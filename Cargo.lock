@@ -672,7 +672,6 @@ dependencies = [
  "futures",
  "http",
  "hyper",
- "hyper-rustls",
  "hyper-timeout",
  "hyper-tls",
  "json-patch",
@@ -689,19 +688,54 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-native-tls",
- "tokio-rustls",
  "tokio-util",
  "tower",
  "url",
 ]
 
 [[package]]
-name = "kube-derive"
-version = "0.51.0"
+name = "kube"
+version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c069cf7fcfe148819d01d1ace64ed82d0bef2c5c27efd2dbc073ec4d210becb9"
+checksum = "65b2fbe85ad92f8435a0f52072f55bd7f0843e082c8e461e56d1ce29440554c8"
 dependencies = [
- "Inflector",
+ "base64",
+ "bytes",
+ "chrono",
+ "dirs-next",
+ "either",
+ "futures",
+ "http",
+ "hyper",
+ "hyper-rustls",
+ "hyper-timeout",
+ "hyper-tls",
+ "jsonpath_lib",
+ "k8s-openapi",
+ "log",
+ "openssl",
+ "pem",
+ "pin-project 1.0.6",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "static_assertions",
+ "thiserror",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-rustls",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "kube-derive"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dca5161aebec14aa62448469b4c128d165e70da503d43813702a23deeff9612"
+dependencies = [
  "darling",
  "proc-macro2",
  "quote",
@@ -719,7 +753,26 @@ dependencies = [
  "derivative",
  "futures",
  "k8s-openapi",
- "kube",
+ "kube 0.51.0",
+ "pin-project 1.0.6",
+ "serde",
+ "smallvec",
+ "snafu",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "kube-runtime"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdbf7b51e6a4984e929dab0bd13b61592b750a3385e298aaa9100c4830205a12"
+dependencies = [
+ "dashmap",
+ "derivative",
+ "futures",
+ "k8s-openapi",
+ "kube 0.52.0",
  "pin-project 1.0.6",
  "serde",
  "smallvec",
@@ -1415,9 +1468,9 @@ name = "stackable-opa-crd"
 version = "0.1.0"
 dependencies = [
  "k8s-openapi",
- "kube",
+ "kube 0.52.0",
  "kube-derive",
- "kube-runtime",
+ "kube-runtime 0.52.0",
  "schemars",
  "serde",
  "serde_json",
@@ -1431,8 +1484,8 @@ dependencies = [
  "async-trait",
  "futures",
  "k8s-openapi",
- "kube",
- "kube-runtime",
+ "kube 0.52.0",
+ "kube-runtime 0.52.0",
  "rstest",
  "serde",
  "serde_json",
@@ -1468,8 +1521,8 @@ dependencies = [
  "futures",
  "json-patch",
  "k8s-openapi",
- "kube",
- "kube-runtime",
+ "kube 0.51.0",
+ "kube-runtime 0.51.0",
  "lazy_static",
  "regex",
  "schemars",

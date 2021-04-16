@@ -7,14 +7,13 @@ use stackable_operator::Crd;
     Clone, CustomResource, Debug, Default, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize,
 )]
 #[kube(
-    group = "opa.stackable.tech",
+    group = "authz.stackable.tech",
     version = "v1",
-    kind = "OpaServer",
-    shortname = "os",
+    kind = "OpenPolicyAgent",
+    shortname = "opa",
     namespaced
 )]
-#[serde(rename_all = "camelCase")]
-pub struct OpaServerSpec {
+pub struct OpaSpec {
     pub selectors: Vec<OpaNodeSelector>,
 }
 
@@ -25,7 +24,7 @@ pub struct OpaNodeSelector {
     pub port: Option<u16>,
 }
 
-impl Crd for OpaServer {
-    const RESOURCE_NAME: &'static str = "server.opa.stackable.tech";
+impl Crd for OpenPolicyAgent {
+    const RESOURCE_NAME: &'static str = "openpolicyagents.authz.stackable.tech";
     const CRD_DEFINITION: &'static str = include_str!("../../deploy/crd/server.opa.crd.yaml");
 }
