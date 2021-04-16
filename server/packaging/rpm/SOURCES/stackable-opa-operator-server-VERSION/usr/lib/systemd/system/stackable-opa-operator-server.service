@@ -1,0 +1,13 @@
+[Unit]
+Description=Stackable OpenPolicyAgent Operator
+Before=
+After=network.target
+[Service]
+User=root
+ExecStart=/opt/stackable/opa-operator/stackable-opa-operator-server
+Restart=on-abort
+StandardOutput=journal
+StandardError=journal
+Environment="OPA_OPERATOR_LOG=info"
+[Install]
+WantedBy=multi-user.target
