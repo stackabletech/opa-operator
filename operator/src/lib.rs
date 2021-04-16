@@ -6,30 +6,41 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::api::ListParams;
 use kube::Api;
 use kube_runtime::controller::ReconcilerAction;
-use stackable_opa_crd::{OpaServer, OpaServerSpec};
+use stackable_opa_crd::OpenPolicyAgent;
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
-use stackable_operator::pod_utils as operator_pod_utils;
 use stackable_operator::reconcile;
 use stackable_operator::reconcile::{
     ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
 use std::pin::Pin;
 use std::time::Duration;
-use tracing::{debug, error, info, trace};
+use tracing::{error, trace};
 
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
 struct OpaState {
-    context: ReconciliationContext<OpaServer>,
+    context: ReconciliationContext<OpenPolicyAgent>,
 }
 
 impl OpaState {
-    pub async fn test1(&mut self) -> OpaReconcileResult {
+    pub async fn read_existing_pod_information(&mut self) -> OpaReconcileResult {
+        let existing_pods = self.context.list_pods().await?;
+
+        trace!(
+            "{}: Found [{}] pods",
+            self.context.log_name(),
+            existing_pods.len()
+        );
+
         Ok(ReconcileFunctionAction::Continue)
     }
 
-    pub async fn test2(&mut self) -> OpaReconcileResult {
+    pub async fn delete_excess_pods(&mut self) -> OpaReconcileResult {
+        Ok(ReconcileFunctionAction::Continue)
+    }
+
+    pub async fn create_missing_pods(&mut self) -> OpaReconcileResult {
         Ok(ReconcileFunctionAction::Continue)
     }
 }
@@ -41,7 +52,14 @@ impl ReconciliationState for OpaState {
         &mut self,
     ) -> Pin<Box<dyn Future<Output = Result<ReconcileFunctionAction, Self::Error>> + Send + '_>>
     {
-        Box::pin(async move { self.test1().await?.then(self.test2()).await })
+        Box::pin(async move {
+            self.read_existing_pod_information()
+                .await?
+                .then(self.delete_excess_pods())
+                .await?
+                .then(self.create_missing_pods())
+                .await
+        })
     }
 }
 
@@ -56,7 +74,7 @@ impl OpaStrategy {
 
 #[async_trait]
 impl ControllerStrategy for OpaStrategy {
-    type Item = OpaServer;
+    type Item = OpenPolicyAgent;
     type State = OpaState;
     type Error = error::Error;
 
@@ -83,7 +101,7 @@ impl ControllerStrategy for OpaStrategy {
 ///
 /// This is an async method and the returned future needs to be consumed to make progress.
 pub async fn create_controller(client: Client) {
-    let opa_api: Api<OpaServer> = client.get_all_api();
+    let opa_api: Api<OpenPolicyAgent> = client.get_all_api();
     let pods_api: Api<Pod> = client.get_all_api();
 
     let controller = Controller::new(opa_api).owns(pods_api, ListParams::default());
