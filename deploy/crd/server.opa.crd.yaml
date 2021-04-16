@@ -19,10 +19,15 @@ spec:
           properties:
             spec:
               properties:
-                port:
-                  type: integer
-              required:
-                - port
+                selectors:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      repoRuleOperatorRef:
+                        type: string
+                      port:
+                        type: integer
               type: object
           required:
             - spec

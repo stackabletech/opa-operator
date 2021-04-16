@@ -13,7 +13,15 @@ use stackable_operator::Crd;
     shortname = "os",
     namespaced
 )]
+#[serde(rename_all = "camelCase")]
 pub struct OpaServerSpec {
+    pub selectors: Vec<OpaNodeSelector>,
+}
+
+#[derive(Clone, Debug, Hash, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaNodeSelector {
+    pub repo_rule_operator_ref: String,
     pub port: Option<u16>,
 }
 
