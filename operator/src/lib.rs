@@ -2,45 +2,167 @@ mod error;
 use crate::error::Error;
 use async_trait::async_trait;
 use futures::Future;
-use k8s_openapi::api::core::v1::Pod;
+use k8s_openapi::api::core::v1::{Container, Node, Pod, PodSpec};
 use kube::api::ListParams;
 use kube::Api;
-use kube_runtime::controller::ReconcilerAction;
-use stackable_opa_crd::OpenPolicyAgent;
+use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
-use stackable_operator::reconcile;
+use stackable_operator::k8s_utils::LabelOptionalValueMap;
 use stackable_operator::reconcile::{
-    ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
+    ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
+use stackable_operator::role_utils::RoleGroup;
+use stackable_operator::{k8s_utils, metadata, role_utils};
+use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::time::Duration;
-use tracing::{error, trace};
+use strum::IntoEnumIterator;
+use strum_macros::Display;
+use strum_macros::EnumIter;
+use tracing::{debug, info, trace, warn};
+
+pub const CLUSTER_NAME_LABEL: &str = "app.kubernetes.io/instance";
+pub const NODE_GROUP_LABEL: &str = "authz.stackable.tech/node-group-name";
+pub const NODE_TYPE_LABEL: &str = "authz.stackable.tech/node-type";
 
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
+#[derive(EnumIter, Debug, Display, PartialEq, Eq, Hash)]
+pub enum OpaNodeType {
+    Server,
+}
+
 struct OpaState {
     context: ReconciliationContext<OpenPolicyAgent>,
+    existing_pods: Vec<Pod>,
+    eligible_nodes: HashMap<OpaNodeType, HashMap<String, Vec<Node>>>,
 }
 
 impl OpaState {
-    pub async fn read_existing_pod_information(&mut self) -> OpaReconcileResult {
-        let existing_pods = self.context.list_pods().await?;
-
-        trace!(
-            "{}: Found [{}] pods",
-            self.context.log_name(),
-            existing_pods.len()
+    pub fn get_full_pod_node_map(&self) -> Vec<(Vec<Node>, LabelOptionalValueMap)> {
+        let mut eligible_nodes_map = vec![];
+        debug!(
+            "Looking for excess pods that need to be deleted for cluster [{}]",
+            self.context.name()
         );
-
-        Ok(ReconcileFunctionAction::Continue)
+        for node_type in OpaNodeType::iter() {
+            if let Some(eligible_nodes_for_role) = self.eligible_nodes.get(&node_type) {
+                for (group_name, eligible_nodes) in eligible_nodes_for_role {
+                    // Create labels to identify eligible nodes
+                    trace!(
+                        "Adding [{}] nodes to eligible node list for role [{}] and group [{}].",
+                        eligible_nodes.len(),
+                        node_type,
+                        group_name
+                    );
+                    eligible_nodes_map.push((
+                        eligible_nodes.clone(),
+                        get_node_and_group_labels(group_name, &node_type),
+                    ))
+                }
+            }
+        }
+        eligible_nodes_map
     }
 
-    pub async fn delete_excess_pods(&mut self) -> OpaReconcileResult {
-        Ok(ReconcileFunctionAction::Continue)
+    pub fn get_deletion_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
+        let roles = OpaNodeType::iter()
+            .map(|role| role.to_string())
+            .collect::<Vec<_>>();
+        let mut mandatory_labels = BTreeMap::new();
+
+        mandatory_labels.insert(String::from(NODE_TYPE_LABEL), Some(roles));
+        mandatory_labels.insert(String::from(CLUSTER_NAME_LABEL), None);
+        mandatory_labels
     }
 
-    pub async fn create_missing_pods(&mut self) -> OpaReconcileResult {
+    async fn create_missing_pods(&mut self) -> OpaReconcileResult {
+        // The iteration happens in two stages here, to accommodate the way our operators think
+        // about nodes and roles.
+        // The hierarchy is:
+        // - Roles (for example Datanode, Namenode, Opa Server)
+        //   - Node groups for this role (user defined)
+        //      - Individual nodes
+        for node_type in OpaNodeType::iter() {
+            if let Some(nodes_for_role) = self.eligible_nodes.get(&node_type) {
+                for (role_group, nodes) in nodes_for_role {
+                    // Create config map for this rolegroup
+                    let pod_name =
+                        format!("opa-{}-{}-{}", self.context.name(), role_group, node_type)
+                            .to_lowercase();
+                    debug!("pod_name: [{}]", pod_name);
+                    debug!(
+                        "Identify missing pods for [{}] role and group [{}]",
+                        node_type, role_group
+                    );
+                    trace!(
+                        "candidate_nodes[{}]: [{:?}]",
+                        nodes.len(),
+                        nodes
+                            .iter()
+                            .map(|node| node.metadata.name.as_ref().unwrap())
+                            .collect::<Vec<_>>()
+                    );
+                    trace!(
+                        "existing_pods[{}]: [{:?}]",
+                        &self.existing_pods.len(),
+                        &self
+                            .existing_pods
+                            .iter()
+                            .map(|pod| pod.metadata.name.as_ref().unwrap())
+                            .collect::<Vec<_>>()
+                    );
+                    trace!(
+                        "labels: [{:?}]",
+                        get_node_and_group_labels(role_group, &node_type)
+                    );
+                    let nodes_that_need_pods = k8s_utils::find_nodes_that_need_pods(
+                        nodes,
+                        &self.existing_pods,
+                        &get_node_and_group_labels(role_group, &node_type),
+                    );
+
+                    for node in nodes_that_need_pods {
+                        let node_name = if let Some(node_name) = &node.metadata.name {
+                            node_name
+                        } else {
+                            warn!("No name found in metadata, this should not happen! Skipping node: [{:?}]", node);
+                            continue;
+                        };
+                        debug!(
+                            "Creating pod on node [{}] for [{}] role and group [{}]",
+                            node.metadata
+                                .name
+                                .as_deref()
+                                .unwrap_or("<no node name found>"),
+                            node_type,
+                            role_group
+                        );
+
+                        let mut node_labels = BTreeMap::new();
+                        node_labels.insert(String::from(NODE_TYPE_LABEL), node_type.to_string());
+                        node_labels
+                            .insert(String::from(NODE_GROUP_LABEL), String::from(role_group));
+                        node_labels.insert(String::from(CLUSTER_NAME_LABEL), self.context.name());
+
+                        if let Some(selector) =
+                            self.context.resource.spec.servers.selectors.get(role_group)
+                        {
+                            // Create a pod for this node, role and group combination
+                            let pod = build_pod(
+                                &self.context.resource,
+                                node_name,
+                                &node_labels,
+                                &pod_name,
+                                &selector.config,
+                            )?;
+                            self.context.client.create(&pod).await?;
+                        }
+                    }
+                }
+            }
+        }
         Ok(ReconcileFunctionAction::Continue)
     }
 }
@@ -52,10 +174,32 @@ impl ReconciliationState for OpaState {
         &mut self,
     ) -> Pin<Box<dyn Future<Output = Result<ReconcileFunctionAction, Self::Error>> + Send + '_>>
     {
+        info!("========================= Starting reconciliation =========================");
+        debug!("Deletion Labels: [{:?}]", &self.get_deletion_labels());
+
         Box::pin(async move {
-            self.read_existing_pod_information()
+            self.context
+                .delete_illegal_pods(
+                    self.existing_pods.as_slice(),
+                    &self.get_deletion_labels(),
+                    ContinuationStrategy::OneRequeue,
+                )
                 .await?
-                .then(self.delete_excess_pods())
+                .then(
+                    self.context
+                        .wait_for_terminating_pods(self.existing_pods.as_slice()),
+                )
+                .await?
+                .then(
+                    self.context
+                        .wait_for_running_and_ready_pods(&self.existing_pods),
+                )
+                .await?
+                .then(self.context.delete_excess_pods(
+                    self.get_full_pod_node_map().as_slice(),
+                    &self.existing_pods,
+                    ContinuationStrategy::OneRequeue,
+                ))
                 .await?
                 .then(self.create_missing_pods())
                 .await
@@ -78,22 +222,42 @@ impl ControllerStrategy for OpaStrategy {
     type State = OpaState;
     type Error = error::Error;
 
-    fn error_policy(&self) -> ReconcilerAction {
-        let reconcile_after_error_sec = 30;
-        error!(
-            "Reconciliation error: requeuing after {} seconds!",
-            reconcile_after_error_sec
-        );
-        reconcile::create_requeuing_reconciler_action(Duration::from_secs(
-            reconcile_after_error_sec,
-        ))
-    }
-
     async fn init_reconcile_state(
         &self,
         context: ReconciliationContext<Self::Item>,
-    ) -> Result<Self::State, Error> {
-        Ok(OpaState { context })
+    ) -> Result<Self::State, Self::Error> {
+        let existing_pods = context.list_pods().await?;
+        trace!("Found [{}] pods", existing_pods.len());
+
+        let opa_spec: OpaSpec = context.resource.spec.clone();
+
+        let mut eligible_nodes = HashMap::new();
+
+        let role_groups: Vec<RoleGroup> = opa_spec
+            .servers
+            .selectors
+            .iter()
+            .map(|(group_name, selector_config)| RoleGroup {
+                name: group_name.to_string(),
+                selector: selector_config.clone().selector.unwrap(),
+            })
+            .collect();
+
+        eligible_nodes.insert(
+            OpaNodeType::Server,
+            role_utils::find_nodes_that_fit_selectors(
+                &context.client,
+                None,
+                role_groups.as_slice(),
+            )
+            .await?,
+        );
+
+        Ok(OpaState {
+            context,
+            existing_pods,
+            eligible_nodes,
+        })
     }
 }
 
@@ -111,4 +275,59 @@ pub async fn create_controller(client: Client) {
     controller
         .run(client, strategy, Duration::from_secs(10))
         .await;
+}
+
+fn get_node_and_group_labels(group_name: &str, node_type: &OpaNodeType) -> LabelOptionalValueMap {
+    let mut node_labels = BTreeMap::new();
+    node_labels.insert(String::from(NODE_TYPE_LABEL), Some(node_type.to_string()));
+    node_labels.insert(
+        String::from(NODE_GROUP_LABEL),
+        Some(String::from(group_name)),
+    );
+    node_labels
+}
+
+fn build_pod(
+    resource: &OpenPolicyAgent,
+    node: &str,
+    labels: &BTreeMap<String, String>,
+    pod_name: &str,
+    config: &OpaConfig,
+) -> Result<Pod, Error> {
+    let pod = Pod {
+        metadata: metadata::build_metadata(
+            pod_name.to_string(),
+            Some(labels.clone()),
+            resource,
+            false,
+        )?,
+        spec: Some(PodSpec {
+            node_name: Some(node.to_string()),
+            tolerations: Some(stackable_operator::krustlet::create_tolerations()),
+            containers: vec![Container {
+                image: Some(format!(
+                    "stackable/opa:{}",
+                    resource.spec.version.to_string()
+                )),
+                name: "opa".to_string(),
+                command: Some(create_opa_start_command(config)),
+                ..Container::default()
+            }],
+            ..PodSpec::default()
+        }),
+        ..Pod::default()
+    };
+    Ok(pod)
+}
+
+fn create_opa_start_command(config: &OpaConfig) -> Vec<String> {
+    let mut command = vec![String::from("./opa run")];
+
+    command.push("--server".to_string());
+    command.push(format!("--bundle {}", config.repo_rule_reference));
+
+    if let Some(port) = config.port {
+        command.push(format!("--addr 0.0.0.0:{}", port.to_string()))
+    }
+    command
 }

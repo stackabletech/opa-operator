@@ -8,7 +8,7 @@ async fn main() -> Result<(), error::Error> {
 
     stackable_operator::crd::ensure_crd_created::<OpenPolicyAgent>(&client).await?;
 
-    //stackable_opa_operator::create_controller(client);
+    stackable_opa_operator::create_controller(client).await;
 
     Ok(())
 }

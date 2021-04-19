@@ -17,10 +17,4 @@ pub enum Error {
         #[from]
         source: serde_json::Error,
     },
-
-    #[error("Error from semver: {source}")]
-    SemVerError {
-        #[from]
-        source: semver::SemVerError,
-    },
 }
