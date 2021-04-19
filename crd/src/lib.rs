@@ -1,4 +1,4 @@
-use kube_derive::CustomResource;
+use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use stackable_operator::Crd;
