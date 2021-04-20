@@ -38,6 +38,7 @@ pub struct OpaSpec {
 )]
 pub enum OpaVersion {
     #[serde(rename = "0.27.1")]
+    #[strum(serialize = "0.27.1")]
     v0_27_1,
 }
 

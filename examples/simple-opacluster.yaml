@@ -14,4 +14,4 @@ spec:
         instancesPerNode: 1
         config:
           port: 12345
-          repoRuleReference: "mdesktop:3030"
+          repoRuleReference: "http://mdesktop:3030/opa/v1"
