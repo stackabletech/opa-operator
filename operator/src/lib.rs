@@ -11,7 +11,9 @@ use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::k8s_utils::LabelOptionalValueMap;
-use stackable_operator::labels::{APP_COMPONENT_LABEL, APP_INSTANCE_LABEL, APP_ROLE_GROUP_LABEL};
+use stackable_operator::labels::{
+    APP_COMPONENT_LABEL, APP_INSTANCE_LABEL, APP_ROLE_GROUP_LABEL, APP_VERSION_LABEL,
+};
 use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
@@ -196,6 +198,10 @@ impl OpaState {
                         node_labels
                             .insert(String::from(APP_ROLE_GROUP_LABEL), String::from(role_group));
                         node_labels.insert(String::from(APP_INSTANCE_LABEL), self.context.name());
+                        node_labels.insert(
+                            String::from(APP_VERSION_LABEL),
+                            self.context.resource.spec.version.to_string(),
+                        );
 
                         // Create a pod for this node, role and group combination
                         let pod = build_pod(
