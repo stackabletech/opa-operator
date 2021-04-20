@@ -11,6 +11,7 @@ use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::k8s_utils::LabelOptionalValueMap;
+use stackable_operator::labels::{APP_COMPONENT_LABEL, APP_INSTANCE_LABEL, APP_ROLE_GROUP_LABEL};
 use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
@@ -23,10 +24,6 @@ use strum::IntoEnumIterator;
 use strum_macros::Display;
 use strum_macros::EnumIter;
 use tracing::{debug, info, trace, warn};
-
-pub const CLUSTER_NAME_LABEL: &str = "app.kubernetes.io/instance";
-pub const NODE_GROUP_LABEL: &str = "authz.stackable.tech/node-group-name";
-pub const NODE_TYPE_LABEL: &str = "authz.stackable.tech/node-type";
 
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
@@ -44,10 +41,7 @@ struct OpaState {
 impl OpaState {
     pub fn get_full_pod_node_map(&self) -> Vec<(Vec<Node>, LabelOptionalValueMap)> {
         let mut eligible_nodes_map = vec![];
-        debug!(
-            "Looking for excess pods that need to be deleted for cluster [{}]",
-            self.context.name()
-        );
+
         for node_type in OpaNodeType::iter() {
             if let Some(eligible_nodes_for_role) = self.eligible_nodes.get(&node_type) {
                 for (group_name, eligible_nodes) in eligible_nodes_for_role {
@@ -74,8 +68,8 @@ impl OpaState {
             .collect::<Vec<_>>();
         let mut mandatory_labels = BTreeMap::new();
 
-        mandatory_labels.insert(String::from(NODE_TYPE_LABEL), Some(roles));
-        mandatory_labels.insert(String::from(CLUSTER_NAME_LABEL), None);
+        mandatory_labels.insert(String::from(APP_COMPONENT_LABEL), Some(roles));
+        mandatory_labels.insert(String::from(APP_INSTANCE_LABEL), None);
         mandatory_labels
     }
 
@@ -86,6 +80,7 @@ impl OpaState {
             .get::<ConfigMap>(name, Some(&"default".to_string()))
             .await
         {
+            // TODO: check and compare content here
             Ok(_) => {
                 debug!("ConfigMap [{}] already exists, skipping creation!", name);
                 return Ok(());
@@ -147,7 +142,6 @@ impl OpaState {
 
                     self.create_config_map(&cm_name, opa_config).await?;
 
-                    debug!("pod_name: [{}]", pod_name);
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
                         node_type, role_group
@@ -197,10 +191,11 @@ impl OpaState {
                         );
 
                         let mut node_labels = BTreeMap::new();
-                        node_labels.insert(String::from(NODE_TYPE_LABEL), node_type.to_string());
                         node_labels
-                            .insert(String::from(NODE_GROUP_LABEL), String::from(role_group));
-                        node_labels.insert(String::from(CLUSTER_NAME_LABEL), self.context.name());
+                            .insert(String::from(APP_COMPONENT_LABEL), node_type.to_string());
+                        node_labels
+                            .insert(String::from(APP_ROLE_GROUP_LABEL), String::from(role_group));
+                        node_labels.insert(String::from(APP_INSTANCE_LABEL), self.context.name());
 
                         // Create a pod for this node, role and group combination
                         let pod = build_pod(
@@ -245,12 +240,12 @@ impl ReconciliationState for OpaState {
                 .await?
                 .then(
                     self.context
-                        .wait_for_running_and_ready_pods(&self.existing_pods),
+                        .wait_for_running_and_ready_pods(&self.existing_pods.as_slice()),
                 )
                 .await?
                 .then(self.context.delete_excess_pods(
                     self.get_full_pod_node_map().as_slice(),
-                    &self.existing_pods,
+                    self.existing_pods.as_slice(),
                     ContinuationStrategy::OneRequeue,
                 ))
                 .await?
@@ -335,9 +330,12 @@ pub async fn create_controller(client: Client) {
 
 fn get_node_and_group_labels(group_name: &str, node_type: &OpaNodeType) -> LabelOptionalValueMap {
     let mut node_labels = BTreeMap::new();
-    node_labels.insert(String::from(NODE_TYPE_LABEL), Some(node_type.to_string()));
     node_labels.insert(
-        String::from(NODE_GROUP_LABEL),
+        String::from(APP_COMPONENT_LABEL),
+        Some(node_type.to_string()),
+    );
+    node_labels.insert(
+        String::from(APP_ROLE_GROUP_LABEL),
         Some(String::from(group_name)),
     );
     node_labels
