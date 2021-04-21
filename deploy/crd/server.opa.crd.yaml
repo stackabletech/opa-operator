@@ -6,29 +6,101 @@ spec:
   group: authz.stackable.tech
   names:
     kind: OpenPolicyAgent
-    singular: openpolicyagent
     plural: openpolicyagents
-    listKind: OpenPolicyAgents
     shortNames:
       - opa
+    singular: openpolicyagent
   scope: Namespaced
   versions:
     - additionalPrinterColumns: []
       name: v1
       schema:
         openAPIV3Schema:
+          description: "Auto-generated derived type for OpaSpec via `CustomResource`"
           properties:
             spec:
               properties:
-                port:
-                  type: integer
+                servers:
+                  properties:
+                    selectors:
+                      additionalProperties:
+                        properties:
+                          config:
+                            properties:
+                              port:
+                                format: uint16
+                                minimum: 0.0
+                                nullable: true
+                                type: integer
+                              repoRuleReference:
+                                type: string
+                            required:
+                              - repoRuleReference
+                            type: object
+                          instances:
+                            format: uint16
+                            minimum: 0.0
+                            type: integer
+                          instancesPerNode:
+                            format: uint8
+                            minimum: 0.0
+                            type: integer
+                          selector:
+                            description: A label selector is a label query over a set of resources. The result of matchLabels and matchExpressions are ANDed. An empty label selector matches all objects. A null label selector matches no objects.
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                                items:
+                                  description: "A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values."
+                                  properties:
+                                    key:
+                                      description: key is the label key that the selector applies to.
+                                      type: string
+                                    operator:
+                                      description: "operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist."
+                                      type: string
+                                    values:
+                                      description: "values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch."
+                                      items:
+                                        type: string
+                                      type: array
+                                  required:
+                                    - key
+                                    - operator
+                                  type: object
+                                type: array
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: "matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is \"key\", the operator is \"In\", and the values array contains only \"value\". The requirements are ANDed."
+                                type: object
+                            type: object
+                        required:
+                          - config
+                          - instances
+                          - instancesPerNode
+                          - selector
+                        type: object
+                      type: object
+                  required:
+                    - selectors
+                  type: object
+                version:
+                  enum:
+                    - 0.27.1
+                  type: string
               required:
-                - port
+                - servers
+                - version
+              type: object
+            status:
+              nullable: true
               type: object
           required:
             - spec
-          title: OpaServer
+          title: OpenPolicyAgent
           type: object
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}

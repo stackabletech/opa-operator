@@ -1,0 +1,17 @@
+apiVersion: authz.stackable.tech/v1
+kind: OpenPolicyAgent
+metadata:
+  name: simple-opacluster
+spec:
+  version: "0.27.1"
+  servers:
+    selectors:
+      default:
+        selector:
+          matchLabels:
+            kubernetes.io/hostname: "mdesktop"
+        instances: 1
+        instancesPerNode: 1
+        config:
+          port: 12345
+          repoRuleReference: "http://mdesktop:3030/opa/v1"
