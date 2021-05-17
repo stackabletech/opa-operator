@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 
 /// The property to be set for the full class name of the supplied authorizer
 /// (must be included in the product package manually)
-/// Refers to OpaReference.authorizerClassName
+/// Refers to OpaReference.authorizer_class_name
 pub const AUTHORIZER_CLASS_NAME_PROPERTY: &str = "authorizer.class.name";
 /// The property to be set for the OPA authorizer url
-/// Refers to OpaReference.opaAuthorizerUrl
+/// Refers to OpaReference.opa_authorizer_url
 pub const OPA_AUTHORIZER_URL_PROPERTY: &str = "opa.authorizer.url";
 
 /// Contains all necessary information to connect to a Stackable managed
