@@ -41,6 +41,8 @@ pub struct OpaReference {
 
 /// Helper enum to build urls against OPA API.
 /// The OPA rest API consists of 4 endpoints: Policy, Data, Query and Compile.
+// TODO: For now we are only interested in the Data API. The others are just there
+//    for completeness and may not be exhaustive with regard to configuration.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub enum OpaApi {
     /// e.g. GET /v1/policies/<id>
@@ -61,9 +63,9 @@ pub enum OpaApi {
 #[derive(strum_macros::Display, strum_macros::EnumString)]
 pub enum OpaApiProtocol {
     #[strum(serialize = "http")]
-    HTTP,
+    Http,
     #[strum(serialize = "https")]
-    HTTPS,
+    Https,
 }
 
 impl OpaApi {
@@ -162,8 +164,8 @@ pub async fn get_opa_connection_info(
         .await?;
 
     let connection_string = get_opa_connection_string_from_pods(
-        opa_cluster.spec,
-        opa_pods,
+        &opa_cluster.spec,
+        &opa_pods,
         opa_api,
         opa_api_protocol,
         node_name,
@@ -176,16 +178,13 @@ pub async fn get_opa_connection_info(
 fn param_map_to_string(params: &BTreeMap<String, String>) -> String {
     let params_len = params.len();
     let mut params_as_string = "".to_string();
-    let mut count = 0;
-    for (key, value) in params {
+    for (count, (key, value)) in params.iter().enumerate() {
         // TODO: escape?
         params_as_string.push_str(&format!("{}={}", key, value));
 
         if count != (params_len - 1) {
             params_as_string.push(';');
         }
-
-        count += 1;
     }
 
     params_as_string
@@ -231,7 +230,7 @@ async fn check_opa_reference(
 /// Builds the actual connection string after all necessary information has been retrieved.
 /// As best practice and to reduce network traffic and increase response time, if a node_name
 /// is provided and matches one of the pod node_name, this node_name is selected. Without a match
-/// a random node is returned. TODO: for now the node_names are sorted and the first node is returned.
+/// a random node is returned. TODO: for now the node_names are sorted and the last node is returned.
 ///
 /// # Arguments
 ///
@@ -242,8 +241,8 @@ async fn check_opa_reference(
 /// * `desired_node_name` - If node_name is provided we look for opa deployments on the same node name to improve response time
 ///
 fn get_opa_connection_string_from_pods(
-    opa_spec: OpaSpec,
-    opa_pods: Vec<Pod>,
+    opa_spec: &OpaSpec,
+    opa_pods: &[Pod],
     opa_api: &OpaApi,
     opa_api_protocol: &OpaApiProtocol,
     desired_node_name: Option<String>,
@@ -251,7 +250,7 @@ fn get_opa_connection_string_from_pods(
     let mut server_and_port_list = Vec::new();
 
     for pod in opa_pods {
-        let pod_name = match pod.metadata.name {
+        let pod_name = match pod.metadata.name.as_ref() {
             None => {
                 return Err(ObjectWithoutName {
                     reference: ErrOpaPodWithoutName.to_string(),
@@ -260,17 +259,20 @@ fn get_opa_connection_string_from_pods(
             Some(pod_name) => pod_name,
         };
 
-        let node_name = match pod.spec.and_then(|spec| spec.node_name) {
+        let node_name = match pod.spec.as_ref().and_then(|spec| spec.node_name.as_ref()) {
             None => {
                 debug!("Pod [{:?}] is does not have node_name set, might not be scheduled yet, aborting.. ",
                        pod_name);
-                return Err(PodWithoutHostname { pod: pod_name });
+                return Err(PodWithoutHostname {
+                    pod: pod_name.clone(),
+                });
             }
             Some(node_name) => node_name,
         };
 
         let role_group = match pod
             .metadata
+            .clone()
             .labels
             .unwrap_or_default()
             .get(APP_ROLE_GROUP_LABEL)
@@ -278,7 +280,7 @@ fn get_opa_connection_string_from_pods(
             None => {
                 return Err(PodMissingLabels {
                     labels: vec![String::from(APP_ROLE_GROUP_LABEL)],
-                    pod: pod_name,
+                    pod: pod_name.clone(),
                 })
             }
             Some(role_group) => role_group.to_owned(),
@@ -288,7 +290,7 @@ fn get_opa_connection_string_from_pods(
 
         // if a node_name is provided we prefer OPA deployments that are located on the same machine
         if let Some(desired_host) = &desired_node_name {
-            if &node_name == desired_host {
+            if node_name == desired_host {
                 let url = opa_api.get_url(opa_api_protocol, &node_name, opa_port)?;
                 debug!(
                     "Found Opa deployment on provided node [{}]; Using this one [{}] ...",
@@ -306,7 +308,7 @@ fn get_opa_connection_string_from_pods(
     // changes to the infrastructure
     server_and_port_list.sort_by(|(host1, _), (host2, _)| host1.cmp(host2));
 
-    // TODO: randomly search for node? -> for now we just take the first one
+    // TODO: randomly search for node? -> for now we just take the last one
     let server = server_and_port_list.pop();
 
     if let Some(server_url) = server {
@@ -324,6 +326,349 @@ fn get_opa_port(opa_spec: &OpaSpec, role_group: &str) -> OpaOperatorResult<u16> 
             return Ok(port);
         }
     }
-
     Ok(8181)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use indoc::indoc;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::single_pod_default_port(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                repoRuleReference: http://debian:3030/opa/v1
+      "},
+    indoc! {"
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: debian
+            containers: []
+      "},
+    &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
+    &OpaApiProtocol::Http,
+    None,
+    "http://debian:8181/v1/data/some_package/some_sub_package/allow"
+    )]
+    #[case::single_pod_configured_port(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                port: 12345
+                repoRuleReference: http://debian:3030/opa/v1
+      "},
+    indoc! {"
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: debian
+            containers: []
+      "},
+    &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
+    &OpaApiProtocol::Http,
+    None,
+    "http://debian:12345/v1/data/some_package/some_sub_package/allow"
+    )]
+    #[case::multiple_pods_configured_port_desired_node_name(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                port: 12345
+                repoRuleReference: http://debian:3030/opa/v1
+      "},
+    indoc! {"
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: cebian
+            containers: []
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: debian
+            containers: []
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: eebian
+            containers: []
+      "},
+    &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
+    &OpaApiProtocol::Http,
+    Some("debian".to_string()),
+    "http://debian:12345/v1/data/some_package/some_sub_package/allow"
+    )]
+    #[case::multiple_pods_no_desired_node_name_secure(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                repoRuleReference: http://debian:3030/opa/v1
+      "},
+    indoc! {"
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: cebian
+            containers: []
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: debian
+            containers: []
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: eebian
+            containers: []
+      "},
+    &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
+    &OpaApiProtocol::Https,
+    None,
+    "https://eebian:8181/v1/data/some_package/some_sub_package/allow"
+    )]
+    fn get_connection_string(
+        #[case] opa_spec: &str,
+        #[case] opa_pods: &str,
+        #[case] opa_api: &OpaApi,
+        #[case] opa_api_protocol: &OpaApiProtocol,
+        #[case] desired_node_name: Option<String>,
+        #[case] expected_result: &str,
+    ) {
+        let pods = parse_pod_list_from_yaml(opa_pods);
+        let opa_spec = parse_opa_from_yaml(opa_spec);
+
+        let conn_string = get_opa_connection_string_from_pods(
+            &opa_spec,
+            &pods,
+            &opa_api,
+            opa_api_protocol,
+            desired_node_name,
+        )
+        .expect("should not fail");
+        assert_eq!(expected_result, conn_string);
+    }
+
+    #[rstest]
+    #[case::missing_mandatory_label(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                 repoRuleReference: http://debian:3030/opa/v1
+      "},
+    indoc! {"
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/instance: test
+          spec:
+            nodeName: debian
+            containers: []
+          status:
+            phase: Running
+            conditions:
+              - type: Ready
+                status: True
+      "},
+    )]
+    #[case::missing_hostname(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                 repoRuleReference: http://debian:3030/opa/v1
+      "},
+    indoc! {"
+        - apiVersion: v1
+          kind: Pod
+          metadata:
+            name: test
+            labels:
+              app.kubernetes.io/name: opa
+              app.kubernetes.io/role-group: default
+              app.kubernetes.io/instance: test
+          spec:
+            containers: []
+          status:
+            phase: Running
+            conditions:
+              - type: Ready
+                status: True
+      "},
+    )]
+    fn test_get_opa_connection_string_from_pods_should_fail(
+        #[case] opa_spec: &str,
+        #[case] opa_pods: &str,
+    ) {
+        let spec = parse_opa_from_yaml(opa_spec);
+        let pods = parse_pod_list_from_yaml(opa_pods);
+
+        let opa_api = OpaApi::Data {
+            package_path: "some_package/some_sub_package".to_string(),
+            rule: "allow".to_string(),
+        };
+
+        let conn_string = get_opa_connection_string_from_pods(
+            &spec,
+            &pods,
+            &opa_api,
+            &OpaApiProtocol::Http,
+            None,
+        );
+
+        assert!(conn_string.is_err())
+    }
+
+    #[rstest]
+    #[case::default_port(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                 repoRuleReference: http://debian:3030/opa/v1
+      "},
+    8181
+    )]
+    #[case::configured_port(
+    indoc! {"
+        version: 0.27.1
+        servers:
+          selectors:
+            default:
+              selector:
+                matchLabels:
+                  kubernetes.io/hostname: debian
+              instances: 1
+              instancesPerNode: 1
+              config:
+                 port: 12345
+                 repoRuleReference: http://debian:3030/opa/v1
+      "},
+    12345
+    )]
+    fn test_get_opa_port(#[case] opa_spec: &str, #[case] expected_port: u16) {
+        let spec = parse_opa_from_yaml(opa_spec);
+        assert_eq!(get_opa_port(&spec, "default").unwrap(), expected_port)
+    }
+
+    fn parse_pod_list_from_yaml(pod_config: &str) -> Vec<Pod> {
+        let kube_pods: Vec<k8s_openapi::api::core::v1::Pod> =
+            serde_yaml::from_str(pod_config).unwrap();
+        kube_pods
+            .iter()
+            .map(|pod| Pod::from(pod.to_owned()))
+            .collect()
+    }
+
+    fn parse_opa_from_yaml(opa_config: &str) -> OpaSpec {
+        serde_yaml::from_str(opa_config).unwrap()
+    }
 }
