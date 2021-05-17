@@ -81,11 +81,7 @@ impl OpaState {
         mandatory_labels
     }
 
-    async fn build_config_map(
-        &self,
-        name: &str,
-        role_group: &str,
-    ) -> Result<Option<ConfigMap>, Error> {
+    async fn create_config_map(&self, name: &str, role_group: &str) -> Result<(), Error> {
         let config = match self.context.resource.spec.servers.selectors.get(role_group) {
             Some(selector) => &selector.config,
             None => {
@@ -100,26 +96,32 @@ impl OpaState {
         let mut data = BTreeMap::new();
         data.insert("config.yaml".to_string(), config);
 
+        // And now create the actual ConfigMap
+        let config_map = stackable_operator::config_map::create_config_map(
+            &self.context.resource,
+            &name,
+            data.clone(),
+        )?;
+
         match self
             .context
             .client
             .get::<ConfigMap>(name, Some(&self.context.namespace()))
             .await
         {
-            Ok(config_map) => {
-                if let Some(existing_config_map_data) = config_map.data {
+            Ok(existing_config_map) => {
+                if let Some(existing_config_map_data) = existing_config_map.data {
                     if existing_config_map_data == data {
                         debug!(
                             "ConfigMap [{}] already exists with identical data, skipping creation!",
                             name
                         );
-                        return Ok(None);
                     } else {
-                        // TODO: We run into an reconcile error if the configmap exists with different data
                         debug!(
                             "ConfigMap [{}] already exists, but differs, recreating it!",
                             name
                         );
+                        self.context.client.update(&config_map).await?;
                     }
                 }
             }
@@ -127,14 +129,11 @@ impl OpaState {
                 // TODO: This is shit, but works for now. If there is an actual error in comes with
                 //   K8S, it will most probably also occur further down and be properly handled
                 debug!("Error getting ConfigMap [{}]: [{:?}]", name, e);
+                self.context.client.create(&config_map).await?;
             }
         }
 
-        // And now create the actual ConfigMap
-        let cm =
-            stackable_operator::config_map::create_config_map(&self.context.resource, &name, data)?;
-
-        Ok(Some(cm))
+        Ok(())
     }
 
     async fn create_missing_pods(&mut self) -> OpaReconcileResult {
@@ -174,14 +173,7 @@ impl OpaState {
                     let cm_name = format!("{}-config", pod_name);
                     debug!("pod_name: [{}], cm_name: [{}]", pod_name, cm_name);
 
-                    // build_config_map returns an Option<ConfigMap>:
-                    // None signals that a config map with identical name and data already exists -> nothing to be done
-                    // Some(ConfigMap) is returned if the config map either does not exists yet or the data differs -> create/override it
-                    // TODO: after the review i actually do not like the flow of that. Returning None if everything is ok does
-                    //    not make that much sense to me. Needs improvement.
-                    if let Some(cm) = self.build_config_map(&cm_name, role_group).await? {
-                        self.context.client.update(&cm).await?;
-                    }
+                    self.create_config_map(&cm_name, role_group).await?;
 
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
