@@ -1,5 +1,6 @@
 mod error;
 use crate::error::Error;
+use crate::error::Error::RoleGroupMissing;
 use async_trait::async_trait;
 use futures::Future;
 use k8s_openapi::api::core::v1::{
@@ -7,13 +8,11 @@ use k8s_openapi::api::core::v1::{
 };
 use kube::api::ListParams;
 use kube::Api;
-use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent};
+use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::k8s_utils::LabelOptionalValueMap;
-use stackable_operator::labels::{
-    APP_COMPONENT_LABEL, APP_INSTANCE_LABEL, APP_ROLE_GROUP_LABEL, APP_VERSION_LABEL,
-};
+use stackable_operator::labels;
 use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
@@ -56,7 +55,7 @@ impl OpaState {
                     );
                     eligible_nodes_map.push((
                         eligible_nodes.clone(),
-                        get_node_and_group_labels(group_name, &node_type),
+                        get_role_and_group_labels(group_name, &node_type),
                     ))
                 }
             }
@@ -64,45 +63,78 @@ impl OpaState {
         eligible_nodes_map
     }
 
-    pub fn get_deletion_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
+    pub fn get_required_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
         let roles = OpaNodeType::iter()
             .map(|role| role.to_string())
             .collect::<Vec<_>>();
         let mut mandatory_labels = BTreeMap::new();
 
-        mandatory_labels.insert(String::from(APP_COMPONENT_LABEL), Some(roles));
-        mandatory_labels.insert(String::from(APP_INSTANCE_LABEL), None);
+        mandatory_labels.insert(String::from(labels::APP_COMPONENT_LABEL), Some(roles));
+        mandatory_labels.insert(
+            String::from(labels::APP_INSTANCE_LABEL),
+            Some(vec![self.context.name()]),
+        );
+        mandatory_labels.insert(
+            labels::APP_VERSION_LABEL.to_string(),
+            Some(vec![self.context.resource.spec.version.to_string()]),
+        );
         mandatory_labels
     }
 
-    async fn create_config_map(&self, name: &str, config: &OpaConfig) -> Result<(), Error> {
-        match self
-            .context
-            .client
-            .get::<ConfigMap>(name, Some(&"default".to_string()))
-            .await
-        {
-            // TODO: check and compare content here
-            Ok(_) => {
-                debug!("ConfigMap [{}] already exists, skipping creation!", name);
-                return Ok(());
+    async fn build_config_map(
+        &self,
+        name: &str,
+        role_group: &str,
+    ) -> Result<Option<ConfigMap>, Error> {
+        let config = match self.context.resource.spec.servers.selectors.get(role_group) {
+            Some(selector) => &selector.config,
+            None => {
+                return Err(RoleGroupMissing {
+                    role_group: role_group.to_string(),
+                })
             }
-            Err(e) => {
-                // TODO: This is shit, but works for now. If there is an actual error in comms with
-                //   K8S, it will most probably also occur further down and be properly handled
-                debug!("Error getting ConfigMap [{}]: [{:?}]", name, e);
-            }
-        }
+        };
+
         let config = create_config_file(config);
 
         let mut data = BTreeMap::new();
         data.insert("config.yaml".to_string(), config);
 
+        match self
+            .context
+            .client
+            .get::<ConfigMap>(name, Some(&self.context.namespace()))
+            .await
+        {
+            Ok(config_map) => {
+                if let Some(existing_config_map_data) = config_map.data {
+                    if existing_config_map_data == data {
+                        debug!(
+                            "ConfigMap [{}] already exists with identical data, skipping creation!",
+                            name
+                        );
+                        return Ok(None);
+                    } else {
+                        // TODO: We run into an reconcile error if the configmap exists with different data
+                        debug!(
+                            "ConfigMap [{}] already exists, but differs, recreating it!",
+                            name
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                // TODO: This is shit, but works for now. If there is an actual error in comes with
+                //   K8S, it will most probably also occur further down and be properly handled
+                debug!("Error getting ConfigMap [{}]: [{:?}]", name, e);
+            }
+        }
+
         // And now create the actual ConfigMap
         let cm =
             stackable_operator::config_map::create_config_map(&self.context.resource, &name, data)?;
-        self.context.client.create(&cm).await?;
-        Ok(())
+
+        Ok(Some(cm))
     }
 
     async fn create_missing_pods(&mut self) -> OpaReconcileResult {
@@ -142,7 +174,14 @@ impl OpaState {
                     let cm_name = format!("{}-config", pod_name);
                     debug!("pod_name: [{}], cm_name: [{}]", pod_name, cm_name);
 
-                    self.create_config_map(&cm_name, opa_config).await?;
+                    // build_config_map returns an Option<ConfigMap>:
+                    // None signals that a config map with identical name and data already exists -> nothing to be done
+                    // Some(ConfigMap) is returned if the config map either does not exists yet or the data differs -> create/override it
+                    // TODO: after the review i actually do not like the flow of that. Returning None if everything is ok does
+                    //    not make that much sense to me. Needs improvement.
+                    if let Some(cm) = self.build_config_map(&cm_name, role_group).await? {
+                        self.context.client.update(&cm).await?;
+                    }
 
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
@@ -167,12 +206,12 @@ impl OpaState {
                     );
                     trace!(
                         "labels: [{:?}]",
-                        get_node_and_group_labels(role_group, &node_type)
+                        get_role_and_group_labels(role_group, &node_type)
                     );
                     let nodes_that_need_pods = k8s_utils::find_nodes_that_need_pods(
                         nodes,
                         &self.existing_pods,
-                        &get_node_and_group_labels(role_group, &node_type),
+                        &get_role_and_group_labels(role_group, &node_type),
                     );
 
                     for node in nodes_that_need_pods {
@@ -192,22 +231,18 @@ impl OpaState {
                             role_group
                         );
 
-                        let mut node_labels = BTreeMap::new();
-                        node_labels
-                            .insert(String::from(APP_COMPONENT_LABEL), node_type.to_string());
-                        node_labels
-                            .insert(String::from(APP_ROLE_GROUP_LABEL), String::from(role_group));
-                        node_labels.insert(String::from(APP_INSTANCE_LABEL), self.context.name());
-                        node_labels.insert(
-                            String::from(APP_VERSION_LABEL),
-                            self.context.resource.spec.version.to_string(),
+                        let pod_labels = build_pod_labels(
+                            &node_type.to_string(),
+                            role_group,
+                            &self.context.name(),
+                            &self.context.resource.spec.version.to_string(),
                         );
 
                         // Create a pod for this node, role and group combination
                         let pod = build_pod(
                             &self.context.resource,
                             node_name,
-                            &node_labels,
+                            &pod_labels,
                             &pod_name,
                             &cm_name,
                             opa_config,
@@ -229,13 +264,13 @@ impl ReconciliationState for OpaState {
     ) -> Pin<Box<dyn Future<Output = Result<ReconcileFunctionAction, Self::Error>> + Send + '_>>
     {
         info!("========================= Starting reconciliation =========================");
-        debug!("Deletion Labels: [{:?}]", &self.get_deletion_labels());
+        debug!("Deletion Labels: [{:?}]", &self.get_required_labels());
 
         Box::pin(async move {
             self.context
                 .delete_illegal_pods(
                     self.existing_pods.as_slice(),
-                    &self.get_deletion_labels(),
+                    &self.get_required_labels(),
                     ContinuationStrategy::OneRequeue,
                 )
                 .await?
@@ -334,17 +369,40 @@ pub async fn create_controller(client: Client) {
         .await;
 }
 
-fn get_node_and_group_labels(group_name: &str, node_type: &OpaNodeType) -> LabelOptionalValueMap {
-    let mut node_labels = BTreeMap::new();
-    node_labels.insert(
-        String::from(APP_COMPONENT_LABEL),
+fn get_role_and_group_labels(group_name: &str, node_type: &OpaNodeType) -> LabelOptionalValueMap {
+    let mut labels = BTreeMap::new();
+    labels.insert(
+        String::from(labels::APP_COMPONENT_LABEL),
         Some(node_type.to_string()),
     );
-    node_labels.insert(
-        String::from(APP_ROLE_GROUP_LABEL),
+    labels.insert(
+        String::from(labels::APP_ROLE_GROUP_LABEL),
         Some(String::from(group_name)),
     );
-    node_labels
+    labels
+}
+
+fn build_pod_labels(
+    role: &str,
+    role_group: &str,
+    name: &str,
+    version: &str,
+) -> BTreeMap<String, String> {
+    let mut labels = BTreeMap::new();
+    labels.insert(labels::APP_NAME_LABEL.to_string(), APP_NAME.to_string());
+    labels.insert(
+        labels::APP_MANAGED_BY_LABEL.to_string(),
+        MANAGED_BY.to_string(),
+    );
+    labels.insert(labels::APP_COMPONENT_LABEL.to_string(), role.to_string());
+    labels.insert(
+        labels::APP_ROLE_GROUP_LABEL.to_string(),
+        role_group.to_string(),
+    );
+    labels.insert(labels::APP_INSTANCE_LABEL.to_string(), name.to_string());
+    labels.insert(labels::APP_VERSION_LABEL.to_string(), version.to_string());
+
+    labels
 }
 
 fn build_pod(

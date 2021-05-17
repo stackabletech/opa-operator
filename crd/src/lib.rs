@@ -1,3 +1,4 @@
+mod error;
 pub mod util;
 
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
@@ -7,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use stackable_operator::label_selector::schema;
 use stackable_operator::Crd;
 use std::collections::HashMap;
+
+pub const APP_NAME: &str = "opa";
+pub const MANAGED_BY: &str = "stackable-opa";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
