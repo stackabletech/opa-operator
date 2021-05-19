@@ -344,6 +344,7 @@ mod tests {
     use super::*;
     use indoc::indoc;
     use rstest::rstest;
+    use std::ops::Deref;
 
     #[test]
     fn test_clean_url() {
@@ -384,10 +385,10 @@ mod tests {
             nodeName: debian
             containers: []
       "},
-    &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
+    &OpaApi::Data{ package_path: "/some_package//some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Http,
     None,
-    "http://debian:8181/v1/data/some_package/some_sub_package/allow"
+    Box::new(["http://debian:8181/v1/data/some_package/some_sub_package/allow"])
     )]
     #[case::single_pod_configured_port(
     indoc! {"
@@ -420,7 +421,7 @@ mod tests {
     &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Http,
     None,
-    "http://debian:12345/v1/data/some_package/some_sub_package/allow"
+    Box::new(["http://debian:12345/v1/data/some_package/some_sub_package/allow"])
     )]
     #[case::multiple_pods_configured_port_desired_node_name(
     indoc! {"
@@ -475,7 +476,7 @@ mod tests {
     &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Http,
     Some("debian".to_string()),
-    "http://debian:12345/v1/data/some_package/some_sub_package/allow"
+    Box::new(["http://debian:12345/v1/data/some_package/some_sub_package/allow"])
     )]
     #[case::multiple_pods_no_desired_node_name_secure(
     indoc! {"
@@ -529,7 +530,7 @@ mod tests {
     &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Https,
     None,
-    "https://eebian:8181/v1/data/some_package/some_sub_package/allow"
+    Box::new(["https://", "ebian:8181/v1/data/some_package/some_sub_package/allow"])
     )]
     fn get_connection_string(
         #[case] opa_spec: &str,
@@ -537,7 +538,7 @@ mod tests {
         #[case] opa_api: &OpaApi,
         #[case] opa_api_protocol: &OpaApiProtocol,
         #[case] desired_node_name: Option<String>,
-        #[case] expected_result: &str,
+        #[case] expected_result: Box<[&str]>,
     ) {
         let pods = parse_pod_list_from_yaml(opa_pods);
         let opa_spec = parse_opa_from_yaml(opa_spec);
@@ -550,7 +551,10 @@ mod tests {
             desired_node_name,
         )
         .expect("should not fail");
-        assert_eq!(expected_result, conn_string);
+
+        for res in expected_result.deref() {
+            assert!(conn_string.contains(res));
+        }
     }
 
     #[rstest]
