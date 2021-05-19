@@ -1,12 +1,11 @@
 use crate::error::Error::{
-    ObjectWithoutName, OpaServerMissing, OperatorFrameworkError, PodMissingLabels,
-    PodWithoutHostname,
+    OpaServerMissing, OperatorFrameworkError, PodMissingLabels, PodWithoutHostname,
 };
 use crate::error::OpaOperatorResult;
-use crate::util::TicketReferences::ErrOpaPodWithoutName;
 use crate::{OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
+use kube::Resource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use stackable_operator::client::Client;
@@ -27,12 +26,13 @@ pub enum TicketReferences {
     ErrOpaPodWithoutName,
 }
 
-/// Contains all necessary information identify a Stackable managed
+/// Contains all necessary information to identify a Stackable managed
 /// Open Policy Agent (OPA) and build a connection string for it.
 /// The main purpose for this struct is for other operators that need to reference
 /// an OPA to use in their CRDs.
 /// This has the benefit of keeping references to OPA consistent
 /// throughout the entire stack.
+// TODO: move to operator-rs as NamespaceName
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub struct OpaReference {
     pub namespace: String,
@@ -54,10 +54,10 @@ pub enum OpaApi {
         /// e.g. "/allow"
         rule: String,
     },
-    /// e.g. GET /v1/query?q=data.servers[i].ports[_] = "p2"; data.servers[i].name = name
+    /// e.g. GET /v1/query?q=data.servers[i].ports[_]="p2";data.servers[i].name=name
     Query { params: BTreeMap<String, String> },
     /// e.g. POST /v1/compile
-    Compile {},
+    Compile,
 }
 
 #[derive(strum_macros::Display, strum_macros::EnumString)]
@@ -122,7 +122,7 @@ impl OpaApi {
             }
         };
 
-        let parsed_url = Url::parse(&url)?;
+        let parsed_url = Url::parse(&clean_url(url))?;
 
         Ok(parsed_url.to_string())
     }
@@ -139,7 +139,7 @@ pub struct OpaConnectionInformation {
     pub connection_string: String,
 }
 
-/// Returns connection information for a Open Policy Agent custom resource. In contrast
+/// Returns connection information for a Open Policy Agent custom resource.
 ///
 /// # Arguments
 ///
@@ -174,10 +174,28 @@ pub async fn get_opa_connection_info(
     Ok(OpaConnectionInformation { connection_string })
 }
 
+/// Remove redundant "/" from the url path
+fn clean_url<T: AsRef<str>>(path: T) -> String {
+    let path = path.as_ref();
+
+    let mut prefix = path
+        .find("://")
+        .map(|i| (&path[..i + 3]).to_string())
+        .unwrap_or_else(String::new);
+
+    let mut slash = false;
+    prefix.extend((&path[prefix.len()..]).chars().filter(|c| {
+        let keep = !slash || *c != '/';
+        slash = *c == '/';
+        keep
+    }));
+    prefix
+}
+
 /// Transform the query param map to actual http parameters.
 fn param_map_to_string(params: &BTreeMap<String, String>) -> String {
     let params_len = params.len();
-    let mut params_as_string = "".to_string();
+    let mut params_as_string = String::new();
     for (count, (key, value)) in params.iter().enumerate() {
         // TODO: escape?
         params_as_string.push_str(&format!("{}={}", key, value));
@@ -192,6 +210,7 @@ fn param_map_to_string(params: &BTreeMap<String, String>) -> String {
 
 /// Build a label selector that applies only to pods belonging to the cluster instance referenced
 /// by `name`
+// TODO: move to operator-rs
 fn get_match_labels(name: &str) -> LabelSelector {
     let mut opa_pod_matchlabels = BTreeMap::new();
     opa_pod_matchlabels.insert(String::from(APP_NAME_LABEL), String::from(APP_NAME));
@@ -220,10 +239,10 @@ async fn check_opa_reference(
 
     opa_cluster.map_err(|err| {
         warn!(?err,
-                        "Referencing a OPA that does not exist (or some other error while fetching it): [{}/{}], we will requeue and check again",
-                        opa_namespace,
-                        opa_name
-                    );
+            "Referencing a OPA that does not exist (or some other error while fetching it): [{}/{}], we will requeue and check again",
+            opa_namespace,
+            opa_name
+        );
         OperatorFrameworkError {source: err}})
 }
 
@@ -250,22 +269,13 @@ fn get_opa_connection_string_from_pods(
     let mut server_and_port_list = Vec::new();
 
     for pod in opa_pods {
-        let pod_name = match pod.metadata.name.as_ref() {
-            None => {
-                return Err(ObjectWithoutName {
-                    reference: ErrOpaPodWithoutName.to_string(),
-                })
-            }
-            Some(pod_name) => pod_name,
-        };
+        let pod_name = Resource::name(pod);
 
         let node_name = match pod.spec.as_ref().and_then(|spec| spec.node_name.as_ref()) {
             None => {
                 debug!("Pod [{:?}] is does not have node_name set, might not be scheduled yet, aborting.. ",
                        pod_name);
-                return Err(PodWithoutHostname {
-                    pod: pod_name.clone(),
-                });
+                return Err(PodWithoutHostname { pod: pod_name });
             }
             Some(node_name) => node_name,
         };
@@ -280,7 +290,7 @@ fn get_opa_connection_string_from_pods(
             None => {
                 return Err(PodMissingLabels {
                     labels: vec![String::from(APP_ROLE_GROUP_LABEL)],
-                    pod: pod_name.clone(),
+                    pod: pod_name,
                 })
             }
             Some(role_group) => role_group.to_owned(),
@@ -308,8 +318,8 @@ fn get_opa_connection_string_from_pods(
     // changes to the infrastructure
     server_and_port_list.sort_by(|(host1, _), (host2, _)| host1.cmp(host2));
 
-    // TODO: randomly search for node? -> for now we just take the last one
-    let server = server_and_port_list.pop();
+    let index = rand::random::<usize>() % server_and_port_list.len();
+    let server = server_and_port_list.get(index);
 
     if let Some(server_url) = server {
         Ok(opa_api.get_url(opa_api_protocol, &server_url.0, server_url.1)?)
@@ -334,6 +344,17 @@ mod tests {
     use super::*;
     use indoc::indoc;
     use rstest::rstest;
+
+    #[test]
+    fn test_clean_url() {
+        assert_eq!(clean_url("//a/b//c".to_string()), "/a/b/c".to_string());
+        assert_eq!(clean_url("//a/b//c"), "/a/b/c".to_string());
+        assert_eq!(clean_url("https:///a/b//c"), "https:///a/b/c".to_string());
+        assert_eq!(clean_url("https:////a/b//c"), "https:///a/b/c".to_string());
+        assert_eq!(clean_url(""), "".to_string());
+        assert_eq!(clean_url("//"), "/".to_string());
+        assert_eq!(clean_url("https://"), "https://".to_string());
+    }
 
     #[rstest]
     #[case::single_pod_default_port(

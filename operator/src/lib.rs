@@ -12,7 +12,10 @@ use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_B
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::k8s_utils::LabelOptionalValueMap;
-use stackable_operator::labels;
+use stackable_operator::labels::{
+    APP_COMPONENT_LABEL, APP_INSTANCE_LABEL, APP_MANAGED_BY_LABEL, APP_NAME_LABEL,
+    APP_ROLE_GROUP_LABEL, APP_VERSION_LABEL,
+};
 use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
@@ -69,19 +72,24 @@ impl OpaState {
             .collect::<Vec<_>>();
         let mut mandatory_labels = BTreeMap::new();
 
-        mandatory_labels.insert(String::from(labels::APP_COMPONENT_LABEL), Some(roles));
+        mandatory_labels.insert(String::from(APP_COMPONENT_LABEL), Some(roles));
         mandatory_labels.insert(
-            String::from(labels::APP_INSTANCE_LABEL),
+            String::from(APP_INSTANCE_LABEL),
             Some(vec![self.context.name()]),
         );
         mandatory_labels.insert(
-            labels::APP_VERSION_LABEL.to_string(),
+            APP_VERSION_LABEL.to_string(),
             Some(vec![self.context.resource.spec.version.to_string()]),
         );
         mandatory_labels
     }
 
-    async fn create_config_map(&self, name: &str, role_group: &str) -> Result<(), Error> {
+    async fn create_config_map(
+        &self,
+        name: &str,
+        role_group: &str,
+        labels: &BTreeMap<String, String>,
+    ) -> Result<(), Error> {
         let config = match self.context.resource.spec.servers.selectors.get(role_group) {
             Some(selector) => &selector.config,
             None => {
@@ -97,11 +105,14 @@ impl OpaState {
         data.insert("config.yaml".to_string(), config);
 
         // And now create the actual ConfigMap
-        let config_map = stackable_operator::config_map::create_config_map(
+        let mut config_map = stackable_operator::config_map::create_config_map(
             &self.context.resource,
             &name,
             data.clone(),
         )?;
+
+        // add required labels
+        config_map.metadata.labels = Some(labels.clone());
 
         match self
             .context
@@ -173,7 +184,15 @@ impl OpaState {
                     let cm_name = format!("{}-config", pod_name);
                     debug!("pod_name: [{}], cm_name: [{}]", pod_name, cm_name);
 
-                    self.create_config_map(&cm_name, role_group).await?;
+                    let labels = build_labels(
+                        &node_type.to_string(),
+                        role_group,
+                        &self.context.name(),
+                        &self.context.resource.spec.version.to_string(),
+                    );
+
+                    self.create_config_map(&cm_name, role_group, &labels)
+                        .await?;
 
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
@@ -223,18 +242,11 @@ impl OpaState {
                             role_group
                         );
 
-                        let pod_labels = build_pod_labels(
-                            &node_type.to_string(),
-                            role_group,
-                            &self.context.name(),
-                            &self.context.resource.spec.version.to_string(),
-                        );
-
                         // Create a pod for this node, role and group combination
                         let pod = build_pod(
                             &self.context.resource,
                             node_name,
-                            &pod_labels,
+                            &labels,
                             &pod_name,
                             &cm_name,
                             opa_config,
@@ -364,35 +376,29 @@ pub async fn create_controller(client: Client) {
 fn get_role_and_group_labels(group_name: &str, node_type: &OpaNodeType) -> LabelOptionalValueMap {
     let mut labels = BTreeMap::new();
     labels.insert(
-        String::from(labels::APP_COMPONENT_LABEL),
+        String::from(APP_COMPONENT_LABEL),
         Some(node_type.to_string()),
     );
     labels.insert(
-        String::from(labels::APP_ROLE_GROUP_LABEL),
+        String::from(APP_ROLE_GROUP_LABEL),
         Some(String::from(group_name)),
     );
     labels
 }
 
-fn build_pod_labels(
+fn build_labels(
     role: &str,
     role_group: &str,
     name: &str,
     version: &str,
 ) -> BTreeMap<String, String> {
     let mut labels = BTreeMap::new();
-    labels.insert(labels::APP_NAME_LABEL.to_string(), APP_NAME.to_string());
-    labels.insert(
-        labels::APP_MANAGED_BY_LABEL.to_string(),
-        MANAGED_BY.to_string(),
-    );
-    labels.insert(labels::APP_COMPONENT_LABEL.to_string(), role.to_string());
-    labels.insert(
-        labels::APP_ROLE_GROUP_LABEL.to_string(),
-        role_group.to_string(),
-    );
-    labels.insert(labels::APP_INSTANCE_LABEL.to_string(), name.to_string());
-    labels.insert(labels::APP_VERSION_LABEL.to_string(), version.to_string());
+    labels.insert(APP_NAME_LABEL.to_string(), APP_NAME.to_string());
+    labels.insert(APP_MANAGED_BY_LABEL.to_string(), MANAGED_BY.to_string());
+    labels.insert(APP_COMPONENT_LABEL.to_string(), role.to_string());
+    labels.insert(APP_ROLE_GROUP_LABEL.to_string(), role_group.to_string());
+    labels.insert(APP_INSTANCE_LABEL.to_string(), name.to_string());
+    labels.insert(APP_VERSION_LABEL.to_string(), version.to_string());
 
     labels
 }
