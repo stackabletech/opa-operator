@@ -6,6 +6,7 @@ use crate::{OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::Resource;
+use rand::seq::SliceRandom;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use stackable_operator::client::Client;
@@ -318,8 +319,8 @@ fn get_opa_connection_string_from_pods(
     // changes to the infrastructure
     server_and_port_list.sort_by(|(host1, _), (host2, _)| host1.cmp(host2));
 
-    let index = rand::random::<usize>() % server_and_port_list.len();
-    let server = server_and_port_list.get(index);
+    // choose one server randomly
+    let server = server_and_port_list.choose(&mut rand::thread_rng());
 
     if let Some(server_url) = server {
         Ok(opa_api.get_url(opa_api_protocol, &server_url.0, server_url.1)?)
