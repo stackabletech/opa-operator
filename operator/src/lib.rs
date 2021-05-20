@@ -177,12 +177,15 @@ impl OpaState {
                     };
 
                     // Create config map for this rolegroup
-                    let pod_name =
+                    let name_prefix =
                         format!("opa-{}-{}-{}", self.context.name(), role_group, node_type)
                             .to_lowercase();
 
-                    let cm_name = format!("{}-config", pod_name);
-                    debug!("pod_name: [{}], cm_name: [{}]", pod_name, cm_name);
+                    let cm_name = format!("{}-config", name_prefix);
+                    debug!(
+                        "ConfigMap name for role group [{}]: [{}]",
+                        role_group, cm_name
+                    );
 
                     let labels = build_labels(
                         &node_type.to_string(),
@@ -232,8 +235,12 @@ impl OpaState {
                             warn!("No name found in metadata, this should not happen! Skipping node: [{:?}]", node);
                             continue;
                         };
+
+                        let pod_name = format!("{}-{}", name_prefix, node_name);
+
                         debug!(
-                            "Creating pod on node [{}] for [{}] role and group [{}]",
+                            "Creating pod [{}] on node [{}] for [{}] role and group [{}]",
+                            pod_name,
                             node.metadata
                                 .name
                                 .as_deref()
