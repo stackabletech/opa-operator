@@ -175,8 +175,20 @@ pub async fn get_opa_connection_info(
     Ok(OpaConnectionInformation { connection_string })
 }
 
-/// Remove redundant "/" from the url path
-fn clean_url<T: AsRef<str>>(path: T) -> String {
+/// Remove duplicated slashes ("/") from the url path. First check for a protocol e.g. "http://" and
+/// continue to check for duplicated slashes in order to remove them. This is basically a "smarter"
+/// trim method in order to catch inputs that may have or have not slashes prefixed or suffixed.
+///
+/// # Examples
+///
+/// ```
+/// use stackable_opa_crd::util::clean_url;
+/// assert_eq!(clean_url("//a/b//c".to_string()), "/a/b/c".to_string());
+/// assert_eq!(clean_url("//a/b//c"), "/a/b/c".to_string());
+/// assert_eq!(clean_url("https:///a/b//c"), "https:///a/b/c".to_string());
+/// ```
+///
+pub fn clean_url<T: AsRef<str>>(path: T) -> String {
     let path = path.as_ref();
 
     let mut prefix = path
@@ -389,7 +401,7 @@ mod tests {
     &OpaApi::Data{ package_path: "/some_package//some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Http,
     None,
-    Box::new(["http://debian:8181/v1/data/some_package/some_sub_package/allow"])
+    &["http://debian:8181/v1/data/some_package/some_sub_package/allow"]
     )]
     #[case::single_pod_configured_port(
     indoc! {"
@@ -422,7 +434,7 @@ mod tests {
     &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Http,
     None,
-    Box::new(["http://debian:12345/v1/data/some_package/some_sub_package/allow"])
+    &["http://debian:12345/v1/data/some_package/some_sub_package/allow"]
     )]
     #[case::multiple_pods_configured_port_desired_node_name(
     indoc! {"
@@ -477,7 +489,7 @@ mod tests {
     &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Http,
     Some("debian".to_string()),
-    Box::new(["http://debian:12345/v1/data/some_package/some_sub_package/allow"])
+    &["http://debian:12345/v1/data/some_package/some_sub_package/allow"]
     )]
     #[case::multiple_pods_no_desired_node_name_secure(
     indoc! {"
@@ -531,7 +543,7 @@ mod tests {
     &OpaApi::Data{ package_path: "some_package/some_sub_package".to_string(), rule: "allow".to_string() },
     &OpaApiProtocol::Https,
     None,
-    Box::new(["https://", "ebian:8181/v1/data/some_package/some_sub_package/allow"])
+    &["https://", "ebian:8181/v1/data/some_package/some_sub_package/allow"]
     )]
     fn get_connection_string(
         #[case] opa_spec: &str,
@@ -539,7 +551,7 @@ mod tests {
         #[case] opa_api: &OpaApi,
         #[case] opa_api_protocol: &OpaApiProtocol,
         #[case] desired_node_name: Option<String>,
-        #[case] expected_result: Box<[&str]>,
+        #[case] expected_result: &[&str],
     ) {
         let pods = parse_pod_list_from_yaml(opa_pods);
         let opa_spec = parse_opa_from_yaml(opa_spec);
