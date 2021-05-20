@@ -17,4 +17,7 @@ pub enum Error {
         #[from]
         source: serde_json::Error,
     },
+
+    #[error("Could not find role group [{role_group}] in spec.")]
+    RoleGroupMissing { role_group: String },
 }
