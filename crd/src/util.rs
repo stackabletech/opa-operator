@@ -700,7 +700,7 @@ mod tests {
     fn parse_pod_list_from_yaml(pod_config: &str) -> Vec<Pod> {
         let kube_pods: Vec<k8s_openapi::api::core::v1::Pod> =
             serde_yaml::from_str(pod_config).unwrap();
-        kube_pods.iter().map(|pod| pod.clone()).collect()
+        kube_pods.iter().cloned().collect()
     }
 
     fn parse_opa_from_yaml(opa_config: &str) -> OpaSpec {
