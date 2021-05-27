@@ -74,5 +74,5 @@ pub struct OpaConfig {
 
 impl Crd for OpenPolicyAgent {
     const RESOURCE_NAME: &'static str = "openpolicyagents.authz.stackable.tech";
-    const CRD_DEFINITION: &'static str = include_str!("../../deploy/crd/server.opa.crd.yaml");
+    const CRD_DEFINITION: &'static str = include_str!("../../deploy/crd/openpolicyagent.crd.yaml");
 }
