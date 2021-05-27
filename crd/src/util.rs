@@ -356,6 +356,7 @@ fn get_opa_port(opa_spec: &OpaSpec, role_group: &str) -> OpaOperatorResult<u16> 
 mod tests {
     use super::*;
     use indoc::indoc;
+    use k8s_openapi::api::core::v1::Pod;
     use rstest::rstest;
     use std::ops::Deref;
 
@@ -698,9 +699,7 @@ mod tests {
     }
 
     fn parse_pod_list_from_yaml(pod_config: &str) -> Vec<Pod> {
-        let kube_pods: Vec<k8s_openapi::api::core::v1::Pod> =
-            serde_yaml::from_str(pod_config).unwrap();
-        kube_pods.iter().cloned().collect()
+        serde_yaml::from_str(pod_config).unwrap()
     }
 
     fn parse_opa_from_yaml(opa_config: &str) -> OpaSpec {
