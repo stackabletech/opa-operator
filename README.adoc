@@ -1,6 +1,6 @@
-= Stackable Operator for OpenPolicyAgent
+= Stackable Operator for OpenPolicyAgent (OPA)
 
-This is a Kubernetes Operator to manage OpenPolicyAgent servers.
+This is a Kubernetes Operator to manage OPA servers.
 
 It is written by https://www.stackable.de[Stackable] in Rust, and it is supposed to be used with the https://github.com/stackabletech/agent[Stackable Agent] instead of the Kubernetes kubelet.
 
