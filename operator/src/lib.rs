@@ -1,4 +1,6 @@
 mod error;
+mod pod_utils;
+
 use crate::error::Error;
 use crate::error::Error::RoleGroupMissing;
 use async_trait::async_trait;
@@ -8,7 +10,9 @@ use k8s_openapi::api::core::v1::{
 };
 use kube::api::ListParams;
 use kube::Api;
-use stackable_opa_crd::{OpaConfig, OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
+use product_config::ProductConfigManager;
+use serde::{Deserialize, Serialize};
+use stackable_opa_crd::{OpaConfig, OpaRole, OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::k8s_utils::LabelOptionalValueMap;
@@ -19,55 +23,29 @@ use stackable_operator::labels::{
 use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
-use stackable_operator::role_utils::RoleGroup;
-use stackable_operator::{k8s_utils, metadata, role_utils};
+use stackable_operator::role_utils::{
+    get_role_and_group_labels, list_eligible_nodes_for_role_and_group, RoleGroup,
+};
+use stackable_operator::{k8s_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 use strum::IntoEnumIterator;
-use strum_macros::Display;
-use strum_macros::EnumIter;
 use tracing::{debug, info, trace, warn};
 
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
-#[derive(EnumIter, Debug, Display, PartialEq, Eq, Hash)]
-pub enum OpaNodeType {
-    Server,
-}
-
 struct OpaState {
     context: ReconciliationContext<OpenPolicyAgent>,
     existing_pods: Vec<Pod>,
-    eligible_nodes: HashMap<OpaNodeType, HashMap<String, Vec<Node>>>,
+    eligible_nodes: HashMap<String, HashMap<String, Vec<Node>>>,
+    validated_role_config: ValidatedRoleConfigByPropertyKind,
 }
 
 impl OpaState {
-    pub fn get_full_pod_node_map(&self) -> Vec<(Vec<Node>, LabelOptionalValueMap)> {
-        let mut eligible_nodes_map = vec![];
-
-        for node_type in OpaNodeType::iter() {
-            if let Some(eligible_nodes_for_role) = self.eligible_nodes.get(&node_type) {
-                for (group_name, eligible_nodes) in eligible_nodes_for_role {
-                    // Create labels to identify eligible nodes
-                    trace!(
-                        "Adding [{}] nodes to eligible node list for role [{}] and group [{}].",
-                        eligible_nodes.len(),
-                        node_type,
-                        group_name
-                    );
-                    eligible_nodes_map.push((
-                        eligible_nodes.clone(),
-                        get_role_and_group_labels(group_name, &node_type),
-                    ))
-                }
-            }
-        }
-        eligible_nodes_map
-    }
-
-    pub fn get_required_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
-        let roles = OpaNodeType::iter()
+    pub fn deletion_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
+        let roles = OpaRole::iter()
             .map(|role| role.to_string())
             .collect::<Vec<_>>();
         let mut mandatory_labels = BTreeMap::new();
@@ -105,14 +83,16 @@ impl OpaState {
         data.insert("config.yaml".to_string(), config);
 
         // And now create the actual ConfigMap
-        let mut config_map = stackable_operator::config_map::create_config_map(
+        // TODO: use builder
+        let mut config_map = ConfigMap::default();
+        /*stackable_operator::config_map::create_config_map(
             &self.context.resource,
             &name,
             data.clone(),
-        )?;
+        )?;*/
 
         // add required labels
-        config_map.metadata.labels = Some(labels.clone());
+        config_map.metadata.labels = labels.clone();
 
         match self
             .context
@@ -152,51 +132,15 @@ impl OpaState {
         // about nodes and roles.
         // The hierarchy is:
         // - Roles (for example Datanode, Namenode, Opa Server)
-        //   - Node groups for this role (user defined)
+        //   - Role groups for this role (user defined)
         //      - Individual nodes
-        for node_type in OpaNodeType::iter() {
-            if let Some(nodes_for_role) = self.eligible_nodes.get(&node_type) {
+        for role in OpaRole::iter() {
+            if let Some(nodes_for_role) = self.eligible_nodes.get(&role) {
+                let role_str = &role.to_string();
                 for (role_group, nodes) in nodes_for_role {
-                    // extract selector for opa config
-                    let opa_config = match self
-                        .context
-                        .resource
-                        .spec
-                        .servers
-                        .selectors
-                        .get(role_group)
-                    {
-                        Some(selector) => &selector.config,
-                        None => {
-                            warn!(
-                                    "No config found in selector for role [{}], this should not happen!",
-                                    &role_group
-                                );
-                            continue;
-                        }
-                    };
-
-                    // Create config map for this rolegroup
-                    let pod_name =
-                        format!("opa-{}-{}-{}", self.context.name(), role_group, node_type)
-                            .to_lowercase();
-
-                    let cm_name = format!("{}-config", pod_name);
-                    debug!("pod_name: [{}], cm_name: [{}]", pod_name, cm_name);
-
-                    let labels = build_labels(
-                        &node_type.to_string(),
-                        role_group,
-                        &self.context.name(),
-                        &self.context.resource.spec.version.to_string(),
-                    );
-
-                    self.create_config_map(&cm_name, role_group, &labels)
-                        .await?;
-
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
-                        node_type, role_group
+                        role_str, role_group
                     );
                     trace!(
                         "candidate_nodes[{}]: [{:?}]",
@@ -217,12 +161,12 @@ impl OpaState {
                     );
                     trace!(
                         "labels: [{:?}]",
-                        get_role_and_group_labels(role_group, &node_type)
+                        get_role_and_group_labels(role_str, role_group)
                     );
                     let nodes_that_need_pods = k8s_utils::find_nodes_that_need_pods(
                         nodes,
                         &self.existing_pods,
-                        &get_role_and_group_labels(role_group, &node_type),
+                        &get_role_and_group_labels(role_str, role_group),
                     );
 
                     for node in nodes_that_need_pods {
@@ -238,7 +182,7 @@ impl OpaState {
                                 .name
                                 .as_deref()
                                 .unwrap_or("<no node name found>"),
-                            node_type,
+                            role_str,
                             role_group
                         );
 
@@ -268,13 +212,12 @@ impl ReconciliationState for OpaState {
     ) -> Pin<Box<dyn Future<Output = Result<ReconcileFunctionAction, Self::Error>> + Send + '_>>
     {
         info!("========================= Starting reconciliation =========================");
-        debug!("Deletion Labels: [{:?}]", &self.get_required_labels());
 
         Box::pin(async move {
             self.context
                 .delete_illegal_pods(
                     self.existing_pods.as_slice(),
-                    &self.get_required_labels(),
+                    &self.deletion_labels(),
                     ContinuationStrategy::OneRequeue,
                 )
                 .await?
@@ -289,8 +232,8 @@ impl ReconciliationState for OpaState {
                 )
                 .await?
                 .then(self.context.delete_excess_pods(
-                    self.get_full_pod_node_map().as_slice(),
-                    self.existing_pods.as_slice(),
+                    list_eligible_nodes_for_role_and_group(&self.eligible_nodes).as_slice(),
+                    &self.existing_pods,
                     ContinuationStrategy::OneRequeue,
                 ))
                 .await?
@@ -301,11 +244,15 @@ impl ReconciliationState for OpaState {
 }
 
 #[derive(Debug)]
-struct OpaStrategy {}
+struct OpaStrategy {
+    config: Arc<ProductConfigManager>,
+}
 
 impl OpaStrategy {
-    pub fn new() -> OpaStrategy {
-        OpaStrategy {}
+    pub fn new(config: ProductConfigManager) -> OpaStrategy {
+        OpaStrategy {
+            config: Arc::new(config),
+        }
     }
 }
 
@@ -322,31 +269,20 @@ impl ControllerStrategy for OpaStrategy {
         let existing_pods = context.list_pods().await?;
         trace!("Found [{}] pods", existing_pods.len());
 
-        let opa_spec: OpaSpec = context.resource.spec.clone();
-
         let mut eligible_nodes = HashMap::new();
 
-        let role_groups: Vec<RoleGroup> = opa_spec
-            .servers
-            .selectors
-            .iter()
-            .map(|(group_name, selector_config)| RoleGroup {
-                name: group_name.to_string(),
-                selector: selector_config.clone().selector.unwrap(),
-            })
-            .collect();
-
         eligible_nodes.insert(
-            OpaNodeType::Server,
+            OpaRole::Server.to_string(),
             role_utils::find_nodes_that_fit_selectors(
                 &context.client,
                 None,
-                role_groups.as_slice(),
+                &context.resource.servers,
             )
             .await?,
         );
 
         Ok(OpaState {
+            validated_role_config: validated_product_config(&context.resource, &self.config)?,
             context,
             existing_pods,
             eligible_nodes,
@@ -366,102 +302,13 @@ pub async fn create_controller(client: Client) {
         .owns(pods_api, ListParams::default())
         .owns(configmaps_api, ListParams::default());
 
-    let strategy = OpaStrategy::new();
+    let product_config =
+        ProductConfigManager::from_yaml_file("deploy/config-spec/properties.yaml").unwrap();
+    let strategy = OpaStrategy::new(product_config);
 
     controller
         .run(client, strategy, Duration::from_secs(10))
         .await;
-}
-
-fn get_role_and_group_labels(group_name: &str, node_type: &OpaNodeType) -> LabelOptionalValueMap {
-    let mut labels = BTreeMap::new();
-    labels.insert(
-        String::from(APP_COMPONENT_LABEL),
-        Some(node_type.to_string()),
-    );
-    labels.insert(
-        String::from(APP_ROLE_GROUP_LABEL),
-        Some(String::from(group_name)),
-    );
-    labels
-}
-
-fn build_labels(
-    role: &str,
-    role_group: &str,
-    name: &str,
-    version: &str,
-) -> BTreeMap<String, String> {
-    let mut labels = BTreeMap::new();
-    labels.insert(APP_NAME_LABEL.to_string(), APP_NAME.to_string());
-    labels.insert(APP_MANAGED_BY_LABEL.to_string(), MANAGED_BY.to_string());
-    labels.insert(APP_COMPONENT_LABEL.to_string(), role.to_string());
-    labels.insert(APP_ROLE_GROUP_LABEL.to_string(), role_group.to_string());
-    labels.insert(APP_INSTANCE_LABEL.to_string(), name.to_string());
-    labels.insert(APP_VERSION_LABEL.to_string(), version.to_string());
-
-    labels
-}
-
-fn build_pod(
-    resource: &OpenPolicyAgent,
-    node: &str,
-    labels: &BTreeMap<String, String>,
-    pod_name: &str,
-    cm_name: &str,
-    config: &OpaConfig,
-) -> Result<Pod, Error> {
-    let pod = Pod {
-        metadata: metadata::build_metadata(
-            pod_name.to_string(),
-            Some(labels.clone()),
-            resource,
-            false,
-        )?,
-        spec: Some(PodSpec {
-            node_name: Some(node.to_string()),
-            tolerations: Some(stackable_operator::krustlet::create_tolerations()),
-            containers: vec![Container {
-                image: Some(format!("opa:{}", resource.spec.version.to_string())),
-                name: "opa".to_string(),
-                command: Some(create_opa_start_command(config)),
-                volume_mounts: Some(vec![VolumeMount {
-                    mount_path: "config".to_string(),
-                    name: "config-volume".to_string(),
-                    ..VolumeMount::default()
-                }]),
-                ..Container::default()
-            }],
-            volumes: Some(vec![Volume {
-                name: "config-volume".to_string(),
-                config_map: Some(ConfigMapVolumeSource {
-                    name: Some(cm_name.to_string()),
-                    ..ConfigMapVolumeSource::default()
-                }),
-                ..Volume::default()
-            }]),
-            ..PodSpec::default()
-        }),
-        ..Pod::default()
-    };
-    Ok(pod)
-}
-
-fn create_opa_start_command(config: &OpaConfig) -> Vec<String> {
-    let mut command = vec![String::from("./opa run")];
-
-    // --server
-    command.push("-s".to_string());
-
-    if let Some(port) = config.port {
-        // --addr
-        command.push(format!("-a 0.0.0.0:{}", port.to_string()))
-    }
-
-    // --config-file
-    command.push("-c {{configroot}}/config/config.yaml".to_string());
-
-    command
 }
 
 fn create_config_file(config: &OpaConfig) -> String {

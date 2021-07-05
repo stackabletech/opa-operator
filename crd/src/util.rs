@@ -5,7 +5,7 @@ use crate::error::OpaOperatorResult;
 use crate::{OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use kube::Resource;
+use kube::ResourceExt;
 use rand::seq::SliceRandom;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -231,7 +231,7 @@ fn get_match_labels(name: &str) -> LabelSelector {
     opa_pod_matchlabels.insert(String::from(APP_INSTANCE_LABEL), name.to_string());
 
     LabelSelector {
-        match_labels: Some(opa_pod_matchlabels),
+        match_labels: opa_pod_matchlabels,
         ..Default::default()
     }
 }
@@ -282,7 +282,7 @@ fn get_opa_connection_string_from_pods(
     let mut server_and_port_list = Vec::new();
 
     for pod in opa_pods {
-        let pod_name = Resource::name(pod);
+        let pod_name = pod.name();
 
         let node_name = match pod.spec.as_ref().and_then(|spec| spec.node_name.as_ref()) {
             None => {
@@ -293,13 +293,7 @@ fn get_opa_connection_string_from_pods(
             Some(node_name) => node_name,
         };
 
-        let role_group = match pod
-            .metadata
-            .clone()
-            .labels
-            .unwrap_or_default()
-            .get(APP_ROLE_GROUP_LABEL)
-        {
+        let role_group = match pod.metadata.labels.get(APP_ROLE_GROUP_LABEL) {
             None => {
                 return Err(PodMissingLabels {
                     labels: vec![String::from(APP_ROLE_GROUP_LABEL)],
@@ -344,10 +338,15 @@ fn get_opa_connection_string_from_pods(
 /// Retrieve the port for the specified role group from the cluster spec
 /// Defaults to 8181
 fn get_opa_port(opa_spec: &OpaSpec, role_group: &str) -> OpaOperatorResult<u16> {
-    if let Some(selector) = opa_spec.servers.selectors.get(role_group) {
-        if let Some(port) = selector.config.port {
-            return Ok(port);
-        }
+    if let Some(Some(Some(Some(port)))) =
+        opa_spec.servers.role_groups.get(role_group).map(|group| {
+            group
+                .config
+                .as_ref()
+                .map(|config| config.config.as_ref().map(|cfg| cfg.port))
+        })
+    {
+        return Ok(port);
     }
     Ok(8181)
 }

@@ -6,8 +6,11 @@ use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use stackable_operator::label_selector::schema;
+use stackable_operator::role_utils::Role;
 use stackable_operator::Crd;
 use std::collections::HashMap;
+use strum_macros::Display;
+use strum_macros::EnumIter;
 
 pub const APP_NAME: &str = "opa";
 pub const MANAGED_BY: &str = "stackable-opa";
@@ -24,7 +27,7 @@ pub const MANAGED_BY: &str = "stackable-opa";
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
     pub version: OpaVersion,
-    pub servers: NodeGroup<OpaConfig>,
+    pub servers: Role<OpaConfig>,
 }
 
 #[allow(non_camel_case_types)]
@@ -49,27 +52,30 @@ pub enum OpaVersion {
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 pub struct OpaStatus {}
 
-#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeGroup<T> {
-    pub selectors: HashMap<String, SelectorAndConfig<T>>,
-}
-
-#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SelectorAndConfig<T> {
-    pub instances: u16,
-    pub instances_per_node: u8,
-    pub config: T,
-    #[schemars(schema_with = "schema")]
-    pub selector: Option<LabelSelector>,
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfig {
     pub port: Option<u16>,
     pub repo_rule_reference: String,
+}
+
+#[derive(
+    EnumIter,
+    Clone,
+    Debug,
+    Hash,
+    Deserialize,
+    Eq,
+    JsonSchema,
+    PartialEq,
+    Serialize,
+    strum_macros::Display,
+    strum_macros::EnumString,
+)]
+pub enum OpaRole {
+    #[serde(rename = "server")]
+    #[strum(serialize = "server")]
+    Server,
 }
 
 impl Crd for OpenPolicyAgent {
