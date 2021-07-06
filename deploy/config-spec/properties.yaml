@@ -34,7 +34,8 @@ properties:
       propertyNames:
         - name: "repoRuleReference"
           kind:
-            type: "cli"
+            type: "file"
+            file: "config.yaml"
       datatype:
         type: "string"
         unit: *unitUrl

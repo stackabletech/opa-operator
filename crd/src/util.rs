@@ -374,13 +374,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                 repoRuleReference: http://debian:3030/opa/v1
       "},
@@ -406,13 +405,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                 port: 12345
                 repoRuleReference: http://debian:3030/opa/v1
@@ -439,13 +437,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                 port: 12345
                 repoRuleReference: http://debian:3030/opa/v1
@@ -494,13 +491,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                 repoRuleReference: http://debian:3030/opa/v1
       "},
@@ -574,13 +570,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                  repoRuleReference: http://debian:3030/opa/v1
       "},
@@ -606,13 +601,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                  repoRuleReference: http://debian:3030/opa/v1
       "},
@@ -662,13 +656,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                  repoRuleReference: http://debian:3030/opa/v1
       "},
@@ -678,13 +671,12 @@ mod tests {
     indoc! {"
         version: 0.27.1
         servers:
-          selectors:
+          roleGroups:
             default:
               selector:
                 matchLabels:
                   kubernetes.io/hostname: debian
-              instances: 1
-              instancesPerNode: 1
+              replicas: 1
               config:
                  port: 12345
                  repoRuleReference: http://debian:3030/opa/v1

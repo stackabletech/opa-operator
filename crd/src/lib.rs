@@ -1,19 +1,22 @@
 mod error;
 pub mod util;
 
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use stackable_operator::label_selector::schema;
+use stackable_operator::product_config_utils::{ConfigError, Configuration};
 use stackable_operator::role_utils::Role;
 use stackable_operator::Crd;
-use std::collections::HashMap;
-use strum_macros::Display;
+use std::collections::BTreeMap;
 use strum_macros::EnumIter;
+use tracing::error;
 
 pub const APP_NAME: &str = "opa";
 pub const MANAGED_BY: &str = "stackable-opa";
+
+pub const CONFIG_FILE: &str = "config.yaml";
+pub const REPO_RULE_REFERENCE: &str = "repoRuleReference";
+pub const PORT: &str = "port";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
@@ -57,6 +60,51 @@ pub struct OpaStatus {}
 pub struct OpaConfig {
     pub port: Option<u16>,
     pub repo_rule_reference: String,
+}
+
+impl Configuration for OpaConfig {
+    type Configurable = OpenPolicyAgent;
+
+    fn compute_env(
+        &self,
+        _resource: &Self::Configurable,
+        _role_name: &str,
+    ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
+        Ok(BTreeMap::new())
+    }
+
+    fn compute_cli(
+        &self,
+        _resource: &Self::Configurable,
+        _role_name: &str,
+    ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
+        let mut cli = BTreeMap::new();
+        cli.insert(PORT.to_string(), self.port.map(|p| p.to_string()));
+        Ok(cli)
+    }
+
+    fn compute_files(
+        &self,
+        _resource: &Self::Configurable,
+        _role_name: &str,
+        file: &str,
+    ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
+        let mut config = BTreeMap::new();
+
+        if file == CONFIG_FILE {
+            config.insert(
+                REPO_RULE_REFERENCE.to_string(),
+                Some(self.repo_rule_reference.clone()),
+            );
+        } else {
+            error!(
+                "Did not find any properties matching config file [{}]. This should not happen.",
+                CONFIG_FILE
+            );
+        }
+
+        Ok(config)
+    }
 }
 
 #[derive(

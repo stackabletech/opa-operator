@@ -5,13 +5,12 @@ metadata:
 spec:
   version: "0.27.1"
   servers:
-    selectors:
+    roleGroups:
       default:
         selector:
           matchLabels:
             kubernetes.io/hostname: "mdesktop"
-        instances: 1
-        instancesPerNode: 1
+        replicas: 1
         config:
           port: 8181
           repoRuleReference: "http://mdesktop:3030/opa/v1"

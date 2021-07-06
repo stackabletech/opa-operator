@@ -1571,12 +1571,13 @@ dependencies = [
  "stackable-operator",
  "stackable_config",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
 name = "stackable-operator"
 version = "0.1.0-nightly"
-source = "git+https://github.com/stackabletech/operator-rs.git?branch=main#4e24acbbb05b5a395f2dff1d162bd2f0b84c7889"
+source = "git+https://github.com/stackabletech/operator-rs.git?branch=adapt_to_product_config_interface#8addde4adaecfd52ec0878bf2fa39dc6a7076727"
 dependencies = [
  "async-trait",
  "backoff",

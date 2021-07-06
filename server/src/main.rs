@@ -1,9 +1,10 @@
 use stackable_opa_crd::OpenPolicyAgent;
 use stackable_operator::crd::Crd;
-use stackable_operator::{client, error};
+use stackable_operator::{client, error as operator_error};
+use tracing::error;
 
 #[tokio::main]
-async fn main() -> Result<(), error::Error> {
+async fn main() -> Result<(), operator_error::Error> {
     stackable_operator::logging::initialize_logging("OPA_OPERATOR_LOG");
     let client = client::create_client(Some("authz.stackable.tech".to_string())).await?;
 

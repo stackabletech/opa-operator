@@ -2,29 +2,37 @@ mod error;
 mod pod_utils;
 
 use crate::error::Error;
-use crate::error::Error::RoleGroupMissing;
+use crate::pod_utils::{build_pod_name, create_opa_start_command};
 use async_trait::async_trait;
 use futures::Future;
-use k8s_openapi::api::core::v1::{
-    ConfigMap, ConfigMapVolumeSource, Container, Node, Pod, PodSpec, Volume, VolumeMount,
-};
+use k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Node, Pod};
 use kube::api::ListParams;
 use kube::Api;
+use kube::ResourceExt;
+use product_config::types::PropertyNameKind;
 use product_config::ProductConfigManager;
-use serde::{Deserialize, Serialize};
-use stackable_opa_crd::{OpaConfig, OpaRole, OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
+use stackable_opa_crd::{
+    OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REPO_RULE_REFERENCE,
+};
+use stackable_operator::builder::{
+    ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder,
+};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
-use stackable_operator::k8s_utils::LabelOptionalValueMap;
+use stackable_operator::error::OperatorResult;
 use stackable_operator::labels::{
-    APP_COMPONENT_LABEL, APP_INSTANCE_LABEL, APP_MANAGED_BY_LABEL, APP_NAME_LABEL,
-    APP_ROLE_GROUP_LABEL, APP_VERSION_LABEL,
+    build_common_labels_for_all_managed_resources, get_recommended_labels, APP_COMPONENT_LABEL,
+    APP_INSTANCE_LABEL, APP_VERSION_LABEL,
+};
+use stackable_operator::product_config_utils::{
+    config_for_role_and_group, transform_all_roles_to_config, validate_all_roles_and_groups_config,
+    ValidatedRoleConfigByPropertyKind,
 };
 use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
 use stackable_operator::role_utils::{
-    get_role_and_group_labels, list_eligible_nodes_for_role_and_group, RoleGroup,
+    get_role_and_group_labels, list_eligible_nodes_for_role_and_group,
 };
 use stackable_operator::{k8s_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
@@ -62,64 +70,42 @@ impl OpaState {
         mandatory_labels
     }
 
-    async fn create_config_map(
-        &self,
-        name: &str,
-        role_group: &str,
-        labels: &BTreeMap<String, String>,
-    ) -> Result<(), Error> {
-        let config = match self.context.resource.spec.servers.selectors.get(role_group) {
-            Some(selector) => &selector.config,
-            None => {
-                return Err(RoleGroupMissing {
-                    role_group: role_group.to_string(),
-                })
-            }
+    /// Create or update a config map.
+    /// - Create if no config map of that name exists
+    /// - Update if config map exists but the content differs
+    /// - Do nothing if the config map exists and the content is identical
+    async fn create_config_map(&self, config_map: ConfigMap) -> Result<(), Error> {
+        let cm_name = match config_map.metadata.name.as_deref() {
+            None => return Err(Error::InvalidConfigMap),
+            Some(name) => name,
         };
-
-        let config = create_config_file(config);
-
-        let mut data = BTreeMap::new();
-        data.insert("config.yaml".to_string(), config);
-
-        // And now create the actual ConfigMap
-        // TODO: use builder
-        let mut config_map = ConfigMap::default();
-        /*stackable_operator::config_map::create_config_map(
-            &self.context.resource,
-            &name,
-            data.clone(),
-        )?;*/
-
-        // add required labels
-        config_map.metadata.labels = labels.clone();
 
         match self
             .context
             .client
-            .get::<ConfigMap>(name, Some(&self.context.namespace()))
+            .get::<ConfigMap>(cm_name, Some(&self.context.namespace()))
             .await
         {
-            Ok(existing_config_map) => {
-                if let Some(existing_config_map_data) = existing_config_map.data {
-                    if existing_config_map_data == data {
-                        debug!(
-                            "ConfigMap [{}] already exists with identical data, skipping creation!",
-                            name
-                        );
-                    } else {
-                        debug!(
-                            "ConfigMap [{}] already exists, but differs, recreating it!",
-                            name
-                        );
-                        self.context.client.update(&config_map).await?;
-                    }
-                }
+            Ok(ConfigMap {
+                data: existing_config_map_data,
+                ..
+            }) if existing_config_map_data == config_map.data => {
+                debug!(
+                    "ConfigMap [{}] already exists with identical data, skipping creation!",
+                    cm_name
+                );
+            }
+            Ok(_) => {
+                debug!(
+                    "ConfigMap [{}] already exists, but differs, updating it!",
+                    cm_name
+                );
+                self.context.client.update(&config_map).await?;
             }
             Err(e) => {
                 // TODO: This is shit, but works for now. If there is an actual error in comes with
                 //   K8S, it will most probably also occur further down and be properly handled
-                debug!("Error getting ConfigMap [{}]: [{:?}]", name, e);
+                debug!("Error getting ConfigMap [{}]: [{:?}]", cm_name, e);
                 self.context.client.create(&config_map).await?;
             }
         }
@@ -135,7 +121,7 @@ impl OpaState {
         //   - Role groups for this role (user defined)
         //      - Individual nodes
         for role in OpaRole::iter() {
-            if let Some(nodes_for_role) = self.eligible_nodes.get(&role) {
+            if let Some(nodes_for_role) = self.eligible_nodes.get(&role.to_string()) {
                 let role_str = &role.to_string();
                 for (role_group, nodes) in nodes_for_role {
                     debug!(
@@ -186,21 +172,141 @@ impl OpaState {
                             role_group
                         );
 
-                        // Create a pod for this node, role and group combination
-                        let pod = build_pod(
-                            &self.context.resource,
-                            node_name,
-                            &labels,
-                            &pod_name,
-                            &cm_name,
-                            opa_config,
-                        )?;
+                        let (pod, config_maps) = self
+                            .create_pod_and_config_maps(
+                                &role,
+                                role_group,
+                                &node_name,
+                                &config_for_role_and_group(
+                                    role_str,
+                                    role_group,
+                                    &self.validated_role_config,
+                                )?,
+                            )
+                            .await?;
+
                         self.context.client.create(&pod).await?;
+
+                        for config_map in config_maps {
+                            self.create_config_map(config_map).await?;
+                        }
                     }
                 }
             }
         }
         Ok(ReconcileFunctionAction::Continue)
+    }
+
+    async fn create_pod_and_config_maps(
+        &self,
+        role: &OpaRole,
+        role_group: &str,
+        node_name: &str,
+        validated_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
+    ) -> Result<(Pod, Vec<ConfigMap>), Error> {
+        let mut config_maps = vec![];
+        let mut env_vars = vec![];
+        let mut start_command = vec![];
+
+        let mut cm_data = BTreeMap::new();
+        let pod_name = build_pod_name(
+            APP_NAME,
+            &self.context.name(),
+            &role.to_string(),
+            role_group,
+            node_name,
+        );
+        let cm_name = format!("{}-config", pod_name);
+
+        for (property_name_kind, config) in validated_config {
+            match property_name_kind {
+                PropertyNameKind::File(file_name) => {
+                    if file_name.as_str() == CONFIG_FILE {
+                        if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
+                            cm_data.insert(
+                                CONFIG_FILE.to_string(),
+                                create_config_file(repo_reference),
+                            );
+                            config_maps.push(
+                                ConfigMapBuilder::new()
+                                    .metadata(
+                                        ObjectMetaBuilder::new()
+                                            .name(cm_name.clone())
+                                            .ownerreference_from_resource(
+                                                &self.context.resource,
+                                                Some(true),
+                                                Some(true),
+                                            )?
+                                            .namespace(&self.context.client.default_namespace)
+                                            .build()?,
+                                    )
+                                    .data(cm_data.clone())
+                                    .build()?,
+                            )
+                        }
+                    }
+                }
+                PropertyNameKind::Env => {
+                    for (property_name, property_value) in config {
+                        if property_name.is_empty() {
+                            warn!("Received empty property_name for ENV... skipping");
+                            continue;
+                        }
+
+                        env_vars.push(EnvVar {
+                            name: property_name.clone(),
+                            value: Some(property_value.to_string()),
+                            value_from: None,
+                        });
+                    }
+                }
+                PropertyNameKind::Cli => {
+                    if let Some(port) = config.get(PORT) {
+                        start_command = create_opa_start_command(Some(port.clone()));
+                    }
+                }
+            }
+        }
+
+        let version = &self.context.resource.spec.version.to_string();
+
+        let labels = get_recommended_labels(
+            &self.context.resource,
+            APP_NAME,
+            version,
+            &role.to_string(),
+            role_group,
+        );
+
+        let mut container_builder = ContainerBuilder::new("opa");
+        container_builder.image(format!(
+            "opa:{}",
+            &self.context.resource.spec.version.to_string()
+        ));
+        container_builder.command(start_command);
+        container_builder.add_configmapvolume(cm_name, "conf".to_string());
+
+        for env in env_vars {
+            if let Some(val) = env.value {
+                container_builder.add_env_var(env.name, val);
+            }
+        }
+
+        let pod = PodBuilder::new()
+            .metadata(
+                ObjectMetaBuilder::new()
+                    .name(pod_name)
+                    .namespace(&self.context.client.default_namespace)
+                    .with_labels(labels)
+                    .ownerreference_from_resource(&self.context.resource, Some(true), Some(true))?
+                    .build()?,
+            )
+            .add_stackable_agent_tolerations()
+            .add_container(container_builder.build())
+            .node_name(node_name)
+            .build()?;
+
+        Ok((pod, config_maps))
     }
 }
 
@@ -243,7 +349,6 @@ impl ReconciliationState for OpaState {
     }
 }
 
-#[derive(Debug)]
 struct OpaStrategy {
     config: Arc<ProductConfigManager>,
 }
@@ -266,7 +371,12 @@ impl ControllerStrategy for OpaStrategy {
         &self,
         context: ReconciliationContext<Self::Item>,
     ) -> Result<Self::State, Self::Error> {
-        let existing_pods = context.list_pods().await?;
+        let existing_pods = context
+            .list_owned(build_common_labels_for_all_managed_resources(
+                APP_NAME,
+                &context.resource.name(),
+            ))
+            .await?;
         trace!("Found [{}] pods", existing_pods.len());
 
         let mut eligible_nodes = HashMap::new();
@@ -276,7 +386,7 @@ impl ControllerStrategy for OpaStrategy {
             role_utils::find_nodes_that_fit_selectors(
                 &context.client,
                 None,
-                &context.resource.servers,
+                &context.resource.spec.servers,
             )
             .await?,
         );
@@ -288,6 +398,33 @@ impl ControllerStrategy for OpaStrategy {
             eligible_nodes,
         })
     }
+}
+
+pub fn validated_product_config(
+    resource: &OpenPolicyAgent,
+    product_config: &ProductConfigManager,
+) -> OperatorResult<ValidatedRoleConfigByPropertyKind> {
+    let mut roles = HashMap::new();
+    roles.insert(
+        OpaRole::Server.to_string(),
+        (
+            vec![
+                PropertyNameKind::File(CONFIG_FILE.to_string()),
+                PropertyNameKind::Cli,
+            ],
+            resource.spec.servers.clone().into_dyn(),
+        ),
+    );
+
+    let role_config = transform_all_roles_to_config(resource, roles);
+
+    validate_all_roles_and_groups_config(
+        &resource.spec.version.to_string(),
+        &role_config,
+        &product_config,
+        false,
+        false,
+    )
 }
 
 /// This creates an instance of a [`Controller`] which waits for incoming events and reconciles them.
@@ -311,7 +448,7 @@ pub async fn create_controller(client: Client) {
         .await;
 }
 
-fn create_config_file(config: &OpaConfig) -> String {
+fn create_config_file(repo_rule_reference: &str) -> String {
     format!(
         "services:
   - name: stackable
@@ -325,6 +462,6 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20",
-        config.repo_rule_reference
+        repo_rule_reference
     )
 }
