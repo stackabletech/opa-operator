@@ -12,7 +12,7 @@ use strum_macros::EnumIter;
 use tracing::error;
 
 pub const APP_NAME: &str = "opa";
-pub const MANAGED_BY: &str = "stackable-opa";
+pub const MANAGED_BY: &str = "opa-operator";
 
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const REPO_RULE_REFERENCE: &str = "repoRuleReference";
