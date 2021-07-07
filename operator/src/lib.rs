@@ -52,7 +52,7 @@ struct OpaState {
 }
 
 impl OpaState {
-    pub fn deletion_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
+    pub fn required_pod_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
         let roles = OpaRole::iter()
             .map(|role| role.to_string())
             .collect::<Vec<_>>();
@@ -323,7 +323,7 @@ impl ReconciliationState for OpaState {
             self.context
                 .delete_illegal_pods(
                     self.existing_pods.as_slice(),
-                    &self.deletion_labels(),
+                    &self.required_pod_labels(),
                     ContinuationStrategy::OneRequeue,
                 )
                 .await?
