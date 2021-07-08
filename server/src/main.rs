@@ -1,11 +1,14 @@
 use stackable_opa_crd::OpenPolicyAgent;
 use stackable_operator::crd::CustomResourceExt;
-use stackable_operator::{client, error as operator_error};
-use tracing::error;
+use stackable_operator::{client, error};
+use tracing::{error, info};
 
 #[tokio::main]
-async fn main() -> Result<(), operator_error::Error> {
+async fn main() -> Result<(), error::Error> {
     stackable_operator::logging::initialize_logging("OPA_OPERATOR_LOG");
+
+    info!("Starting Stackable Operator for OpenPolicyAgent");
+
     let client = client::create_client(Some("authz.stackable.tech".to_string())).await?;
 
     if let Err(error) = stackable_operator::crd::wait_until_crds_present(
