@@ -6,7 +6,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use stackable_operator::product_config_utils::{ConfigError, Configuration};
 use stackable_operator::role_utils::Role;
-use stackable_operator::Crd;
 use std::collections::BTreeMap;
 use strum_macros::EnumIter;
 use tracing::error;
@@ -21,7 +20,7 @@ pub const PORT: &str = "port";
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
     group = "authz.stackable.tech",
-    version = "v1",
+    version = "v1alpha1",
     kind = "OpenPolicyAgent",
     shortname = "opa",
     namespaced
@@ -124,9 +123,4 @@ pub enum OpaRole {
     #[serde(rename = "server")]
     #[strum(serialize = "server")]
     Server,
-}
-
-impl Crd for OpenPolicyAgent {
-    const RESOURCE_NAME: &'static str = "openpolicyagents.authz.stackable.tech";
-    const CRD_DEFINITION: &'static str = include_str!("../../deploy/crd/server.opa.crd.yaml");
 }

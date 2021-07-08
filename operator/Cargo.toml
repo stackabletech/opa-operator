@@ -9,7 +9,7 @@ license = "OSL-3.0"
 [dependencies]
 product-config = { git = "https://github.com/stackabletech/product-config.git", branch = "main" }
 stackable-opa-crd = { path = "../crd" }
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", branch = "adapt_to_product_config_interface" }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", branch = "main" }
 
 async-trait = "0.1"
 futures = "0.3"

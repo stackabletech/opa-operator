@@ -1,5 +1,5 @@
 use stackable_opa_crd::OpenPolicyAgent;
-use stackable_operator::crd::Crd;
+use stackable_operator::crd::CustomResourceExt;
 use stackable_operator::{client, error as operator_error};
 use tracing::error;
 
@@ -10,7 +10,7 @@ async fn main() -> Result<(), operator_error::Error> {
 
     if let Err(error) = stackable_operator::crd::wait_until_crds_present(
         &client,
-        vec![OpenPolicyAgent::RESOURCE_NAME],
+        vec![&OpenPolicyAgent::crd_name()],
         None,
     )
     .await

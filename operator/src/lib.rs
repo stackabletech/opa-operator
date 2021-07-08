@@ -177,7 +177,7 @@ impl OpaState {
                                 &role,
                                 role_group,
                                 &node_name,
-                                &config_for_role_and_group(
+                                config_for_role_and_group(
                                     role_str,
                                     role_group,
                                     &self.validated_role_config,
@@ -412,7 +412,7 @@ pub fn validated_product_config(
                 PropertyNameKind::File(CONFIG_FILE.to_string()),
                 PropertyNameKind::Cli,
             ],
-            resource.spec.servers.clone().into_dyn(),
+            resource.spec.servers.clone().into(),
         ),
     );
 

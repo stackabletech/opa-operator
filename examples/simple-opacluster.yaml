@@ -1,4 +1,4 @@
-apiVersion: authz.stackable.tech/v1
+apiVersion: authz.stackable.tech/v1alpha1
 kind: OpenPolicyAgent
 metadata:
   name: simple-opacluster
