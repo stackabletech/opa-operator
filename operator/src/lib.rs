@@ -197,6 +197,12 @@ impl OpaState {
         Ok(ReconcileFunctionAction::Continue)
     }
 
+    /// This method creates a pod and required config map(s) for a certain role and role_group.
+    /// The validated_config from the product-config is used to create the config map data, as
+    /// well as setting the ENV variables in the containers or adapt / expand the CLI parameters.
+    /// First we iterate through the validated_config and extract files (which represents one or
+    /// more config map(s)), env variables for the pod containers and cli parameters for the
+    /// container start command and arguments.
     async fn create_pod_and_config_maps(
         &self,
         role: &OpaRole,
@@ -208,7 +214,6 @@ impl OpaState {
         let mut env_vars = vec![];
         let mut start_command = vec![];
 
-        let mut cm_data = BTreeMap::new();
         let pod_name = build_pod_name(
             APP_NAME,
             &self.context.name(),
@@ -216,36 +221,22 @@ impl OpaState {
             role_group,
             node_name,
         );
+
         let cm_name = format!("{}-config", pod_name);
+        let mut cm_data = BTreeMap::new();
 
         for (property_name_kind, config) in validated_config {
             match property_name_kind {
+                // we collect the data for the config map here and build it later
                 PropertyNameKind::File(file_name) => {
                     if file_name.as_str() == CONFIG_FILE {
                         if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
-                            cm_data.insert(
-                                CONFIG_FILE.to_string(),
-                                create_config_file(repo_reference),
-                            );
-                            config_maps.push(
-                                ConfigMapBuilder::new()
-                                    .metadata(
-                                        ObjectMetaBuilder::new()
-                                            .name(cm_name.clone())
-                                            .ownerreference_from_resource(
-                                                &self.context.resource,
-                                                Some(true),
-                                                Some(true),
-                                            )?
-                                            .namespace(&self.context.client.default_namespace)
-                                            .build()?,
-                                    )
-                                    .data(cm_data.clone())
-                                    .build()?,
-                            )
+                            cm_data
+                                .insert(file_name.to_string(), create_config_file(repo_reference));
                         }
                     }
                 }
+                // we collect env variables here and add it to the pod container later
                 PropertyNameKind::Env => {
                     for (property_name, property_value) in config {
                         if property_name.is_empty() {
@@ -267,6 +258,23 @@ impl OpaState {
                 }
             }
         }
+
+        config_maps.push(
+            ConfigMapBuilder::new()
+                .metadata(
+                    ObjectMetaBuilder::new()
+                        .name(cm_name.clone())
+                        .ownerreference_from_resource(
+                            &self.context.resource,
+                            Some(true),
+                            Some(true),
+                        )?
+                        .namespace(&self.context.client.default_namespace)
+                        .build()?,
+                )
+                .data(cm_data)
+                .build()?,
+        );
 
         let version = &self.context.resource.spec.version.to_string();
 
