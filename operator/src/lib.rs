@@ -1,12 +1,11 @@
 mod error;
-mod pod_utils;
 
 use crate::error::Error;
-use crate::pod_utils::{build_pod_name, create_opa_start_command};
 use async_trait::async_trait;
 use futures::Future;
 use k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Node, Pod};
 use kube::api::ListParams;
+use kube::error::ErrorResponse;
 use kube::Api;
 use kube::ResourceExt;
 use product_config::types::PropertyNameKind;
@@ -34,7 +33,7 @@ use stackable_operator::reconcile::{
 use stackable_operator::role_utils::{
     get_role_and_group_labels, list_eligible_nodes_for_role_and_group,
 };
-use stackable_operator::{k8s_utils, role_utils};
+use stackable_operator::{k8s_utils, pod_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -102,12 +101,13 @@ impl OpaState {
                 );
                 self.context.client.update(&config_map).await?;
             }
-            Err(e) => {
-                // TODO: This is shit, but works for now. If there is an actual error in comes with
-                //   K8S, it will most probably also occur further down and be properly handled
-                debug!("Error getting ConfigMap [{}]: [{:?}]", cm_name, e);
+            Err(stackable_operator::error::Error::KubeError {
+                source: kube::error::Error::Api(ErrorResponse { reason, .. }),
+            }) if reason == "NotFound" => {
+                debug!("Error getting ConfigMap [{}]: [{:?}]", cm_name, reason);
                 self.context.client.create(&config_map).await?;
             }
+            Err(e) => return Err(Error::OperatorError { source: e }),
         }
 
         Ok(())
@@ -214,11 +214,11 @@ impl OpaState {
         let mut env_vars = vec![];
         let mut start_command = vec![];
 
-        let pod_name = build_pod_name(
+        let pod_name = pod_utils::get_pod_name(
             APP_NAME,
             &self.context.name(),
-            &role.to_string(),
             role_group,
+            &role.to_string(),
             node_name,
         );
 
@@ -472,4 +472,21 @@ bundles:
       max_delay_seconds: 20",
         repo_rule_reference
     )
+}
+
+fn create_opa_start_command(port: Option<String>) -> Vec<String> {
+    let mut command = vec![String::from("./opa run")];
+
+    // --server
+    command.push("-s".to_string());
+
+    if let Some(port) = port {
+        // --addr
+        command.push(format!("-a 0.0.0.0:{}", port))
+    }
+
+    // --config-file
+    command.push("-c {{configroot}}/conf/config.yaml".to_string());
+
+    command
 }
