@@ -1,3 +1,4 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -12,8 +13,7 @@ spec:
     singular: openpolicyagent
   scope: Namespaced
   versions:
-    - additionalPrinterColumns: []
-      name: v1
+    - name: v1alpha1
       schema:
         openAPIV3Schema:
           description: "Auto-generated derived type for OpaSpec via `CustomResource`"
@@ -22,10 +22,46 @@ spec:
               properties:
                 servers:
                   properties:
-                    selectors:
+                    cliOverrides:
+                      additionalProperties:
+                        type: string
+                      nullable: true
+                      type: object
+                    config:
+                      nullable: true
+                      properties:
+                        port:
+                          format: uint16
+                          minimum: 0.0
+                          nullable: true
+                          type: integer
+                        repoRuleReference:
+                          type: string
+                      required:
+                        - repoRuleReference
+                      type: object
+                    configOverrides:
+                      additionalProperties:
+                        additionalProperties:
+                          type: string
+                        type: object
+                      nullable: true
+                      type: object
+                    envOverrides:
+                      additionalProperties:
+                        type: string
+                      nullable: true
+                      type: object
+                    roleGroups:
                       additionalProperties:
                         properties:
+                          cliOverrides:
+                            additionalProperties:
+                              type: string
+                            nullable: true
+                            type: object
                           config:
+                            nullable: true
                             properties:
                               port:
                                 format: uint16
@@ -37,12 +73,20 @@ spec:
                             required:
                               - repoRuleReference
                             type: object
-                          instances:
+                          configOverrides:
+                            additionalProperties:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            nullable: true
+                            type: object
+                          envOverrides:
+                            additionalProperties:
+                              type: string
+                            nullable: true
+                            type: object
+                          replicas:
                             format: uint16
-                            minimum: 0.0
-                            type: integer
-                          instancesPerNode:
-                            format: uint8
                             minimum: 0.0
                             type: integer
                           selector:
@@ -76,14 +120,12 @@ spec:
                                 type: object
                             type: object
                         required:
-                          - config
-                          - instances
-                          - instancesPerNode
+                          - replicas
                           - selector
                         type: object
                       type: object
                   required:
-                    - selectors
+                    - roleGroups
                   type: object
                 version:
                   enum:

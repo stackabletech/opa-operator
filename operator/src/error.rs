@@ -18,6 +18,7 @@ pub enum Error {
         source: serde_json::Error,
     },
 
-    #[error("Could not find role group [{role_group}] in spec.")]
-    RoleGroupMissing { role_group: String },
+    // TODO: move to operator-rs
+    #[error("Invalid Configmap. No name found which is required to query the ConfigMap.")]
+    InvalidConfigMap,
 }
