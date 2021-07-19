@@ -232,7 +232,7 @@ impl OpaState {
                     if file_name.as_str() == CONFIG_FILE {
                         if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
                             cm_data
-                                .insert(file_name.to_string(), create_config_file(repo_reference));
+                                .insert(file_name.to_string(), build_config_file(repo_reference));
                         }
                     }
                 }
@@ -253,7 +253,7 @@ impl OpaState {
                 }
                 PropertyNameKind::Cli => {
                     if let Some(port) = config.get(PORT) {
-                        start_command = create_opa_start_command(Some(port.clone()));
+                        start_command = build_opa_start_command(Some(port.clone()));
                     }
                 }
             }
@@ -408,6 +408,8 @@ impl ControllerStrategy for OpaStrategy {
     }
 }
 
+/// Validates the provided custom resource configuration fpr the provided roles with the
+/// product-config.
 pub fn validated_product_config(
     resource: &OpenPolicyAgent,
     product_config: &ProductConfigManager,
@@ -456,7 +458,7 @@ pub async fn create_controller(client: Client) {
         .await;
 }
 
-fn create_config_file(repo_rule_reference: &str) -> String {
+fn build_config_file(repo_rule_reference: &str) -> String {
     format!(
         "services:
   - name: stackable
@@ -474,7 +476,7 @@ bundles:
     )
 }
 
-fn create_opa_start_command(port: Option<String>) -> Vec<String> {
+fn build_opa_start_command(port: Option<String>) -> Vec<String> {
     let mut command = vec![String::from("./opa run")];
 
     // --server
