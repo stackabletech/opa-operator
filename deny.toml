@@ -26,10 +26,8 @@ deny = [
 
 exceptions = [
     { name = "stackable-opa-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-zookeeper-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-kafka-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-kafka-operator-server", allow = ["OSL-3.0"] },
-    { name = "stackable-kafka-operator", allow = ["OSL-3.0"] },
+    { name = "stackable-opa-operator-server", allow = ["OSL-3.0"] },
+    { name = "stackable-opa-operator", allow = ["OSL-3.0"] },
 ]
 
 [[licenses.clarify]]
