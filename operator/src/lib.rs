@@ -303,9 +303,17 @@ impl OpaState {
         // only add metrics container port and annotation if available
         if let Some(metrics_port) = port {
             annotations.insert(SHOULD_BE_SCRAPED.to_string(), "true".to_string());
+            let parsed_port = metrics_port.parse()?;
+            // with OPA, there is only one port available
+            // we expose that port twice: once for metrics and once for the clients
             container_builder.add_container_port(
-                ContainerPortBuilder::new(metrics_port.parse()?)
+                ContainerPortBuilder::new(parsed_port)
                     .name("metrics")
+                    .build(),
+            );
+            container_builder.add_container_port(
+                ContainerPortBuilder::new(parsed_port)
+                    .name("client")
                     .build(),
             );
         }
