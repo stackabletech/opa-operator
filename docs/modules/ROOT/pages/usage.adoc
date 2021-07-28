@@ -1,26 +1,28 @@
 = Usage
 
-OpenPolicyAgent can be defined in a YAML file:
+After installation, the CRD for this operator must be created:
 
-[source,yaml]
-----
-apiVersion: authz.stackable.tech/v1
-kind: OpenPolicyAgent
-metadata:
-  name: simple-opacluster
-spec:
-  version: "0.27.1"
-  servers:
-    selectors:
-      default:
-        selector:
-          matchLabels:
-            kubernetes.io/hostname: "foobar"
-        instances: 1
-        instancesPerNode: 1
-        config:
-          port: 8181
-          repoRuleReference: "http://foobar:3030/opa/v1"
+    kubectl apply -f /etc/stackable/opa-operator/crd/opa.crd.yaml
 
-----
+To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on port 8181:
+
+
+    cat <<EOF | kubectl apply -f -
+    apiVersion: authz.stackable.tech/v1alpha1
+    kind: OpenPolicyAgent
+    metadata:
+      name: simple
+    spec:
+      version: "0.27.1"
+      servers:
+        roleGroups:
+          default:
+            selector:
+              matchLabels:
+                kubernetes.io/arch: stackable-linux
+            replicas: 1
+            config:
+              port: 8181
+              repoRuleReference: "http://mdesktop:3030/opa/v1"
+    EOF
 
