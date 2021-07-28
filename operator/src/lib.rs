@@ -14,7 +14,7 @@ use stackable_opa_crd::{
     OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REPO_RULE_REFERENCE,
 };
 use stackable_operator::builder::{
-    ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder,
+    ConfigMapBuilder, ContainerBuilder, ContainerPortBuilder, ObjectMetaBuilder, PodBuilder,
 };
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
@@ -33,7 +33,7 @@ use stackable_operator::reconcile::{
 use stackable_operator::role_utils::{
     get_role_and_group_labels, list_eligible_nodes_for_role_and_group,
 };
-use stackable_operator::{k8s_utils, pod_utils, role_utils};
+use stackable_operator::{cli, k8s_utils, pod_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -41,12 +41,15 @@ use std::time::Duration;
 use strum::IntoEnumIterator;
 use tracing::{debug, info, trace, warn};
 
+const FINALIZER_NAME: &str = "opa.stackable.tech/cleanup";
+const SHOULD_BE_SCRAPED: &str = "monitoring.stackable.tech/should_be_scraped";
+
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
 struct OpaState {
     context: ReconciliationContext<OpenPolicyAgent>,
     existing_pods: Vec<Pod>,
-    eligible_nodes: HashMap<String, HashMap<String, Vec<Node>>>,
+    eligible_nodes: HashMap<String, HashMap<String, (Vec<Node>, usize)>>,
     validated_role_config: ValidatedRoleConfigByPropertyKind,
 }
 
@@ -107,7 +110,7 @@ impl OpaState {
                 debug!("Error getting ConfigMap [{}]: [{:?}]", cm_name, reason);
                 self.context.client.create(&config_map).await?;
             }
-            Err(e) => return Err(Error::OperatorError { source: e }),
+            Err(e) => return Err(Error::OperatorFrameworkError { source: e }),
         }
 
         Ok(())
@@ -123,7 +126,7 @@ impl OpaState {
         for role in OpaRole::iter() {
             if let Some(nodes_for_role) = self.eligible_nodes.get(&role.to_string()) {
                 let role_str = &role.to_string();
-                for (role_group, nodes) in nodes_for_role {
+                for (role_group, (nodes, replicas)) in nodes_for_role {
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
                         role_str, role_group
@@ -153,6 +156,7 @@ impl OpaState {
                         nodes,
                         &self.existing_pods,
                         &get_role_and_group_labels(role_str, role_group),
+                        *replicas,
                     );
 
                     for node in nodes_that_need_pods {
@@ -213,6 +217,7 @@ impl OpaState {
         let mut config_maps = vec![];
         let mut env_vars = vec![];
         let mut start_command = vec![];
+        let mut port = None;
 
         let pod_name = pod_utils::get_pod_name(
             APP_NAME,
@@ -252,9 +257,8 @@ impl OpaState {
                     }
                 }
                 PropertyNameKind::Cli => {
-                    if let Some(port) = config.get(PORT) {
-                        start_command = build_opa_start_command(Some(port.clone()));
-                    }
+                    port = config.get(PORT);
+                    start_command = build_opa_start_command(port);
                 }
             }
         }
@@ -293,11 +297,17 @@ impl OpaState {
         ));
         container_builder.command(start_command);
         container_builder.add_configmapvolume(cm_name, "conf".to_string());
+        container_builder.add_env_vars(env_vars);
 
-        for env in env_vars {
-            if let Some(val) = env.value {
-                container_builder.add_env_var(env.name, val);
-            }
+        let mut annotations = BTreeMap::new();
+        // only add metrics container port and annotation if available
+        if let Some(metrics_port) = port {
+            annotations.insert(SHOULD_BE_SCRAPED.to_string(), "true".to_string());
+            container_builder.add_container_port(
+                ContainerPortBuilder::new(metrics_port.parse()?)
+                    .name("metrics")
+                    .build(),
+            );
         }
 
         let pod = PodBuilder::new()
@@ -306,6 +316,7 @@ impl OpaState {
                     .name(pod_name)
                     .namespace(&self.context.client.default_namespace)
                     .with_labels(labels)
+                    .with_annotations(annotations)
                     .ownerreference_from_resource(&self.context.resource, Some(true), Some(true))?
                     .build()?,
             )
@@ -315,6 +326,13 @@ impl OpaState {
             .build()?;
 
         Ok((pod, config_maps))
+    }
+
+    async fn delete_all_pods(&self) -> OperatorResult<ReconcileFunctionAction> {
+        for pod in &self.existing_pods {
+            self.context.client.delete(pod).await?;
+        }
+        Ok(ReconcileFunctionAction::Done)
     }
 }
 
@@ -329,11 +347,13 @@ impl ReconciliationState for OpaState {
 
         Box::pin(async move {
             self.context
-                .delete_illegal_pods(
+                .handle_deletion(Box::pin(self.delete_all_pods()), FINALIZER_NAME, true)
+                .await?
+                .then(self.context.delete_illegal_pods(
                     self.existing_pods.as_slice(),
                     &self.required_pod_labels(),
                     ContinuationStrategy::OneRequeue,
-                )
+                ))
                 .await?
                 .then(
                     self.context
@@ -440,7 +460,7 @@ pub fn validated_product_config(
 /// This creates an instance of a [`Controller`] which waits for incoming events and reconciles them.
 ///
 /// This is an async method and the returned future needs to be consumed to make progress.
-pub async fn create_controller(client: Client) {
+pub async fn create_controller(client: Client) -> OperatorResult<()> {
     let opa_api: Api<OpenPolicyAgent> = client.get_all_api();
     let pods_api: Api<Pod> = client.get_all_api();
     let configmaps_api: Api<ConfigMap> = client.get_all_api();
@@ -449,18 +469,29 @@ pub async fn create_controller(client: Client) {
         .owns(pods_api, ListParams::default())
         .owns(configmaps_api, ListParams::default());
 
-    let product_config =
-        ProductConfigManager::from_yaml_file("deploy/config-spec/properties.yaml").unwrap();
+    let product_config_path = cli::product_config_path(
+        "opa-operator",
+        vec![
+            "deploy/config-spec/properties.yaml",
+            "/etc/stackable/opa-operator/config-spec/properties.yaml",
+        ],
+    )?;
+
+    let product_config = ProductConfigManager::from_yaml_file(&product_config_path).unwrap();
+
     let strategy = OpaStrategy::new(product_config);
 
     controller
         .run(client, strategy, Duration::from_secs(10))
         .await;
+
+    Ok(())
 }
 
 fn build_config_file(repo_rule_reference: &str) -> String {
     format!(
-        "services:
+        "
+services:
   - name: stackable
     url: {}
 
@@ -476,7 +507,7 @@ bundles:
     )
 }
 
-fn build_opa_start_command(port: Option<String>) -> Vec<String> {
+fn build_opa_start_command(port: Option<&String>) -> Vec<String> {
     let mut command = vec![String::from("./opa run")];
 
     // --server
