@@ -10,7 +10,6 @@ spec:
         selector:
           matchLabels:
             kubernetes.io/arch: stackable-linux
-        replicas: 1
         config:
           port: 8181
           repoRuleReference: "http://mdesktop:3030/opa/v1"

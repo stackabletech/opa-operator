@@ -3,7 +3,7 @@ mod error;
 use crate::error::Error;
 use async_trait::async_trait;
 use futures::Future;
-use k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Node, Pod};
+use k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Pod};
 use kube::api::ListParams;
 use kube::error::ErrorResponse;
 use kube::Api;
@@ -31,7 +31,7 @@ use stackable_operator::reconcile::{
     ContinuationStrategy, ReconcileFunctionAction, ReconcileResult, ReconciliationContext,
 };
 use stackable_operator::role_utils::{
-    get_role_and_group_labels, list_eligible_nodes_for_role_and_group,
+    get_role_and_group_labels, list_eligible_nodes_for_role_and_group, EligibleNodesForRoleAndGroup,
 };
 use stackable_operator::{cli, k8s_utils, pod_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
@@ -49,7 +49,7 @@ type OpaReconcileResult = ReconcileResult<error::Error>;
 struct OpaState {
     context: ReconciliationContext<OpenPolicyAgent>,
     existing_pods: Vec<Pod>,
-    eligible_nodes: HashMap<String, HashMap<String, (Vec<Node>, usize)>>,
+    eligible_nodes: EligibleNodesForRoleAndGroup,
     validated_role_config: ValidatedRoleConfigByPropertyKind,
 }
 
