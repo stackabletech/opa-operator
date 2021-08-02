@@ -180,7 +180,7 @@ impl OpaState {
                             .create_pod_and_config_maps(
                                 &role,
                                 role_group,
-                                &node_name,
+                                node_name,
                                 config_for_role_and_group(
                                     role_str,
                                     role_group,
@@ -370,7 +370,7 @@ impl ReconciliationState for OpaState {
                 .await?
                 .then(
                     self.context
-                        .wait_for_running_and_ready_pods(&self.existing_pods.as_slice()),
+                        .wait_for_running_and_ready_pods(self.existing_pods.as_slice()),
                 )
                 .await?
                 .then(self.context.delete_excess_pods(
@@ -459,7 +459,7 @@ pub fn validated_product_config(
     validate_all_roles_and_groups_config(
         &resource.spec.version.to_string(),
         &role_config,
-        &product_config,
+        product_config,
         false,
         false,
     )
