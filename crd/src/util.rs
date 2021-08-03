@@ -555,7 +555,7 @@ mod tests {
         let conn_string = get_opa_connection_string_from_pods(
             &opa_spec,
             &pods,
-            &opa_api,
+            opa_api,
             opa_api_protocol,
             desired_node_name,
         )
