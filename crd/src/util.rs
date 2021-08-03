@@ -303,12 +303,12 @@ fn get_opa_connection_string_from_pods(
             Some(role_group) => role_group.to_owned(),
         };
 
-        let opa_port = get_opa_port(&opa_spec, &role_group)?;
+        let opa_port = get_opa_port(opa_spec, &role_group)?;
 
         // if a node_name is provided we prefer OPA deployments that are located on the same machine
         if let Some(desired_host) = &desired_node_name {
             if node_name == desired_host {
-                let url = opa_api.get_url(opa_api_protocol, &node_name, opa_port)?;
+                let url = opa_api.get_url(opa_api_protocol, node_name, opa_port)?;
                 debug!(
                     "Found Opa deployment on provided node [{}]; Using this one [{}] ...",
                     node_name, url
@@ -329,7 +329,7 @@ fn get_opa_connection_string_from_pods(
     let server = server_and_port_list.choose(&mut rand::thread_rng());
 
     if let Some(server_url) = server {
-        Ok(opa_api.get_url(opa_api_protocol, &server_url.0, server_url.1)?)
+        Ok(opa_api.get_url(opa_api_protocol, server_url.0, server_url.1)?)
     } else {
         Err(OpaServerMissing)
     }
@@ -555,7 +555,7 @@ mod tests {
         let conn_string = get_opa_connection_string_from_pods(
             &opa_spec,
             &pods,
-            &opa_api,
+            opa_api,
             opa_api_protocol,
             desired_node_name,
         )
