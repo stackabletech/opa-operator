@@ -1,3 +1,4 @@
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Pod has no hostname assignment, this is most probably a transient failure and should be retried: [{pod}]")]
