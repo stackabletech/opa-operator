@@ -1,5 +1,6 @@
 use std::num::ParseIntError;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // TODO: move to operator-rs
