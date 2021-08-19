@@ -30,6 +30,6 @@ maintainer-scripts = "packaging/debian/"
 systemd-units = { enable = false }
 assets = [
     ["../target/release/stackable-opa-operator-server", "opt/stackable/opa-operator/", "755"],
-    ["../deploy/crd/opa.crd.yaml", "etc/stackable/opa-operator/crd/", "644"],
+    ["../deploy/crd/openpolicyagent.crd.yaml", "etc/stackable/opa-operator/crd/", "644"],
     ["../deploy/config-spec/properties.yaml", "etc/stackable/opa-operator/config-spec/", "644"],
 ]
