@@ -19,7 +19,7 @@ pub const PORT: &str = "port";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
-    group = "authz.stackable.tech",
+    group = "opa.stackable.tech",
     version = "v1alpha1",
     kind = "OpenPolicyAgent",
     shortname = "opa",
