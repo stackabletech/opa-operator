@@ -477,7 +477,7 @@ pub async fn create_controller(client: Client, product_config_path: &str) -> Ope
         .owns(pods_api, ListParams::default())
         .owns(configmaps_api, ListParams::default());
 
-    let product_config = ProductConfigManager::from_yaml_file(&product_config_path).unwrap();
+    let product_config = ProductConfigManager::from_yaml_file(product_config_path).unwrap();
 
     let strategy = OpaStrategy::new(product_config);
 
