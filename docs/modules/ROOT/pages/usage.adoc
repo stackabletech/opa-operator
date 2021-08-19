@@ -8,7 +8,7 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
 
 
     cat <<EOF | kubectl apply -f -
-    apiVersion: authz.stackable.tech/v1alpha1
+    apiVersion: opa.stackable.tech/v1alpha1
     kind: OpenPolicyAgent
     metadata:
       name: simple
