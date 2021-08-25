@@ -5,7 +5,6 @@ use async_trait::async_trait;
 use futures::Future;
 use k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Pod};
 use kube::api::ListParams;
-use kube::error::ErrorResponse;
 use kube::Api;
 use kube::ResourceExt;
 use product_config::types::PropertyNameKind;
@@ -14,7 +13,7 @@ use stackable_opa_crd::{
     OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REPO_RULE_REFERENCE,
 };
 use stackable_operator::builder::{
-    ConfigMapBuilder, ContainerBuilder, ContainerPortBuilder, ObjectMetaBuilder, PodBuilder,
+    ContainerBuilder, ContainerPortBuilder, ObjectMetaBuilder, PodBuilder,
 };
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
@@ -33,7 +32,7 @@ use stackable_operator::reconcile::{
 use stackable_operator::role_utils::{
     get_role_and_group_labels, list_eligible_nodes_for_role_and_group, EligibleNodesForRoleAndGroup,
 };
-use stackable_operator::{k8s_utils, pod_utils, role_utils};
+use stackable_operator::{configmap, k8s_utils, name_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -43,6 +42,7 @@ use tracing::{debug, info, trace, warn};
 
 const FINALIZER_NAME: &str = "opa.stackable.tech/cleanup";
 const SHOULD_BE_SCRAPED: &str = "monitoring.stackable.tech/should_be_scraped";
+const CONFIG_MAP_TYPE_CONFIG: &str = "config";
 
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
@@ -70,50 +70,6 @@ impl OpaState {
             Some(vec![self.context.resource.spec.version.to_string()]),
         );
         mandatory_labels
-    }
-
-    /// Create or update a config map.
-    /// - Create if no config map of that name exists
-    /// - Update if config map exists but the content differs
-    /// - Do nothing if the config map exists and the content is identical
-    async fn create_config_map(&self, config_map: ConfigMap) -> Result<(), Error> {
-        let cm_name = match config_map.metadata.name.as_deref() {
-            None => return Err(Error::InvalidConfigMap),
-            Some(name) => name,
-        };
-
-        match self
-            .context
-            .client
-            .get::<ConfigMap>(cm_name, Some(&self.context.namespace()))
-            .await
-        {
-            Ok(ConfigMap {
-                data: existing_config_map_data,
-                ..
-            }) if existing_config_map_data == config_map.data => {
-                debug!(
-                    "ConfigMap [{}] already exists with identical data, skipping creation!",
-                    cm_name
-                );
-            }
-            Ok(_) => {
-                debug!(
-                    "ConfigMap [{}] already exists, but differs, updating it!",
-                    cm_name
-                );
-                self.context.client.update(&config_map).await?;
-            }
-            Err(stackable_operator::error::Error::KubeError {
-                source: kube::error::Error::Api(ErrorResponse { reason, .. }),
-            }) if reason == "NotFound" => {
-                debug!("Error getting ConfigMap [{}]: [{:?}]", cm_name, reason);
-                self.context.client.create(&config_map).await?;
-            }
-            Err(e) => return Err(Error::OperatorFrameworkError { source: e }),
-        }
-
-        Ok(())
     }
 
     async fn create_missing_pods(&mut self) -> OpaReconcileResult {
@@ -176,24 +132,27 @@ impl OpaState {
                             role_group
                         );
 
-                        let (pod, config_maps) = self
-                            .create_pod_and_config_maps(
-                                &role,
-                                role_group,
-                                node_name,
-                                config_for_role_and_group(
-                                    role_str,
-                                    role_group,
-                                    &self.validated_role_config,
-                                )?,
-                            )
+                        // now we have a node that needs pods -> get validated config
+                        let validated_config = config_for_role_and_group(
+                            role_str,
+                            role_group,
+                            &self.validated_role_config,
+                        )?;
+
+                        let config_maps = self
+                            .create_config_maps(role_str, role_group, validated_config)
                             .await?;
 
-                        self.context.client.create(&pod).await?;
+                        self.create_pod(
+                            role_str,
+                            role_group,
+                            node_name,
+                            &config_maps,
+                            validated_config,
+                        )
+                        .await?;
 
-                        for config_map in config_maps {
-                            self.create_config_map(config_map).await?;
-                        }
+                        return Ok(ReconcileFunctionAction::Requeue(Duration::from_secs(10)));
                     }
                 }
             }
@@ -201,47 +160,104 @@ impl OpaState {
         Ok(ReconcileFunctionAction::Continue)
     }
 
-    /// This method creates a pod and required config map(s) for a certain role and role_group.
-    /// The validated_config from the product-config is used to create the config map data, as
-    /// well as setting the ENV variables in the containers or adapt / expand the CLI parameters.
-    /// First we iterate through the validated_config and extract files (which represents one or
-    /// more config map(s)), env variables for the pod containers and cli parameters for the
-    /// container start command and arguments.
-    async fn create_pod_and_config_maps(
+    /// Creates the config maps required for an opa instance (or role, role_group combination):
+    /// * The 'config.yaml'
+    ///
+    /// The 'config.yaml' properties are read from the product_config.
+    ///
+    /// Labels are automatically adapted from the `recommended_labels` with a type (config for
+    /// 'config.yaml'). Names are generated via `name_utils::build_resource_name`.
+    ///
+    /// Returns a map with a 'type' identifier (e.g. data, id) as key and the corresponding
+    /// ConfigMap as value. This is required to set the volume mounts in the pod later on.
+    ///
+    /// # Arguments
+    ///
+    /// - `role` - The Zookeeper role.
+    /// - `group` - The role group.
+    /// - `validated_config` - The validated product config.
+    ///
+    async fn create_config_maps(
         &self,
-        role: &OpaRole,
-        role_group: &str,
-        node_name: &str,
+        role: &str,
+        group: &str,
         validated_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
-    ) -> Result<(Pod, Vec<ConfigMap>), Error> {
-        let mut config_maps = vec![];
+    ) -> Result<HashMap<&'static str, ConfigMap>, Error> {
+        let mut config_maps = HashMap::new();
+
+        let recommended_labels = get_recommended_labels(
+            &self.context.resource,
+            APP_NAME,
+            &self.context.resource.spec.version.to_string(),
+            role,
+            group,
+        );
+
+        // Get config from product-config for the zookeeper properties file (zoo.cfg)
+        if let Some(config) = validated_config.get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
+        {
+            // enhance with config map type label
+            let mut cm_config_labels = recommended_labels.clone();
+            cm_config_labels.insert(
+                configmap::CONFIGMAP_TYPE_LABEL.to_string(),
+                CONFIG_MAP_TYPE_CONFIG.to_string(),
+            );
+
+            let cm_config_name = name_utils::build_resource_name(
+                APP_NAME,
+                &self.context.name(),
+                role,
+                Some(group),
+                None,
+                Some(CONFIG_MAP_TYPE_CONFIG),
+            )?;
+
+            let mut cm_config_data = BTreeMap::new();
+            if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
+                cm_config_data.insert(CONFIG_FILE.to_string(), build_config_file(repo_reference));
+            }
+
+            let cm_config = configmap::build_config_map(
+                &self.context.resource,
+                &cm_config_name,
+                &self.context.namespace(),
+                cm_config_labels,
+                cm_config_data,
+            )?;
+
+            config_maps.insert(
+                CONFIG_MAP_TYPE_CONFIG,
+                configmap::create_config_map(&self.context.client, cm_config).await?,
+            );
+        }
+
+        Ok(config_maps)
+    }
+
+    /// Creates the pod required for the opa instance.
+    ///
+    /// # Arguments
+    ///
+    /// - `role` - The Zookeeper role.
+    /// - `group` - The role group.
+    /// - `node_name` - The node name for this pod.
+    /// - `config_maps` - The config maps and respective types required for this pod.
+    /// - `validated_config` - The validated product config.
+    ///
+    async fn create_pod(
+        &self,
+        role: &str,
+        group: &str,
+        node_name: &str,
+        config_maps: &HashMap<&'static str, ConfigMap>,
+        validated_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
+    ) -> Result<Pod, Error> {
         let mut env_vars = vec![];
         let mut start_command = vec![];
         let mut port = None;
 
-        let pod_name = pod_utils::get_pod_name(
-            APP_NAME,
-            &self.context.name(),
-            role_group,
-            &role.to_string(),
-            node_name,
-        );
-
-        let cm_name = format!("{}-config", pod_name);
-        let mut cm_data = BTreeMap::new();
-
         for (property_name_kind, config) in validated_config {
             match property_name_kind {
-                // we collect the data for the config map here and build it later
-                PropertyNameKind::File(file_name) => {
-                    if file_name.as_str() == CONFIG_FILE {
-                        if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
-                            cm_data
-                                .insert(file_name.to_string(), build_config_file(repo_reference));
-                        }
-                    }
-                }
-                // we collect env variables here and add it to the pod container later
                 PropertyNameKind::Env => {
                     for (property_name, property_value) in config {
                         if property_name.is_empty() {
@@ -260,44 +276,43 @@ impl OpaState {
                     port = config.get(PORT);
                     start_command = build_opa_start_command(port);
                 }
+                _ => {}
             }
         }
 
-        config_maps.push(
-            ConfigMapBuilder::new()
-                .metadata(
-                    ObjectMetaBuilder::new()
-                        .name(cm_name.clone())
-                        .ownerreference_from_resource(
-                            &self.context.resource,
-                            Some(true),
-                            Some(true),
-                        )?
-                        .namespace(&self.context.client.default_namespace)
-                        .build()?,
-                )
-                .data(cm_data)
-                .build()?,
-        );
-
-        let version = &self.context.resource.spec.version.to_string();
-
-        let labels = get_recommended_labels(
-            &self.context.resource,
+        let pod_name = name_utils::build_resource_name(
             APP_NAME,
-            version,
-            &role.to_string(),
-            role_group,
-        );
+            &self.context.name(),
+            role,
+            Some(group),
+            Some(node_name),
+            None,
+        )?;
 
-        let mut container_builder = ContainerBuilder::new("opa");
+        let mut container_builder = ContainerBuilder::new(APP_NAME);
         container_builder.image(format!(
-            "opa:{}",
+            "{}:{}",
+            APP_NAME,
             &self.context.resource.spec.version.to_string()
         ));
         container_builder.command(start_command);
-        container_builder.add_configmapvolume(cm_name, "conf".to_string());
         container_builder.add_env_vars(env_vars);
+
+        // One mount for the config directory, this will be relative to the extracted package
+        if let Some(config_map_data) = config_maps.get(CONFIG_MAP_TYPE_CONFIG) {
+            if let Some(name) = config_map_data.metadata.name.as_ref() {
+                container_builder.add_configmapvolume(name, "conf".to_string());
+            } else {
+                return Err(error::Error::MissingConfigMapNameError {
+                    cm_type: CONFIG_MAP_TYPE_CONFIG,
+                });
+            }
+        } else {
+            return Err(error::Error::MissingConfigMapError {
+                cm_type: CONFIG_MAP_TYPE_CONFIG,
+                pod_name,
+            });
+        }
 
         let mut annotations = BTreeMap::new();
         // only add metrics container port and annotation if available
@@ -318,12 +333,20 @@ impl OpaState {
             );
         }
 
+        let pod_labels = get_recommended_labels(
+            &self.context.resource,
+            APP_NAME,
+            &self.context.resource.spec.version.to_string(),
+            role,
+            group,
+        );
+
         let pod = PodBuilder::new()
             .metadata(
                 ObjectMetaBuilder::new()
-                    .name(pod_name)
+                    .generate_name(pod_name)
                     .namespace(&self.context.client.default_namespace)
-                    .with_labels(labels)
+                    .with_labels(pod_labels)
                     .with_annotations(annotations)
                     .ownerreference_from_resource(&self.context.resource, Some(true), Some(true))?
                     .build()?,
@@ -333,7 +356,7 @@ impl OpaState {
             .node_name(node_name)
             .build()?;
 
-        Ok((pod, config_maps))
+        Ok(self.context.client.create(&pod).await?)
     }
 
     async fn delete_all_pods(&self) -> OperatorResult<ReconcileFunctionAction> {
