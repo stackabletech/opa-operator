@@ -297,7 +297,7 @@ impl OpaState {
         container_builder.command(start_command);
         container_builder.add_env_vars(env_vars);
 
-        // One mount for the config directory, this will be relative to the extracted package
+        // Add one mount for the config directory
         if let Some(config_map_data) = config_maps.get(CONFIG_MAP_TYPE_CONFIG) {
             if let Some(name) = config_map_data.metadata.name.as_ref() {
                 container_builder.add_configmapvolume(name, "conf".to_string());
