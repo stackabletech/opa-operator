@@ -173,7 +173,7 @@ impl OpaState {
     ///
     /// # Arguments
     ///
-    /// - `role` - The Zookeeper role.
+    /// - `role` - The OPA role.
     /// - `group` - The role group.
     /// - `validated_config` - The validated product config.
     ///
@@ -193,7 +193,6 @@ impl OpaState {
             group,
         );
 
-        // Get config from product-config for the zookeeper properties file (zoo.cfg)
         if let Some(config) = validated_config.get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
         {
             // enhance with config map type label
@@ -238,7 +237,7 @@ impl OpaState {
     ///
     /// # Arguments
     ///
-    /// - `role` - The Zookeeper role.
+    /// - `role` - The OPA role.
     /// - `group` - The role group.
     /// - `node_name` - The node name for this pod.
     /// - `config_maps` - The config maps and respective types required for this pod.
