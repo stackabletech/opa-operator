@@ -4,6 +4,7 @@ description = "Stackable Operator for OpenPolicyAgent - The Custom Resource Defi
 edition = "2018"
 license = "OSL-3.0"
 name = "stackable-opa-crd"
+repository = "https://github.com/stackabletech/opa-operator"
 version = "0.1.0-nightly"
 
 [dependencies]
