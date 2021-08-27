@@ -1,5 +1,6 @@
 use crate::error::Error::{
-    OpaServerMissing, OperatorFrameworkError, PodMissingLabels, PodWithoutHostname,
+    NoOpaPodsAvailableForConnectionInfo, OpaServerMissing, OperatorFrameworkError,
+    PodMissingLabels, PodWithoutHostname,
 };
 use crate::error::OpaOperatorResult;
 use crate::{OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
@@ -164,6 +165,15 @@ pub async fn get_opa_connection_info(
         .list_with_label_selector(None, &get_match_labels(&opa_reference.name))
         .await?;
 
+    // No OPA pods means an empty connect string. We throw an error indicating to check the
+    // OPA custom resource or the OPA operator for errors.
+    if opa_pods.is_empty() {
+        return Err(NoOpaPodsAvailableForConnectionInfo {
+            namespace: opa_reference.namespace.clone(),
+            name: opa_reference.name.clone(),
+        });
+    }
+
     let connection_string = get_opa_connection_string_from_pods(
         &opa_cluster.spec,
         &opa_pods,
@@ -256,7 +266,8 @@ async fn check_opa_reference(
             opa_namespace,
             opa_name
         );
-        OperatorFrameworkError {source: err}})
+        OperatorFrameworkError {source: err}
+    })
 }
 
 /// Builds the actual connection string after all necessary information has been retrieved.
