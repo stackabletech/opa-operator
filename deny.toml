@@ -59,20 +59,3 @@ unknown-git = "deny"
 
 [sources.allow-org]
 github = ["stackabletech"]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
