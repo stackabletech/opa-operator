@@ -10,6 +10,9 @@ pub enum Error {
     #[error("Did not find any suitable OPA server. Please confirm that at least one OPA pod is up and running.")]
     OpaServerMissing,
 
+    #[error("No pods are found for OPA cluster [{namespace}/{name}]. Please check the OPA custom resource and OPA Operator for errors.")]
+    NoOpaPodsAvailableForConnectionInfo { namespace: String, name: String },
+
     #[error("Kubernetes reported error: {source}")]
     KubeError {
         #[from]
