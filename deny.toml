@@ -56,6 +56,7 @@ license-files = [
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+required-git-spec = "tag"
 
 [sources.allow-org]
 github = ["stackabletech"]
