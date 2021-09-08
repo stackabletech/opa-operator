@@ -36,7 +36,7 @@ After you added the repository run:
 [source,bash]
 ----
 sudo apt-get update
-sudo apt-get install stackable-opa-operator
+sudo apt-get install stackable-opa-operator-server
 ----
 
 === RHEL/CentOS
@@ -76,7 +76,7 @@ Install the Operator:
 
 [source,bash]
 ----
-sudo yum install stackable-opa-operator
+sudo yum install stackable-opa-operator-server
 ----
 
 == Docker
