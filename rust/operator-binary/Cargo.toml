@@ -26,7 +26,7 @@ stackable-opa-crd = { path = "../crd" }
 
 [package.metadata.deb]
 maintainer-scripts = "packaging/debian/"
-systemd-units = { enable = false }
+systemd-units = { enable = false, unit-name = "stackable-kafka-operator" }
 assets = [
     ["../../target/release/stackable-opa-operator", "opt/stackable/opa-operator/", "755"],
     ["../../deploy/crd/openpolicyagent.crd.yaml", "etc/stackable/opa-operator/crd/", "644"],
