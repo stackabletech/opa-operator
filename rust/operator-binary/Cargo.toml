@@ -4,7 +4,7 @@ build = "build.rs"
 description = "Stackable Operator for OpenPolicyAgent"
 edition = "2018"
 license = "OSL-3.0"
-name = "stackable-opa-operator-server"
+name = "stackable-opa-operator-binary"
 repository = "https://github.com/stackabletech/opa-operator"
 version = "0.2.0-nightly"
 
@@ -28,7 +28,11 @@ stackable-opa-crd = { path = "../crd" }
 maintainer-scripts = "packaging/debian/"
 systemd-units = { enable = false }
 assets = [
-    ["../target/release/stackable-opa-operator-server", "opt/stackable/opa-operator/", "755"],
-    ["../deploy/crd/openpolicyagent.crd.yaml", "etc/stackable/opa-operator/crd/", "644"],
-    ["../deploy/config-spec/properties.yaml", "etc/stackable/opa-operator/config-spec/", "644"],
+    ["../../target/release/stackable-opa-operator", "opt/stackable/opa-operator/", "755"],
+    ["../../deploy/crd/openpolicyagent.crd.yaml", "etc/stackable/opa-operator/crd/", "644"],
+    ["../../deploy/config-spec/properties.yaml", "etc/stackable/opa-operator/config-spec/", "644"],
 ]
+
+[[bin]]
+name = "stackable-opa-operator"
+path = "src/stackable-opa-operator.rs"
