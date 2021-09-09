@@ -26,7 +26,7 @@ stackable-opa-crd = { path = "../crd" }
 
 [package.metadata.deb]
 name = "stackable-opa-operator"
-maintainer-scripts = "packaging/debian/"
+maintainer-scripts = "../../packaging/debian/"
 systemd-units = { enable = false, unit-name = "stackable-opa-operator" }
 assets = [
     ["../../target/release/stackable-opa-operator", "opt/stackable/opa-operator/", "755"],
