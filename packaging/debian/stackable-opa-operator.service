@@ -1,5 +1,5 @@
 [Unit]
-Description=Stackable OpenPolicyAgent Operator
+Description=Stackable Opa Operator
 Before=
 After=network.target
 [Service]

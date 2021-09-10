@@ -56,4 +56,3 @@ rm -rf %{buildroot}
 %{_servicedir}/%{name}.service
 %{_productconfigdir}/*
 %{_crddir}/*
-

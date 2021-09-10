@@ -49,7 +49,7 @@ def copy_assets(root, assets):
         source = asset_def[0][6:] ### remove the leading ../
         dest = asset_def[1]
         dest_mod = int(asset_def[2], 8)
-
+        
         ### build the destination file name
         absolute_dest = os.path.join(root, dest, os.path.basename(source))
         ### create destination directory if doesn't exist already
