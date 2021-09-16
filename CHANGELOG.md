@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added versioning code from operator-rs for up and downgrades ([#86]).
+- Added `ProductVersion` to status ([#86]).
+- Added `Condition` to status ([#86]).
+
+### Removed
+- Code for version handling ([#86]).
+
+[#86]: https://github.com/stackabletech/opa-operator/pull/86
+
 ## [0.2.0] - 2021-09-14
 
 
