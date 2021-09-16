@@ -32,6 +32,8 @@ use stackable_operator::reconcile::{
 use stackable_operator::role_utils::{
     get_role_and_group_labels, list_eligible_nodes_for_role_and_group, EligibleNodesForRoleAndGroup,
 };
+use stackable_operator::status::init_status;
+use stackable_operator::versioning::{finalize_versioning, init_versioning};
 use stackable_operator::{configmap, k8s_utils, name_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
@@ -54,6 +56,19 @@ struct OpaState {
 }
 
 impl OpaState {
+    /// Will initialize the status object if it's never been set.
+    async fn init_status(&mut self) -> OpaReconcileResult {
+        // init status with default values if not available yet.
+        self.context.resource = init_status(&self.context.client, &self.context.resource).await?;
+
+        let spec_version = self.context.resource.spec.version.clone();
+
+        self.context.resource =
+            init_versioning(&self.context.client, &self.context.resource, spec_version).await?;
+
+        Ok(ReconcileFunctionAction::Continue)
+    }
+
     pub fn required_pod_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
         let roles = OpaRole::iter()
             .map(|role| role.to_string())
@@ -157,6 +172,12 @@ impl OpaState {
                 }
             }
         }
+
+        // If we reach here it means all pods must be running on target_version.
+        // We can now set current_version to target_version (if target_version was set) and
+        // target_version to None
+        finalize_versioning(&self.context.client, &self.context.resource).await?;
+
         Ok(ReconcileFunctionAction::Continue)
     }
 
@@ -376,8 +397,13 @@ impl ReconciliationState for OpaState {
         info!("========================= Starting reconciliation =========================");
 
         Box::pin(async move {
-            self.context
-                .handle_deletion(Box::pin(self.delete_all_pods()), FINALIZER_NAME, true)
+            self.init_status()
+                .await?
+                .then(self.context.handle_deletion(
+                    Box::pin(self.delete_all_pods()),
+                    FINALIZER_NAME,
+                    true,
+                ))
                 .await?
                 .then(self.context.delete_illegal_pods(
                     self.existing_pods.as_slice(),
