@@ -1,11 +1,16 @@
 pub mod error;
 pub mod util;
 
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
 use kube::CustomResource;
 use schemars::JsonSchema;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use stackable_operator::product_config_utils::{ConfigError, Configuration};
 use stackable_operator::role_utils::Role;
+use stackable_operator::status::{Conditions, Status, Versioned};
+use stackable_operator::versioning::{ProductVersion, Versioning, VersioningState};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use strum_macros::EnumIter;
 use tracing::error;
@@ -32,6 +37,15 @@ pub struct OpaSpec {
     pub servers: Role<OpaConfig>,
 }
 
+impl Status<OpaStatus> for OpenPolicyAgent {
+    fn status(&self) -> &Option<OpaStatus> {
+        &self.status
+    }
+    fn status_mut(&mut self) -> &mut Option<OpaStatus> {
+        &mut self.status
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(
     Clone,
@@ -49,10 +63,70 @@ pub enum OpaVersion {
     #[serde(rename = "0.27.1")]
     #[strum(serialize = "0.27.1")]
     v0_27_1,
+    #[serde(rename = "0.28.0")]
+    #[strum(serialize = "0.28.0")]
+    v0_28_0,
+}
+
+impl Versioning for OpaVersion {
+    fn versioning_state(&self, other: &Self) -> VersioningState {
+        let from_version = match Version::parse(&self.to_string()) {
+            Ok(v) => v,
+            Err(e) => {
+                return VersioningState::Invalid(format!(
+                    "Could not parse [{}] to SemVer: {}",
+                    self.to_string(),
+                    e.to_string()
+                ))
+            }
+        };
+
+        let to_version = match Version::parse(&other.to_string()) {
+            Ok(v) => v,
+            Err(e) => {
+                return VersioningState::Invalid(format!(
+                    "Could not parse [{}] to SemVer: {}",
+                    other.to_string(),
+                    e.to_string()
+                ))
+            }
+        };
+
+        match to_version.cmp(&from_version) {
+            Ordering::Greater => VersioningState::ValidUpgrade,
+            Ordering::Less => VersioningState::ValidDowngrade,
+            Ordering::Equal => VersioningState::NoOp,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
-pub struct OpaStatus {}
+#[serde(rename_all = "camelCase")]
+pub struct OpaStatus {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(schema_with = "stackable_operator::conditions::schema")]
+    pub conditions: Vec<Condition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<ProductVersion<OpaVersion>>,
+}
+
+impl Versioned<OpaVersion> for OpaStatus {
+    fn version(&self) -> &Option<ProductVersion<OpaVersion>> {
+        &self.version
+    }
+    fn version_mut(&mut self) -> &mut Option<ProductVersion<OpaVersion>> {
+        &mut self.version
+    }
+}
+
+impl Conditions for OpaStatus {
+    fn conditions(&self) -> &[Condition] {
+        self.conditions.as_slice()
+    }
+    fn conditions_mut(&mut self) -> &mut Vec<Condition> {
+        &mut self.conditions
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,4 +197,34 @@ pub enum OpaRole {
     #[serde(rename = "server")]
     #[strum(serialize = "server")]
     Server,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::OpaVersion;
+    use stackable_operator::versioning::{Versioning, VersioningState};
+    use std::str::FromStr;
+
+    #[test]
+    fn test_zookeeper_version_versioning() {
+        assert_eq!(
+            OpaVersion::v0_27_1.versioning_state(&OpaVersion::v0_28_0),
+            VersioningState::ValidUpgrade
+        );
+        assert_eq!(
+            OpaVersion::v0_28_0.versioning_state(&OpaVersion::v0_27_1),
+            VersioningState::ValidDowngrade
+        );
+        assert_eq!(
+            OpaVersion::v0_27_1.versioning_state(&OpaVersion::v0_27_1),
+            VersioningState::NoOp
+        );
+    }
+
+    #[test]
+    fn test_version_conversion() {
+        OpaVersion::from_str("0.27.1").unwrap();
+        OpaVersion::from_str("0.28.0").unwrap();
+        OpaVersion::from_str("1.2.3").unwrap_err();
+    }
 }

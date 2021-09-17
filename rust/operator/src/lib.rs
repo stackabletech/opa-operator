@@ -32,6 +32,8 @@ use stackable_operator::reconcile::{
 use stackable_operator::role_utils::{
     get_role_and_group_labels, list_eligible_nodes_for_role_and_group, EligibleNodesForRoleAndGroup,
 };
+use stackable_operator::status::init_status;
+use stackable_operator::versioning::{finalize_versioning, init_versioning};
 use stackable_operator::{configmap, k8s_utils, name_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
@@ -54,6 +56,19 @@ struct OpaState {
 }
 
 impl OpaState {
+    /// Will initialize the status object if it's never been set.
+    async fn init_status(&mut self) -> OpaReconcileResult {
+        // init status with default values if not available yet.
+        self.context.resource = init_status(&self.context.client, &self.context.resource).await?;
+
+        let spec_version = self.context.resource.spec.version.clone();
+
+        self.context.resource =
+            init_versioning(&self.context.client, &self.context.resource, spec_version).await?;
+
+        Ok(ReconcileFunctionAction::Continue)
+    }
+
     pub fn required_pod_labels(&self) -> BTreeMap<String, Option<Vec<String>>> {
         let roles = OpaRole::iter()
             .map(|role| role.to_string())
@@ -82,15 +97,16 @@ impl OpaState {
         for role in OpaRole::iter() {
             if let Some(nodes_for_role) = self.eligible_nodes.get(&role.to_string()) {
                 let role_str = &role.to_string();
-                for (role_group, (nodes, replicas)) in nodes_for_role {
+                for (role_group, eligible_nodes) in nodes_for_role {
                     debug!(
                         "Identify missing pods for [{}] role and group [{}]",
                         role_str, role_group
                     );
                     trace!(
                         "candidate_nodes[{}]: [{:?}]",
-                        nodes.len(),
-                        nodes
+                        eligible_nodes.nodes.len(),
+                        eligible_nodes
+                            .nodes
                             .iter()
                             .map(|node| node.metadata.name.as_ref().unwrap())
                             .collect::<Vec<_>>()
@@ -109,10 +125,10 @@ impl OpaState {
                         get_role_and_group_labels(role_str, role_group)
                     );
                     let nodes_that_need_pods = k8s_utils::find_nodes_that_need_pods(
-                        nodes,
+                        &eligible_nodes.nodes,
                         &self.existing_pods,
                         &get_role_and_group_labels(role_str, role_group),
-                        *replicas,
+                        eligible_nodes.replicas,
                     );
 
                     for node in nodes_that_need_pods {
@@ -157,6 +173,12 @@ impl OpaState {
                 }
             }
         }
+
+        // If we reach here it means all pods must be running on target_version.
+        // We can now set current_version to target_version (if target_version was set) and
+        // target_version to None
+        finalize_versioning(&self.context.client, &self.context.resource).await?;
+
         Ok(ReconcileFunctionAction::Continue)
     }
 
@@ -376,8 +398,13 @@ impl ReconciliationState for OpaState {
         info!("========================= Starting reconciliation =========================");
 
         Box::pin(async move {
-            self.context
-                .handle_deletion(Box::pin(self.delete_all_pods()), FINALIZER_NAME, true)
+            self.init_status()
+                .await?
+                .then(self.context.handle_deletion(
+                    Box::pin(self.delete_all_pods()),
+                    FINALIZER_NAME,
+                    true,
+                ))
                 .await?
                 .then(self.context.delete_illegal_pods(
                     self.existing_pods.as_slice(),
