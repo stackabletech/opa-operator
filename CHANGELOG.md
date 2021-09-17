@@ -9,13 +9,9 @@ All notable changes to this project will be documented in this file.
 - Added `ProductVersion` to status ([#86]).
 - Added `Condition` to status ([#86]).
 
-### Removed
-- Code for version handling ([#86]).
-
 [#86]: https://github.com/stackabletech/opa-operator/pull/86
 
 ## [0.2.0] - 2021-09-14
-
 
 ### Changed
 - **Breaking:** Repository structure was changed and the -server crate renamed to -binary. As part of this change the -server suffix was removed from both the package name for os packages and the name of the executable ([#72]).
