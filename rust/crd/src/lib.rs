@@ -201,7 +201,7 @@ pub enum OpaRole {
 
 #[cfg(test)]
 mod tests {
-    use crate::{OpaVersion, ZookeeperVersion};
+    use crate::OpaVersion;
     use stackable_operator::versioning::{Versioning, VersioningState};
     use std::str::FromStr;
 
