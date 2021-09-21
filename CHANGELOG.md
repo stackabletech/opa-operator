@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2021-09-21
+
+
 ### Changed
 
 - `kube-rs`: `0.58` → `0.60` ([#88]).
