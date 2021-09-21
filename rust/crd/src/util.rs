@@ -233,7 +233,6 @@ fn param_map_to_string(params: &BTreeMap<String, String>) -> String {
 
 /// Build a label selector that applies only to pods belonging to the cluster instance referenced
 /// by `name`
-// TODO: move to operator-rs
 fn get_match_labels(name: &str) -> LabelSelector {
     let mut opa_pod_matchlabels = BTreeMap::new();
     opa_pod_matchlabels.insert(String::from(APP_NAME_LABEL), String::from(APP_NAME));
@@ -241,7 +240,7 @@ fn get_match_labels(name: &str) -> LabelSelector {
     opa_pod_matchlabels.insert(String::from(APP_INSTANCE_LABEL), name.to_string());
 
     LabelSelector {
-        match_labels: opa_pod_matchlabels,
+        match_labels: Some(opa_pod_matchlabels),
         ..Default::default()
     }
 }
@@ -304,31 +303,33 @@ fn get_opa_connection_string_from_pods(
             Some(node_name) => node_name,
         };
 
-        let role_group = match pod.metadata.labels.get(APP_ROLE_GROUP_LABEL) {
-            None => {
-                return Err(PodMissingLabels {
-                    labels: vec![String::from(APP_ROLE_GROUP_LABEL)],
-                    pod: pod_name,
-                })
-            }
-            Some(role_group) => role_group.to_owned(),
-        };
+        if let Some(labels) = &pod.metadata.labels {
+            let role_group = match labels.get(APP_ROLE_GROUP_LABEL) {
+                None => {
+                    return Err(PodMissingLabels {
+                        labels: vec![String::from(APP_ROLE_GROUP_LABEL)],
+                        pod: pod_name,
+                    })
+                }
+                Some(role_group) => role_group.to_owned(),
+            };
 
-        let opa_port = get_opa_port(opa_spec, &role_group)?;
+            let opa_port = get_opa_port(opa_spec, &role_group)?;
 
-        // if a node_name is provided we prefer OPA deployments that are located on the same machine
-        if let Some(desired_host) = &desired_node_name {
-            if node_name == desired_host {
-                let url = opa_api.get_url(opa_api_protocol, node_name, opa_port)?;
-                debug!(
-                    "Found Opa deployment on provided node [{}]; Using this one [{}] ...",
-                    node_name, url
-                );
-                return Ok(url);
+            // if a node_name is provided we prefer OPA deployments that are located on the same machine
+            if let Some(desired_host) = &desired_node_name {
+                if node_name == desired_host {
+                    let url = opa_api.get_url(opa_api_protocol, node_name, opa_port)?;
+                    debug!(
+                        "Found Opa deployment on provided node [{}]; Using this one [{}] ...",
+                        node_name, url
+                    );
+                    return Ok(url);
+                }
             }
+
+            server_and_port_list.push((node_name, opa_port));
         }
-
-        server_and_port_list.push((node_name, opa_port));
     }
 
     // Sort list by hostname to make resulting connection strings predictable
