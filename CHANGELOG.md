@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - `kube-rs`: `0.58` → `0.60` ([#88]).
 - `k8s-openapi` `0.12` → `0.13` and features: `v1_21` → `v1_22` ([#88]).
+- `operator-rs` `0.2.1` → `0.2.2` ([#88]).
 
 ### Removed
 
