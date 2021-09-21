@@ -1,8 +1,6 @@
 use clap::{crate_version, App, AppSettings, SubCommand};
 use stackable_opa_crd::OpenPolicyAgent;
-use stackable_operator::crd::CustomResourceExt;
 use stackable_operator::{cli, client, error};
-use tracing::error;
 
 mod built_info {
     // The file has been placed there by the build script.
@@ -48,17 +46,6 @@ async fn main() -> Result<(), error::Error> {
     );
 
     let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
-
-    if let Err(error) = stackable_operator::crd::wait_until_crds_present(
-        &client,
-        vec![&OpenPolicyAgent::crd_name()],
-        None,
-    )
-    .await
-    {
-        error!("Required CRDs missing, aborting: {:?}", error);
-        return Err(error);
-    };
 
     stackable_opa_operator::create_controller(client, &product_config_path).await?;
     Ok(())

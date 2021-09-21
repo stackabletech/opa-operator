@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- `kube-rs`: `0.58` → `0.60` ([#88]).
+- `k8s-openapi` `0.12` → `0.13` and features: `v1_21` → `v1_22` ([#88]).
+- `operator-rs` `0.2.1` → `0.2.2` ([#88]).
+
+### Removed
+
+- `kube-runtime` dependency ([#88]).
+
+[#88]: https://github.com/stackabletech/opa-operator/pull/88
+
 ## [0.3.0] - 2021-09-20
 
 
