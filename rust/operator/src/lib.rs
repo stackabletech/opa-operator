@@ -19,6 +19,9 @@ use stackable_operator::builder::{
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::error::OperatorResult;
+use stackable_operator::identity::{
+    LabeledPodIdentityFactory, NodeIdentity, PodIdentity, PodToNodeMapping,
+};
 use stackable_operator::labels::{
     build_common_labels_for_all_managed_resources, get_recommended_labels, APP_COMPONENT_LABEL,
     APP_INSTANCE_LABEL, APP_VERSION_LABEL,
@@ -33,9 +36,12 @@ use stackable_operator::reconcile::{
 use stackable_operator::role_utils::{
     get_role_and_group_labels, list_eligible_nodes_for_role_and_group, EligibleNodesForRoleAndGroup,
 };
+use stackable_operator::scheduler::{
+    K8SUnboundedHistory, RoleGroupEligibleNodes, ScheduleStrategy, Scheduler, StickyScheduler,
+};
 use stackable_operator::status::init_status;
 use stackable_operator::versioning::{finalize_versioning, init_versioning};
-use stackable_operator::{configmap, k8s_utils, name_utils, role_utils};
+use stackable_operator::{configmap, name_utils, role_utils};
 use std::collections::{BTreeMap, HashMap};
 use std::pin::Pin;
 use std::sync::Arc;
@@ -46,6 +52,7 @@ use tracing::{debug, error, info, trace, warn};
 const FINALIZER_NAME: &str = "opa.stackable.tech/cleanup";
 const SHOULD_BE_SCRAPED: &str = "monitoring.stackable.tech/should_be_scraped";
 const CONFIG_MAP_TYPE_CONFIG: &str = "config";
+const ID_LABEL: &str = "opa.stackable.tech/id";
 
 type OpaReconcileResult = ReconcileResult<error::Error>;
 
@@ -125,49 +132,63 @@ impl OpaState {
                         "labels: [{:?}]",
                         get_role_and_group_labels(role_str, role_group)
                     );
-                    let nodes_that_need_pods = k8s_utils::find_nodes_that_need_pods(
-                        &eligible_nodes.nodes,
-                        &self.existing_pods,
-                        &get_role_and_group_labels(role_str, role_group),
-                        eligible_nodes.replicas,
+
+                    let mut history = match self
+                        .context
+                        .resource
+                        .status
+                        .as_ref()
+                        .and_then(|status| status.history.as_ref())
+                    {
+                        Some(simple_history) => {
+                            // we clone here because we cannot access mut self because we need it later
+                            // to create config maps and pods. The `status` history will be out of sync
+                            // with the cloned `simple_history` until the next reconcile.
+                            // The `status` history should not be used after this method to avoid side
+                            // effects.
+                            K8SUnboundedHistory::new(&self.context.client, simple_history.clone())
+                        }
+                        None => K8SUnboundedHistory::new(
+                            &self.context.client,
+                            PodToNodeMapping::default(),
+                        ),
+                    };
+
+                    let mut scheduler =
+                        StickyScheduler::new(&mut history, ScheduleStrategy::GroupAntiAffinity);
+
+                    let pod_id_factory = LabeledPodIdentityFactory::new(
+                        APP_NAME,
+                        &self.context.name(),
+                        &self.eligible_nodes,
+                        ID_LABEL,
+                        1,
                     );
 
-                    for node in nodes_that_need_pods {
-                        let node_name = if let Some(node_name) = &node.metadata.name {
-                            node_name
-                        } else {
-                            warn!("No name found in metadata, this should not happen! Skipping node: [{:?}]", node);
-                            continue;
-                        };
-                        debug!(
-                            "Creating pod on node [{}] for [{}] role and group [{}]",
-                            node.metadata
-                                .name
-                                .as_deref()
-                                .unwrap_or("<no node name found>"),
-                            role_str,
-                            role_group
-                        );
+                    let state = scheduler.schedule(
+                        &pod_id_factory,
+                        &RoleGroupEligibleNodes::from(&self.eligible_nodes),
+                        &self.existing_pods,
+                    )?;
 
-                        // now we have a node that needs pods -> get validated config
+                    let mapping = state
+                        .remaining_mapping()
+                        .get_filtered(&role_str.to_string(), role_group);
+
+                    if let Some((pod_id, node_id)) = mapping.iter().next() {
+                        // now we have a node that needs a pod -> get validated config
                         let validated_config = config_for_role_and_group(
-                            role_str,
-                            role_group,
+                            pod_id.role(),
+                            pod_id.group(),
                             &self.validated_role_config,
                         )?;
 
-                        let config_maps = self
-                            .create_config_maps(role_str, role_group, validated_config)
+                        let config_maps = self.create_config_maps(pod_id, validated_config).await?;
+
+                        self.create_pod(pod_id, node_id, &config_maps, validated_config)
                             .await?;
 
-                        self.create_pod(
-                            role_str,
-                            role_group,
-                            node_name,
-                            &config_maps,
-                            validated_config,
-                        )
-                        .await?;
+                        history.save(&self.context.resource).await?;
 
                         return Ok(ReconcileFunctionAction::Requeue(Duration::from_secs(10)));
                     }
@@ -196,24 +217,22 @@ impl OpaState {
     ///
     /// # Arguments
     ///
-    /// - `role` - The OPA role.
-    /// - `group` - The role group.
+    /// - `pod_id` - The pod identity of the pod that references the newly created config map.
     /// - `validated_config` - The validated product config.
     ///
     async fn create_config_maps(
         &self,
-        role: &str,
-        group: &str,
+        pod_id: &PodIdentity,
         validated_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     ) -> Result<HashMap<&'static str, ConfigMap>, Error> {
         let mut config_maps = HashMap::new();
 
         let recommended_labels = get_recommended_labels(
             &self.context.resource,
-            APP_NAME,
+            pod_id.app(),
             &self.context.resource.spec.version.to_string(),
-            role,
-            group,
+            pod_id.role(),
+            pod_id.group(),
         );
 
         if let Some(config) = validated_config.get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
@@ -226,10 +245,10 @@ impl OpaState {
             );
 
             let cm_config_name = name_utils::build_resource_name(
-                APP_NAME,
+                pod_id.app(),
                 &self.context.name(),
-                role,
-                Some(group),
+                pod_id.role(),
+                Some(pod_id.group()),
                 None,
                 Some(CONFIG_MAP_TYPE_CONFIG),
             )?;
@@ -268,9 +287,8 @@ impl OpaState {
     ///
     async fn create_pod(
         &self,
-        role: &str,
-        group: &str,
-        node_name: &str,
+        pod_id: &PodIdentity,
+        node_id: &NodeIdentity,
         config_maps: &HashMap<&'static str, ConfigMap>,
         validated_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     ) -> Result<Pod, Error> {
@@ -303,18 +321,18 @@ impl OpaState {
         }
 
         let pod_name = name_utils::build_resource_name(
-            APP_NAME,
+            pod_id.app(),
             &self.context.name(),
-            role,
-            Some(group),
-            Some(node_name),
+            pod_id.role(),
+            Some(pod_id.group()),
+            Some(node_id.name.as_str()),
             None,
         )?;
 
-        let mut container_builder = ContainerBuilder::new(APP_NAME);
+        let mut container_builder = ContainerBuilder::new(pod_id.app());
         container_builder.image(format!(
             "{}:{}",
-            APP_NAME,
+            pod_id.app(),
             &self.context.resource.spec.version.to_string()
         ));
         container_builder.command(start_command);
@@ -355,13 +373,14 @@ impl OpaState {
             );
         }
 
-        let pod_labels = get_recommended_labels(
+        let mut pod_labels = get_recommended_labels(
             &self.context.resource,
-            APP_NAME,
+            pod_id.app(),
             &self.context.resource.spec.version.to_string(),
-            role,
-            group,
+            pod_id.role(),
+            pod_id.group(),
         );
+        pod_labels.insert(ID_LABEL.to_string(), pod_id.id().to_string());
 
         let pod = PodBuilder::new()
             .metadata(
@@ -375,7 +394,7 @@ impl OpaState {
             )
             .add_stackable_agent_tolerations()
             .add_container(container_builder.build())
-            .node_name(node_name)
+            .node_name(node_id.name.as_str())
             .build()?;
 
         Ok(self.context.client.create(&pod).await?)
