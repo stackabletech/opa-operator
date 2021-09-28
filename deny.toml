@@ -35,18 +35,20 @@ allow = [
 
 exceptions = [
     { name = "stackable-opa-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-opa-operator-binary", allow = ["OSL-3.0"] },
+    { name = "stackable-zookeeper-crd", allow = ["OSL-3.0"] },
+    { name = "stackable-opa-crd", allow = ["OSL-3.0"] },
     { name = "stackable-opa-operator", allow = ["OSL-3.0"] },
+    { name = "stackable-opa-operator-binary", allow = ["OSL-3.0"] },
 ]
 
-[[licenses.clarify]]
+[licenses.clarify]
 name = "ring"
 expression = "LicenseRef-ring"
 license-files = [
     { path = "LICENSE", hash = 0xbd0eed23 },
 ]
 
-[[licenses.clarify]]
+[licenses.clarify]
 name = "webpki"
 expression = "LicenseRef-webpki"
 license-files = [
@@ -56,7 +58,6 @@ license-files = [
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-required-git-spec = "tag"
 
 [sources.allow-org]
 github = ["stackabletech"]
