@@ -857,9 +857,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.102"
+version = "0.2.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2a5ac8f984bfcf3a823267e5fde638acc3325f6496633a5da6bb6eb2171e103"
+checksum = "dd8f7255a17a627354f321ef0055d63b898c6fb27eff628af4d1b66b7331edf6"
 
 [[package]]
 name = "libgit2-sys"
@@ -1615,7 +1615,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator"
 version = "0.2.3-nightly"
-source = "git+https://github.com/stackabletech/operator-rs.git?branch=feature/schedule-pods-without-ids#8a75ddee3f769446f5ea98fbcd4bdcc33346bfe9"
+source = "git+https://github.com/stackabletech/operator-rs.git?branch=feature/schedule-pods-without-ids#0e26ca8155633d30a83fc42ca146192194e72527"
 dependencies = [
  "async-trait",
  "backoff",
