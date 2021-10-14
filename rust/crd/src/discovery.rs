@@ -35,7 +35,7 @@ pub enum TicketReferences {
 /// This has the benefit of keeping references to OPA consistent
 /// throughout the entire stack.
 // TODO: move to operator-rs as NamespaceName
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 pub struct OpaReference {
     pub namespace: String,
     pub name: String,
@@ -192,7 +192,7 @@ pub async fn get_opa_connection_info(
 /// # Examples
 ///
 /// ```
-/// use stackable_opa_crd::util::clean_url;
+/// use stackable_opa_crd::discovery::clean_url;
 /// assert_eq!(clean_url("//a/b//c".to_string()), "/a/b/c".to_string());
 /// assert_eq!(clean_url("//a/b//c"), "/a/b/c".to_string());
 /// assert_eq!(clean_url("https:///a/b//c"), "https:///a/b/c".to_string());
