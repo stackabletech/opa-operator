@@ -1151,21 +1151,6 @@ dependencies = [
 
 [[package]]
 name = "product-config"
-version = "0.1.0"
-source = "git+https://github.com/stackabletech/product-config.git?tag=0.1.0#2c8f66264cceca02d0a7ecb413435041cd7d0ca6"
-dependencies = [
- "java-properties",
- "regex",
- "schemars",
- "semver",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
-]
-
-[[package]]
-name = "product-config"
 version = "0.2.0-nightly"
 source = "git+https://github.com/stackabletech/product-config.git?branch=main#53c4bac3aa52bf61f5cef4fc47447be67749c3ce"
 dependencies = [
@@ -1600,7 +1585,7 @@ dependencies = [
  "futures",
  "k8s-openapi",
  "kube",
- "product-config 0.1.0",
+ "product-config",
  "serde",
  "serde_json",
  "stackable-opa-crd",
@@ -1645,7 +1630,7 @@ dependencies = [
  "kube",
  "kube-runtime",
  "lazy_static",
- "product-config 0.2.0-nightly",
+ "product-config",
  "rand",
  "regex",
  "schemars",
