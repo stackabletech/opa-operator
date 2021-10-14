@@ -1,5 +1,8 @@
+pub mod discovery;
 pub mod error;
-pub mod util;
+
+#[deprecated(note = "The util module has been renamed to discovery, please use this instead.")]
+pub use discovery as util;
 
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
 use kube::CustomResource;
