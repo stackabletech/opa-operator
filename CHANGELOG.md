@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added PartialEq trait to `OpaReference` ([#103]).
+
+### Changed
+
+- Renamed crd/util to crd::discovery and added deprecated reexport for backwards compatibility ([#103]).
+
+[#103]: https://github.com/stackabletech/opa-operator/pull/103
+
 ## [0.4.0] - 2021-09-21
 
 
