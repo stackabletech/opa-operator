@@ -1152,7 +1152,7 @@ dependencies = [
 [[package]]
 name = "product-config"
 version = "0.2.0-nightly"
-source = "git+https://github.com/stackabletech/product-config.git?branch=main#53c4bac3aa52bf61f5cef4fc47447be67749c3ce"
+source = "git+https://github.com/stackabletech/product-config.git?branch=main#97734dfa78c5e96922b2fc99bbd0cf2a1b7ac89d"
 dependencies = [
  "java-properties",
  "regex",
@@ -1570,7 +1570,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "stackable-operator",
- "strum",
+ "strum 0.21.0",
  "strum_macros",
  "thiserror",
  "tracing",
@@ -1590,7 +1590,7 @@ dependencies = [
  "serde_json",
  "stackable-opa-crd",
  "stackable-operator",
- "strum",
+ "strum 0.21.0",
  "strum_macros",
  "thiserror",
  "tokio",
@@ -1616,7 +1616,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator"
 version = "0.2.3-nightly"
-source = "git+https://github.com/stackabletech/operator-rs.git?branch=main#7965121542135b6c9c1287b0e7b4f9cf32ae7fe2"
+source = "git+https://github.com/stackabletech/operator-rs.git?branch=main#477c489183569db831447f978c8cb51ecf418ead"
 dependencies = [
  "async-trait",
  "backoff",
@@ -1637,7 +1637,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "strum",
+ "strum 0.22.0",
  "strum_macros",
  "thiserror",
  "tokio",
@@ -1664,6 +1664,12 @@ name = "strum"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
+
+[[package]]
+name = "strum"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7ac893c7d471c8a21f31cfe213ec4f6d9afeed25537c772e08ef3f005f8729e"
 
 [[package]]
 name = "strum_macros"
