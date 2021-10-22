@@ -1571,7 +1571,7 @@ dependencies = [
  "serde_yaml",
  "stackable-operator",
  "strum",
- "strum_macros 0.21.1",
+ "strum_macros",
  "thiserror",
  "tracing",
  "url",
@@ -1591,7 +1591,7 @@ dependencies = [
  "stackable-opa-crd",
  "stackable-operator",
  "strum",
- "strum_macros 0.21.1",
+ "strum_macros",
  "thiserror",
  "tokio",
  "tracing",
@@ -1638,7 +1638,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "strum",
- "strum_macros 0.22.0",
+ "strum_macros",
  "thiserror",
  "tokio",
  "tracing",
@@ -1664,18 +1664,6 @@ name = "strum"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
-
-[[package]]
-name = "strum_macros"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d06aaeeee809dbc59eb4556183dd927df67db1540de5be8d3ec0b6636358a5ec"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "strum_macros"
