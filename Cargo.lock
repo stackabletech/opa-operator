@@ -1580,7 +1580,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "stackable-operator",
- "strum 0.21.0",
+ "strum",
  "strum_macros",
  "thiserror",
  "tracing",
@@ -1598,7 +1598,7 @@ dependencies = [
  "serde_json",
  "stackable-opa-crd",
  "stackable-operator",
- "strum 0.21.0",
+ "strum",
  "strum_macros",
  "thiserror",
  "tokio",
@@ -1642,7 +1642,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "strum 0.22.0",
+ "strum",
  "strum_macros",
  "thiserror",
  "tokio",
@@ -1663,12 +1663,6 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "strum"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
 
 [[package]]
 name = "strum"
