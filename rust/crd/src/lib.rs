@@ -4,14 +4,14 @@ pub mod error;
 #[deprecated(note = "The util module has been renamed to discovery, please use this instead.")]
 pub use discovery as util;
 
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
-use kube::CustomResource;
-use schemars::JsonSchema;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use stackable_operator::identity::PodToNodeMapping;
+use stackable_operator::k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
+use stackable_operator::kube::CustomResource;
 use stackable_operator::product_config_utils::{ConfigError, Configuration};
 use stackable_operator::role_utils::Role;
+use stackable_operator::schemars::{self, JsonSchema};
 use stackable_operator::status::{Conditions, Status, Versioned};
 use stackable_operator::versioning::{ProductVersion, Versioning, VersioningState};
 use std::cmp::Ordering;
@@ -32,9 +32,12 @@ pub const PORT: &str = "port";
     version = "v1alpha1",
     kind = "OpenPolicyAgent",
     shortname = "opa",
-    namespaced
+    status = "OpaStatus",
+    namespaced,
+    kube_core = "stackable_operator::kube::core",
+    k8s_openapi = "stackable_operator::k8s_openapi",
+    schemars = "stackable_operator::schemars"
 )]
-#[kube(status = "OpaStatus")]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
     pub version: OpaVersion,
