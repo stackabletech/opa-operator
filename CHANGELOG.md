@@ -10,8 +10,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- `operator-rs`: `0.3.0` ([#115]).
 - Renamed crd/util to crd::discovery and added deprecated reexport for backwards compatibility ([#103]).
 
+### Fixed
+- Fixed a bug where `wait_until_crds_present` only reacted to the main CRD, not the commands ([#115]).
+ 
+[#115]: https://github.com/stackabletech/opa-operator/pull/115
 [#103]: https://github.com/stackabletech/opa-operator/pull/103
 
 ## [0.4.0] - 2021-09-21
