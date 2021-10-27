@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - Renamed crd/util to crd::discovery and added deprecated reexport for backwards compatibility ([#103]).
 
 ### Fixed
-- Fixed a bug where `wait_until_crds_present` only reacted to the main CRD, not the commands ([#115]).
+- Moved `wait_until_crds_present` to operator-binary (preparation for commands) ([#115]).
  
 [#115]: https://github.com/stackabletech/opa-operator/pull/115
 [#103]: https://github.com/stackabletech/opa-operator/pull/103
