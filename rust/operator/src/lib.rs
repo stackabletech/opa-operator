@@ -3,13 +3,6 @@ mod error;
 use crate::error::Error;
 use async_trait::async_trait;
 use futures::Future;
-use k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Pod};
-use kube::api::ListParams;
-use kube::Api;
-use kube::CustomResourceExt;
-use kube::ResourceExt;
-use product_config::types::PropertyNameKind;
-use product_config::ProductConfigManager;
 use stackable_opa_crd::{
     OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REPO_RULE_REFERENCE,
 };
@@ -22,10 +15,17 @@ use stackable_operator::error::OperatorResult;
 use stackable_operator::identity::{
     LabeledPodIdentityFactory, NodeIdentity, PodIdentity, PodToNodeMapping,
 };
+use stackable_operator::k8s_openapi::api::core::v1::{ConfigMap, EnvVar, Pod};
+use stackable_operator::kube::api::ListParams;
+use stackable_operator::kube::Api;
+use stackable_operator::kube::CustomResourceExt;
+use stackable_operator::kube::ResourceExt;
 use stackable_operator::labels::{
     build_common_labels_for_all_managed_resources, get_recommended_labels, APP_COMPONENT_LABEL,
     APP_INSTANCE_LABEL, APP_VERSION_LABEL,
 };
+use stackable_operator::product_config::types::PropertyNameKind;
+use stackable_operator::product_config::ProductConfigManager;
 use stackable_operator::product_config_utils::{
     config_for_role_and_group, transform_all_roles_to_config, validate_all_roles_and_groups_config,
     ValidatedRoleConfigByPropertyKind,

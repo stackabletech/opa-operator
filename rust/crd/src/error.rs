@@ -1,3 +1,5 @@
+use stackable_operator::kube;
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

@@ -4,17 +4,17 @@ use crate::error::Error::{
 };
 use crate::error::OpaOperatorResult;
 use crate::{OpaSpec, OpenPolicyAgent, APP_NAME, MANAGED_BY};
-use k8s_openapi::api::core::v1::Pod;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
-use kube::ResourceExt;
 use rand::seq::SliceRandom;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use stackable_operator::client::Client;
 use stackable_operator::error::OperatorResult;
+use stackable_operator::k8s_openapi::api::core::v1::Pod;
+use stackable_operator::k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
+use stackable_operator::kube::ResourceExt;
 use stackable_operator::labels::{
     APP_INSTANCE_LABEL, APP_MANAGED_BY_LABEL, APP_NAME_LABEL, APP_ROLE_GROUP_LABEL,
 };
+use stackable_operator::schemars::{self, JsonSchema};
 use std::collections::BTreeMap;
 use std::string::ToString;
 use strum_macros::Display;
@@ -367,8 +367,8 @@ fn get_opa_port(opa_spec: &OpaSpec, role_group: &str) -> OpaOperatorResult<u16> 
 mod tests {
     use super::*;
     use indoc::indoc;
-    use k8s_openapi::api::core::v1::Pod;
     use rstest::rstest;
+    use stackable_operator::k8s_openapi::api::core::v1::Pod;
     use std::ops::Deref;
 
     #[test]

@@ -1,3 +1,4 @@
+use stackable_operator::kube;
 use std::num::ParseIntError;
 
 #[allow(clippy::enum_variant_names)]
