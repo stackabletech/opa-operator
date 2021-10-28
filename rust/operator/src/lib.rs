@@ -385,7 +385,7 @@ impl OpaState {
         );
         pod_labels.insert(ID_LABEL.to_string(), pod_id.id().to_string());
 
-        // for docker
+        // TODO: for docker local testing (remove later)
         let mut container = container_builder.build();
         container.image_pull_policy = Some("IfNotPresent".to_string());
 
