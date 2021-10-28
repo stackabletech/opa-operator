@@ -588,7 +588,8 @@ fn build_opa_start_command(port: Option<&String>) -> Vec<String> {
     command.push("-s".to_string());
 
     if let Some(port) = port {
-        command.push(format!("-a 0.0.0.0:{}", port))
+        command.push("-a".to_string());
+        command.push(format!("0.0.0.0:{}", port))
     }
 
     command.push("-c".to_string());
