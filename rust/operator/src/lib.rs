@@ -332,18 +332,19 @@ impl OpaState {
         )?;
 
         let mut container_builder = ContainerBuilder::new(pod_id.app());
-        container_builder.image(format!(
-            "{}:{}",
-            pod_id.app(),
-            &self.context.resource.spec.version.to_string()
-        ));
+        // container_builder.image(format!(
+        //     "{}:{}",
+        //     pod_id.app(),
+        //     &self.context.resource.spec.version.to_string()
+        // ));
+        container_builder.image("opa-test:latest".to_string());
         container_builder.command(start_command);
         container_builder.add_env_vars(env_vars);
 
         // Add one mount for the config directory
         if let Some(config_map_data) = config_maps.get(CONFIG_MAP_TYPE_CONFIG) {
             if let Some(name) = config_map_data.metadata.name.as_ref() {
-                container_builder.add_configmapvolume(name, "conf".to_string());
+                container_builder.add_configmapvolume(name, "/stackable/conf".to_string());
             } else {
                 return Err(error::Error::MissingConfigMapNameError {
                     cm_type: CONFIG_MAP_TYPE_CONFIG,
@@ -384,6 +385,10 @@ impl OpaState {
         );
         pod_labels.insert(ID_LABEL.to_string(), pod_id.id().to_string());
 
+        // for docker
+        let mut container = container_builder.build();
+        container.image_pull_policy = Some("IfNotPresent".to_string());
+
         let pod = PodBuilder::new()
             .metadata(
                 ObjectMetaBuilder::new()
@@ -395,7 +400,7 @@ impl OpaState {
                     .build()?,
             )
             .add_stackable_agent_tolerations()
-            .add_container(container_builder.build())
+            .add_container(container)
             .node_name(node_id.name.as_str())
             .build()?;
 
@@ -579,18 +584,15 @@ bundles:
 }
 
 fn build_opa_start_command(port: Option<&String>) -> Vec<String> {
-    let mut command = vec![String::from("./opa run")];
-
-    // --server
+    let mut command = vec!["/stackable/opa/opa".to_string(), "run".to_string()];
     command.push("-s".to_string());
 
     if let Some(port) = port {
-        // --addr
         command.push(format!("-a 0.0.0.0:{}", port))
     }
 
-    // --config-file
-    command.push("-c {{configroot}}/conf/config.yaml".to_string());
+    command.push("-c".to_string());
+    command.push("/stackable/conf/config.yaml".to_string());
 
     command
 }
