@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.1] - 2021-10-27
+
+
 ### Added
 
 - Added PartialEq trait to `OpaReference` ([#103]).
