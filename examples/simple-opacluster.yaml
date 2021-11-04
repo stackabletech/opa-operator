@@ -12,4 +12,4 @@ spec:
             kubernetes.io/os: linux
         config:
           port: 8181
-          repoRuleReference: "http://mdesktop:3030/opa/v1"
+          repoRuleReference: "http://192.168.178.27:3030/opa/v1"

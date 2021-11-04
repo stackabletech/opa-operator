@@ -331,8 +331,8 @@ impl OpaState {
 
         let mut container_builder = ContainerBuilder::new(pod_id.app());
         container_builder.image(format!(
-            "{}:{}",
-            pod_id.app(),
+            // TODO: How to handle the platform version?
+            "docker.stackable.tech/stackable/opa:{}-0.1",
             self.context.resource.spec.version.to_string()
         ));
         container_builder.command(start_command);
@@ -379,9 +379,6 @@ impl OpaState {
             pod_id.group(),
         );
         pod_labels.insert(ID_LABEL.to_string(), pod_id.id().to_string());
-
-        // TODO: remove if not testing locally
-        container_builder.image_pull_policy("IfNotPresent");
 
         let pod = pod_builder
             .metadata(
