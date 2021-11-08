@@ -4,7 +4,7 @@ use crate::error::Error;
 use async_trait::async_trait;
 use futures::Future;
 use stackable_opa_crd::{
-    OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REPO_RULE_REFERENCE,
+    OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REGO_RULE_REFERENCE,
 };
 use stackable_operator::builder::{ContainerBuilder, ObjectMetaBuilder, PodBuilder, VolumeBuilder};
 use stackable_operator::client::Client;
@@ -254,7 +254,7 @@ impl OpaState {
             )?;
 
             let mut cm_config_data = BTreeMap::new();
-            if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
+            if let Some(repo_reference) = config.get(REGO_RULE_REFERENCE) {
                 cm_config_data.insert(CONFIG_FILE.to_string(), build_config_file(repo_reference));
             }
 
@@ -390,7 +390,6 @@ impl OpaState {
                     .ownerreference_from_resource(&self.context.resource, Some(true), Some(true))?
                     .build()?,
             )
-            .add_stackable_agent_tolerations()
             .add_container(container_builder.build())
             .node_name(node_id.name.as_str())
             // TODO: first iteration we are using host network
@@ -557,7 +556,7 @@ pub async fn create_controller(client: Client, product_config_path: &str) -> Ope
     Ok(())
 }
 
-fn build_config_file(repo_rule_reference: &str) -> String {
+fn build_config_file(rego_rule_reference: &str) -> String {
     format!(
         "
 services:
@@ -572,7 +571,7 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20",
-        repo_rule_reference
+        rego_rule_reference
     )
 }
 

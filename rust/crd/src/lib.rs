@@ -23,7 +23,7 @@ pub const APP_NAME: &str = "opa";
 pub const MANAGED_BY: &str = "opa-operator";
 
 pub const CONFIG_FILE: &str = "config.yaml";
-pub const REPO_RULE_REFERENCE: &str = "repoRuleReference";
+pub const REGO_RULE_REFERENCE: &str = "repoRuleReference";
 pub const PORT: &str = "port";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
@@ -140,7 +140,7 @@ impl Conditions for OpaStatus {
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfig {
     pub port: Option<u16>,
-    pub repo_rule_reference: String,
+    pub rego_rule_reference: String,
 }
 
 impl Configuration for OpaConfig {
@@ -174,8 +174,8 @@ impl Configuration for OpaConfig {
 
         if file == CONFIG_FILE {
             config.insert(
-                REPO_RULE_REFERENCE.to_string(),
-                Some(self.repo_rule_reference.clone()),
+                REGO_RULE_REFERENCE.to_string(),
+                Some(self.rego_rule_reference.clone()),
             );
         } else {
             error!(
