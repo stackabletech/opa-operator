@@ -359,9 +359,9 @@ impl OpaState {
 
         let mut annotations = BTreeMap::new();
         // only add metrics container port and annotation if available
-        if let Some(metrics_port) = port {
+        if let Some(port) = port {
             annotations.insert(SHOULD_BE_SCRAPED.to_string(), "true".to_string());
-            let parsed_port = metrics_port.parse()?;
+            let parsed_port = port.parse()?;
             // with OPA the client and metrics port are shared
             // TODO: we need to expose that port twice:
             //  once for metrics and once for the clients
