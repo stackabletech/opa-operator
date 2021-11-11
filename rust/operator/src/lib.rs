@@ -335,7 +335,6 @@ impl OpaState {
 
         let mut container_builder = ContainerBuilder::new(pod_id.app());
         container_builder.image(format!(
-            // TODO: How to handle the platform version?
             "docker.stackable.tech/stackable/opa:{}-stackable{}",
             self.context.resource.spec.version.to_string(),
             DEFAULT_IMAGE_VERSION
