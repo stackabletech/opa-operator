@@ -46,6 +46,10 @@ use std::time::Duration;
 use strum::IntoEnumIterator;
 use tracing::{debug, info, trace, warn};
 
+/// The docker image we default to. This needs to be adapted if the operator does not work
+/// with images 0.0.1, 0.1.0 etc. anymore and requires e.g. a new major version like 1(.0.0).
+const DEFAULT_IMAGE_VERSION: &str = "0";
+
 const FINALIZER_NAME: &str = "opa.stackable.tech/cleanup";
 const SHOULD_BE_SCRAPED: &str = "monitoring.stackable.tech/should_be_scraped";
 const CONFIG_MAP_TYPE_CONFIG: &str = "config";
@@ -332,8 +336,9 @@ impl OpaState {
         let mut container_builder = ContainerBuilder::new(pod_id.app());
         container_builder.image(format!(
             // TODO: How to handle the platform version?
-            "docker.stackable.tech/stackable/opa:{}-0.1",
-            self.context.resource.spec.version.to_string()
+            "docker.stackable.tech/stackable/opa:{}-stackable{}",
+            self.context.resource.spec.version.to_string(),
+            DEFAULT_IMAGE_VERSION
         ));
         container_builder.command(start_command);
         container_builder.add_env_vars(env_vars);
