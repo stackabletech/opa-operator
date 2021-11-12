@@ -1570,7 +1570,7 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "stackable-opa-crd"
-version = "0.5.0"
+version = "0.6.0-nightly"
 dependencies = [
  "indoc",
  "rand",
@@ -1589,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-operator"
-version = "0.5.0"
+version = "0.6.0-nightly"
 dependencies = [
  "async-trait",
  "futures",
@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-operator-binary"
-version = "0.5.0"
+version = "0.6.0-nightly"
 dependencies = [
  "built",
  "clap",
