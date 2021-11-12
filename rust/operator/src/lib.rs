@@ -4,11 +4,9 @@ use crate::error::Error;
 use async_trait::async_trait;
 use futures::Future;
 use stackable_opa_crd::{
-    OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REPO_RULE_REFERENCE,
+    OpaRole, OpenPolicyAgent, APP_NAME, CONFIG_FILE, PORT, REGO_RULE_REFERENCE,
 };
-use stackable_operator::builder::{
-    ContainerBuilder, ContainerPortBuilder, ObjectMetaBuilder, PodBuilder,
-};
+use stackable_operator::builder::{ContainerBuilder, ObjectMetaBuilder, PodBuilder, VolumeBuilder};
 use stackable_operator::client::Client;
 use stackable_operator::controller::{Controller, ControllerStrategy, ReconciliationState};
 use stackable_operator::error::OperatorResult;
@@ -47,6 +45,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use strum::IntoEnumIterator;
 use tracing::{debug, info, trace, warn};
+
+/// The docker image we default to. This needs to be adapted if the operator does not work
+/// with images 0.0.1, 0.1.0 etc. anymore and requires e.g. a new major version like 1(.0.0).
+const DEFAULT_IMAGE_VERSION: &str = "0";
 
 const FINALIZER_NAME: &str = "opa.stackable.tech/cleanup";
 const SHOULD_BE_SCRAPED: &str = "monitoring.stackable.tech/should_be_scraped";
@@ -256,7 +258,7 @@ impl OpaState {
             )?;
 
             let mut cm_config_data = BTreeMap::new();
-            if let Some(repo_reference) = config.get(REPO_RULE_REFERENCE) {
+            if let Some(repo_reference) = config.get(REGO_RULE_REFERENCE) {
                 cm_config_data.insert(CONFIG_FILE.to_string(), build_config_file(repo_reference));
             }
 
@@ -333,17 +335,20 @@ impl OpaState {
 
         let mut container_builder = ContainerBuilder::new(pod_id.app());
         container_builder.image(format!(
-            "{}:{}",
-            pod_id.app(),
-            &self.context.resource.spec.version.to_string()
+            "docker.stackable.tech/stackable/opa:{}-stackable{}",
+            self.context.resource.spec.version.to_string(),
+            DEFAULT_IMAGE_VERSION
         ));
         container_builder.command(start_command);
         container_builder.add_env_vars(env_vars);
 
+        let mut pod_builder = PodBuilder::new();
+
         // Add one mount for the config directory
         if let Some(config_map_data) = config_maps.get(CONFIG_MAP_TYPE_CONFIG) {
             if let Some(name) = config_map_data.metadata.name.as_ref() {
-                container_builder.add_configmapvolume(name, "conf".to_string());
+                container_builder.add_volume_mount("config", "/stackable/conf");
+                pod_builder.add_volume(VolumeBuilder::new("config").with_config_map(name).build());
             } else {
                 return Err(error::Error::MissingConfigMapNameError {
                     cm_type: CONFIG_MAP_TYPE_CONFIG,
@@ -358,21 +363,16 @@ impl OpaState {
 
         let mut annotations = BTreeMap::new();
         // only add metrics container port and annotation if available
-        if let Some(metrics_port) = port {
+        if let Some(port) = port {
             annotations.insert(SHOULD_BE_SCRAPED.to_string(), "true".to_string());
-            let parsed_port = metrics_port.parse()?;
-            // with OPA, there is only one port available
-            // we expose that port twice: once for metrics and once for the clients
-            container_builder.add_container_port(
-                ContainerPortBuilder::new(parsed_port)
-                    .name("metrics")
-                    .build(),
-            );
-            container_builder.add_container_port(
-                ContainerPortBuilder::new(parsed_port)
-                    .name("client")
-                    .build(),
-            );
+            let parsed_port = port.parse()?;
+            // with OPA the client and metrics port are shared
+            // TODO: we need to expose that port twice:
+            //  once for metrics and once for the clients
+            //  This is now allowed so we deactivate the metrics port for now because
+            //  we require the client port for discovery
+            //container_builder.add_container_port("metrics", parsed_port);
+            container_builder.add_container_port("client", parsed_port);
         }
 
         let mut pod_labels = get_recommended_labels(
@@ -384,7 +384,7 @@ impl OpaState {
         );
         pod_labels.insert(ID_LABEL.to_string(), pod_id.id().to_string());
 
-        let pod = PodBuilder::new()
+        let pod = pod_builder
             .metadata(
                 ObjectMetaBuilder::new()
                     .generate_name(pod_name)
@@ -394,9 +394,10 @@ impl OpaState {
                     .ownerreference_from_resource(&self.context.resource, Some(true), Some(true))?
                     .build()?,
             )
-            .add_stackable_agent_tolerations()
             .add_container(container_builder.build())
             .node_name(node_id.name.as_str())
+            // TODO: first iteration we are using host network
+            .host_network(true)
             .build()?;
 
         Ok(self.context.client.create(&pod).await?)
@@ -559,7 +560,7 @@ pub async fn create_controller(client: Client, product_config_path: &str) -> Ope
     Ok(())
 }
 
-fn build_config_file(repo_rule_reference: &str) -> String {
+fn build_config_file(rego_rule_reference: &str) -> String {
     format!(
         "
 services:
@@ -574,23 +575,21 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20",
-        repo_rule_reference
+        rego_rule_reference
     )
 }
 
 fn build_opa_start_command(port: Option<&String>) -> Vec<String> {
-    let mut command = vec![String::from("./opa run")];
-
-    // --server
+    let mut command = vec!["/stackable/opa/opa".to_string(), "run".to_string()];
     command.push("-s".to_string());
 
     if let Some(port) = port {
-        // --addr
-        command.push(format!("-a 0.0.0.0:{}", port))
+        command.push("-a".to_string());
+        command.push(format!("0.0.0.0:{}", port))
     }
 
-    // --config-file
-    command.push("-c {{configroot}}/conf/config.yaml".to_string());
+    command.push("-c".to_string());
+    command.push("/stackable/conf/config.yaml".to_string());
 
     command
 }

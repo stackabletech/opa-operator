@@ -19,10 +19,10 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
           default:
             selector:
               matchLabels:
-                kubernetes.io/arch: stackable-linux
+                kubernetes.io/os: linux
             replicas: 1
             config:
               port: 8181
-              repoRuleReference: "http://mdesktop:3030/opa/v1"
+              regoRuleReference: "http://localhost:3030/opa/v1"
     EOF
 

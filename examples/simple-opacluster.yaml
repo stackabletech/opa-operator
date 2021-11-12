@@ -9,7 +9,7 @@ spec:
       default:
         selector:
           matchLabels:
-            kubernetes.io/arch: stackable-linux
+            kubernetes.io/os: linux
         config:
           port: 8181
-          repoRuleReference: "http://mdesktop:3030/opa/v1"
+          regoRuleReference: "http://10.101.106.208:3030/opa/v1"

@@ -369,7 +369,6 @@ mod tests {
     use indoc::indoc;
     use rstest::rstest;
     use stackable_operator::k8s_openapi::api::core::v1::Pod;
-    use std::ops::Deref;
 
     #[test]
     fn test_clean_url() {
@@ -394,7 +393,7 @@ mod tests {
                   kubernetes.io/hostname: debian
               replicas: 1
               config:
-                repoRuleReference: http://debian:3030/opa/v1
+                regoRuleReference: http://debian:3030/opa/v1
       "},
     indoc! {"
         - apiVersion: v1
@@ -426,7 +425,7 @@ mod tests {
               replicas: 1
               config:
                 port: 12345
-                repoRuleReference: http://debian:3030/opa/v1
+                regoRuleReference: http://debian:3030/opa/v1
       "},
     indoc! {"
         - apiVersion: v1
@@ -458,7 +457,7 @@ mod tests {
               replicas: 1
               config:
                 port: 12345
-                repoRuleReference: http://debian:3030/opa/v1
+                regoRuleReference: http://debian:3030/opa/v1
       "},
     indoc! {"
         - apiVersion: v1
@@ -511,7 +510,7 @@ mod tests {
                   kubernetes.io/hostname: debian
               replicas: 1
               config:
-                repoRuleReference: http://debian:3030/opa/v1
+                regoRuleReference: http://debian:3030/opa/v1
       "},
     indoc! {"
         - apiVersion: v1
@@ -573,7 +572,7 @@ mod tests {
         )
         .expect("should not fail");
 
-        for res in expected_result.deref() {
+        for res in expected_result {
             assert!(conn_string.contains(res));
         }
     }
@@ -590,7 +589,7 @@ mod tests {
                   kubernetes.io/hostname: debian
               replicas: 1
               config:
-                 repoRuleReference: http://debian:3030/opa/v1
+                 regoRuleReference: http://debian:3030/opa/v1
       "},
     indoc! {"
         - apiVersion: v1
@@ -621,7 +620,7 @@ mod tests {
                   kubernetes.io/hostname: debian
               replicas: 1
               config:
-                 repoRuleReference: http://debian:3030/opa/v1
+                 regoRuleReference: http://debian:3030/opa/v1
       "},
     indoc! {"
         - apiVersion: v1
@@ -676,7 +675,7 @@ mod tests {
                   kubernetes.io/hostname: debian
               replicas: 1
               config:
-                 repoRuleReference: http://debian:3030/opa/v1
+                 regoRuleReference: http://debian:3030/opa/v1
       "},
     8181
     )]
@@ -692,7 +691,7 @@ mod tests {
               replicas: 1
               config:
                  port: 12345
-                 repoRuleReference: http://debian:3030/opa/v1
+                 regoRuleReference: http://debian:3030/opa/v1
       "},
     12345
     )]

@@ -4,8 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [0.4.1] - 2021-10-27
+### Changed
+- `operator-rs` `0.3.0` → `0.4.0` ([#119]).
+- Adapted pod image and container command to docker image ([#119]). 
+- BREAKING CRD: Fixed typos `Reporule` to `Regorule` ([#119]).
+- Adapted documentation to represent new workflow with docker images ([#119]).
 
+### Removed
+- BREAKING monitoring: container port `metrics` temporarily removed (cannot assign the same port to `client` and `metrics`). This will not work with the current monitoring approach ([#119]).
+
+[#119]: https://github.com/stackabletech/opa-operator/pull/119
+
+## [0.4.1] - 2021-10-27
 
 ### Added
 

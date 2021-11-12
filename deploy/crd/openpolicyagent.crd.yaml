@@ -37,10 +37,10 @@ spec:
                           minimum: 0.0
                           nullable: true
                           type: integer
-                        repoRuleReference:
+                        regoRuleReference:
                           type: string
                       required:
-                        - repoRuleReference
+                        - regoRuleReference
                       type: object
                     configOverrides:
                       additionalProperties:
@@ -70,10 +70,10 @@ spec:
                                 minimum: 0.0
                                 nullable: true
                                 type: integer
-                              repoRuleReference:
+                              regoRuleReference:
                                 type: string
                             required:
-                              - repoRuleReference
+                              - regoRuleReference
                             type: object
                           configOverrides:
                             additionalProperties:
