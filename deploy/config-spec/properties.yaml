@@ -30,9 +30,9 @@ properties:
       asOfVersion: "0.0.0"
       description: "Start the OPA server on a different port (default: 8081)"
 
-  - property: &opaRepoRuleReference
+  - property: &opaRegoRuleReference
       propertyNames:
-        - name: "repoRuleReference"
+        - name: "regoRuleReference"
           kind:
             type: "file"
             file: "config.yaml"
@@ -43,4 +43,4 @@ properties:
         - name: "server"
           required: true
       asOfVersion: "0.0.0"
-      description: "The url of the RepoRule server"
+      description: "The url of the RegoRule server"
