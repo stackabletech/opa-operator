@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - `operator-rs` `0.3.0` → `0.4.0` ([#119]).
 - Adapted pod image and container command to docker image ([#119]). 
-- BREAKING CRD: Fixed typos `Regorule` to `Regorule` ([#119]).
+- BREAKING CRD: Fixed typos `Reporule` to `Regorule` ([#119]).
 - Adapted documentation to represent new workflow with docker images ([#119]).
 
 ### Removed
