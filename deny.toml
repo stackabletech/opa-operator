@@ -35,8 +35,6 @@ allow = [
 
 exceptions = [
     { name = "stackable-opa-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-zookeeper-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-opa-crd", allow = ["OSL-3.0"] },
     { name = "stackable-opa-operator", allow = ["OSL-3.0"] },
     { name = "stackable-opa-operator-binary", allow = ["OSL-3.0"] },
     ]
