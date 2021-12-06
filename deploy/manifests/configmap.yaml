@@ -58,4 +58,4 @@ metadata:
   labels:
     app.kubernetes.io/name: opa-operator
     app.kubernetes.io/instance: opa-operator
-    app.kubernetes.io/version: "0.6.0-nightly"
+    app.kubernetes.io/version: "0.7.0-nightly"
