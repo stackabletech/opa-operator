@@ -392,7 +392,7 @@ impl OpaState {
                     .with_labels(pod_labels)
                     .with_annotations(annotations)
                     .ownerreference_from_resource(&self.context.resource, Some(true), Some(true))?
-                    .build()?,
+                    .build(),
             )
             .add_container(container_builder.build())
             .node_name(node_id.name.as_str())
@@ -522,7 +522,7 @@ pub fn validated_product_config(
                 PropertyNameKind::File(CONFIG_FILE.to_string()),
                 PropertyNameKind::Cli,
             ],
-            resource.spec.servers.clone().into(),
+            resource.spec.servers.clone(),
         ),
     );
 

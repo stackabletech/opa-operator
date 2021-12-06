@@ -45,8 +45,8 @@ pub struct OpaSpec {
 }
 
 impl Status<OpaStatus> for OpenPolicyAgent {
-    fn status(&self) -> &Option<OpaStatus> {
-        &self.status
+    fn status(&self) -> Option<&OpaStatus> {
+        self.status.as_ref()
     }
     fn status_mut(&mut self) -> &mut Option<OpaStatus> {
         &mut self.status
@@ -119,8 +119,8 @@ pub struct OpaStatus {
 }
 
 impl Versioned<OpaVersion> for OpaStatus {
-    fn version(&self) -> &Option<ProductVersion<OpaVersion>> {
-        &self.version
+    fn version(&self) -> Option<&ProductVersion<OpaVersion>> {
+        self.version.as_ref()
     }
     fn version_mut(&mut self) -> &mut Option<ProductVersion<OpaVersion>> {
         &mut self.version
