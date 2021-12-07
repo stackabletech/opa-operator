@@ -1,9 +1,3 @@
-pub mod discovery;
-pub mod error;
-
-#[deprecated(note = "The util module has been renamed to discovery, please use this instead.")]
-pub use discovery as util;
-
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use stackable_operator::identity::PodToNodeMapping;
@@ -42,6 +36,8 @@ pub const PORT: &str = "port";
 pub struct OpaSpec {
     pub version: OpaVersion,
     pub servers: Role<OpaConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<bool>,
 }
 
 impl Status<OpaStatus> for OpenPolicyAgent {
@@ -205,6 +201,22 @@ pub enum OpaRole {
     #[serde(rename = "server")]
     #[strum(serialize = "server")]
     Server,
+}
+
+impl OpenPolicyAgent {
+    /// The name of the role-level load-balanced Kubernetes `Service`
+    pub fn server_role_service_name(&self) -> Option<String> {
+        self.metadata.name.clone()
+    }
+
+    /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
+    pub fn server_role_service_fqdn(&self) -> Option<String> {
+        Some(format!(
+            "{}.{}.svc.cluster.local",
+            self.server_role_service_name()?,
+            self.metadata.namespace.as_ref()?
+        ))
+    }
 }
 
 #[cfg(test)]

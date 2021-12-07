@@ -1569,6 +1569,7 @@ dependencies = [
  "futures",
  "serde",
  "serde_json",
+ "snafu",
  "stackable-opa-crd",
  "stackable-operator",
  "strum",
@@ -1595,13 +1596,14 @@ dependencies = [
 [[package]]
 name = "stackable-operator"
 version = "0.5.0-nightly"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=main#9f48e37ef415af7f61f400291da6ffb760e322a1"
+source = "git+https://github.com/stackabletech//operator-rs.git?branch=feature/stfu#548cd5075d88df8f4ad1067046bf307f5b8d3863"
 dependencies = [
  "async-trait",
  "backoff",
  "chrono",
  "clap",
  "const_format",
+ "derivative",
  "either",
  "futures",
  "json-patch",

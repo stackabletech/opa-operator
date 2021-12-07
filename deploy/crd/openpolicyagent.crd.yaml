@@ -128,6 +128,9 @@ spec:
                   required:
                     - roleGroups
                   type: object
+                stopped:
+                  nullable: true
+                  type: boolean
                 version:
                   enum:
                     - 0.27.1
