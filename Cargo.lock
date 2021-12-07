@@ -1547,7 +1547,6 @@ name = "stackable-opa-crd"
 version = "0.7.0-nightly"
 dependencies = [
  "indoc",
- "rand",
  "rstest",
  "semver",
  "serde",
@@ -1556,9 +1555,7 @@ dependencies = [
  "stackable-operator",
  "strum",
  "strum_macros",
- "thiserror",
  "tracing",
- "url",
 ]
 
 [[package]]
