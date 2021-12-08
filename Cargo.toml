@@ -4,4 +4,4 @@ members = [
 ]
 
 [patch."git+https://github.com/stackabletech/operator-rs.git"]
-stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "feature/stfu" }
+stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "main" }
