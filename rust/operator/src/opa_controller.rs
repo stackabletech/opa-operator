@@ -57,21 +57,12 @@ pub enum Error {
     ObjectHasNoVersion { obj_ref: ObjectRef<OpenPolicyAgent> },
     #[snafu(display("{} has no server role", obj_ref))]
     NoServerRole { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("failed to calculate global service name for {}", obj_ref))]
-    GlobalServiceNameNotFound { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("failed to calculate service name for role {}", rolegroup))]
-    RoleGroupServiceNameNotFound {
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
-    },
-    #[snafu(display("failed to apply global Service for {}", opa))]
+    #[snafu(display("failed to calculate role service name for {}", obj_ref))]
+    RoleServiceNameNotFound { obj_ref: ObjectRef<OpenPolicyAgent> },
+    #[snafu(display("failed to apply role Service for {}", opa))]
     ApplyRoleService {
         source: kube::Error,
         opa: ObjectRef<OpenPolicyAgent>,
-    },
-    #[snafu(display("failed to apply Service for {}", rolegroup))]
-    ApplyRoleGroupService {
-        source: kube::Error,
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
     },
     #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
     BuildRoleGroupConfig {
@@ -93,11 +84,6 @@ pub enum Error {
         source: stackable_operator::error::Error,
         opa: ObjectRef<OpenPolicyAgent>,
     },
-    #[snafu(display("failed to serialize zoo.cfg for {}", rolegroup))]
-    SerializeZooCfg {
-        source: stackable_operator::product_config::writer::PropertiesWriterError,
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
-    },
     #[snafu(display("object {} is missing metadata to build owner reference", opa))]
     ObjectMissingMetadataForOwnerRef {
         source: stackable_operator::error::Error,
@@ -110,11 +96,6 @@ pub enum Error {
     },
     #[snafu(display("failed to apply discovery ConfigMap for {}", opa))]
     ApplyDiscoveryConfig {
-        source: kube::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
-    },
-    #[snafu(display("failed to update status of {}", opa))]
-    ApplyStatus {
         source: kube::Error,
         opa: ObjectRef<OpenPolicyAgent>,
     },
@@ -215,7 +196,7 @@ pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
     let role_name = OpaRole::Server.to_string();
     let role_svc_name =
         opa.server_role_service_name()
-            .with_context(|| GlobalServiceNameNotFound {
+            .with_context(|| RoleServiceNameNotFound {
                 obj_ref: ObjectRef::from_obj(opa),
             })?;
     Ok(Service {
