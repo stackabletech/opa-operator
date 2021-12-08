@@ -8,8 +8,6 @@ use std::{
 
 use crate::{
     discovery::{self, build_discovery_configmaps},
-    // discovery::{self, build_discovery_configmaps},
-    utils::apply_owned,
     APP_NAME,
 };
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -25,12 +23,9 @@ use stackable_operator::{
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
     },
-    kube::{
-        self,
-        runtime::{
-            controller::{Context, ReconcilerAction},
-            reflector::ObjectRef,
-        },
+    kube::runtime::{
+        controller::{Context, ReconcilerAction},
+        reflector::ObjectRef,
     },
     labels::{role_group_selector_labels, role_selector_labels},
     product_config::{types::PropertyNameKind, ProductConfigManager},
@@ -38,13 +33,13 @@ use stackable_operator::{
     role_utils::RoleGroupRef,
 };
 
-const FIELD_MANAGER: &str = "zookeeper.stackable.tech/zookeepercluster";
+const FIELD_MANAGER_SCOPE: &str = "openpolicyagent";
 
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const APP_PORT: u16 = 8181;
 
 pub struct Ctx {
-    pub kube: kube::Client,
+    pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
 }
 
@@ -61,7 +56,7 @@ pub enum Error {
     RoleServiceNameNotFound { obj_ref: ObjectRef<OpenPolicyAgent> },
     #[snafu(display("failed to apply role Service for {}", opa))]
     ApplyRoleService {
-        source: kube::Error,
+        source: stackable_operator::error::Error,
         opa: ObjectRef<OpenPolicyAgent>,
     },
     #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
@@ -71,12 +66,12 @@ pub enum Error {
     },
     #[snafu(display("failed to apply ConfigMap for {}", rolegroup))]
     ApplyRoleGroupConfig {
-        source: kube::Error,
+        source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpenPolicyAgent>,
     },
     #[snafu(display("failed to apply DaemonSet for {}", rolegroup))]
     ApplyRoleGroupDaemonSet {
-        source: kube::Error,
+        source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpenPolicyAgent>,
     },
     #[snafu(display("invalid product config for {}", opa))]
@@ -96,7 +91,7 @@ pub enum Error {
     },
     #[snafu(display("failed to apply discovery ConfigMap for {}", opa))]
     ApplyDiscoveryConfig {
-        source: kube::Error,
+        source: stackable_operator::error::Error,
         opa: ObjectRef<OpenPolicyAgent>,
     },
 }
@@ -105,7 +100,7 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<ReconcilerAction> {
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(&opa);
-    let kube = ctx.get_ref().kube.clone();
+    let client = ctx.get_ref().client.clone();
 
     let opa_version = opa.spec.version.to_string();
     let validated_config = validate_all_roles_and_groups_config(
@@ -136,7 +131,13 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
-    let server_role_service = apply_owned(&kube, FIELD_MANAGER, &build_server_role_service(&opa)?)
+    let server_role_service = build_server_role_service(&opa)?;
+    let server_role_service = client
+        .apply_patch(
+            FIELD_MANAGER_SCOPE,
+            &server_role_service,
+            &server_role_service,
+        )
         .await
         .with_context(|| ApplyRoleService {
             opa: opa_ref.clone(),
@@ -148,24 +149,20 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             role_group: rolegroup_name.to_string(),
         };
 
-        apply_owned(
-            &kube,
-            FIELD_MANAGER,
-            &build_server_rolegroup_config_map(&rolegroup, &opa, rolegroup_config)?,
-        )
-        .await
-        .with_context(|| ApplyRoleGroupConfig {
-            rolegroup: rolegroup.clone(),
-        })?;
-        apply_owned(
-            &kube,
-            FIELD_MANAGER,
-            &build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config)?,
-        )
-        .await
-        .with_context(|| ApplyRoleGroupDaemonSet {
-            rolegroup: rolegroup.clone(),
-        })?;
+        let rg_configmap = build_server_rolegroup_config_map(&rolegroup, &opa, rolegroup_config)?;
+        let rg_daemonset = build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config)?;
+        client
+            .apply_patch(FIELD_MANAGER_SCOPE, &rg_configmap, &rg_configmap)
+            .await
+            .with_context(|| ApplyRoleGroupConfig {
+                rolegroup: rolegroup.clone(),
+            })?;
+        client
+            .apply_patch(FIELD_MANAGER_SCOPE, &rg_daemonset, &rg_daemonset)
+            .await
+            .with_context(|| ApplyRoleGroupDaemonSet {
+                rolegroup: rolegroup.clone(),
+            })?;
     }
 
     for discovery_cm in
@@ -175,7 +172,8 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             }
         })?
     {
-        apply_owned(&kube, FIELD_MANAGER, &discovery_cm)
+        client
+            .apply_patch(FIELD_MANAGER_SCOPE, &discovery_cm, &discovery_cm)
             .await
             .with_context(|| ApplyDiscoveryConfig {
                 opa: opa_ref.clone(),

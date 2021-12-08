@@ -1,6 +1,5 @@
 mod discovery;
 mod opa_controller;
-mod utils;
 
 use futures::StreamExt;
 use stackable_opa_crd::{OpenPolicyAgent, APP_NAME};
@@ -35,7 +34,7 @@ pub async fn create_controller(client: Client, product_config_path: &str) -> Ope
             opa_controller::reconcile_opa,
             opa_controller::error_policy,
             Context::new(opa_controller::Ctx {
-                kube: client.as_kube_client(),
+                client,
                 product_config,
             }),
         )
