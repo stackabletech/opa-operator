@@ -16,7 +16,10 @@ use stackable_operator::product_config::ProductConfigManager;
 /// This creates an instance of a [`Controller`] which waits for incoming events and reconciles them.
 ///
 /// This is an async method and the returned future needs to be consumed to make progress.
-pub async fn create_controller(client: Client, product_config_path: &str) -> OperatorResult<()> {
+pub async fn create_controller(
+    client: Client,
+    product_config: ProductConfigManager,
+) -> OperatorResult<()> {
     let opa_api: Api<OpenPolicyAgent> = client.get_all_api();
     let daemonsets_api: Api<DaemonSet> = client.get_all_api();
     let configmaps_api: Api<ConfigMap> = client.get_all_api();
@@ -26,8 +29,6 @@ pub async fn create_controller(client: Client, product_config_path: &str) -> Ope
         .owns(daemonsets_api, ListParams::default())
         .owns(configmaps_api, ListParams::default())
         .owns(services_api, ListParams::default());
-
-    let product_config = ProductConfigManager::from_yaml_file(product_config_path).unwrap();
 
     controller
         .run(
