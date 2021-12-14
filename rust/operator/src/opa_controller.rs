@@ -46,18 +46,17 @@ pub struct Ctx {
 #[derive(Snafu, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object {} has no namespace", obj_ref))]
-    ObjectHasNoNamespace { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("object {} defines no version", obj_ref))]
-    ObjectHasNoVersion { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("{} has no server role", obj_ref))]
-    NoServerRole { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("failed to calculate role service name for {}", obj_ref))]
-    RoleServiceNameNotFound { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("failed to apply role Service for {}", opa))]
+    #[snafu(display("object has no namespace"))]
+    ObjectHasNoNamespace,
+    #[snafu(display("object defines no version"))]
+    ObjectHasNoVersion,
+    #[snafu(display("object has no server role"))]
+    NoServerRole,
+    #[snafu(display("failed to calculate role service name"))]
+    RoleServiceNameNotFound,
+    #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
         source: stackable_operator::error::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
     },
     #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
     BuildRoleGroupConfig {
@@ -74,25 +73,19 @@ pub enum Error {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpenPolicyAgent>,
     },
-    #[snafu(display("invalid product config for {}", opa))]
+    #[snafu(display("invalid product config"))]
     InvalidProductConfig {
         source: stackable_operator::error::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
     },
-    #[snafu(display("object {} is missing metadata to build owner reference", opa))]
+    #[snafu(display("object is missing metadata to build owner reference"))]
     ObjectMissingMetadataForOwnerRef {
         source: stackable_operator::error::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
     },
-    #[snafu(display("failed to build discovery ConfigMap for {}", opa))]
-    BuildDiscoveryConfig {
-        source: discovery::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
-    },
-    #[snafu(display("failed to apply discovery ConfigMap for {}", opa))]
+    #[snafu(display("failed to build discovery ConfigMap"))]
+    BuildDiscoveryConfig { source: discovery::Error },
+    #[snafu(display("failed to apply discovery ConfigMap"))]
     ApplyDiscoveryConfig {
         source: stackable_operator::error::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
     },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -123,9 +116,7 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
         false,
         false,
     )
-    .with_context(|| InvalidProductConfig {
-        opa: opa_ref.clone(),
-    })?;
+    .context(InvalidProductConfig)?;
     let role_server_config = validated_config
         .get(&OpaRole::Server.to_string())
         .map(Cow::Borrowed)
@@ -139,9 +130,7 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             &server_role_service,
         )
         .await
-        .with_context(|| ApplyRoleService {
-            opa: opa_ref.clone(),
-        })?;
+        .context(ApplyRoleService)?;
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
@@ -165,19 +154,13 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             })?;
     }
 
-    for discovery_cm in
-        build_discovery_configmaps(&opa, &opa, &server_role_service).with_context(|| {
-            BuildDiscoveryConfig {
-                opa: opa_ref.clone(),
-            }
-        })?
+    for discovery_cm in build_discovery_configmaps(&opa, &opa, &server_role_service)
+        .context(BuildDiscoveryConfig)?
     {
         client
             .apply_patch(FIELD_MANAGER_SCOPE, &discovery_cm, &discovery_cm)
             .await
-            .with_context(|| ApplyDiscoveryConfig {
-                opa: opa_ref.clone(),
-            })?;
+            .context(ApplyDiscoveryConfig)?;
     }
 
     Ok(ReconcilerAction {
@@ -192,19 +175,15 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
 /// and use the connection string that it gives you.
 pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
     let role_name = OpaRole::Server.to_string();
-    let role_svc_name =
-        opa.server_role_service_name()
-            .with_context(|| RoleServiceNameNotFound {
-                obj_ref: ObjectRef::from_obj(opa),
-            })?;
+    let role_svc_name = opa
+        .server_role_service_name()
+        .context(RoleServiceNameNotFound)?;
     Ok(Service {
         metadata: ObjectMetaBuilder::new()
             .name_and_namespace(opa)
             .name(&role_svc_name)
             .ownerreference_from_resource(opa, None, Some(true))
-            .with_context(|| ObjectMissingMetadataForOwnerRef {
-                opa: ObjectRef::from_obj(opa),
-            })?
+            .context(ObjectMissingMetadataForOwnerRef)?
             .with_recommended_labels(opa, APP_NAME, &opa_version(opa)?, &role_name, "global")
             .build(),
         spec: Some(ServiceSpec {
@@ -238,9 +217,7 @@ fn build_server_rolegroup_config_map(
             .name_and_namespace(opa)
             .name(rolegroup.object_name())
             .ownerreference_from_resource(opa, None, Some(true))
-            .with_context(|| ObjectMissingMetadataForOwnerRef {
-                opa: ObjectRef::from_obj(opa),
-            })?
+            .context(ObjectMissingMetadataForOwnerRef)?
             .with_recommended_labels(
                 opa,
                 APP_NAME,
@@ -292,9 +269,7 @@ fn build_server_rolegroup_daemonset(
             .name_and_namespace(opa)
             .name(&rolegroup_ref.object_name())
             .ownerreference_from_resource(opa, None, Some(true))
-            .with_context(|| ObjectMissingMetadataForOwnerRef {
-                opa: ObjectRef::from_obj(opa),
-            })?
+            .context(ObjectMissingMetadataForOwnerRef)?
             .with_recommended_labels(
                 opa,
                 APP_NAME,
