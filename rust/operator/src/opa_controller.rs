@@ -1,4 +1,4 @@
-//! Ensures that `Pod`s are configured and running for each [`ZookeeperCluster`]
+//! Ensures that `Pod`s are configured and running for each [`OpenPolicyAgent`]
 
 use std::{
     borrow::Cow,
@@ -170,9 +170,6 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
-///
-/// Note that you should generally *not* hard-code clients to use these services; instead, create a [`ZookeeperZnode`](`stackable_zookeeper_crd::ZookeeperZnode`)
-/// and use the connection string that it gives you.
 pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
     let role_name = OpaRole::Server.to_string();
     let role_svc_name = opa

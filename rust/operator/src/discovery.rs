@@ -21,7 +21,7 @@ pub enum Error {
     NoNamespace,
 }
 
-/// Builds discovery [`ConfigMap`]s for connecting to a [`ZookeeperCluster`] for all expected scenarios
+/// Builds discovery [`ConfigMap`]s for connecting to a [`OpenPolicyAgent`] for all expected scenarios
 pub fn build_discovery_configmaps(
     owner: &impl Resource<DynamicType = ()>,
     opa: &OpenPolicyAgent,
