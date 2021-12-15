@@ -19,6 +19,10 @@ pub enum Error {
     NoName,
     #[snafu(display("object has no namespace associated"))]
     NoNamespace,
+    #[snafu(display("failed to build ConfigMap"))]
+    BuildConfigMap {
+        source: stackable_operator::error::Error,
+    },
 }
 
 /// Builds discovery [`ConfigMap`]s for connecting to a [`OpenPolicyAgent`] for all expected scenarios
@@ -46,7 +50,7 @@ fn build_discovery_configmap(
         svc.metadata.namespace.as_deref().context(NoNamespace)?,
         APP_PORT
     );
-    Ok(ConfigMapBuilder::new()
+    ConfigMapBuilder::new()
         .metadata(
             ObjectMetaBuilder::new()
                 .name_and_namespace(opa)
@@ -66,5 +70,5 @@ fn build_discovery_configmap(
         )
         .add_data("OPA", url)
         .build()
-        .unwrap())
+        .context(BuildConfigMap)
 }
