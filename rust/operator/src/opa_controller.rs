@@ -257,6 +257,7 @@ fn build_server_rolegroup_daemonset(
         .collect::<Vec<_>>();
     let container_opa = ContainerBuilder::new("opa")
         .image(image)
+        .command(build_opa_start_command())
         .add_env_vars(env)
         .add_container_port("http", APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
@@ -338,4 +339,16 @@ bundles:
       max_delay_seconds: 20",
         rego_rule_reference
     )
+}
+
+fn build_opa_start_command() -> Vec<String> {
+    vec![
+        "/stackable/opa/opa".to_string(),
+        "run".to_string(),
+        "-s".to_string(),
+        "-a".to_string(),
+        format!("0.0.0.0:{}", APP_PORT),
+        "-c".to_string(),
+        "/stackable/config/config.yaml".to_string(),
+    ]
 }
