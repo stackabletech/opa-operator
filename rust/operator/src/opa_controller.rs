@@ -345,12 +345,13 @@ bundles:
 }
 
 fn build_opa_start_command() -> Vec<String> {
-    let mut command = vec!["/stackable/opa/opa".to_string(), "run".to_string()];
-    command.push("-s".to_string());
-    command.push("-a".to_string());
-    command.push(format!("0.0.0.0:{}", APP_PORT));
-    command.push("-c".to_string());
-    command.push("/stackable/config/config.yaml".to_string());
-
-    command
+    vec![
+        "/stackable/opa/opa".to_string(),
+        "run".to_string(),
+        "-s".to_string(),
+        "-a".to_string(),
+        format!("0.0.0.0:{}", APP_PORT),
+        "-c".to_string(),
+        "/stackable/config/config.yaml".to_string(),
+    ]
 }
