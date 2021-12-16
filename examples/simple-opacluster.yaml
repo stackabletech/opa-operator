@@ -1,7 +1,7 @@
 apiVersion: opa.stackable.tech/v1alpha1
 kind: OpenPolicyAgent
 metadata:
-  name: simple
+  name: opa-simple
 spec:
   version: "0.27.1"
   servers:

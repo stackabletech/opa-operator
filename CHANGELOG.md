@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- BREAKING: STFU rework ([#146]).
+
+[#146]: https://github.com/stackabletech/opa-operator/pull/146
+
 ## [0.6.0] - 2021-12-06
 
 

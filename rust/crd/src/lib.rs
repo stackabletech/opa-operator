@@ -1,20 +1,8 @@
-pub mod discovery;
-pub mod error;
-
-#[deprecated(note = "The util module has been renamed to discovery, please use this instead.")]
-pub use discovery as util;
-
-use semver::Version;
 use serde::{Deserialize, Serialize};
-use stackable_operator::identity::PodToNodeMapping;
-use stackable_operator::k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition;
 use stackable_operator::kube::CustomResource;
 use stackable_operator::product_config_utils::{ConfigError, Configuration};
 use stackable_operator::role_utils::Role;
 use stackable_operator::schemars::{self, JsonSchema};
-use stackable_operator::status::{Conditions, Status, Versioned};
-use stackable_operator::versioning::{ProductVersion, Versioning, VersioningState};
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use strum_macros::EnumIter;
 use tracing::error;
@@ -32,25 +20,19 @@ pub const PORT: &str = "port";
     version = "v1alpha1",
     kind = "OpenPolicyAgent",
     shortname = "opa",
-    status = "OpaStatus",
     namespaced,
-    kube_core = "stackable_operator::kube::core",
-    k8s_openapi = "stackable_operator::k8s_openapi",
-    schemars = "stackable_operator::schemars"
+    crates(
+        kube_core = "stackable_operator::kube::core",
+        k8s_openapi = "stackable_operator::k8s_openapi",
+        schemars = "stackable_operator::schemars"
+    )
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
     pub version: OpaVersion,
     pub servers: Role<OpaConfig>,
-}
-
-impl Status<OpaStatus> for OpenPolicyAgent {
-    fn status(&self) -> &Option<OpaStatus> {
-        &self.status
-    }
-    fn status_mut(&mut self) -> &mut Option<OpaStatus> {
-        &mut self.status
-    }
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<bool>,
 }
 
 #[allow(non_camel_case_types)]
@@ -73,67 +55,6 @@ pub enum OpaVersion {
     #[serde(rename = "0.28.0")]
     #[strum(serialize = "0.28.0")]
     v0_28_0,
-}
-
-impl Versioning for OpaVersion {
-    fn versioning_state(&self, other: &Self) -> VersioningState {
-        let from_version = match Version::parse(&self.to_string()) {
-            Ok(v) => v,
-            Err(e) => {
-                return VersioningState::Invalid(format!(
-                    "Could not parse [{}] to SemVer: {}",
-                    self.to_string(),
-                    e.to_string()
-                ))
-            }
-        };
-
-        let to_version = match Version::parse(&other.to_string()) {
-            Ok(v) => v,
-            Err(e) => {
-                return VersioningState::Invalid(format!(
-                    "Could not parse [{}] to SemVer: {}",
-                    other.to_string(),
-                    e.to_string()
-                ))
-            }
-        };
-
-        match to_version.cmp(&from_version) {
-            Ordering::Greater => VersioningState::ValidUpgrade,
-            Ordering::Less => VersioningState::ValidDowngrade,
-            Ordering::Equal => VersioningState::NoOp,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpaStatus {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub conditions: Vec<Condition>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<ProductVersion<OpaVersion>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub history: Option<PodToNodeMapping>,
-}
-
-impl Versioned<OpaVersion> for OpaStatus {
-    fn version(&self) -> &Option<ProductVersion<OpaVersion>> {
-        &self.version
-    }
-    fn version_mut(&mut self) -> &mut Option<ProductVersion<OpaVersion>> {
-        &mut self.version
-    }
-}
-
-impl Conditions for OpaStatus {
-    fn conditions(&self) -> &[Condition] {
-        self.conditions.as_slice()
-    }
-    fn conditions_mut(&mut self) -> &mut Vec<Condition> {
-        &mut self.conditions
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -207,32 +128,18 @@ pub enum OpaRole {
     Server,
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::OpaVersion;
-    use stackable_operator::versioning::{Versioning, VersioningState};
-    use std::str::FromStr;
-
-    #[test]
-    fn test_zookeeper_version_versioning() {
-        assert_eq!(
-            OpaVersion::v0_27_1.versioning_state(&OpaVersion::v0_28_0),
-            VersioningState::ValidUpgrade
-        );
-        assert_eq!(
-            OpaVersion::v0_28_0.versioning_state(&OpaVersion::v0_27_1),
-            VersioningState::ValidDowngrade
-        );
-        assert_eq!(
-            OpaVersion::v0_27_1.versioning_state(&OpaVersion::v0_27_1),
-            VersioningState::NoOp
-        );
+impl OpenPolicyAgent {
+    /// The name of the role-level load-balanced Kubernetes `Service`
+    pub fn server_role_service_name(&self) -> Option<String> {
+        self.metadata.name.clone()
     }
 
-    #[test]
-    fn test_version_conversion() {
-        OpaVersion::from_str("0.27.1").unwrap();
-        OpaVersion::from_str("0.28.0").unwrap();
-        OpaVersion::from_str("1.2.3").unwrap_err();
+    /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
+    pub fn server_role_service_fqdn(&self) -> Option<String> {
+        Some(format!(
+            "{}.{}.svc.cluster.local",
+            self.server_role_service_name()?,
+            self.metadata.namespace.as_ref()?
+        ))
     }
 }
