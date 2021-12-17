@@ -2,7 +2,7 @@
 authors = ["Stackable GmbH <info@stackable.de>"]
 build = "build.rs"
 description = "Stackable Operator for OpenPolicyAgent"
-edition = "2018"
+edition = "2021"
 license = "OSL-3.0"
 name = "stackable-opa-operator-binary"
 repository = "https://github.com/stackabletech/opa-operator"

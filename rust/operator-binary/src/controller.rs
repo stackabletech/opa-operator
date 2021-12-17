@@ -43,10 +43,10 @@ pub struct Ctx {
 #[derive(Snafu, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object {} has no namespace", obj_ref))]
-    ObjectHasNoNamespace { obj_ref: ObjectRef<OpenPolicyAgent> },
-    #[snafu(display("object {} defines no version", obj_ref))]
-    ObjectHasNoVersion { obj_ref: ObjectRef<OpenPolicyAgent> },
+    #[snafu(display("object has no namespace"))]
+    ObjectHasNoNamespace,
+    #[snafu(display("object defines no version"))]
+    ObjectHasNoVersion,
     #[snafu(display("object defines no server role"))]
     NoServerRole,
     #[snafu(display("failed to calculate role service name"))]
@@ -311,12 +311,7 @@ fn build_server_rolegroup_daemonset(
 }
 
 pub fn opa_version(opa: &OpenPolicyAgent) -> Result<&str> {
-    opa.spec
-        .version
-        .as_deref()
-        .with_context(|| ObjectHasNoVersion {
-            obj_ref: ObjectRef::from_obj(opa),
-        })
+    opa.spec.version.as_deref().context(ObjectHasNoVersion)
 }
 
 pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
