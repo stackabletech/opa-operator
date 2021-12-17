@@ -8,11 +8,8 @@ use strum_macros::EnumIter;
 use tracing::error;
 
 pub const APP_NAME: &str = "opa";
-pub const MANAGED_BY: &str = "opa-operator";
-
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const REGO_RULE_REFERENCE: &str = "regoRuleReference";
-pub const PORT: &str = "port";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
@@ -29,38 +26,16 @@ pub const PORT: &str = "port";
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
-    pub version: OpaVersion,
     pub servers: Role<OpaConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped: Option<bool>,
-}
-
-#[allow(non_camel_case_types)]
-#[derive(
-    Clone,
-    Debug,
-    Deserialize,
-    Eq,
-    Hash,
-    JsonSchema,
-    PartialEq,
-    Serialize,
-    strum_macros::Display,
-    strum_macros::EnumString,
-)]
-pub enum OpaVersion {
-    #[serde(rename = "0.27.1")]
-    #[strum(serialize = "0.27.1")]
-    v0_27_1,
-    #[serde(rename = "0.28.0")]
-    #[strum(serialize = "0.28.0")]
-    v0_28_0,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfig {
-    pub port: Option<u16>,
     pub rego_rule_reference: String,
 }
 
@@ -80,9 +55,7 @@ impl Configuration for OpaConfig {
         _resource: &Self::Configurable,
         _role_name: &str,
     ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
-        let mut cli = BTreeMap::new();
-        cli.insert(PORT.to_string(), self.port.map(|p| p.to_string()));
-        Ok(cli)
+        Ok(BTreeMap::new())
     }
 
     fn compute_files(

@@ -26,7 +26,7 @@ properties:
           value: "8081"
       roles:
         - name: "server"
-          required: true
+          required: false
       asOfVersion: "0.0.0"
       description: "Start the OPA server on a different port (default: 8081)"
 

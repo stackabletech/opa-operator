@@ -6,7 +6,7 @@ use stackable_operator::{
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
 };
 
-use crate::opa_controller::{opa_version, APP_PORT};
+use crate::controller::{opa_version, APP_PORT};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
