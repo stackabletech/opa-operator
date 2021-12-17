@@ -4,7 +4,7 @@ build = "build.rs"
 description = "Stackable Operator for OpenPolicyAgent"
 edition = "2021"
 license = "OSL-3.0"
-name = "stackable-opa-operator-binary"
+name = "stackable-opa-operator"
 repository = "https://github.com/stackabletech/opa-operator"
 version = "0.7.0-nightly"
 
