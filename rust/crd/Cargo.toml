@@ -1,5 +1,5 @@
 [package]
-authors = ["Malte Sander <malte.sander.it@gmail.com>"]
+authors = ["Stackable GmbH <info@stackable.de>"]
 description = "Stackable Operator for OpenPolicyAgent - The Custom Resource Definition"
 edition = "2018"
 license = "OSL-3.0"

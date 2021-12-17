@@ -6,12 +6,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    discovery::{self, build_discovery_configmaps},
-    APP_NAME,
-};
+use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaRole, OpenPolicyAgent, REGO_RULE_REFERENCE};
+use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder},
     k8s_openapi::{
