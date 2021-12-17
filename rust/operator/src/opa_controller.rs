@@ -46,11 +46,11 @@ pub struct Ctx {
 #[derive(Snafu, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object has no namespace"))]
-    ObjectHasNoNamespace,
-    #[snafu(display("object defines no version"))]
-    ObjectHasNoVersion,
-    #[snafu(display("object has no server role"))]
+    #[snafu(display("object {} has no namespace", obj_ref))]
+    ObjectHasNoNamespace { obj_ref: ObjectRef<OpenPolicyAgent> },
+    #[snafu(display("object {} defines no version", obj_ref))]
+    ObjectHasNoVersion { obj_ref: ObjectRef<OpenPolicyAgent> },
+    #[snafu(display("object defines no server role"))]
     NoServerRole,
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
@@ -94,10 +94,10 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(&opa);
     let client = ctx.get_ref().client.clone();
+    let opa_version = opa_version(&opa)?;
 
-    let opa_version = opa.spec.version.to_string();
     let validated_config = validate_all_roles_and_groups_config(
-        &opa_version,
+        opa_version,
         &transform_all_roles_to_config(
             &opa,
             [(
@@ -181,7 +181,7 @@ pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
             .name(&role_svc_name)
             .ownerreference_from_resource(opa, None, Some(true))
             .context(ObjectMissingMetadataForOwnerRef)?
-            .with_recommended_labels(opa, APP_NAME, &opa_version(opa)?, &role_name, "global")
+            .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
             .build(),
         spec: Some(ServiceSpec {
             ports: Some(vec![ServicePort {
@@ -218,7 +218,7 @@ fn build_server_rolegroup_config_map(
             .with_recommended_labels(
                 opa,
                 APP_NAME,
-                &opa_version(opa)?,
+                opa_version(opa)?,
                 &rolegroup.role,
                 &rolegroup.role_group,
             )
@@ -232,9 +232,10 @@ fn build_server_rolegroup_config_map(
     })
 }
 
-/// The rolegroup [`StatefulSet`] runs the rolegroup, as configured by the administrator.
+/// The rolegroup [`DaemonSet`] runs the rolegroup, as configured by the administrator.
 ///
-/// The [`Pod`](`stackable_operator::k8s_openapi::api::core::v1::Pod`)s are accessible through the corresponding [`Service`] (from [`build_rolegroup_service`]).
+/// The [`Pod`](`stackable_operator::k8s_openapi::api::core::v1::Pod`)s are accessible through the
+/// corresponding [`Service`] (from [`build_rolegroup_service`]).
 fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpenPolicyAgent>,
     opa: &OpenPolicyAgent,
@@ -271,7 +272,7 @@ fn build_server_rolegroup_daemonset(
             .with_recommended_labels(
                 opa,
                 APP_NAME,
-                &opa_version,
+                opa_version,
                 &rolegroup_ref.role,
                 &rolegroup_ref.role_group,
             )
@@ -291,7 +292,7 @@ fn build_server_rolegroup_daemonset(
                     m.with_recommended_labels(
                         opa,
                         APP_NAME,
-                        &opa_version,
+                        opa_version,
                         &rolegroup_ref.role,
                         &rolegroup_ref.role_group,
                     )
@@ -312,8 +313,13 @@ fn build_server_rolegroup_daemonset(
     })
 }
 
-pub fn opa_version(opa: &OpenPolicyAgent) -> Result<String> {
-    Ok(opa.spec.version.to_string())
+pub fn opa_version(opa: &OpenPolicyAgent) -> Result<&str> {
+    opa.spec
+        .version
+        .as_deref()
+        .with_context(|| ObjectHasNoVersion {
+            obj_ref: ObjectRef::from_obj(opa),
+        })
 }
 
 pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {

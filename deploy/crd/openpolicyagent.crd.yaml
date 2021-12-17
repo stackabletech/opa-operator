@@ -32,11 +32,6 @@ spec:
                     config:
                       nullable: true
                       properties:
-                        port:
-                          format: uint16
-                          minimum: 0.0
-                          nullable: true
-                          type: integer
                         regoRuleReference:
                           type: string
                       required:
@@ -65,11 +60,6 @@ spec:
                           config:
                             nullable: true
                             properties:
-                              port:
-                                format: uint16
-                                minimum: 0.0
-                                nullable: true
-                                type: integer
                               regoRuleReference:
                                 type: string
                             required:
@@ -132,13 +122,10 @@ spec:
                   nullable: true
                   type: boolean
                 version:
-                  enum:
-                    - 0.27.1
-                    - 0.28.0
+                  nullable: true
                   type: string
               required:
                 - servers
-                - version
               type: object
           required:
             - spec
