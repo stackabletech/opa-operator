@@ -8,11 +8,8 @@ use strum_macros::EnumIter;
 use tracing::error;
 
 pub const APP_NAME: &str = "opa";
-pub const MANAGED_BY: &str = "opa-operator";
-
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const REGO_RULE_REFERENCE: &str = "regoRuleReference";
-pub const PORT: &str = "port";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(

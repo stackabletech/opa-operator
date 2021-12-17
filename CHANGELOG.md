@@ -6,8 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - BREAKING: STFU rework ([#146]).
+- Version now a String instead of enum ([#156]).
+
+### Removed 
+- Configurable Port from code and product config ([#156]).
 
 [#146]: https://github.com/stackabletech/opa-operator/pull/146
+[#156]: https://github.com/stackabletech/opa-operator/pull/156
 
 ## [0.6.0] - 2021-12-06
 
