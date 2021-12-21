@@ -42,7 +42,7 @@ rules:
   - apiGroups:
       - apps
     resources:
-      - statefulsets
+      - daemonsets
     verbs:
       - create
       - delete
