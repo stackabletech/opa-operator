@@ -84,6 +84,10 @@ pub enum Error {
     ApplyDiscoveryConfig {
         source: stackable_operator::error::Error,
     },
+    #[snafu(display("failed to transform configs"))]
+    ProductConfigTransform {
+        source: stackable_operator::product_config_utils::ConfigError,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -108,7 +112,8 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
                 ),
             )]
             .into(),
-        ),
+        )
+        .context(ProductConfigTransform)?,
         &ctx.get_ref().product_config,
         false,
         false,
