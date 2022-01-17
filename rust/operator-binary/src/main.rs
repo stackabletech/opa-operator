@@ -25,7 +25,7 @@ mod built_info {
 }
 
 #[derive(Parser)]
-#[clap(about = built_info::PKG_DESCRIPTION, author = "Stackable GmbH - info@stackable.de")]
+#[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
 struct Opts {
     #[clap(subcommand)]
     cmd: Command,
