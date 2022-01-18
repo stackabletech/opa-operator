@@ -237,7 +237,7 @@ fn build_server_rolegroup_config_map(
 /// The rolegroup [`DaemonSet`] runs the rolegroup, as configured by the administrator.
 ///
 /// The [`Pod`](`stackable_operator::k8s_openapi::api::core::v1::Pod`)s are accessible through the
-/// corresponding [`Service`] (from [`build_rolegroup_service`]).
+/// corresponding [`Service`] (from [`build_server_role_service`]).
 fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpenPolicyAgent>,
     opa: &OpenPolicyAgent,
