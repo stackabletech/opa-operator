@@ -36,8 +36,6 @@ pub fn build_discovery_configmaps(
 }
 
 /// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`OpenPolicyAgent`]
-///
-/// `hosts` will usually come from either [`pod_hosts`] or [`nodeport_hosts`].
 fn build_discovery_configmap(
     name: &str,
     owner: &impl Resource<DynamicType = ()>,
