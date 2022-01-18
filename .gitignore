@@ -7,5 +7,3 @@ target/
 *.iml
 
 *.tgz
-deploy/helm/opa-operator/configs
-deploy/helm/opa-operator/templates/crds.yaml
