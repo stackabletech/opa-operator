@@ -1,6 +1,7 @@
 mod controller;
 mod discovery;
 
+use clap::Parser;
 use futures::StreamExt;
 use stackable_opa_crd::OpenPolicyAgent;
 use stackable_operator::cli::Command;
@@ -18,16 +19,15 @@ use stackable_operator::{
         CustomResourceExt,
     },
 };
-use structopt::StructOpt;
 
 mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-#[derive(StructOpt)]
-#[structopt(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
+#[derive(Parser)]
+#[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
 struct Opts {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     cmd: Command,
 }
 
@@ -35,10 +35,10 @@ struct Opts {
 async fn main() -> Result<(), error::Error> {
     stackable_operator::logging::initialize_logging("OPA_OPERATOR_LOG");
 
-    let opts = Opts::from_args();
+    let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => println!("{}", serde_yaml::to_string(&OpenPolicyAgent::crd())?),
-        Command::Run { product_config } => {
+        Command::Run(product_config) => {
             stackable_operator::utils::print_startup_string(
                 built_info::PKG_DESCRIPTION,
                 built_info::PKG_VERSION,
@@ -47,7 +47,7 @@ async fn main() -> Result<(), error::Error> {
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
-            let product_config = product_config.load(&[
+            let product_config = product_config.product_config.load(&[
                 "deploy/config-spec/properties.yaml",
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;

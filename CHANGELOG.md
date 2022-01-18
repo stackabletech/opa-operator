@@ -7,12 +7,15 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - BREAKING: STFU rework ([#146]).
 - Version now a String instead of enum ([#156]).
+- `operator-rs` `0.6.0` → `0.8.0` ([#177]).
+- Custom resource example now points to regorule-operator service ([#177]).
 
 ### Removed 
 - Configurable Port from code and product config ([#156]).
 
 [#146]: https://github.com/stackabletech/opa-operator/pull/146
 [#156]: https://github.com/stackabletech/opa-operator/pull/156
+[#177]: https://github.com/stackabletech/opa-operator/pull/177
 
 ## [0.6.0] - 2021-12-06
 
