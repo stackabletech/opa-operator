@@ -5,7 +5,7 @@ use stackable_operator::role_utils::Role;
 use stackable_operator::schemars::{self, JsonSchema};
 use std::collections::BTreeMap;
 use strum_macros::EnumIter;
-use tracing::error;
+use tracing::{error};
 
 pub const APP_NAME: &str = "opa";
 pub const CONFIG_FILE: &str = "config.yaml";
@@ -36,7 +36,7 @@ pub struct OpaSpec {
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfig {
-    pub rego_rule_reference: String,
+    pub rego_rule_reference: Option<String>,
 }
 
 impl Configuration for OpaConfig {
@@ -67,10 +67,12 @@ impl Configuration for OpaConfig {
         let mut config = BTreeMap::new();
 
         if file == CONFIG_FILE {
-            config.insert(
-                REGO_RULE_REFERENCE.to_string(),
-                Some(self.rego_rule_reference.clone()),
-            );
+            if let Some(rego) = &self.rego_rule_reference {
+                config.insert(
+                    REGO_RULE_REFERENCE.to_string(),
+                    Some(rego.to_string()),
+                );
+            }
         } else {
             error!(
                 "Did not find any properties matching config file [{}]. This should not happen.",
