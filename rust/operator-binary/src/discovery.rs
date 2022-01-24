@@ -45,7 +45,10 @@ fn build_discovery_configmap(
     let url = format!(
         "http://{}.{}.svc.cluster.local:{}/",
         svc.metadata.name.as_deref().context(NoNameSnafu)?,
-        svc.metadata.namespace.as_deref().context(NoNamespaceSnafu)?,
+        svc.metadata
+            .namespace
+            .as_deref()
+            .context(NoNamespaceSnafu)?,
         APP_PORT
     );
     ConfigMapBuilder::new()
