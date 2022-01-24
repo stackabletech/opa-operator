@@ -5,7 +5,7 @@ use stackable_operator::role_utils::Role;
 use stackable_operator::schemars::{self, JsonSchema};
 use std::collections::BTreeMap;
 use strum_macros::EnumIter;
-use tracing::{error};
+use tracing::error;
 
 pub const APP_NAME: &str = "opa";
 pub const CONFIG_FILE: &str = "config.yaml";
@@ -68,10 +68,7 @@ impl Configuration for OpaConfig {
 
         if file == CONFIG_FILE {
             if let Some(rego) = &self.rego_rule_reference {
-                config.insert(
-                    REGO_RULE_REFERENCE.to_string(),
-                    Some(rego.to_string()),
-                );
+                config.insert(REGO_RULE_REFERENCE.to_string(), Some(rego.to_string()));
             }
         } else {
             error!(
