@@ -12,4 +12,5 @@ spec:
             kubernetes.io/os: linux
         config:
           # access the regorule-operator cluster ip service
+          # defaults to "http://regorule-operator:3030/opa/v1"
           regoRuleReference: "http://regorule-operator:3030/opa/v1"

@@ -44,8 +44,11 @@ fn build_discovery_configmap(
 ) -> Result<ConfigMap, Error> {
     let url = format!(
         "http://{}.{}.svc.cluster.local:{}/",
-        svc.metadata.name.as_deref().context(NoName)?,
-        svc.metadata.namespace.as_deref().context(NoNamespace)?,
+        svc.metadata.name.as_deref().context(NoNameSnafu)?,
+        svc.metadata
+            .namespace
+            .as_deref()
+            .context(NoNamespaceSnafu)?,
         APP_PORT
     );
     ConfigMapBuilder::new()
@@ -54,7 +57,7 @@ fn build_discovery_configmap(
                 .name_and_namespace(opa)
                 .name(name)
                 .ownerreference_from_resource(owner, None, Some(true))
-                .with_context(|| ObjectMissingMetadataForOwnerRef {
+                .with_context(|_| ObjectMissingMetadataForOwnerRefSnafu {
                     opa: ObjectRef::from_obj(opa),
                 })?
                 .with_recommended_labels(
@@ -68,5 +71,5 @@ fn build_discovery_configmap(
         )
         .add_data("OPA", url)
         .build()
-        .context(BuildConfigMap)
+        .context(BuildConfigMapSnafu)
 }

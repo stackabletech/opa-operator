@@ -113,12 +113,12 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             )]
             .into(),
         )
-        .context(ProductConfigTransform)?,
+        .context(ProductConfigTransformSnafu)?,
         &ctx.get_ref().product_config,
         false,
         false,
     )
-    .context(InvalidProductConfig)?;
+    .context(InvalidProductConfigSnafu)?;
     let role_server_config = validated_config
         .get(&OpaRole::Server.to_string())
         .map(Cow::Borrowed)
@@ -132,7 +132,7 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             &server_role_service,
         )
         .await
-        .context(ApplyRoleService)?;
+        .context(ApplyRoleServiceSnafu)?;
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
@@ -145,24 +145,24 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
         client
             .apply_patch(FIELD_MANAGER_SCOPE, &rg_configmap, &rg_configmap)
             .await
-            .with_context(|| ApplyRoleGroupConfig {
+            .with_context(|_| ApplyRoleGroupConfigSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
         client
             .apply_patch(FIELD_MANAGER_SCOPE, &rg_daemonset, &rg_daemonset)
             .await
-            .with_context(|| ApplyRoleGroupDaemonSet {
+            .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
     }
 
     for discovery_cm in build_discovery_configmaps(&opa, &opa, &server_role_service)
-        .context(BuildDiscoveryConfig)?
+        .context(BuildDiscoveryConfigSnafu)?
     {
         client
             .apply_patch(FIELD_MANAGER_SCOPE, &discovery_cm, &discovery_cm)
             .await
-            .context(ApplyDiscoveryConfig)?;
+            .context(ApplyDiscoveryConfigSnafu)?;
     }
 
     Ok(ReconcilerAction {
@@ -176,13 +176,13 @@ pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
     let role_name = OpaRole::Server.to_string();
     let role_svc_name = opa
         .server_role_service_name()
-        .context(RoleServiceNameNotFound)?;
+        .context(RoleServiceNameNotFoundSnafu)?;
     Ok(Service {
         metadata: ObjectMetaBuilder::new()
             .name_and_namespace(opa)
             .name(&role_svc_name)
             .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRef)?
+            .context(ObjectMissingMetadataForOwnerRefSnafu)?
             .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
             .build(),
         spec: Some(ServiceSpec {
@@ -216,7 +216,7 @@ fn build_server_rolegroup_config_map(
             .name_and_namespace(opa)
             .name(rolegroup.object_name())
             .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRef)?
+            .context(ObjectMissingMetadataForOwnerRefSnafu)?
             .with_recommended_labels(
                 opa,
                 APP_NAME,
@@ -229,7 +229,7 @@ fn build_server_rolegroup_config_map(
     if let Some(rego_reference) = config.get(REGO_RULE_REFERENCE) {
         cm.add_data(CONFIG_FILE, build_config_file(rego_reference));
     }
-    cm.build().with_context(|| BuildRoleGroupConfig {
+    cm.build().with_context(|_| BuildRoleGroupConfigSnafu {
         rolegroup: rolegroup.clone(),
     })
 }
@@ -270,7 +270,7 @@ fn build_server_rolegroup_daemonset(
             .name_and_namespace(opa)
             .name(&rolegroup_ref.object_name())
             .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRef)?
+            .context(ObjectMissingMetadataForOwnerRefSnafu)?
             .with_recommended_labels(
                 opa,
                 APP_NAME,
@@ -316,7 +316,7 @@ fn build_server_rolegroup_daemonset(
 }
 
 pub fn opa_version(opa: &OpenPolicyAgent) -> Result<&str> {
-    opa.spec.version.as_deref().context(ObjectHasNoVersion)
+    opa.spec.version.as_deref().context(ObjectHasNoVersionSnafu)
 }
 
 pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
