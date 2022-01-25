@@ -10,30 +10,8 @@ data:
             regex: "^((https?|ftp|file)://)?[-a-zA-Z0-9+&@#}/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
             examples:
               - "https://www.stackable.de/blog/"
-        - unit: &unitPort
-            name: "port"
-            regex: "^([0-9]{1,4}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
 
     properties:
-      - property: &opaPort
-          propertyNames:
-            - name: "port"
-              kind:
-                type: "cli"
-          datatype:
-            type: "integer"
-            min: "1024"
-            max: "65535"
-            unit: *unitPort
-          defaultValues:
-            - fromVersion: "0.0.0"
-              value: "8081"
-          roles:
-            - name: "server"
-              required: true
-          asOfVersion: "0.0.0"
-          description: "Start the OPA server on a different port (default: 8081)"
-
       - property: &opaRegoRuleReference
           propertyNames:
             - name: "regoRuleReference"
@@ -43,6 +21,9 @@ data:
           datatype:
             type: "string"
             unit: *unitUrl
+          defaultValues:
+            - fromVersion: "0.0.0"
+              value: "http://regorule-operator:3030/opa/v1"
           roles:
             - name: "server"
               required: true
