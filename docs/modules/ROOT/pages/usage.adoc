@@ -4,7 +4,7 @@ After installation, the CRD for this operator must be created:
 
     kubectl apply -f /etc/stackable/opa-operator/crd/openpolicyagent.crd.yaml
 
-To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on port 8181:
+To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on port 8081:
 
 
     cat <<EOF | kubectl apply -f -
@@ -22,7 +22,6 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
                 kubernetes.io/os: linux
             replicas: 1
             config:
-              port: 8181
               regoRuleReference: "http://localhost:3030/opa/v1"
     EOF
 
