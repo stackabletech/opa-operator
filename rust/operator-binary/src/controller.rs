@@ -33,7 +33,7 @@ use stackable_operator::{
 const FIELD_MANAGER_SCOPE: &str = "openpolicyagent";
 
 pub const CONFIG_FILE: &str = "config.yaml";
-pub const APP_PORT: u16 = 8181;
+pub const APP_PORT: u16 = 8081;
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
