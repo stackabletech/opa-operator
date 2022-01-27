@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2022-01-27
+
+
 ### Changed
 - BREAKING: STFU rework ([#146]).
 - BREAKING: regoRuleReference in config now optional ([#188]).
