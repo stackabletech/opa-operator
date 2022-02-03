@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- `operator-rs` `0.8.0` → `0.9.0` ([#202]).
+
+[#202]: https://github.com/stackabletech/opa-operator/pull/202
+
 ## [0.7.0] - 2022-01-27
 
 
