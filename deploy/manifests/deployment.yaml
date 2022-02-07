@@ -1,12 +1,15 @@
 ---
+# Source: opa-operator/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: opa-operator-deployment
   labels:
+    helm.sh/chart: opa-operator-0.8.0-nightly
     app.kubernetes.io/name: opa-operator
     app.kubernetes.io/instance: opa-operator
     app.kubernetes.io/version: "0.8.0-nightly"
+    app.kubernetes.io/managed-by: Helm
 spec:
   replicas: 1
   strategy:
@@ -22,13 +25,16 @@ spec:
         app.kubernetes.io/instance: opa-operator
     spec:
       serviceAccountName: opa-operator-serviceaccount
-      securityContext: {}
+      securityContext:
+        {}
       containers:
         - name: opa-operator
-          securityContext: {}
+          securityContext:
+            {}
           image: "docker.stackable.tech/stackable/opa-operator:0.8.0-nightly"
           imagePullPolicy: IfNotPresent
-          resources: {}
+          resources:
+            {}
           volumeMounts:
             - mountPath: /etc/stackable/opa-operator/config-spec
               name: config-spec
