@@ -238,6 +238,9 @@ fn build_server_rolegroup_config_map(
 ///
 /// The [`Pod`](`stackable_operator::k8s_openapi::api::core::v1::Pod`)s are accessible through the
 /// corresponding [`Service`] (from [`build_server_role_service`]).
+///
+/// We run an OPA on each node, because we want to avoid requiring network roundtrips for services making
+/// policy queries (which are often chained in serial, and block other tasks in the products).
 fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpenPolicyAgent>,
     opa: &OpenPolicyAgent,
