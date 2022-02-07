@@ -2,3 +2,4 @@
 * xref:installation.adoc[]
 * xref:usage.adoc[]
 * xref:configuration.adoc[]
+* xref:implementation-notes.adoc[]

@@ -1,0 +1,9 @@
+= Implementation Notes
+
+These notes may be of use when trying to understand why things are implemented the way that they are,
+but should not be required reading for regular use.
+
+== OPA replica per Node
+
+We run an OPA on each node, because we want to avoid requiring network roundtrips for services making
+policy queries (which are often chained in serial, and block other tasks in the products).
