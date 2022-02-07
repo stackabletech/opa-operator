@@ -1,4 +1,5 @@
 ---
+# Source: opa-operator/templates/configmap.yaml
 apiVersion: v1
 data:
   properties.yaml: |-
@@ -10,7 +11,7 @@ data:
             regex: "^((https?|ftp|file)://)?[-a-zA-Z0-9+&@#}/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
             examples:
               - "https://www.stackable.de/blog/"
-
+  
     properties:
       - property: &opaRegoRuleReference
           propertyNames:
@@ -33,6 +34,8 @@ kind: ConfigMap
 metadata:
   name: opa-operator-configmap
   labels:
+    helm.sh/chart: opa-operator-0.8.0-nightly
     app.kubernetes.io/name: opa-operator
     app.kubernetes.io/instance: opa-operator
     app.kubernetes.io/version: "0.8.0-nightly"
+    app.kubernetes.io/managed-by: Helm
