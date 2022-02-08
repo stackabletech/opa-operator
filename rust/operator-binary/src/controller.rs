@@ -332,9 +332,6 @@ fn build_server_rolegroup_daemonset(
                 &rolegroup_ref.role,
                 &rolegroup_ref.role_group,
             )
-            .with_annotation("prometheus.io/scrape", "true")
-            .with_annotation("prometheus.io/port", APP_PORT.to_string())
-            .with_annotation("prometheus.io/path", "metrics")
             .build(),
         spec: Some(DaemonSetSpec {
             selector: LabelSelector {
@@ -355,9 +352,6 @@ fn build_server_rolegroup_daemonset(
                         &rolegroup_ref.role,
                         &rolegroup_ref.role_group,
                     )
-                    .with_annotation("prometheus.io/scrape", "true")
-                    .with_annotation("prometheus.io/port", APP_PORT.to_string())
-                    .with_annotation("prometheus.io/path", "metrics")
                 })
                 .add_container(container_opa)
                 .add_volume(Volume {
