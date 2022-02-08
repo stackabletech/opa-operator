@@ -1,3 +1,4 @@
+---
 apiVersion: opa.stackable.tech/v1alpha1
 kind: OpenPolicyAgent
 metadata:

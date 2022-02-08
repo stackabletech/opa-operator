@@ -4,6 +4,14 @@ This is an operator for Kubernetes that can manage https://www.openpolicyagent.o
 
 WARNING: This operator only works with images from the https://repo.stackable.tech/#browse/browse:docker:v2%2Fstackable%2Fopa[Stackable] repository
 
+== Supported Versions
+
+The Stackable Operator for OPA currently supports the following versions of OPA:
+
+include::partial$supported-versions.adoc[]
+
+== Getting the Docker image
+
 [source]
 ----
 docker pull docker.stackable.tech/stackable/opa:<version>

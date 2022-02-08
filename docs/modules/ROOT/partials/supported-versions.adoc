@@ -1,0 +1,5 @@
+// The version ranges supported by OPA-Operator
+// This is a separate file, since it is used by both the direct OPA documentation, and the overarching
+// Stackable Platform documentation.
+
+- 0.27.1
