@@ -3,6 +3,8 @@
 use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
+use stackable_operator::k8s_openapi::api::core::v1::{Probe, TCPSocketAction};
+use stackable_operator::k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder},
     k8s_openapi::{
@@ -318,6 +320,25 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
+        .readiness_probe(Probe {
+            initial_delay_seconds: Some(10),
+            period_seconds: Some(10),
+            failure_threshold: Some(5),
+            tcp_socket: Some(TCPSocketAction {
+                port: IntOrString::String(APP_PORT_NAME.to_string()),
+                ..TCPSocketAction::default()
+            }),
+            ..Probe::default()
+        })
+        .liveness_probe(Probe {
+            initial_delay_seconds: Some(30),
+            period_seconds: Some(10),
+            tcp_socket: Some(TCPSocketAction {
+                port: IntOrString::String(APP_PORT_NAME.to_string()),
+                ..TCPSocketAction::default()
+            }),
+            ..Probe::default()
+        })
         .build();
     Ok(DaemonSet {
         metadata: ObjectMetaBuilder::new()
