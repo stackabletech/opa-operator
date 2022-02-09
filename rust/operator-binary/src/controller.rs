@@ -37,6 +37,7 @@ const FIELD_MANAGER_SCOPE: &str = "openpolicyagent";
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const APP_PORT: u16 = 8081;
 pub const APP_PORT_NAME: &str = "http";
+pub const METRICS_PORT_NAME: &str = "metrics";
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -432,10 +433,19 @@ fn build_opa_start_command() -> Vec<String> {
 }
 
 fn service_ports() -> Vec<ServicePort> {
-    vec![ServicePort {
-        name: Some(APP_PORT_NAME.to_string()),
-        port: APP_PORT.into(),
-        protocol: Some("TCP".to_string()),
-        ..ServicePort::default()
-    }]
+    vec![
+        ServicePort {
+            name: Some(APP_PORT_NAME.to_string()),
+            port: APP_PORT.into(),
+            protocol: Some("TCP".to_string()),
+            ..ServicePort::default()
+        },
+        ServicePort {
+            name: Some(METRICS_PORT_NAME.to_string()),
+            port: 9504, // Arbitrary port number, this is never actually used anywhere
+            protocol: Some("TCP".to_string()),
+            target_port: Some(IntOrString::String(APP_PORT_NAME.to_string())),
+            ..ServicePort::default()
+        },
+    ]
 }
