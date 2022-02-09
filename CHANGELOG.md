@@ -4,11 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- monitoring scraping label `prometheus.io/scrape: true` ([#218]).
+- supported versions ([#218]).
+
 ### Changed
 
-- `operator-rs` `0.8.0` → `0.9.0` ([#202]).
+- `operator-rs` `0.8.0` → `0.10.0` ([#202]), ([#218]).
+- fixed outdated docs ([#218]).
 
 [#202]: https://github.com/stackabletech/opa-operator/pull/202
+[#218]: https://github.com/stackabletech/opa-operator/pull/218
 
 ## [0.7.0] - 2022-01-27
 

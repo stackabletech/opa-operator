@@ -11,7 +11,7 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
     apiVersion: opa.stackable.tech/v1alpha1
     kind: OpenPolicyAgent
     metadata:
-      name: simple
+      name: simple-opa
     spec:
       version: "0.27.1"
       servers:
@@ -22,6 +22,10 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
                 kubernetes.io/os: linux
             replicas: 1
             config:
-              regoRuleReference: "http://localhost:3030/opa/v1"
+              regoRuleReference: "http://regorule-operator:3030/opa/v1"
     EOF
 
+== Monitoring
+
+The managed OPA instances are automatically configured to export Prometheus metrics. See
+xref:home::monitoring.adoc[] for more details.

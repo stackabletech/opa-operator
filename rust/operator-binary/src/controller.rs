@@ -1,14 +1,10 @@
 //! Ensures that `Pod`s are configured and running for each [`OpenPolicyAgent`]
 
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    time::Duration,
-};
-
 use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
+use stackable_operator::k8s_openapi::api::core::v1::{HTTPGetAction, Probe};
+use stackable_operator::k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder},
     k8s_openapi::{
@@ -29,11 +25,19 @@ use stackable_operator::{
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     role_utils::RoleGroupRef,
 };
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 
 const FIELD_MANAGER_SCOPE: &str = "openpolicyagent";
 
 pub const CONFIG_FILE: &str = "config.yaml";
 pub const APP_PORT: u16 = 8081;
+pub const APP_PORT_NAME: &str = "http";
+pub const METRICS_PORT_NAME: &str = "metrics";
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -43,17 +47,18 @@ pub struct Ctx {
 #[derive(Snafu, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object has no namespace"))]
-    ObjectHasNoNamespace,
     #[snafu(display("object defines no version"))]
     ObjectHasNoVersion,
-    #[snafu(display("object defines no server role"))]
-    NoServerRole,
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
         source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to apply Service for {}", rolegroup))]
+    ApplyRoleGroupService {
+        source: stackable_operator::error::Error,
+        rolegroup: RoleGroupRef<OpenPolicyAgent>,
     },
     #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
     BuildRoleGroupConfig {
@@ -91,16 +96,19 @@ pub enum Error {
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<ReconcilerAction> {
+pub async fn reconcile_opa(
+    opa: Arc<OpenPolicyAgent>,
+    ctx: Context<Ctx>,
+) -> Result<ReconcilerAction> {
     tracing::info!("Starting reconcile");
-    let opa_ref = ObjectRef::from_obj(&opa);
+    let opa_ref = ObjectRef::from_obj(&*opa);
     let client = ctx.get_ref().client.clone();
     let opa_version = opa_version(&opa)?;
 
     let validated_config = validate_all_roles_and_groups_config(
         opa_version,
         &transform_all_roles_to_config(
-            &opa,
+            &*opa,
             [(
                 OpaRole::Server.to_string(),
                 (
@@ -142,6 +150,8 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
 
         let rg_configmap = build_server_rolegroup_config_map(&rolegroup, &opa, rolegroup_config)?;
         let rg_daemonset = build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config)?;
+        let rg_service = build_rolegroup_service(&opa, &rolegroup)?;
+
         client
             .apply_patch(FIELD_MANAGER_SCOPE, &rg_configmap, &rg_configmap)
             .await
@@ -154,9 +164,15 @@ pub async fn reconcile_opa(opa: OpenPolicyAgent, ctx: Context<Ctx>) -> Result<Re
             .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
+        client
+            .apply_patch(FIELD_MANAGER_SCOPE, &rg_service, &rg_service)
+            .await
+            .with_context(|_| ApplyRoleGroupServiceSnafu {
+                rolegroup: rolegroup.clone(),
+            })?;
     }
 
-    for discovery_cm in build_discovery_configmaps(&opa, &opa, &server_role_service)
+    for discovery_cm in build_discovery_configmaps(&*opa, &*opa, &server_role_service)
         .context(BuildDiscoveryConfigSnafu)?
     {
         client
@@ -187,13 +203,51 @@ pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
             .build(),
         spec: Some(ServiceSpec {
             ports: Some(vec![ServicePort {
-                name: Some("http".to_string()),
+                name: Some(APP_PORT_NAME.to_string()),
                 port: APP_PORT.into(),
                 protocol: Some("TCP".to_string()),
                 ..ServicePort::default()
             }]),
             selector: Some(role_selector_labels(opa, APP_NAME, &role_name)),
             type_: Some("NodePort".to_string()),
+            ..ServiceSpec::default()
+        }),
+        status: None,
+    })
+}
+
+/// The rolegroup [`Service`] is a headless service that allows direct access to the instances of a certain rolegroup
+///
+/// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
+fn build_rolegroup_service(
+    opa: &OpenPolicyAgent,
+    rolegroup: &RoleGroupRef<OpenPolicyAgent>,
+) -> Result<Service> {
+    Ok(Service {
+        metadata: ObjectMetaBuilder::new()
+            .name_and_namespace(opa)
+            .name(&rolegroup.object_name())
+            .ownerreference_from_resource(opa, None, Some(true))
+            .context(ObjectMissingMetadataForOwnerRefSnafu)?
+            .with_recommended_labels(
+                opa,
+                APP_NAME,
+                opa_version(opa)?,
+                &rolegroup.role,
+                &rolegroup.role_group,
+            )
+            .with_label("prometheus.io/scrape", "true")
+            .build(),
+        spec: Some(ServiceSpec {
+            cluster_ip: Some("None".to_string()),
+            ports: Some(service_ports()),
+            selector: Some(role_group_selector_labels(
+                opa,
+                APP_NAME,
+                &rolegroup.role,
+                &rolegroup.role_group,
+            )),
+            publish_not_ready_addresses: Some(true),
             ..ServiceSpec::default()
         }),
         status: None,
@@ -265,8 +319,27 @@ fn build_server_rolegroup_daemonset(
         .image(image)
         .command(build_opa_start_command())
         .add_env_vars(env)
-        .add_container_port("http", APP_PORT.into())
+        .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
+        .readiness_probe(Probe {
+            initial_delay_seconds: Some(5),
+            period_seconds: Some(10),
+            failure_threshold: Some(5),
+            http_get: Some(HTTPGetAction {
+                port: IntOrString::String(APP_PORT_NAME.to_string()),
+                ..HTTPGetAction::default()
+            }),
+            ..Probe::default()
+        })
+        .liveness_probe(Probe {
+            initial_delay_seconds: Some(30),
+            period_seconds: Some(10),
+            http_get: Some(HTTPGetAction {
+                port: IntOrString::String(APP_PORT_NAME.to_string()),
+                ..HTTPGetAction::default()
+            }),
+            ..Probe::default()
+        })
         .build();
     Ok(DaemonSet {
         metadata: ObjectMetaBuilder::new()
@@ -356,5 +429,23 @@ fn build_opa_start_command() -> Vec<String> {
         format!("0.0.0.0:{}", APP_PORT),
         "-c".to_string(),
         "/stackable/config/config.yaml".to_string(),
+    ]
+}
+
+fn service_ports() -> Vec<ServicePort> {
+    vec![
+        ServicePort {
+            name: Some(APP_PORT_NAME.to_string()),
+            port: APP_PORT.into(),
+            protocol: Some("TCP".to_string()),
+            ..ServicePort::default()
+        },
+        ServicePort {
+            name: Some(METRICS_PORT_NAME.to_string()),
+            port: 9504, // Arbitrary port number, this is never actually used anywhere
+            protocol: Some("TCP".to_string()),
+            target_port: Some(IntOrString::String(APP_PORT_NAME.to_string())),
+            ..ServicePort::default()
+        },
     ]
 }
