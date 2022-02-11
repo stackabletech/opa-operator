@@ -2,12 +2,15 @@
 
 After installation, the CRD for this operator must be created:
 
-    kubectl apply -f /etc/stackable/opa-operator/crd/openpolicyagent.crd.yaml
+[source]
+----
+kubectl apply -f /etc/stackable/opa-operator/crd/openpolicyagent.crd.yaml
+----
 
 To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on port 8081:
 
-
-    cat <<EOF | kubectl apply -f -
+[source,yaml]
+----
     apiVersion: opa.stackable.tech/v1alpha1
     kind: OpenPolicyAgent
     metadata:
@@ -20,12 +23,49 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
             selector:
               matchLabels:
                 kubernetes.io/os: linux
-            replicas: 1
             config:
               regoRuleReference: "http://regorule-operator:3030/opa/v1"
-    EOF
+----
 
 == Monitoring
 
 The managed OPA instances are automatically configured to export Prometheus metrics. See
 xref:home::monitoring.adoc[] for more details.
+
+== Configuration & Environment Overrides
+
+The cluster definition also supports overriding configuration properties and environment variables, either per role or per role group, where the more specific override (role group) has precedence over the less specific one (role).
+
+IMPORTANT: Do not override port numbers. This will lead to faulty installations.
+
+=== Configuration Properties
+
+Currently, not supported for `config.yaml`.
+
+=== Environment Variables
+
+Environment variables can be (over)written by adding the `envOverrides` property.
+
+For example per role group:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      config: {}
+      envOverrides:
+        MY_ENV_VAR: "MY_VALUE"
+----
+
+or per role:
+
+[source,yaml]
+----
+servers:
+  envOverrides:
+    MY_ENV_VAR: "MY_VALUE"
+  roleGroups:
+    default:
+      config: {}
+----
