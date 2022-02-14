@@ -1517,7 +1517,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-crd"
-version = "0.8.0-nightly"
+version = "0.8.0"
 dependencies = [
  "semver",
  "serde",
@@ -1530,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-operator"
-version = "0.8.0-nightly"
+version = "0.8.0"
 dependencies = [
  "built",
  "clap",
