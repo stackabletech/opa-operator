@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Reconciliation errors are now reported as Kubernetes events ([#241]).
+
+### Changed
+
+- `operator-rs` `0.10.0` -> `0.12.0` ([#241]).
+
+[#241]: https://github.com/stackabletech/opa-operator/pull/241
+
 ## [0.8.0] - 2022-02-14
 
 ### Added
