@@ -4,14 +4,11 @@ kind: ClusterRole
 metadata:
   name: {{ .Release.Name }}-clusterrole
 rules:
-  # For OPA dependents. Note that OPA it's self is listed here because it's own resource name
-  # doesn't follow the *clusters convention
   - apiGroups:
       - opa.stackable.tech
     resources:
       - openpolicyagents
       - openpolicyagents/status
-      - regorules
     verbs:
       - create
       - get
@@ -83,35 +80,8 @@ rules:
     verbs:
       - get
   - apiGroups:
-      - command.{{ include "operator.name" . }}.stackable.tech
+      - events.k8s.io
     resources:
-      - inits
-      - restarts
-      - starts
-      - stops
+      - events
     verbs:
-      - get
-      - list
-      - patch
-      - watch
-  - apiGroups:
-      - command.{{ include "operator.name" . }}.stackable.tech
-    resources:
-      - inits/status
-    verbs:
-      - patch
-  - apiGroups:
-      - {{ include "operator.name" . }}.stackable.tech
-    resources:
-      - {{ include "operator.name" . }}clusters
-    verbs:
-      - get
-      - list
-      - patch
-      - watch
-  - apiGroups:
-      - {{ include "operator.name" . }}.stackable.tech
-    resources:
-      - {{ include "operator.name" . }}clusters/status
-    verbs:
-      - patch
+      - create
