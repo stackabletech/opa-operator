@@ -11,8 +11,11 @@ use stackable_operator::kube::runtime::watcher;
 use stackable_operator::kube::Api;
 use stackable_operator::namespace::WatchNamespace;
 use std::env::VarError;
+use std::fs::create_dir_all;
+use std::fs::rename;
+use std::fs::File;
+use std::io::prelude::*;
 use std::path::Path;
-use tokio::fs::create_dir_all;
 
 mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -40,6 +43,8 @@ pub enum Error {
     OpaBundleDir { source: std::io::Error },
     #[snafu(display("missing namespace to watch"))]
     MissingWatchNamespace,
+    #[snafu(display("config map [{name}] is empty"))]
+    EmptyConfigMap { name: String },
 }
 
 #[tokio::main]
@@ -60,12 +65,19 @@ async fn main() -> Result<(), error::Error> {
     match stackable_operator::namespace::get_watch_namespace()? {
         WatchNamespace::One(namespace) => {
             let opa_bundle_api: Api<ConfigMap> = client.get_namespaced_api(namespace.as_str());
-            let mut watcher =
-                try_flatten_applied(watcher(opa_bundle_api, ListParams::default().labels("opa.stackable.tech/bundle=true"))).boxed_local();
+            let mut watcher = try_flatten_applied(watcher(
+                opa_bundle_api,
+                ListParams::default().labels("opa.stackable.tech/bundle=true"),
+            ))
+            .boxed_local();
             while let Ok(Some(cm)) = watcher.try_next().await {
                 // TODO: can we handle errors ?
                 tracing::debug!("Applied ConfigMap name [{:?}]", cm.metadata.name);
-                if let Err(e) = update_bundle(Path::new("/bundles"), &cm).await {
+                if let Err(e) = update_bundle(
+                    Path::new("/bundles/active"),
+                    Path::new("/bundles/incomming"),
+                    &cm,
+                ) {
                     tracing::error!("{}", e);
                 }
             }
@@ -86,16 +98,64 @@ async fn main() -> Result<(), error::Error> {
     }
 }
 
-pub async fn update_bundle(root: impl AsRef<Path>, bundle: &ConfigMap) -> Result<(), Error> {
+/// Writes bundle.data under `root`.
+pub fn update_bundle(root: &Path, incomming: &Path, bundle: &ConfigMap) -> Result<(), Error> {
     let name = bundle
         .metadata
         .name
         .as_ref()
         .context(OpaBundleHasNoNameSnafu)?;
-    let full_path = root.as_ref().join(Path::new(name.as_str()));
-    create_dir_all(full_path)
-        .await
-        .with_context(|_| OpaBundleDirSnafu)?;
 
-    Ok(())
+    match bundle.data.as_ref() {
+        Some(rules) => {
+            let temp_full_path = incomming.join(Path::new(name.as_str()));
+            create_dir_all(&temp_full_path).with_context(|_| OpaBundleDirSnafu)?;
+
+            for (k, v) in rules.iter() {
+                let rego_file_path = temp_full_path.clone().join(Path::new(k));
+
+                File::create(&rego_file_path)
+                    .and_then(|mut file| file.write_all(v.as_bytes()))
+                    .context(OpaBundleDirSnafu)?;
+            }
+
+            let dest_path = root.join(Path::new(name));
+            rename(&temp_full_path, &dest_path).context(OpaBundleDirSnafu)
+        }
+        None => Err(Error::EmptyConfigMap { name: name.clone() }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::update_bundle;
+
+    use std::fs::create_dir;
+    use std::fs::read_to_string;
+
+    use stackable_operator::builder::{ConfigMapBuilder, ObjectMetaBuilder};
+    use tempdir::TempDir;
+
+    #[test]
+    pub fn test_update_bundle() {
+        let tmp = TempDir::new("test-bundle-helper").unwrap();
+        let active = tmp.path().join("active");
+        let incomming = tmp.path().join("incomming");
+
+        create_dir(&active).unwrap();
+        create_dir(&incomming).unwrap();
+
+        let config_map = ConfigMapBuilder::new()
+            .metadata(ObjectMetaBuilder::new().name("test-bundle-helper").build())
+            .add_data(String::from("roles.rego"), String::from("allow user true"))
+            .build()
+            .unwrap();
+
+        update_bundle(&active, &incomming, &config_map).unwrap();
+
+        assert_eq!(
+            String::from("allow user true"),
+            read_to_string(active.join("test-bundle-helper/roles.rego")).unwrap()
+        );
+    }
 }
