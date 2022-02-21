@@ -15,6 +15,7 @@ VERSION := $(shell cargo metadata --format-version 1 | jq '.packages[] | select(
 ## Docker related targets
 docker-build:
 	docker build --force-rm -t "docker.stackable.tech/stackable/opa-operator:${VERSION}" -f docker/Dockerfile .
+	docker build --force-rm -t "docker.stackable.tech/stackable/opa-bundle-helper:${VERSION}" -f docker/Dockerfile.helper .
 
 docker-build-latest: docker-build
 	docker tag "docker.stackable.tech/stackable/opa-operator:${VERSION}" \

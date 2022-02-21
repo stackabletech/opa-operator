@@ -3,7 +3,10 @@
 use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
-use stackable_operator::k8s_openapi::api::core::v1::{HTTPGetAction, Probe};
+use stackable_operator::k8s_openapi::api::core::v1::{
+    Container, EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
+    SecurityContext, VolumeMount,
+};
 use stackable_operator::k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder},
@@ -321,6 +324,7 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
+        .add_volume_mount("bundles", "/bundles")
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
@@ -341,6 +345,48 @@ fn build_server_rolegroup_daemonset(
             ..Probe::default()
         })
         .build();
+
+    let container_bundle_helper = ContainerBuilder::new("opa-bundle-helper")
+        .image("docker.stackable.tech/stackable/opa-bundle-helper:0.9.0-nightly")
+        .command(vec![String::from("/stackable-opa-bundle-helper")])
+        .add_env_vars(vec![EnvVar {
+            name: String::from("WATCH_NAMESPACE"),
+            value_from: Some(EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: String::from("metadata.namespace"),
+                    ..ObjectFieldSelector::default()
+                }),
+                ..EnvVarSource::default()
+            }),
+            ..EnvVar::default()
+        }])
+        .add_volume_mount("bundles", "/bundles")
+        .build();
+
+    let init_container = Container {
+        name: "init-container".to_string(),
+        image: Some(String::from(
+            "docker.stackable.tech/stackable/opa-bundle-helper:0.9.0-nightly",
+        )),
+        command: Some(vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "mkdir -p /bundles/active ".to_string(),
+            "&& mkdir -p /bundles/incomming ".to_string(),
+            "&& chown -R stackable:stackable /bundles ".to_string(),
+            "&& chmod -R a=,u=rwX /bundles".to_string(),
+        ]),
+        security_context: Some(SecurityContext {
+            run_as_user: Some(0),
+            ..SecurityContext::default()
+        }),
+        volume_mounts: Some(vec![VolumeMount {
+            name: "bundles".to_string(),
+            mount_path: "/bundles".to_string(),
+            ..VolumeMount::default()
+        }]),
+        ..Container::default()
+    };
     Ok(DaemonSet {
         metadata: ObjectMetaBuilder::new()
             .name_and_namespace(opa)
@@ -376,12 +422,19 @@ fn build_server_rolegroup_daemonset(
                     )
                 })
                 .add_container(container_opa)
+                .add_container(container_bundle_helper)
+                .add_init_container(init_container)
                 .add_volume(Volume {
                     name: "config".to_string(),
                     config_map: Some(ConfigMapVolumeSource {
                         name: Some(rolegroup_ref.object_name()),
                         ..ConfigMapVolumeSource::default()
                     }),
+                    ..Volume::default()
+                })
+                .add_volume(Volume {
+                    name: "bundles".to_string(),
+                    empty_dir: Some(EmptyDirVolumeSource::default()),
                     ..Volume::default()
                 })
                 .build_template(),
@@ -427,8 +480,8 @@ fn build_opa_start_command() -> Vec<String> {
         "-s".to_string(),
         "-a".to_string(),
         format!("0.0.0.0:{}", APP_PORT),
-        "-c".to_string(),
-        "/stackable/config/config.yaml".to_string(),
+        "-w".to_string(),
+        "/bundles/active".to_string(),
     ]
 }
 

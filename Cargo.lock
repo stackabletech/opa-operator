@@ -1572,7 +1572,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "snafu",
- "stackable-opa-crd",
  "stackable-operator",
  "strum",
  "strum_macros",
