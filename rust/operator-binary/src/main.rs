@@ -4,20 +4,23 @@ mod discovery;
 use clap::Parser;
 use futures::StreamExt;
 use stackable_opa_crd::OpenPolicyAgent;
-use stackable_operator::cli::Command;
-use stackable_operator::client::Client;
-use stackable_operator::error::OperatorResult;
-use stackable_operator::k8s_openapi::api::apps::v1::DaemonSet;
-use stackable_operator::kube::Api;
-use stackable_operator::product_config::ProductConfigManager;
 use stackable_operator::{
-    client, error,
-    k8s_openapi::api::core::v1::{ConfigMap, Service},
+    cli::Command,
+    client,
+    client::Client,
+    error,
+    error::OperatorResult,
+    k8s_openapi::api::{
+        apps::v1::DaemonSet,
+        core::v1::{ConfigMap, Service},
+    },
     kube::{
         api::ListParams,
         runtime::{controller::Context, Controller},
-        CustomResourceExt,
+        Api, CustomResourceExt,
     },
+    logging::controller::report_controller_reconciled,
+    product_config::ProductConfigManager,
 };
 
 mod built_info {
@@ -81,21 +84,14 @@ async fn create_controller(
             controller::reconcile_opa,
             controller::error_policy,
             Context::new(controller::Ctx {
-                client,
+                client: client.clone(),
                 product_config,
             }),
         )
-        .for_each(|res| async {
-            match res {
-                Ok((obj, _)) => tracing::info!(object = %obj, "Reconciled object"),
-                Err(err) => {
-                    tracing::error!(
-                        error = &err as &dyn std::error::Error,
-                        "Failed to reconcile object",
-                    )
-                }
-            }
+        .map(|res| {
+            report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
         })
+        .collect::<()>()
         .await;
 
     Ok(())
