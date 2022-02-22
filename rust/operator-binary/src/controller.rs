@@ -4,12 +4,10 @@ use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
 use stackable_operator::builder::SecurityContextBuilder;
-use stackable_operator::k8s_openapi::api::core::v1::{
-    EmptyDirVolumeSource, HTTPGetAction, Probe, VolumeMount,
-};
+use stackable_operator::k8s_openapi::api::core::v1::{EmptyDirVolumeSource, HTTPGetAction, Probe};
 use stackable_operator::k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
 use stackable_operator::{
-    builder::{ConfigMapBuilder, ContainerBuilder, ObjectMetaBuilder, PodBuilder},
+    builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
@@ -349,26 +347,30 @@ fn build_server_rolegroup_daemonset(
     let container_bundle_helper = ContainerBuilder::new("opa-bundle-helper")
         .image("docker.stackable.tech/stackable/opa-bundle-helper:0.9.0-nightly")
         .command(vec![String::from("/stackable-opa-bundle-helper")])
-        .add_env_var_from_field_ref("WATCH_NAMESPACE", "metadata.namespace")
+        .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
         .build();
 
     let init_container = ContainerBuilder::new("init-container")
         .image("docker.stackable.tech/stackable/opa-bundle-helper:0.9.0-nightly")
-        .command(vec![
-            "sh".to_string(),
+        .command(vec!["bash".to_string()])
+        .args(vec![
+            "-euo".to_string(),
+            "pipefail".to_string(),
+            "-x".to_string(),
             "-c".to_string(),
-            "mkdir -p /bundles/active ".to_string(),
-            "&& mkdir -p /bundles/incomming ".to_string(),
-            "&& chown -R stackable:stackable /bundles ".to_string(),
-            "&& chmod -R a=,u=rwX /bundles".to_string(),
+            [
+                "mkdir -p /bundles/active",
+                "mkdir -p /bundles/incomming",
+                "chown -R stackable:stackable /bundles/active",
+                "chown -R stackable:stackable /bundles/incomming",
+                "chmod -R a=,u=rwX /bundles/active",
+                "chmod -R a=,u=rwX /bundles/incomming",
+            ]
+            .join(" && "),
         ])
         .security_context(SecurityContextBuilder::run_as_root())
-        .add_volume_mounts(vec![VolumeMount {
-            name: "bundles".to_string(),
-            mount_path: "/bundles".to_string(),
-            ..VolumeMount::default()
-        }])
+        .add_volume_mount("bundles", "/bundles")
         .build();
 
     Ok(DaemonSet {
