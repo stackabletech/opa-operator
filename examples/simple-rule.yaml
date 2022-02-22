@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-bundle-trino
+  labels:
+    opa.stackable.tech/bundle: "true"
+data:
+  trino.rego: |
+    enemy.types=aliens,monsters
+    player.maximum-lives=5    

@@ -19,5 +19,7 @@ RUN groupadd -g 1000 stackable && adduser -u 1000 -g stackable -c 'Stackable OPA
 
 USER 1000:1000
 
+ENV WATCH_NAMESPACE="default"
+
 ENTRYPOINT ["/stackable-opa-bundle-helper"]
 CMD ["run"]

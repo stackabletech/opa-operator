@@ -9,7 +9,7 @@ repository = "https://github.com/stackabletech/opa-operator"
 version = "0.9.0-nightly"
 
 [dependencies]
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "0.10.0" }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", branch = "builder-enhancements" }
 stackable-opa-crd = { path = "../crd" }
 
 clap = "3.0"
@@ -28,5 +28,5 @@ pin-project = "1.0"
 
 [build-dependencies]
 built = { version =  "0.5", features = ["chrono", "git2"] }
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "0.10.0" }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", branch = "builder-enhancements" }
 stackable-opa-crd = { path = "../crd" }

@@ -1,7 +1,5 @@
-use clap::Parser;
 use futures::{StreamExt, TryStreamExt};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_operator::cli::Command;
 use stackable_operator::client;
 use stackable_operator::error;
 use stackable_operator::k8s_openapi::api::core::v1::ConfigMap;
@@ -16,21 +14,6 @@ use std::fs::rename;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-
-mod built_info {
-    include!(concat!(env!("OUT_DIR"), "/built.rs"));
-}
-
-pub struct Ctx {
-    pub client: stackable_operator::client::Client,
-}
-
-#[derive(Parser)]
-#[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
-struct Opts {
-    #[clap(subcommand)]
-    cmd: Command,
-}
 
 #[derive(Snafu, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -51,16 +34,6 @@ pub enum Error {
 async fn main() -> Result<(), error::Error> {
     stackable_operator::logging::initialize_logging("OPA_BUNDLE_HELPER_LOG");
 
-    // TODO: verify this
-    stackable_operator::utils::print_startup_string(
-        built_info::PKG_DESCRIPTION,
-        built_info::PKG_VERSION,
-        built_info::GIT_VERSION,
-        built_info::TARGET,
-        built_info::BUILT_TIME_UTC,
-        built_info::RUSTC_VERSION,
-    );
-
     let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
     match stackable_operator::namespace::get_watch_namespace()? {
         WatchNamespace::One(namespace) => {
@@ -70,19 +43,26 @@ async fn main() -> Result<(), error::Error> {
                 ListParams::default().labels("opa.stackable.tech/bundle=true"),
             ))
             .boxed_local();
-            while let Ok(Some(cm)) = watcher.try_next().await {
-                // TODO: can we handle errors ?
-                tracing::debug!("Applied ConfigMap name [{:?}]", cm.metadata.name);
-                if let Err(e) = update_bundle(
-                    Path::new("/bundles/active"),
-                    Path::new("/bundles/incomming"),
-                    &cm,
-                ) {
-                    tracing::error!("{}", e);
+            tracing::info!("waiting for config maps in namespace [{namespace}]");
+            loop {
+                let watch_result = watcher.try_next().await;
+
+                match watch_result {
+                    Ok(Some(cm)) => {
+                        // TODO: can we handle errors ?
+                        tracing::debug!("Applied ConfigMap name [{:?}]", cm.metadata.name);
+                        if let Err(e) = update_bundle(
+                            Path::new("/bundles/active"),
+                            Path::new("/bundles/incomming"),
+                            &cm,
+                        ) {
+                            tracing::error!("{}", e);
+                        }
+                    }
+                    Err(e) => tracing::error!("watch error {:?}", e),
+                    _ => {}
                 }
             }
-
-            Ok(())
         }
         WatchNamespace::All => {
             // TODO: need to return an enum variant that is defined in operator-rs and this seems the best choice.
