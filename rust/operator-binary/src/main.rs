@@ -23,7 +23,7 @@ use stackable_operator::{
     product_config::ProductConfigManager,
 };
 
-mod built_info {
+pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 

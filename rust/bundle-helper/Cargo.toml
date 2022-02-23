@@ -8,7 +8,7 @@ repository = "https://github.com/stackabletech/opa-operator"
 version = "0.9.0-nightly"
 
 [dependencies]
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", branch = "builder-enhancements" }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", branch = "main" }
 
 clap = "3.0"
 fnv = "1.0"

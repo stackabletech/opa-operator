@@ -1,6 +1,7 @@
 //! Ensures that `Pod`s are configured and running for each [`OpenPolicyAgent`]
 
 use crate::discovery::{self, build_discovery_configmaps};
+use crate::built_info::{PKG_VERSION};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
 use stackable_operator::builder::SecurityContextBuilder;
@@ -354,7 +355,7 @@ fn build_server_rolegroup_daemonset(
         .build();
 
     let container_bundle_helper = ContainerBuilder::new("opa-bundle-helper")
-        .image("docker.stackable.tech/stackable/opa-bundle-helper:0.9.0-nightly")
+        .image(format!("docker.stackable.tech/stackable/opa-bundle-helper:{}", PKG_VERSION ))
         .command(vec![String::from("/stackable-opa-bundle-helper")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
