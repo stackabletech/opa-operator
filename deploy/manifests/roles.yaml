@@ -86,3 +86,25 @@ rules:
       - events
     verbs:
       - create
+---
+# Source: opa-operator/templates/roles.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opa-bundle-helper-clusterrole
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - configmaps
+      - secrets
+      - services
+      - endpoints
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+      - watch
