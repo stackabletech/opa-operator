@@ -140,36 +140,46 @@ pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::update_bundle;
-//
-//     use std::fs::create_dir;
-//     use std::fs::read_to_string;
-//
-//     use stackable_operator::builder::{ConfigMapBuilder, ObjectMetaBuilder};
-//     use tempdir::TempDir;
-//
-//     #[test]
-//     pub fn test_update_bundle() {
-//         let tmp = TempDir::new("test-bundle-helper").unwrap();
-//         let active = tmp.path().join("active");
-//         let incomming = tmp.path().join("incomming");
-//
-//         create_dir(&active).unwrap();
-//         create_dir(&incomming).unwrap();
-//
-//         let config_map = ConfigMapBuilder::new()
-//             .metadata(ObjectMetaBuilder::new().name("test-bundle-helper").build())
-//             .add_data(String::from("roles.rego"), String::from("allow user true"))
-//             .build()
-//             .unwrap();
-//
-//         update_bundle(Arc::new(config_map), Ctx { root:: active, &incomming, &config_map).unwrap();
-//
-//         assert_eq!(
-//             String::from("allow user true"),
-//             read_to_string(active.join("test-bundle-helper/roles.rego")).unwrap()
-//         );
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use crate::Ctx;
+
+    use super::update_bundle;
+
+    use std::fs::create_dir;
+    use std::fs::read_to_string;
+    use std::sync::Arc;
+
+    use stackable_operator::builder::{ConfigMapBuilder, ObjectMetaBuilder};
+    use stackable_operator::kube::runtime::controller::Context;
+    use tempdir::TempDir;
+
+    #[test]
+    pub fn test_update_bundle() {
+        let tmp = TempDir::new("test-bundle-helper").unwrap();
+        let active = tmp.path().join("active");
+        let incomming = tmp.path().join("incomming");
+
+        create_dir(&active).unwrap();
+        create_dir(&incomming).unwrap();
+
+        let config_map = ConfigMapBuilder::new()
+            .metadata(ObjectMetaBuilder::new().name("test-bundle-helper").build())
+            .add_data(String::from("roles.rego"), String::from("allow user true"))
+            .build()
+            .unwrap();
+
+        let context = Context::new(Ctx {
+            root: String::from(active.to_str().unwrap()),
+            incomming: String::from(incomming.to_str().unwrap()),
+        });
+
+        match tokio_test::block_on(update_bundle(Arc::new(config_map), context)) {
+            Ok(_) => assert_eq!(
+                String::from("allow user true"),
+                read_to_string(active.join("test-bundle-helper/roles.rego")).unwrap()
+            ),
+            Err(e) => panic!("{:?}", e),
+        }
+    }
+}
