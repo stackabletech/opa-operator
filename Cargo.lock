@@ -1579,14 +1579,9 @@ dependencies = [
 name = "stackable-opa-bundle-helper"
 version = "0.9.0-nightly"
 dependencies = [
- "clap",
- "fnv",
  "futures 0.3.21",
  "pin-project",
  "semver",
- "serde",
- "serde_json",
- "serde_yaml",
  "snafu",
  "stackable-operator",
  "strum",
@@ -1634,8 +1629,8 @@ dependencies = [
 
 [[package]]
 name = "stackable-operator"
-version = "0.12.0"
-source = "git+https://github.com/stackabletech/operator-rs.git?branch=main#0e09eeabd63e3cf8019df55b752e336b5f3f8e8d"
+version = "0.13.0"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=0.13.0#401f4053d8c32d0fcd507d94799956181f66105d"
 dependencies = [
  "backoff",
  "chrono",

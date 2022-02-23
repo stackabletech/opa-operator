@@ -12,7 +12,6 @@ use stackable_operator::kube::runtime::Controller;
 use stackable_operator::kube::Api;
 use stackable_operator::logging::controller::report_controller_reconciled;
 use stackable_operator::logging::controller::ReconcilerError;
-use stackable_operator::namespace::WatchNamespace;
 use std::fs::create_dir_all;
 use std::fs::rename;
 use std::fs::File;
@@ -20,6 +19,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use std::env;
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -46,20 +46,22 @@ pub struct Ctx {
     pub incomming: String,
 }
 
+const WATCH_NAMESPACE_ENV: &str = "WATCH_NAMESPACE";
+
 #[tokio::main]
 async fn main() -> Result<(), error::Error> {
     stackable_operator::logging::initialize_logging("OPA_BUNDLE_HELPER_LOG");
 
     let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
 
-    match stackable_operator::namespace::get_watch_namespace()? {
-        WatchNamespace::One(namespace) => {
+    match env::var(WATCH_NAMESPACE_ENV) {
+        Ok(namespace) => {
             create_controller(client, namespace, "/bundles/active", "/bundles/incomming").await?;
         }
-        WatchNamespace::All => {
+        Err(_) => {
             tracing::error!(
                 "Missing namespace to watch. Env var [{}] is probably not defined.",
-                stackable_operator::namespace::WATCH_NAMESPACE_ENV
+                WATCH_NAMESPACE_ENV
             );
         }
     }
