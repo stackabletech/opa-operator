@@ -479,7 +479,7 @@ bundles:
     )
 }
 
-/// OPA either loads bundles from [`rego_ref`] or it watches the `/bundles/active` folder
+/// OPA either loads bundles from rego_ref or it watches the `/bundles/active` folder
 fn build_opa_start_command(rego_ref: Option<&String>) -> Vec<String> {
     let mut result = vec![
         "/stackable/opa/opa".to_string(),
