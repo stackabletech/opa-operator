@@ -7,12 +7,14 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Reconciliation errors are now reported as Kubernetes events ([#241]).
+- Local bundles from `ConfigMap` objects with the help of a side container ([#244])
 
 ### Changed
 
 - `operator-rs` `0.10.0` -> `0.12.0` ([#241]).
 
 [#241]: https://github.com/stackabletech/opa-operator/pull/241
+[#244]: https://github.com/stackabletech/opa-operator/pull/244
 
 ## [0.8.0] - 2022-02-14
 
