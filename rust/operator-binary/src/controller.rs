@@ -1,7 +1,7 @@
 //! Ensures that `Pod`s are configured and running for each [`OpenPolicyAgent`]
 
+use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
-use crate::built_info::{PKG_VERSION};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
 use stackable_operator::builder::SecurityContextBuilder;
@@ -316,6 +316,12 @@ fn build_server_rolegroup_daemonset(
         "docker.stackable.tech/stackable/opa:{}-stackable0",
         opa_version
     );
+
+    let rego_ref = server_config
+        .get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
+        .map(|props| props.get(REGO_RULE_REFERENCE))
+        .flatten();
+
     let env = server_config
         .get(&PropertyNameKind::Env)
         .iter()
@@ -328,7 +334,7 @@ fn build_server_rolegroup_daemonset(
         .collect::<Vec<_>>();
     let container_opa = ContainerBuilder::new("opa")
         .image(image)
-        .command(build_opa_start_command())
+        .command(build_opa_start_command(rego_ref))
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
@@ -355,7 +361,10 @@ fn build_server_rolegroup_daemonset(
         .build();
 
     let container_bundle_helper = ContainerBuilder::new("opa-bundle-helper")
-        .image(format!("docker.stackable.tech/stackable/opa-bundle-helper:{}", PKG_VERSION ))
+        .image(format!(
+            "docker.stackable.tech/stackable/opa-bundle-helper:{}",
+            PKG_VERSION
+        ))
         .command(vec![String::from("/stackable-opa-bundle-helper")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
@@ -470,16 +479,25 @@ bundles:
     )
 }
 
-fn build_opa_start_command() -> Vec<String> {
-    vec![
+/// OPA either loads bundles from [`rego_ref`] or it watches the `/bundles/active` folder
+fn build_opa_start_command(rego_ref: Option<&String>) -> Vec<String> {
+    let mut result = vec![
         "/stackable/opa/opa".to_string(),
         "run".to_string(),
         "-s".to_string(),
         "-a".to_string(),
         format!("0.0.0.0:{}", APP_PORT),
-        "-w".to_string(),
-        "/bundles/active".to_string(),
-    ]
+    ];
+
+    result.extend(rego_ref.map_or(
+        [
+            "-c".to_string(),
+            "/stackable/config/config.yaml".to_string(),
+        ],
+        |_| ["-w".to_string(), "/bundles/active".to_string()],
+    ));
+
+    result
 }
 
 fn service_ports() -> Vec<ServicePort> {
