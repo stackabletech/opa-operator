@@ -27,6 +27,13 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
               regoRuleReference: "http://regorule-operator:3030/opa/v1"
 ----
 
+== Bundle sources
+
+The OPA servers can load bundles from a remote server by specifying the `regoRuleReference` property as shown above.
+
+Alternatively, bundles can be loaded from `ConfigMap` objects created in the same namespace as the OPA pod. These `ConfigMap`s
+must be labeled with `opa.stackable.tech/bundle: true`.
+
 == Monitoring
 
 The managed OPA instances are automatically configured to export Prometheus metrics. See

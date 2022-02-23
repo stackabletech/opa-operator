@@ -10,5 +10,5 @@ policy queries (which are often chained in serial, and block other tasks in the 
 
 == OPA bundle helper
 
-Each OPA pod runs a container that watches for `ConfigMap` objects labeled `"opa.stackable.tech/bundle: true"`.
+Each OPA pod runs a container that watches for `ConfigMap` objects labeled `opa.stackable.tech/bundle: true`.
 For each `ConfigMap` a bundle is (re)created where the all `data` entries are mapped to bundle files.
