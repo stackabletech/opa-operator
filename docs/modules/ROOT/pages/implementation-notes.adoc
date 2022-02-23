@@ -7,3 +7,8 @@ but should not be required reading for regular use.
 
 We run an OPA on each node, because we want to avoid requiring network round trips for services making
 policy queries (which are often chained in serial, and block other tasks in the products).
+
+== OPA bundle helper
+
+Each OPA pod runs a container that watches for `ConfigMap` objects labeled `"opa.stackable.tech/bundle: true"`.
+For each `ConfigMap` a bundle is (re)created where the all `data` entries are mapped to bundle files.

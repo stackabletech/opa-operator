@@ -24,6 +24,7 @@ docker-build-latest: docker-build
 docker-publish:
 	echo "${NEXUS_PASSWORD}" | docker login --username github --password-stdin docker.stackable.tech
 	docker push --all-tags docker.stackable.tech/stackable/opa-operator
+	docker push --all-tags docker.stackable.tech/stackable/opa-bundle-helper
 
 docker: docker-build docker-publish
 
