@@ -12,6 +12,7 @@ use stackable_operator::kube::runtime::Controller;
 use stackable_operator::kube::Api;
 use stackable_operator::logging::controller::report_controller_reconciled;
 use stackable_operator::logging::controller::ReconcilerError;
+use std::env;
 use std::fs::create_dir_all;
 use std::fs::rename;
 use std::fs::File;
@@ -19,7 +20,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use std::env;
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -43,7 +43,7 @@ impl ReconcilerError for Error {
 }
 pub struct Ctx {
     pub root: String,
-    pub incomming: String,
+    pub incoming: String,
 }
 
 const WATCH_NAMESPACE_ENV: &str = "WATCH_NAMESPACE";
@@ -56,7 +56,7 @@ async fn main() -> Result<(), error::Error> {
 
     match env::var(WATCH_NAMESPACE_ENV) {
         Ok(namespace) => {
-            create_controller(client, namespace, "/bundles/active", "/bundles/incomming").await?;
+            create_controller(client, namespace, "/bundles/active", "/bundles/incoming").await?;
         }
         Err(_) => {
             tracing::error!(
@@ -73,7 +73,7 @@ async fn create_controller(
     client: Client,
     namespace: impl Into<String>,
     root: impl Into<String>,
-    incomming: impl Into<String>,
+    incoming: impl Into<String>,
 ) -> OperatorResult<()> {
     let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.into().as_ref());
 
@@ -88,7 +88,7 @@ async fn create_controller(
             error_policy,
             Context::new(Ctx {
                 root: root.into(),
-                incomming: incomming.into(),
+                incoming: incoming.into(),
             }),
         )
         .map(|res| {
@@ -114,7 +114,7 @@ async fn update_bundle(
     match bundle.data.as_ref() {
         Some(rules) => {
             let temp_full_path =
-                Path::new(ctx.get_ref().incomming.as_str()).join(Path::new(name.as_str()));
+                Path::new(ctx.get_ref().incoming.as_str()).join(Path::new(name.as_str()));
             create_dir_all(&temp_full_path).with_context(|_| OpaBundleDirSnafu)?;
 
             for (k, v) in rules.iter() {
@@ -160,10 +160,10 @@ mod tests {
     pub fn test_update_bundle() {
         let tmp = TempDir::new("test-bundle-helper").unwrap();
         let active = tmp.path().join("active");
-        let incomming = tmp.path().join("incomming");
+        let incoming = tmp.path().join("incoming");
 
         create_dir(&active).unwrap();
-        create_dir(&incomming).unwrap();
+        create_dir(&incoming).unwrap();
 
         let config_map = ConfigMapBuilder::new()
             .metadata(ObjectMetaBuilder::new().name("test-bundle-helper").build())
@@ -173,7 +173,7 @@ mod tests {
 
         let context = Context::new(Ctx {
             root: String::from(active.to_str().unwrap()),
-            incomming: String::from(incomming.to_str().unwrap()),
+            incoming: String::from(incoming.to_str().unwrap()),
         });
 
         match tokio_test::block_on(update_bundle(Arc::new(config_map), context)) {

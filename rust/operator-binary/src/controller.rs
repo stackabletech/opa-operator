@@ -42,7 +42,8 @@ pub const CONFIG_FILE: &str = "config.yaml";
 pub const APP_PORT: u16 = 8081;
 pub const APP_PORT_NAME: &str = "http";
 pub const METRICS_PORT_NAME: &str = "metrics";
-
+pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
+pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
@@ -371,7 +372,10 @@ fn build_server_rolegroup_daemonset(
         .build();
 
     let init_container = ContainerBuilder::new("init-container")
-        .image(format!("docker.stackable.tech/stackable/opa-bundle-helper:{}", built_info::PKG_VERSION))
+        .image(format!(
+            "docker.stackable.tech/stackable/opa-bundle-helper:{}",
+            PKG_VERSION
+        ))
         .command(vec!["bash".to_string()])
         .args(vec![
             "-euo".to_string(),
@@ -379,12 +383,12 @@ fn build_server_rolegroup_daemonset(
             "-x".to_string(),
             "-c".to_string(),
             [
-                "mkdir -p /bundles/active",
-                "mkdir -p /bundles/incomming",
-                "chown -R stackable:stackable /bundles/active",
-                "chown -R stackable:stackable /bundles/incomming",
-                "chmod -R a=,u=rwX /bundles/active",
-                "chmod -R a=,u=rwX /bundles/incomming",
+                format!("mkdir -p {}", BUNDLES_ACTIVE_DIR),
+                format!("mkdir -p {}", BUNDLES_INCOMING_DIR),
+                format!("chown -R stackable:stackable {}", BUNDLES_ACTIVE_DIR),
+                format!("chown -R stackable:stackable {}", BUNDLES_INCOMING_DIR),
+                format!("chmod -R a=,u=rwX {}", BUNDLES_ACTIVE_DIR),
+                format!("chmod -R a=,u=rwX {}", BUNDLES_INCOMING_DIR),
             ]
             .join(" && "),
         ])
@@ -439,7 +443,10 @@ fn build_server_rolegroup_daemonset(
                 })
                 .add_volume(Volume {
                     name: "bundles".to_string(),
-                    empty_dir: Some(EmptyDirVolumeSource::default()),
+                    empty_dir: Some(EmptyDirVolumeSource {
+                        medium: Some(String::from("Memory")),
+                        ..EmptyDirVolumeSource::default()
+                    }),
                     ..Volume::default()
                 })
                 .service_account_name("opa-bundle-helper-serviceaccount")
@@ -494,7 +501,7 @@ fn build_opa_start_command(rego_ref: Option<&String>) -> Vec<String> {
             "-c".to_string(),
             "/stackable/config/config.yaml".to_string(),
         ],
-        |_| ["-w".to_string(), "/bundles/active".to_string()],
+        |_| ["-w".to_string(), BUNDLES_ACTIVE_DIR.to_string()],
     ));
 
     result
