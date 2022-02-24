@@ -9,12 +9,12 @@ RUN microdnf update --disablerepo=* --enablerepo=ubi-8-baseos --enablerepo=ubi-8
   && microdnf install --disablerepo=* --enablerepo=ubi-8-baseos shadow-utils -y \
   && rm -rf /var/cache/yum
 
-COPY --from=builder /app/stackable-opa-bundle-helper /
+COPY --from=builder /app/stackable-opa-bundle-builder /
 
-RUN groupadd -g 1000 stackable && adduser -u 1000 -g stackable -c 'Stackable OPA Bundle Helper' stackable
+RUN groupadd -g 1000 stackable && adduser -u 1000 -g stackable -c 'Stackable OPA Bundle Builder' stackable
 
 USER 1000:1000
 
 
-ENTRYPOINT ["/stackable-opa-bundle-helper"]
+ENTRYPOINT ["/stackable-opa-bundle-builder"]
 CMD ["run"]

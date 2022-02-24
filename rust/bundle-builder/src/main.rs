@@ -50,7 +50,7 @@ const WATCH_NAMESPACE_ENV: &str = "WATCH_NAMESPACE";
 
 #[tokio::main]
 async fn main() -> Result<(), error::Error> {
-    stackable_operator::logging::initialize_logging("OPA_BUNDLE_HELPER_LOG");
+    stackable_operator::logging::initialize_logging("OPA_BUNDLE_BUILDER_LOG");
 
     let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
 
@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     pub fn test_update_bundle() {
-        let tmp = TempDir::new("test-bundle-helper").unwrap();
+        let tmp = TempDir::new("test-bundle-builder").unwrap();
         let active = tmp.path().join("active");
         let incoming = tmp.path().join("incoming");
 
@@ -166,7 +166,7 @@ mod tests {
         create_dir(&incoming).unwrap();
 
         let config_map = ConfigMapBuilder::new()
-            .metadata(ObjectMetaBuilder::new().name("test-bundle-helper").build())
+            .metadata(ObjectMetaBuilder::new().name("test-bundle-builder").build())
             .add_data(String::from("roles.rego"), String::from("allow user true"))
             .build()
             .unwrap();
@@ -179,7 +179,7 @@ mod tests {
         match tokio_test::block_on(update_bundle(Arc::new(config_map), context)) {
             Ok(_) => assert_eq!(
                 String::from("allow user true"),
-                read_to_string(active.join("test-bundle-helper/roles.rego")).unwrap()
+                read_to_string(active.join("test-bundle-builder/roles.rego")).unwrap()
             ),
             Err(e) => panic!("{:?}", e),
         }

@@ -361,19 +361,19 @@ fn build_server_rolegroup_daemonset(
         })
         .build();
 
-    let container_bundle_helper = ContainerBuilder::new("opa-bundle-helper")
+    let container_bundle_builder = ContainerBuilder::new("opa-bundle-builder")
         .image(format!(
-            "docker.stackable.tech/stackable/opa-bundle-helper:{}",
+            "docker.stackable.tech/stackable/opa-bundle-builder:{}",
             PKG_VERSION
         ))
-        .command(vec![String::from("/stackable-opa-bundle-helper")])
+        .command(vec![String::from("/stackable-opa-bundle-builder")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
         .build();
 
     let init_container = ContainerBuilder::new("init-container")
         .image(format!(
-            "docker.stackable.tech/stackable/opa-bundle-helper:{}",
+            "docker.stackable.tech/stackable/opa-bundle-builder:{}",
             PKG_VERSION
         ))
         .command(vec!["bash".to_string()])
@@ -431,7 +431,7 @@ fn build_server_rolegroup_daemonset(
                     )
                 })
                 .add_container(container_opa)
-                .add_container(container_bundle_helper)
+                .add_container(container_bundle_builder)
                 .add_init_container(init_container)
                 .add_volume(Volume {
                     name: "config".to_string(),
@@ -449,7 +449,7 @@ fn build_server_rolegroup_daemonset(
                     }),
                     ..Volume::default()
                 })
-                .service_account_name("opa-bundle-helper-serviceaccount")
+                .service_account_name("opa-bundle-builder-serviceaccount")
                 .build_template(),
             ..DaemonSetSpec::default()
         }),

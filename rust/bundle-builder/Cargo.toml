@@ -1,9 +1,9 @@
 [package]
 authors = ["Stackable GmbH <info@stackable.de>"]
-description = "Stackable Bundle Helper for  the OpenPolicyAgent"
+description = "Stackable Bundle Builder for  the OpenPolicyAgent"
 edition = "2021"
 license = "OSL-3.0"
-name = "stackable-opa-bundle-helper"
+name = "stackable-opa-bundle-builder"
 repository = "https://github.com/stackabletech/opa-operator"
 version = "0.9.0-nightly"
 
