@@ -371,7 +371,7 @@ fn build_server_rolegroup_daemonset(
         .build();
 
     let init_container = ContainerBuilder::new("init-container")
-        .image("docker.stackable.tech/stackable/opa-bundle-helper:0.9.0-nightly")
+        .image(format!("docker.stackable.tech/stackable/opa-bundle-helper:{}", built_info::PKG_VERSION))
         .command(vec!["bash".to_string()])
         .args(vec![
             "-euo".to_string(),
