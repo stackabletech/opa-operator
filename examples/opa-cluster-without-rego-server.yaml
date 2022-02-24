@@ -1,0 +1,13 @@
+---
+apiVersion: opa.stackable.tech/v1alpha1
+kind: OpenPolicyAgent
+metadata:
+  name: opa-without-rego-server
+spec:
+  version: "0.27.1"
+  servers:
+    roleGroups:
+      default:
+        selector:
+          matchLabels:
+            kubernetes.io/os: linux

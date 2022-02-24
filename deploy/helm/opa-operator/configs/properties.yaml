@@ -22,6 +22,6 @@ properties:
           value: "http://regorule-operator:3030/opa/v1"
       roles:
         - name: "server"
-          required: true
+          required: false
       asOfVersion: "0.0.0"
       description: "The url of the RegoRule server"
