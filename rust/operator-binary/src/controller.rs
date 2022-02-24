@@ -496,13 +496,14 @@ fn build_opa_start_command(rego_ref: Option<&String>) -> Vec<String> {
         format!("0.0.0.0:{}", APP_PORT),
     ];
 
-    result.extend(rego_ref.map_or(
-        [
-            "-c".to_string(),
-            "/stackable/config/config.yaml".to_string(),
-        ],
-        |_| ["-w".to_string(), BUNDLES_ACTIVE_DIR.to_string()],
-    ));
+    result.extend(
+        rego_ref.map_or(["-w".to_string(), BUNDLES_ACTIVE_DIR.to_string()], |_| {
+            [
+                "-c".to_string(),
+                "/stackable/config/config.yaml".to_string(),
+            ]
+        }),
+    );
 
     result
 }

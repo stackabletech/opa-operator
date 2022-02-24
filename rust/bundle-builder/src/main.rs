@@ -79,7 +79,7 @@ async fn create_controller(
 
     let controller = Controller::new(
         configmaps_api,
-        ListParams::default().labels("opa.stackable.tech/bundle=true"),
+        ListParams::default().labels("opa.stackable.tech/bundle"),
     );
 
     controller
