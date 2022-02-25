@@ -233,8 +233,5 @@ mod tests {
             Ok(_) => assert!(metadata(active.join("bundle.tar.gz")).unwrap().is_file()),
             Err(e) => panic!("{:?}", e),
         }
-
-        println!("bundle file {}/bundle.tar.gz", active.to_str().unwrap());
-        std::thread::sleep(std::time::Duration::from_secs(120));
     }
 }

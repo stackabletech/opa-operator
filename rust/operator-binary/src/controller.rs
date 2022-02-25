@@ -390,7 +390,11 @@ fn build_server_rolegroup_daemonset(
         "docker.stackable.tech/stackable/opa:{}-stackable0",
         opa_version
     );
-
+    let sa_name = format!(
+        "{}-{}",
+        opa.metadata.name.as_ref().unwrap(),
+        rolegroup_ref.role
+    );
     let rego_ref = server_config
         .get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
         .and_then(|props| props.get(REGO_RULE_REFERENCE));
@@ -521,7 +525,7 @@ fn build_server_rolegroup_daemonset(
                     empty_dir: Some(EmptyDirVolumeSource::default()),
                     ..Volume::default()
                 })
-                .service_account_name("opa-bundle-builder-serviceaccount")
+                .service_account_name(sa_name)
                 .build_template(),
             ..DaemonSetSpec::default()
         }),

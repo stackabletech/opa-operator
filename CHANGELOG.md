@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - `operator-rs` `0.10.0` -> `0.12.0` ([#241]).
+- BREACKING: `OpenPolicyAgent` custom resource renamed to `OpaCluster`
 
 [#241]: https://github.com/stackabletech/opa-operator/pull/241
 [#244]: https://github.com/stackabletech/opa-operator/pull/244
