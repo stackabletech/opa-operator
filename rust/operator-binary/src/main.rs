@@ -4,6 +4,8 @@ mod discovery;
 use clap::Parser;
 use futures::StreamExt;
 use stackable_opa_crd::OpenPolicyAgent;
+use stackable_operator::cli::ProductOperatorRun;
+use stackable_operator::namespace::WatchNamespace;
 use stackable_operator::{
     cli::Command,
     client,
@@ -41,7 +43,10 @@ async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => println!("{}", serde_yaml::to_string(&OpenPolicyAgent::crd())?),
-        Command::Run(product_config) => {
+        Command::Run(ProductOperatorRun {
+            product_config,
+            watch_namespace,
+        }) => {
             stackable_operator::utils::print_startup_string(
                 built_info::PKG_DESCRIPTION,
                 built_info::PKG_VERSION,
@@ -50,12 +55,12 @@ async fn main() -> Result<(), error::Error> {
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
-            let product_config = product_config.product_config.load(&[
+            let product_config = product_config.load(&[
                 "deploy/config-spec/properties.yaml",
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
             let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
-            create_controller(client, product_config).await?;
+            create_controller(client, product_config, watch_namespace).await?;
         }
     };
 
@@ -68,11 +73,12 @@ async fn main() -> Result<(), error::Error> {
 async fn create_controller(
     client: Client,
     product_config: ProductConfigManager,
+    watch_namespace: WatchNamespace,
 ) -> OperatorResult<()> {
-    let opa_api: Api<OpenPolicyAgent> = client.get_all_api();
-    let daemonsets_api: Api<DaemonSet> = client.get_all_api();
-    let configmaps_api: Api<ConfigMap> = client.get_all_api();
-    let services_api: Api<Service> = client.get_all_api();
+    let opa_api: Api<OpenPolicyAgent> = watch_namespace.get_api(&client);
+    let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
+    let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
+    let services_api: Api<Service> = watch_namespace.get_api(&client);
 
     let controller = Controller::new(opa_api, ListParams::default())
         .owns(daemonsets_api, ListParams::default())
