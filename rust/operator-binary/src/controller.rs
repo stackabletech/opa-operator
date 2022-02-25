@@ -1,12 +1,16 @@
-//! Ensures that `Pod`s are configured and running for each [`OpenPolicyAgent`]
+//! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
 
 use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME, REGO_RULE_REFERENCE};
+use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME, REGO_RULE_REFERENCE};
 use stackable_operator::builder::SecurityContextBuilder;
-use stackable_operator::k8s_openapi::api::core::v1::{EmptyDirVolumeSource, HTTPGetAction, Probe};
+use stackable_operator::k8s_openapi::api::core::v1::{
+    EmptyDirVolumeSource, HTTPGetAction, Probe, ServiceAccount,
+};
+use stackable_operator::k8s_openapi::api::rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject};
 use stackable_operator::k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
+use stackable_operator::k8s_openapi::Resource;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
     k8s_openapi::{
@@ -45,9 +49,11 @@ pub const METRICS_PORT_NAME: &str = "metrics";
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
+
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
+    pub opa_builder_clusterrole: String,
 }
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -62,25 +68,33 @@ pub enum Error {
     ApplyRoleService {
         source: stackable_operator::error::Error,
     },
+    #[snafu(display("failed to apply role ServiceAccount"))]
+    ApplyRoleServiceAccount {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to apply global RoleBinding"))]
+    ApplyRoleRoleBinding {
+        source: stackable_operator::error::Error,
+    },
     #[snafu(display("failed to apply Service for {}", rolegroup))]
     ApplyRoleGroupService {
         source: stackable_operator::error::Error,
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
+        rolegroup: RoleGroupRef<OpaCluster>,
     },
     #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
     BuildRoleGroupConfig {
         source: stackable_operator::error::Error,
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
+        rolegroup: RoleGroupRef<OpaCluster>,
     },
     #[snafu(display("failed to apply ConfigMap for {}", rolegroup))]
     ApplyRoleGroupConfig {
         source: stackable_operator::error::Error,
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
+        rolegroup: RoleGroupRef<OpaCluster>,
     },
     #[snafu(display("failed to apply DaemonSet for {}", rolegroup))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::error::Error,
-        rolegroup: RoleGroupRef<OpenPolicyAgent>,
+        rolegroup: RoleGroupRef<OpaCluster>,
     },
     #[snafu(display("invalid product config"))]
     InvalidProductConfig {
@@ -109,10 +123,7 @@ impl ReconcilerError for Error {
     }
 }
 
-pub async fn reconcile_opa(
-    opa: Arc<OpenPolicyAgent>,
-    ctx: Context<Ctx>,
-) -> Result<ReconcilerAction> {
+pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<ReconcilerAction> {
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(&*opa);
     let client = ctx.get_ref().client.clone();
@@ -154,6 +165,27 @@ pub async fn reconcile_opa(
         )
         .await
         .context(ApplyRoleServiceSnafu)?;
+
+    let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
+        build_opa_builder_serviceaccount(&opa, &ctx.get_ref().opa_builder_clusterrole)?;
+
+    client
+        .apply_patch(
+            FIELD_MANAGER_SCOPE,
+            &opa_builder_role_serviceaccount,
+            &opa_builder_role_serviceaccount,
+        )
+        .await
+        .context(ApplyRoleServiceAccountSnafu)?;
+    client
+        .apply_patch(
+            FIELD_MANAGER_SCOPE,
+            &opa_builder_role_rolebinding,
+            &opa_builder_role_rolebinding,
+        )
+        .await
+        .context(ApplyRoleRoleBindingSnafu)?;
+
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
@@ -199,9 +231,49 @@ pub async fn reconcile_opa(
     })
 }
 
+fn build_opa_builder_serviceaccount(
+    opa: &OpaCluster,
+    opa_builder_clusterrole: &str,
+) -> Result<(ServiceAccount, RoleBinding)> {
+    let role_name = OpaRole::Server.to_string();
+    let sa_name = format!("{}-{}", opa.metadata.name.as_ref().unwrap(), role_name);
+    let sa = ServiceAccount {
+        metadata: ObjectMetaBuilder::new()
+            .name_and_namespace(opa)
+            .name(&sa_name)
+            .ownerreference_from_resource(opa, None, Some(true))
+            .context(ObjectMissingMetadataForOwnerRefSnafu)?
+            .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
+            .build(),
+        ..ServiceAccount::default()
+    };
+    let binding_name = &sa_name;
+    let binding = RoleBinding {
+        metadata: ObjectMetaBuilder::new()
+            .name_and_namespace(opa)
+            .name(binding_name)
+            .ownerreference_from_resource(opa, None, Some(true))
+            .context(ObjectMissingMetadataForOwnerRefSnafu)?
+            .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
+            .build(),
+        role_ref: RoleRef {
+            api_group: ClusterRole::GROUP.to_string(),
+            kind: ClusterRole::KIND.to_string(),
+            name: opa_builder_clusterrole.to_string(),
+        },
+        subjects: Some(vec![Subject {
+            api_group: Some(ServiceAccount::GROUP.to_string()),
+            kind: ServiceAccount::KIND.to_string(),
+            name: sa_name,
+            namespace: sa.metadata.namespace.clone(),
+        }]),
+    };
+    Ok((sa, binding))
+}
+
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
-pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
+pub fn build_server_role_service(opa: &OpaCluster) -> Result<Service> {
     let role_name = OpaRole::Server.to_string();
     let role_svc_name = opa
         .server_role_service_name()
@@ -233,8 +305,8 @@ pub fn build_server_role_service(opa: &OpenPolicyAgent) -> Result<Service> {
 ///
 /// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
 fn build_rolegroup_service(
-    opa: &OpenPolicyAgent,
-    rolegroup: &RoleGroupRef<OpenPolicyAgent>,
+    opa: &OpaCluster,
+    rolegroup: &RoleGroupRef<OpaCluster>,
 ) -> Result<Service> {
     Ok(Service {
         metadata: ObjectMetaBuilder::new()
@@ -269,8 +341,8 @@ fn build_rolegroup_service(
 
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the administrator
 fn build_server_rolegroup_config_map(
-    rolegroup: &RoleGroupRef<OpenPolicyAgent>,
-    opa: &OpenPolicyAgent,
+    rolegroup: &RoleGroupRef<OpaCluster>,
+    opa: &OpaCluster,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
 ) -> Result<ConfigMap> {
     let config = server_config
@@ -309,8 +381,8 @@ fn build_server_rolegroup_config_map(
 /// We run an OPA on each node, because we want to avoid requiring network roundtrips for services making
 /// policy queries (which are often chained in serial, and block other tasks in the products).
 fn build_server_rolegroup_daemonset(
-    rolegroup_ref: &RoleGroupRef<OpenPolicyAgent>,
-    opa: &OpenPolicyAgent,
+    rolegroup_ref: &RoleGroupRef<OpaCluster>,
+    opa: &OpaCluster,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
 ) -> Result<DaemonSet> {
     let opa_version = opa_version(opa)?;
@@ -457,7 +529,7 @@ fn build_server_rolegroup_daemonset(
     })
 }
 
-pub fn opa_version(opa: &OpenPolicyAgent) -> Result<&str> {
+pub fn opa_version(opa: &OpaCluster) -> Result<&str> {
     opa.spec.version.as_deref().context(ObjectHasNoVersionSnafu)
 }
 

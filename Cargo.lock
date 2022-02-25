@@ -1872,8 +1872,7 @@ dependencies = [
  "serde",
  "serde_json",
  "stackable-operator",
- "strum 0.23.0",
- "strum_macros 0.23.1",
+ "strum 0.24.0",
  "tracing",
 ]
 
@@ -1893,8 +1892,7 @@ dependencies = [
  "snafu",
  "stackable-opa-crd",
  "stackable-operator",
- "strum 0.23.0",
- "strum_macros 0.23.1",
+ "strum 0.24.0",
  "tokio",
  "tracing",
 ]

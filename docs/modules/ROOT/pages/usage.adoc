@@ -12,7 +12,7 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
 [source,yaml]
 ----
     apiVersion: opa.stackable.tech/v1alpha1
-    kind: OpenPolicyAgent
+    kind: OpaCluster
     metadata:
       name: simple-opa
     spec:

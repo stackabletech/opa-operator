@@ -1,7 +1,7 @@
 [package]
 authors = ["Stackable GmbH <info@stackable.de>"]
 build = "build.rs"
-description = "Stackable Operator for OpenPolicyAgent"
+description = "Stackable Operator for OPA"
 edition = "2021"
 license = "OSL-3.0"
 name = "stackable-opa-operator"
@@ -20,8 +20,7 @@ serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.8"
 snafu = "0.7"
-strum = { version = "0.23.0", features = ["derive"] }
-strum_macros = "0.23"
+strum = { version = "0.24", features = ["derive"] }
 tokio = { version = "1.17", features = ["full"] }
 tracing = "0.1"
 pin-project = "1.0"

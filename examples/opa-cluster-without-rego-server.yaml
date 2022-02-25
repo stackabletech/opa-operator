@@ -1,6 +1,6 @@
 ---
 apiVersion: opa.stackable.tech/v1alpha1
-kind: OpenPolicyAgent
+kind: OpaCluster
 metadata:
   name: opa-without-rego-server
 spec:
