@@ -4,7 +4,7 @@ kind: OpenPolicyAgent
 metadata:
   name: opa-without-rego-server
 spec:
-  version: "0.27.1"
+  version: "0.37.2"
   servers:
     roleGroups:
       default:

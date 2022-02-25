@@ -1,3 +1,6 @@
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use futures::Future;
 use futures::StreamExt;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::client;
@@ -21,6 +24,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use strum::{EnumDiscriminants, IntoStaticStr};
+use tar::Builder;
+use warp::Filter;
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(IntoStaticStr))]
@@ -34,6 +39,15 @@ pub enum Error {
     OpaBundleDir { source: std::io::Error },
     #[snafu(display("missing namespace to watch"))]
     MissingWatchNamespace,
+    #[snafu(display("could not create [{path}]"))]
+    CreateBundleFailed {
+        source: std::io::Error,
+        path: String,
+    },
+    #[snafu(display("could not create bundle tar"))]
+    CreateBundleTarFailed { source: std::io::Error },
+    #[snafu(display("could not append to bundle tar"))]
+    AppendToBundleTarFailed { source: std::io::Error },
 }
 
 impl ReconcilerError for Error {
@@ -42,8 +56,9 @@ impl ReconcilerError for Error {
     }
 }
 pub struct Ctx {
-    pub root: String,
+    pub active: String,
     pub incoming: String,
+    pub tmp: String,
 }
 
 const WATCH_NAMESPACE_ENV: &str = "WATCH_NAMESPACE";
@@ -56,7 +71,16 @@ async fn main() -> Result<(), error::Error> {
 
     match env::var(WATCH_NAMESPACE_ENV) {
         Ok(namespace) => {
-            create_controller(client, namespace, "/bundles/active", "/bundles/incoming").await?;
+            create_controller_and_web_server(
+                client,
+                namespace,
+                Ctx {
+                    active: "/bundles/active".to_string(),
+                    incoming: "/bundles/incoming".to_string(),
+                    tmp: "/bundles/tmp".to_string(),
+                },
+            )
+            .await?;
         }
         Err(_) => {
             tracing::error!(
@@ -69,11 +93,10 @@ async fn main() -> Result<(), error::Error> {
     Ok(())
 }
 
-async fn create_controller(
+async fn create_controller_and_web_server(
     client: Client,
     namespace: impl Into<String>,
-    root: impl Into<String>,
-    incoming: impl Into<String>,
+    ctx: Ctx,
 ) -> OperatorResult<()> {
     let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.into().as_ref());
 
@@ -82,22 +105,21 @@ async fn create_controller(
         ListParams::default().labels("opa.stackable.tech/bundle"),
     );
 
-    controller
+    let web_server = create_web_server(ctx.active.clone(), 3030);
+
+    tokio::select! {
+        _ = web_server => Ok(()),
+    _ = controller
         .run(
             update_bundle,
             error_policy,
-            Context::new(Ctx {
-                root: root.into(),
-                incoming: incoming.into(),
-            }),
+            Context::new(ctx),
         )
         .map(|res| {
             report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
         })
-        .collect::<()>()
-        .await;
-
-    Ok(())
+        .collect::<()>() => Ok(()),
+    }
 }
 
 /// Writes bundle.data under `root`.
@@ -113,8 +135,11 @@ async fn update_bundle(
 
     match bundle.data.as_ref() {
         Some(rules) => {
-            let temp_full_path =
-                Path::new(ctx.get_ref().incoming.as_str()).join(Path::new(name.as_str()));
+            let incoming = ctx.get_ref().incoming.as_str();
+            let active = ctx.get_ref().active.as_str();
+            let tmp = ctx.get_ref().tmp.as_str();
+
+            let temp_full_path = Path::new(incoming).join(Path::new(name.as_str()));
             create_dir_all(&temp_full_path).with_context(|_| OpaBundleDirSnafu)?;
 
             for (k, v) in rules.iter() {
@@ -125,8 +150,21 @@ async fn update_bundle(
                     .context(OpaBundleDirSnafu)?;
             }
 
-            let dest_path = Path::new(ctx.get_ref().root.as_str()).join(Path::new(name));
-            rename(&temp_full_path, &dest_path).context(OpaBundleDirSnafu)?;
+            let tmp_bundle_path = format!("{}/bundle.tar.gz", tmp);
+            let tar_gz =
+                File::create(&tmp_bundle_path).with_context(|_| CreateBundleFailedSnafu {
+                    path: tmp_bundle_path.to_string(),
+                })?;
+            let gz_encoder = GzEncoder::new(tar_gz, Compression::best());
+            let mut tar_builder = Builder::new(gz_encoder);
+
+            tar_builder
+                .append_dir_all("bundles", ctx.get_ref().incoming.as_str())
+                .context(AppendToBundleTarFailedSnafu)?;
+            tar_builder.finish().context(CreateBundleTarFailedSnafu)?;
+
+            let dest_path = Path::new(active).join(Path::new("bundle.tar.gz"));
+            rename(&Path::new(&tmp_bundle_path), &dest_path).context(OpaBundleDirSnafu)?;
         }
         None => tracing::error!("empty config map {}", name),
     }
@@ -142,6 +180,13 @@ pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
     }
 }
 
+async fn create_web_server(active: String, port: u16) -> impl Future<Output = ()> {
+    let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz")
+        .and(warp::fs::file(format!("{}/bundle.tar.gz", active)));
+    let bundle = bundle.with(warp::log("bundle"));
+    warp::serve(bundle).run(([0, 0, 0, 0], port))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Ctx;
@@ -149,7 +194,7 @@ mod tests {
     use super::update_bundle;
 
     use std::fs::create_dir;
-    use std::fs::read_to_string;
+    use std::fs::metadata;
     use std::sync::Arc;
 
     use stackable_operator::builder::{ConfigMapBuilder, ObjectMetaBuilder};
@@ -161,9 +206,11 @@ mod tests {
         let tmp = TempDir::new("test-bundle-builder").unwrap();
         let active = tmp.path().join("active");
         let incoming = tmp.path().join("incoming");
+        let tmp = tmp.path().join("tmp");
 
         create_dir(&active).unwrap();
         create_dir(&incoming).unwrap();
+        create_dir(&tmp).unwrap();
 
         let config_map = ConfigMapBuilder::new()
             .metadata(ObjectMetaBuilder::new().name("test-bundle-builder").build())
@@ -172,16 +219,17 @@ mod tests {
             .unwrap();
 
         let context = Context::new(Ctx {
-            root: String::from(active.to_str().unwrap()),
+            active: String::from(active.to_str().unwrap()),
             incoming: String::from(incoming.to_str().unwrap()),
+            tmp: String::from(tmp.to_str().unwrap()),
         });
 
         match tokio_test::block_on(update_bundle(Arc::new(config_map), context)) {
-            Ok(_) => assert_eq!(
-                String::from("allow user true"),
-                read_to_string(active.join("test-bundle-builder/roles.rego")).unwrap()
-            ),
+            Ok(_) => assert!(metadata(active.join("bundle.tar.gz")).unwrap().is_file()),
             Err(e) => panic!("{:?}", e),
         }
+
+        println!("bundle file {}/bundle.tar.gz", active.to_str().unwrap());
+        std::thread::sleep(std::time::Duration::from_secs(120));
     }
 }

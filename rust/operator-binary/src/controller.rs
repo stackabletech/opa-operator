@@ -44,6 +44,7 @@ pub const APP_PORT_NAME: &str = "http";
 pub const METRICS_PORT_NAME: &str = "metrics";
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
+pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
@@ -384,10 +385,13 @@ fn build_server_rolegroup_daemonset(
             [
                 format!("mkdir -p {}", BUNDLES_ACTIVE_DIR),
                 format!("mkdir -p {}", BUNDLES_INCOMING_DIR),
+                format!("mkdir -p {}", BUNDLES_TMP_DIR),
                 format!("chown -R stackable:stackable {}", BUNDLES_ACTIVE_DIR),
                 format!("chown -R stackable:stackable {}", BUNDLES_INCOMING_DIR),
+                format!("chown -R stackable:stackable {}", BUNDLES_TMP_DIR),
                 format!("chmod -R a=,u=rwX {}", BUNDLES_ACTIVE_DIR),
                 format!("chmod -R a=,u=rwX {}", BUNDLES_INCOMING_DIR),
+                format!("chmod -R a=,u=rwX {}", BUNDLES_TMP_DIR),
             ]
             .join(" && "),
         ])
@@ -442,10 +446,7 @@ fn build_server_rolegroup_daemonset(
                 })
                 .add_volume(Volume {
                     name: "bundles".to_string(),
-                    empty_dir: Some(EmptyDirVolumeSource {
-                        medium: Some(String::from("Memory")),
-                        ..EmptyDirVolumeSource::default()
-                    }),
+                    empty_dir: Some(EmptyDirVolumeSource::default()),
                     ..Volume::default()
                 })
                 .service_account_name("opa-bundle-builder-serviceaccount")
