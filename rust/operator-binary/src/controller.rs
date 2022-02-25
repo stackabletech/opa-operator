@@ -395,9 +395,6 @@ fn build_server_rolegroup_daemonset(
         opa.metadata.name.as_ref().unwrap(),
         rolegroup_ref.role
     );
-    let rego_ref = server_config
-        .get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
-        .and_then(|props| props.get(REGO_RULE_REFERENCE));
 
     let env = server_config
         .get(&PropertyNameKind::Env)
@@ -411,11 +408,10 @@ fn build_server_rolegroup_daemonset(
         .collect::<Vec<_>>();
     let container_opa = ContainerBuilder::new("opa")
         .image(image)
-        .command(build_opa_start_command(rego_ref))
+        .command(build_opa_start_command())
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
-        .add_volume_mount("bundles", "/bundles")
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
@@ -562,26 +558,16 @@ bundles:
     )
 }
 
-/// OPA either loads bundles from rego_ref or it watches the `/bundles/active` folder
-fn build_opa_start_command(rego_ref: Option<&String>) -> Vec<String> {
-    let mut result = vec![
+fn build_opa_start_command() -> Vec<String> {
+    vec![
         "/stackable/opa/opa".to_string(),
         "run".to_string(),
         "-s".to_string(),
         "-a".to_string(),
         format!("0.0.0.0:{}", APP_PORT),
-    ];
-
-    result.extend(
-        rego_ref.map_or(["-w".to_string(), BUNDLES_ACTIVE_DIR.to_string()], |_| {
-            [
-                "-c".to_string(),
-                "/stackable/config/config.yaml".to_string(),
-            ]
-        }),
-    );
-
-    result
+        "-c".to_string(),
+        "/stackable/config/config.yaml".to_string(),
+    ]
 }
 
 fn service_ports() -> Vec<ServicePort> {
