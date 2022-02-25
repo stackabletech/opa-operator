@@ -441,6 +441,27 @@ fn build_server_rolegroup_daemonset(
         .command(vec![String::from("/stackable-opa-bundle-builder")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
+        .readiness_probe(Probe {
+            initial_delay_seconds: Some(5),
+            period_seconds: Some(10),
+            failure_threshold: Some(5),
+            http_get: Some(HTTPGetAction {
+                port: IntOrString::Int(3030),
+                path: Some("/status".to_string()),
+                ..HTTPGetAction::default()
+            }),
+            ..Probe::default()
+        })
+        .liveness_probe(Probe {
+            initial_delay_seconds: Some(30),
+            period_seconds: Some(10),
+            http_get: Some(HTTPGetAction {
+                port: IntOrString::Int(3030),
+                path: Some("/status".to_string()),
+                ..HTTPGetAction::default()
+            }),
+            ..Probe::default()
+        })
         .build();
 
     let init_container = ContainerBuilder::new("init-container")

@@ -74,11 +74,8 @@ async fn main() -> Result<(), error::Error> {
     match env::var(WATCH_NAMESPACE_ENV) {
         Ok(namespace) => {
             let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.as_ref());
-            let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz").and(warp::fs::file(
-                format!("{BUNDLES_ACTIVE_DIR}/{BUNDLE_NAME}"),
-            ));
-            let bundle = bundle.with(warp::log("bundle"));
-            let web_server = warp::serve(bundle).run(([0, 0, 0, 0], 3030)).into_stream();
+
+            let web_server = make_web_server();
 
             let controller = Controller::new(
                 configmaps_api,
@@ -110,6 +107,27 @@ async fn main() -> Result<(), error::Error> {
     }
 
     Ok(())
+}
+
+/// Create the web server for bundles.
+///
+/// There are two paths available:
+/// - /opa/v1/opa/bundle.tar.gz
+/// - /status
+///
+fn make_web_server() -> futures::future::IntoStream<impl futures::Future<Output = ()>> {
+    let web_bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz")
+        .and(warp::fs::file(format!(
+            "{BUNDLES_ACTIVE_DIR}/{BUNDLE_NAME}"
+        )))
+        .with(warp::log("bundle"));
+    let web_status = warp::path("status")
+        .map(|| "i'm good")
+        .with(warp::log("status"));
+
+    warp::serve(warp::get().and(web_bundle.or(web_status)))
+        .run(([0, 0, 0, 0], 3030))
+        .into_stream()
 }
 
 /// Updates the `/bundles/active/bundle.tar.gz` with the new `ConfigMap`.
