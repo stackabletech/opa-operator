@@ -3,3 +3,4 @@
 // Stackable Platform documentation.
 
 - 0.27.1
+- 0.37.2

@@ -7,12 +7,19 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Reconciliation errors are now reported as Kubernetes events ([#241]).
-- Local bundles from `ConfigMap` objects with the help of a side container ([#244])
+- Bundle builder side car container that generates bundles from `ConfigMap` objects ([#244])
+- The command line argument `--opa-builder-clusterrole` for the `run` subcommand or
+    the environment variable `OPA_BUILDER_CLUSTERROLE` to set up a service account
+    for the OPA pods. ([#244])
+- The command line argument `--watch-namespace` for the `run` subcommand or 
+    the environment variable `WATCH_NAMESPACE` can be used to instruct the operator
+    to watch a particular namespace. ([#244])
 
 ### Changed
 
 - `operator-rs` `0.10.0` -> `0.12.0` ([#241]).
-- BREACKING: `OpenPolicyAgent` custom resource renamed to `OpaCluster`
+- `operator-rs` `0.12.0` -> `0.13.0` ([#244]).
+- BREACKING: Renamed custom resource from `OpenPolicyAgent` to `OpaCluster` ([#244]).
 
 [#241]: https://github.com/stackabletech/opa-operator/pull/241
 [#244]: https://github.com/stackabletech/opa-operator/pull/244

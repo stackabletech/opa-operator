@@ -11,4 +11,4 @@ policy queries (which are often chained in serial, and block other tasks in the 
 == OPA Bundle Builder
 
 Each OPA pod runs a container that watches for `ConfigMap` objects labeled `opa.stackable.tech/bundle`.
-For each `ConfigMap` a bundle is (re)created where the all `data` entries are mapped to bundle files.
+All `ConfigMap`s are bundled together in a single `bundle.tar.gz` file that is served to the colocated OPA container.

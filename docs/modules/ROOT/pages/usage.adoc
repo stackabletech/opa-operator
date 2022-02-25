@@ -7,7 +7,7 @@ After installation, the CRD for this operator must be created:
 kubectl apply -f /etc/stackable/opa-operator/crd/openpolicyagent.crd.yaml
 ----
 
-To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on port 8081:
+To create a single node OPA (v0.37.2) cluster with Prometheus metrics exposed on port 8081:
 
 [source,yaml]
 ----
@@ -16,23 +16,20 @@ To create a single node OPA (v0.27.1) cluster with Prometheus metrics exposed on
     metadata:
       name: simple-opa
     spec:
-      version: "0.27.1"
+      version: "0.37.2"
       servers:
         roleGroups:
           default:
             selector:
               matchLabels:
                 kubernetes.io/os: linux
-            config:
-              regoRuleReference: "http://regorule-operator:3030/opa/v1"
 ----
 
-== Bundle sources
+== Bundle Sources
 
-The OPA servers can load bundles from a remote server by specifying the `regoRuleReference` property as shown above.
+OPA bundles are generated from `ConfigMap` objects by a side car container running along side the OPA server.
 
-Alternatively, bundles can be loaded from `ConfigMap` objects created in the same namespace as the OPA pod. These `ConfigMap`s
-must be labeled with `opa.stackable.tech/bundle`.
+Alternatively, the OPA servers can load bundles from a remote server when a `regoRuleReference` is configured in the role group's `config` section.
 
 == Monitoring
 
