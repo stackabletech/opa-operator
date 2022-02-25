@@ -1,12 +1,10 @@
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use futures::Future;
+use futures::FutureExt;
 use futures::StreamExt;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::client;
-use stackable_operator::client::Client;
 use stackable_operator::error;
-use stackable_operator::error::OperatorResult;
 use stackable_operator::k8s_openapi::api::core::v1::ConfigMap;
 use stackable_operator::kube::api::ListParams;
 use stackable_operator::kube::runtime::controller::Context;
@@ -71,16 +69,33 @@ async fn main() -> Result<(), error::Error> {
 
     match env::var(WATCH_NAMESPACE_ENV) {
         Ok(namespace) => {
-            create_controller_and_web_server(
-                client,
-                namespace,
-                Ctx {
+            let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.as_ref());
+            let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz").and(warp::fs::file(
+                format!("{}/bundle.tar.gz", "/bundles/active"),
+            ));
+            let bundle = bundle.with(warp::log("bundle"));
+            let web_server = warp::serve(bundle).run(([0, 0, 0, 0], 3030)).into_stream();
+
+            let controller = Controller::new(
+                configmaps_api,
+                ListParams::default().labels("opa.stackable.tech/bundle"),
+            )
+            .run(
+                update_bundle,
+                error_policy,
+                Context::new(Ctx {
                     active: "/bundles/active".to_string(),
                     incoming: "/bundles/incoming".to_string(),
                     tmp: "/bundles/tmp".to_string(),
-                },
+                }),
             )
-            .await?;
+            .map(|res| {
+                report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
+            });
+
+            futures::stream::select(controller, web_server)
+                .collect::<()>()
+                .await;
         }
         Err(_) => {
             tracing::error!(
@@ -93,34 +108,24 @@ async fn main() -> Result<(), error::Error> {
     Ok(())
 }
 
-async fn create_controller_and_web_server(
-    client: Client,
-    namespace: impl Into<String>,
-    ctx: Ctx,
-) -> OperatorResult<()> {
-    let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.into().as_ref());
-
-    let controller = Controller::new(
-        configmaps_api,
-        ListParams::default().labels("opa.stackable.tech/bundle"),
-    );
-
-    let web_server = create_web_server(ctx.active.clone(), 3030);
-
-    tokio::select! {
-        _ = web_server => Ok(()),
-    _ = controller
-        .run(
-            update_bundle,
-            error_policy,
-            Context::new(ctx),
-        )
-        .map(|res| {
-            report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
-        })
-        .collect::<()>() => Ok(()),
-    }
-}
+//async fn create_controller(
+//    client: Client,
+//    namespace: impl Into<String>,
+//    ctx: Ctx,
+//) -> OperatorResult<()> {
+//    let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.into().as_ref());
+//
+//    let controller = Controller::new(
+//        configmaps_api,
+//        ListParams::default().labels("opa.stackable.tech/bundle"),
+//    );
+//
+//    controller
+//        .run(update_bundle, error_policy, Context::new(ctx))
+//        .map(|res| {
+//            report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
+//        })
+//}
 
 /// Writes bundle.data under `root`.
 async fn update_bundle(
@@ -180,12 +185,12 @@ pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
     }
 }
 
-async fn create_web_server(active: String, port: u16) -> impl Future<Output = ()> {
-    let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz")
-        .and(warp::fs::file(format!("{}/bundle.tar.gz", active)));
-    let bundle = bundle.with(warp::log("bundle"));
-    warp::serve(bundle).run(([0, 0, 0, 0], port))
-}
+//async fn create_web_server(active: String, port: u16) -> impl Future<Output = ()> {
+//    let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz")
+//        .and(warp::fs::file(format!("{}/bundle.tar.gz", active)));
+//    let bundle = bundle.with(warp::log("bundle"));
+//    warp::serve(bundle).run(([0, 0, 0, 0], port)).into_stream()
+//}
 
 #[cfg(test)]
 mod tests {
