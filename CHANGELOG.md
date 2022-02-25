@@ -7,13 +7,14 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Reconciliation errors are now reported as Kubernetes events ([#241]).
-- Bundle builder side car container that generates bundles from `ConfigMap` objects ([#244])
-- The command line argument `--opa-builder-clusterrole` for the `run` subcommand or
-    the environment variable `OPA_BUILDER_CLUSTERROLE` to set up a service account
-    for the OPA pods. ([#244])
+- Bundle builder side car container that generates bundles from
+    `ConfigMap` objects ([#244])
+- The command line argument `--opa-builder-clusterrole` for the `run`
+    subcommand or the environment variable `OPA_BUILDER_CLUSTERROLE` to set up
+    a service account for the OPA pods. ([#244])
 - The command line argument `--watch-namespace` for the `run` subcommand or 
-    the environment variable `WATCH_NAMESPACE` can be used to instruct the operator
-    to watch a particular namespace. ([#244])
+    the environment variable `WATCH_NAMESPACE` can be used to instruct the
+    operator to watch a particular namespace. ([#244])
 
 ### Changed
 
