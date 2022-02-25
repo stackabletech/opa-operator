@@ -320,8 +320,7 @@ fn build_server_rolegroup_daemonset(
 
     let rego_ref = server_config
         .get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
-        .map(|props| props.get(REGO_RULE_REFERENCE))
-        .flatten();
+        .and_then(|props| props.get(REGO_RULE_REFERENCE));
 
     let env = server_config
         .get(&PropertyNameKind::Env)
