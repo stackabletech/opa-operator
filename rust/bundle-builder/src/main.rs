@@ -60,6 +60,10 @@ pub struct Ctx {
 }
 
 const WATCH_NAMESPACE_ENV: &str = "WATCH_NAMESPACE";
+const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
+const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
+const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
+const BUNDLE_NAME: &str = "bundle.tar.gz";
 
 #[tokio::main]
 async fn main() -> Result<(), error::Error> {
@@ -71,7 +75,7 @@ async fn main() -> Result<(), error::Error> {
         Ok(namespace) => {
             let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.as_ref());
             let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz").and(warp::fs::file(
-                format!("{}/bundle.tar.gz", "/bundles/active"),
+                format!("{BUNDLES_ACTIVE_DIR}/{BUNDLE_NAME}"),
             ));
             let bundle = bundle.with(warp::log("bundle"));
             let web_server = warp::serve(bundle).run(([0, 0, 0, 0], 3030)).into_stream();
@@ -84,13 +88,13 @@ async fn main() -> Result<(), error::Error> {
                 update_bundle,
                 error_policy,
                 Context::new(Ctx {
-                    active: "/bundles/active".to_string(),
-                    incoming: "/bundles/incoming".to_string(),
-                    tmp: "/bundles/tmp".to_string(),
+                    active: BUNDLES_ACTIVE_DIR.to_string(),
+                    incoming: BUNDLES_INCOMING_DIR.to_string(),
+                    tmp: BUNDLES_TMP_DIR.to_string(),
                 }),
             )
             .map(|res| {
-                report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
+                report_controller_reconciled(&client, "opaclusters.opa.stackable.tech", &res)
             });
 
             futures::stream::select(controller, web_server)
@@ -108,26 +112,12 @@ async fn main() -> Result<(), error::Error> {
     Ok(())
 }
 
-//async fn create_controller(
-//    client: Client,
-//    namespace: impl Into<String>,
-//    ctx: Ctx,
-//) -> OperatorResult<()> {
-//    let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.into().as_ref());
-//
-//    let controller = Controller::new(
-//        configmaps_api,
-//        ListParams::default().labels("opa.stackable.tech/bundle"),
-//    );
-//
-//    controller
-//        .run(update_bundle, error_policy, Context::new(ctx))
-//        .map(|res| {
-//            report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
-//        })
-//}
-
-/// Writes bundle.data under `root`.
+/// Updates the `/bundles/active/bundle.tar.gz` with the new `ConfigMap`.
+///
+/// All `ConfigMap`s are stored under [`BUNDLES_INCOMING_DIR`] and archived into [`BUNDLES_TMP_DIR`]/bundle.tar.gz first
+/// before being moved to to [`BUNDLES_ACTIVE_DIR`]/bundle.tar.gz for serving.
+///
+/// The root of the tar file is always "bundles".
 async fn update_bundle(
     bundle: Arc<ConfigMap>,
     ctx: Context<Ctx>,
@@ -155,7 +145,7 @@ async fn update_bundle(
                     .context(OpaBundleDirSnafu)?;
             }
 
-            let tmp_bundle_path = format!("{}/bundle.tar.gz", tmp);
+            let tmp_bundle_path = format!("{tmp}/{BUNDLE_NAME}");
             let tar_gz =
                 File::create(&tmp_bundle_path).with_context(|_| CreateBundleFailedSnafu {
                     path: tmp_bundle_path.to_string(),
@@ -168,7 +158,7 @@ async fn update_bundle(
                 .context(AppendToBundleTarFailedSnafu)?;
             tar_builder.finish().context(CreateBundleTarFailedSnafu)?;
 
-            let dest_path = Path::new(active).join(Path::new("bundle.tar.gz"));
+            let dest_path = Path::new(active).join(Path::new(BUNDLE_NAME));
             rename(&Path::new(&tmp_bundle_path), &dest_path).context(OpaBundleDirSnafu)?;
         }
         None => tracing::error!("empty config map {}", name),
@@ -184,13 +174,6 @@ pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
         requeue_after: Some(Duration::from_secs(5)),
     }
 }
-
-//async fn create_web_server(active: String, port: u16) -> impl Future<Output = ()> {
-//    let bundle = warp::path!("opa" / "v1" / "opa" / "bundle.tar.gz")
-//        .and(warp::fs::file(format!("{}/bundle.tar.gz", active)));
-//    let bundle = bundle.with(warp::log("bundle"));
-//    warp::serve(bundle).run(([0, 0, 0, 0], port)).into_stream()
-//}
 
 #[cfg(test)]
 mod tests {
