@@ -8,7 +8,7 @@ metadata:
 data:
   test.rego: |
     package test
-    
+
     hello {
       true
     }
