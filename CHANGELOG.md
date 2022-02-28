@@ -12,15 +12,15 @@ All notable changes to this project will be documented in this file.
 - The command line argument `--opa-builder-clusterrole` for the `run`
     subcommand or the environment variable `OPA_BUILDER_CLUSTERROLE` to set up
     a service account for the OPA pods. ([#244])
-- The command line argument `--watch-namespace` for the `run` subcommand or 
-    the environment variable `WATCH_NAMESPACE` can be used to instruct the
-    operator to watch a particular namespace. ([#244])
+- The command line argument `--watch-namespace` for the `run` subcommand or
+  the environment variable `WATCH_NAMESPACE` can be used to instruct the
+  operator to watch a particular namespace. ([#244])
 
 ### Changed
 
 - `operator-rs` `0.10.0` -> `0.12.0` ([#241]).
 - `operator-rs` `0.12.0` -> `0.13.0` ([#244]).
-- BREACKING: Renamed custom resource from `OpenPolicyAgent` to `OpaCluster` ([#244]).
+- BREAKING: Renamed custom resource from `OpenPolicyAgent` to `OpaCluster` ([#244]).
 
 [#241]: https://github.com/stackabletech/opa-operator/pull/241
 [#244]: https://github.com/stackabletech/opa-operator/pull/244
@@ -42,7 +42,6 @@ All notable changes to this project will be documented in this file.
 
 ## [0.7.0] - 2022-01-27
 
-
 ### Changed
 - BREAKING: STFU rework ([#146]).
 - BREAKING: regoRuleReference in config now optional ([#188]).
@@ -61,9 +60,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.6.0] - 2021-12-06
 
-
 ## [0.5.0] - 2021-11-12
-
 
 ### Changed
 - `operator-rs` `0.3.0` → `0.4.0` ([#119]).
@@ -95,7 +92,6 @@ All notable changes to this project will be documented in this file.
 
 ## [0.4.0] - 2021-09-21
 
-
 ### Changed
 
 - `kube-rs`: `0.58` → `0.60` ([#88]).
@@ -109,7 +105,6 @@ All notable changes to this project will be documented in this file.
 [#88]: https://github.com/stackabletech/opa-operator/pull/88
 
 ## [0.3.0] - 2021-09-20
-
 
 ### Added
 - Added versioning code from operator-rs for up and downgrades ([#86]).
