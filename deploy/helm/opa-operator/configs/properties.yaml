@@ -19,7 +19,7 @@ properties:
         unit: *unitUrl
       defaultValues:
         - fromVersion: "0.0.0"
-          value: "http://regorule-operator:3030/opa/v1"
+          value: "http://localhost:3030/opa/v1"
       roles:
         - name: "server"
           required: true

@@ -7,5 +7,33 @@
 
 *Multiple values:* false
 
+[source]
+----
+cargo run -- run --product-config /foo/bar/properties.yaml
+----
 
-This file contains property definitions for the Open Policy Agent configuration.
+=== watch-namespace
+
+*Default value*: All namespaces
+
+*Required*: false
+
+*Multiple values:* false
+
+The operator will **only** watch for resources in the provided namespace `test`:
+
+[source]
+----
+cargo run -- run --watch-namespace test
+----
+
+=== run --opa-builder-clusterrole
+
+*Default value*: `None`. A value is generated automatically by Helm.
+
+*Required*: false. When not specified, the environment variable `OPA_BUILDER_CLUSTERROLE` must be present.
+
+*Multiple values:* false
+
+
+The name of the `ClusterRole` object that is referenced by the OPA pods. This object must exist in the Kubernetes cluster and is created by Helm.

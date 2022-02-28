@@ -1,5 +1,5 @@
 name: opa
 version: master
-title: Stackable Operator for OpenPolicyAgent
+title: Stackable Operator for OPA
 nav:
   - modules/ROOT/nav.adoc

@@ -1,17 +1,13 @@
 ---
 apiVersion: opa.stackable.tech/v1alpha1
-kind: OpenPolicyAgent
+kind: OpaCluster
 metadata:
   name: simple-opa
 spec:
-  version: "0.27.1"
+  version: "0.37.2"
   servers:
     roleGroups:
       default:
         selector:
           matchLabels:
             kubernetes.io/os: linux
-        config:
-          # access the regorule-operator cluster ip service
-          # defaults to "http://regorule-operator:3030/opa/v1"
-          regoRuleReference: "http://regorule-operator:3030/opa/v1"

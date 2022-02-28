@@ -6,17 +6,6 @@ metadata:
   name: opa-operator-clusterrole
 rules:
   - apiGroups:
-      - opa.stackable.tech
-    resources:
-      - openpolicyagents
-      - openpolicyagents/status
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-      - patch
-  - apiGroups:
       - ""
     resources:
       - nodes
@@ -86,3 +75,18 @@ rules:
       - events
     verbs:
       - create
+  - apiGroups:
+      - opa.stackable.tech
+    resources:
+      - opaclusters
+    verbs:
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - opa.stackable.tech
+    resources:
+      - opaclusters/status
+    verbs:
+      - patch

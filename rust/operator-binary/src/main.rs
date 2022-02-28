@@ -3,7 +3,9 @@ mod discovery;
 
 use clap::Parser;
 use futures::StreamExt;
-use stackable_opa_crd::OpenPolicyAgent;
+use stackable_opa_crd::OpaCluster;
+use stackable_operator::cli::ProductOperatorRun;
+use stackable_operator::namespace::WatchNamespace;
 use stackable_operator::{
     cli::Command,
     client,
@@ -23,7 +25,7 @@ use stackable_operator::{
     product_config::ProductConfigManager,
 };
 
-mod built_info {
+pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
@@ -31,7 +33,15 @@ mod built_info {
 #[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
 struct Opts {
     #[clap(subcommand)]
-    cmd: Command,
+    cmd: Command<OpaRun>,
+}
+
+#[derive(clap::Parser)]
+struct OpaRun {
+    #[clap(long, env)]
+    opa_builder_clusterrole: String,
+    #[clap(flatten)]
+    common: ProductOperatorRun,
 }
 
 #[tokio::main]
@@ -40,8 +50,15 @@ async fn main() -> Result<(), error::Error> {
 
     let opts = Opts::parse();
     match opts.cmd {
-        Command::Crd => println!("{}", serde_yaml::to_string(&OpenPolicyAgent::crd())?),
-        Command::Run(product_config) => {
+        Command::Crd => println!("{}", serde_yaml::to_string(&OpaCluster::crd())?),
+        Command::Run(OpaRun {
+            opa_builder_clusterrole,
+            common:
+                ProductOperatorRun {
+                    product_config,
+                    watch_namespace,
+                },
+        }) => {
             stackable_operator::utils::print_startup_string(
                 built_info::PKG_DESCRIPTION,
                 built_info::PKG_VERSION,
@@ -50,12 +67,18 @@ async fn main() -> Result<(), error::Error> {
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
-            let product_config = product_config.product_config.load(&[
+            let product_config = product_config.load(&[
                 "deploy/config-spec/properties.yaml",
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
             let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
-            create_controller(client, product_config).await?;
+            create_controller(
+                client,
+                product_config,
+                watch_namespace,
+                opa_builder_clusterrole,
+            )
+            .await?;
         }
     };
 
@@ -68,11 +91,13 @@ async fn main() -> Result<(), error::Error> {
 async fn create_controller(
     client: Client,
     product_config: ProductConfigManager,
+    watch_namespace: WatchNamespace,
+    opa_builder_clusterrole: String,
 ) -> OperatorResult<()> {
-    let opa_api: Api<OpenPolicyAgent> = client.get_all_api();
-    let daemonsets_api: Api<DaemonSet> = client.get_all_api();
-    let configmaps_api: Api<ConfigMap> = client.get_all_api();
-    let services_api: Api<Service> = client.get_all_api();
+    let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
+    let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
+    let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
+    let services_api: Api<Service> = watch_namespace.get_api(&client);
 
     let controller = Controller::new(opa_api, ListParams::default())
         .owns(daemonsets_api, ListParams::default())
@@ -86,6 +111,7 @@ async fn create_controller(
             Context::new(controller::Ctx {
                 client: client.clone(),
                 product_config,
+                opa_builder_clusterrole,
             }),
         )
         .map(|res| {

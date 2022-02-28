@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-**Which new version of OpenPolicyAgent should we support?**
+**Which new version of OPA should we support?**
 
 Please specify the version, version range or version numbers to support, please also add these to the issue title
 

@@ -5,17 +5,6 @@ metadata:
   name: {{ .Release.Name }}-clusterrole
 rules:
   - apiGroups:
-      - opa.stackable.tech
-    resources:
-      - openpolicyagents
-      - openpolicyagents/status
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-      - patch
-  - apiGroups:
       - ""
     resources:
       - nodes
@@ -85,3 +74,18 @@ rules:
       - events
     verbs:
       - create
+  - apiGroups:
+      - {{ include "operator.name" . }}.stackable.tech
+    resources:
+      - {{ include "operator.name" . }}clusters
+    verbs:
+      - get
+      - list
+      - patch
+      - watch
+  - apiGroups:
+      - {{ include "operator.name" . }}.stackable.tech
+    resources:
+      - {{ include "operator.name" . }}clusters/status
+    verbs:
+      - patch

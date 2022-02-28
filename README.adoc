@@ -1,4 +1,4 @@
-= Stackable Operator for OpenPolicyAgent (OPA)
+= Stackable Operator for OPA (OpenPolicyAgent)
 
 This is a Kubernetes Operator to manage OPA servers.
 

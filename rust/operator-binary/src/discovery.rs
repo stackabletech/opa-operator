@@ -1,5 +1,5 @@
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaRole, OpenPolicyAgent, APP_NAME};
+use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ObjectMetaBuilder},
     k8s_openapi::api::core::v1::{ConfigMap, Service},
@@ -13,7 +13,7 @@ pub enum Error {
     #[snafu(display("object {} is missing metadata to build owner reference", opa))]
     ObjectMissingMetadataForOwnerRef {
         source: stackable_operator::error::Error,
-        opa: ObjectRef<OpenPolicyAgent>,
+        opa: ObjectRef<OpaCluster>,
     },
     #[snafu(display("object has no name associated"))]
     NoName,
@@ -25,21 +25,21 @@ pub enum Error {
     },
 }
 
-/// Builds discovery [`ConfigMap`]s for connecting to a [`OpenPolicyAgent`] for all expected scenarios
+/// Builds discovery [`ConfigMap`]s for connecting to a [`OpaCluster`] for all expected scenarios
 pub fn build_discovery_configmaps(
     owner: &impl Resource<DynamicType = ()>,
-    opa: &OpenPolicyAgent,
+    opa: &OpaCluster,
     svc: &Service,
 ) -> Result<Vec<ConfigMap>, Error> {
     let name = owner.name();
     Ok(vec![build_discovery_configmap(&name, owner, opa, svc)?])
 }
 
-/// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`OpenPolicyAgent`]
+/// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`OpaCluster`]
 fn build_discovery_configmap(
     name: &str,
     owner: &impl Resource<DynamicType = ()>,
-    opa: &OpenPolicyAgent,
+    opa: &OpaCluster,
     svc: &Service,
 ) -> Result<ConfigMap, Error> {
     let url = format!(
