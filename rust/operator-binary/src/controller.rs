@@ -49,6 +49,7 @@ pub const METRICS_PORT_NAME: &str = "metrics";
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
+pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -446,7 +447,7 @@ fn build_server_rolegroup_daemonset(
             period_seconds: Some(10),
             failure_threshold: Some(5),
             http_get: Some(HTTPGetAction {
-                port: IntOrString::Int(3030),
+                port: IntOrString::Int(BUNDLE_BUILDER_PORT),
                 path: Some("/status".to_string()),
                 ..HTTPGetAction::default()
             }),
@@ -456,7 +457,7 @@ fn build_server_rolegroup_daemonset(
             initial_delay_seconds: Some(30),
             period_seconds: Some(10),
             http_get: Some(HTTPGetAction {
-                port: IntOrString::Int(3030),
+                port: IntOrString::Int(BUNDLE_BUILDER_PORT),
                 path: Some("/status".to_string()),
                 ..HTTPGetAction::default()
             }),
