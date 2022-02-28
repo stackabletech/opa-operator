@@ -1,5 +1,5 @@
 
-=== run --product-config
+=== product-config
 
 *Default value*: `/etc/stackable/opa-operator/config-spec/properties.yaml`
 
@@ -7,8 +7,25 @@
 
 *Multiple values:* false
 
+[source]
+----
+cargo run -- run --product-config /foo/bar/properties.yaml
+----
 
-This file contains property definitions for the Open Policy Agent configuration.
+=== watch-namespace
+
+*Default value*: All namespaces
+
+*Required*: false
+
+*Multiple values:* false
+
+The operator will **only** watch for resources in the provided namespace `test`:
+
+[source]
+----
+cargo run -- run --watch-namespace test
+----
 
 === run --opa-builder-clusterrole
 
@@ -20,14 +37,3 @@ This file contains property definitions for the Open Policy Agent configuration.
 
 
 The name of the `ClusterRole` object that is referenced by the OPA pods. This object must exist in the Kubernetes cluster and is created by Helm.
-
-=== run --watch-namespace
-
-*Default value*: `None`.
-
-*Required*: false
-
-*Multiple values:* false
-
-
-The namespace to watch for.
