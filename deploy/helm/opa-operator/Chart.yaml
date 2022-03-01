@@ -3,7 +3,7 @@ apiVersion: v2
 name: opa-operator
 version: 0.9.0-nightly
 appVersion: "0.9.0-nightly"
-description: The Stackable Operator for OPA
+description: The Stackable Operator for OpenPolicyAgent
 home: https://github.com/stackabletech/opa-operator
 maintainers:
   - name: Stackable
