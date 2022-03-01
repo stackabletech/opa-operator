@@ -39,7 +39,7 @@ struct Opts {
 #[derive(clap::Parser)]
 struct OpaRun {
     #[clap(long, env)]
-    opa_builder_clusterrole: String,
+    opa_bundle_builder_clusterrole: String,
     #[clap(flatten)]
     common: ProductOperatorRun,
 }
@@ -52,7 +52,7 @@ async fn main() -> Result<(), error::Error> {
     match opts.cmd {
         Command::Crd => println!("{}", serde_yaml::to_string(&OpaCluster::crd())?),
         Command::Run(OpaRun {
-            opa_builder_clusterrole,
+            opa_bundle_builder_clusterrole: opa_builder_clusterrole,
             common:
                 ProductOperatorRun {
                     product_config,
@@ -92,7 +92,7 @@ async fn create_controller(
     client: Client,
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
-    opa_builder_clusterrole: String,
+    opa_bundle_builder_clusterrole: String,
 ) -> OperatorResult<()> {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
@@ -111,7 +111,7 @@ async fn create_controller(
             Context::new(controller::Ctx {
                 client: client.clone(),
                 product_config,
-                opa_builder_clusterrole,
+                opa_bundle_builder_clusterrole,
             }),
         )
         .map(|res| {
