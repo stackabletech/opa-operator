@@ -10,7 +10,7 @@
 [source]
 ----
 export PRODUCT_CONFIG=/foo/bar/properties.yaml
-cargo run -- run
+stackable-opa-operator run
 ----
 
 or via docker:
@@ -38,7 +38,7 @@ The operator will **only** watch for resources in the provided namespace `test`:
 [source]
 ----
 export WATCH_NAMESPACE=test
-cargo run -- run
+stackable-opa-operator run
 ----
 
 or via docker:
@@ -53,3 +53,20 @@ docker run \
 --mount type=bind,source="$HOME/.kube/config",target="/home/stackable/.kube/config" \
 docker.stackable.tech/stackable/opa-operator:latest
 ----
+
+=== OPA_BUNDLE_BUILDER_CLUSTERROLE
+
+*Default value*: None.
+
+*Required*: true
+
+*Multiple values:* false
+
+The name of the cluster role to use for the OPA pods.
+
+[source]
+----
+export OPA_BUNDLE_BUILDER_CLUSTERROLE=test
+stackable-opa-operator run
+----
+

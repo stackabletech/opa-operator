@@ -9,7 +9,7 @@
 
 [source]
 ----
-cargo run -- run --product-config /foo/bar/properties.yaml
+stackable-opa-operator run --product-config /foo/bar/properties.yaml
 ----
 
 === watch-namespace
@@ -24,14 +24,14 @@ The operator will **only** watch for resources in the provided namespace `test`:
 
 [source]
 ----
-cargo run -- run --watch-namespace test
+stackable-opa-operator run --watch-namespace test
 ----
 
-=== run --opa-builder-clusterrole
+=== opa-bundle-builder-clusterrole
 
 *Default value*: `None`. A value is generated automatically by Helm.
 
-*Required*: false. When not specified, the environment variable `OPA_BUILDER_CLUSTERROLE` must be present.
+*Required*: false. When not specified, the environment variable `OPA_BUNDLE_BUILDER_CLUSTERROLE` must be present.
 
 *Multiple values:* false
 

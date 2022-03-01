@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Release.Name }}-opa-builder-clusterrole
+  name: {{ .Release.Name }}-opa-bundle-builder-clusterrole
 rules:
   - apiGroups:
       - ""

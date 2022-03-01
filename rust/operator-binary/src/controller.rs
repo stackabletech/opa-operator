@@ -54,7 +54,7 @@ pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
-    pub opa_builder_clusterrole: String,
+    pub opa_bundle_builder_clusterrole: String,
 }
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -168,7 +168,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Re
         .context(ApplyRoleServiceSnafu)?;
 
     let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
-        build_opa_builder_serviceaccount(&opa, &ctx.get_ref().opa_builder_clusterrole)?;
+        build_opa_builder_serviceaccount(&opa, &ctx.get_ref().opa_bundle_builder_clusterrole)?;
 
     client
         .apply_patch(
@@ -234,7 +234,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Re
 
 fn build_opa_builder_serviceaccount(
     opa: &OpaCluster,
-    opa_builder_clusterrole: &str,
+    opa_bundle_builder_clusterrole: &str,
 ) -> Result<(ServiceAccount, RoleBinding)> {
     let role_name = OpaRole::Server.to_string();
     let sa_name = format!("{}-{}", opa.metadata.name.as_ref().unwrap(), role_name);
@@ -260,7 +260,7 @@ fn build_opa_builder_serviceaccount(
         role_ref: RoleRef {
             api_group: ClusterRole::GROUP.to_string(),
             kind: ClusterRole::KIND.to_string(),
-            name: opa_builder_clusterrole.to_string(),
+            name: opa_bundle_builder_clusterrole.to_string(),
         },
         subjects: Some(vec![Subject {
             api_group: Some(ServiceAccount::GROUP.to_string()),
