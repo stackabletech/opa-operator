@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
     `ConfigMap` objects ([#244])
 - The command line argument `--opa-builder-clusterrole` for the `run`
     subcommand or the environment variable `OPA_BUNDLE_BUILDER_CLUSTERROLE` to set up
-    a service account for the OPA pods. ([#244]) and ([#xxx])
+    a service account for the OPA pods. ([#244]) and ([#252])
 - The command line argument `--watch-namespace` for the `run` subcommand or
   the environment variable `WATCH_NAMESPACE` can be used to instruct the
   operator to watch a particular namespace. ([#244])
@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 
 [#241]: https://github.com/stackabletech/opa-operator/pull/241
 [#244]: https://github.com/stackabletech/opa-operator/pull/244
-[#xxx]: https://github.com/stackabletech/opa-operator/pull/xxx
+[#252]: https://github.com/stackabletech/opa-operator/pull/252
 
 ## [0.8.0] - 2022-02-14
 
