@@ -1,7 +1,6 @@
-# Helm Chart for Stackable Operator for OPA (OpenPolicyAgent)
+# Helm Chart for Stackable Operator for OpenPolicyAgent
 
-This Helm Chart can be used to install Custom Resource Definitions and the
-Operator for OPA provided by Stackable.
+This Helm Chart can be used to install Custom Resource Definitions and the Operator for OpenPolicyAgent provided by Stackable.
 
 
 ## Requirements
@@ -10,7 +9,7 @@ Operator for OPA provided by Stackable.
 - Install [Helm](https://helm.sh/docs/intro/install/)
 
 
-## Install the Stackable Operator for OPA
+## Install the Stackable Operator for OpenPolicyAgent
 
 ```bash
 # From the root of the operator repository

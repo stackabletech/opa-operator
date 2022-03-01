@@ -40,9 +40,6 @@ spec:
           volumeMounts:
             - mountPath: /etc/stackable/{{ include "operator.appname" . }}/config-spec
               name: config-spec
-          env:
-            - name: OPA_BUILDER_CLUSTERROLE
-              value: {{ .Release.Name }}-opa-builder-clusterrole
       volumes:
         - name: config-spec
           configMap:
