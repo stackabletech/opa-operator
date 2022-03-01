@@ -1,3 +1,4 @@
+---
 # All defaults or options can be checked here:
 # https://github.com/DavidAnson/markdownlint/blob/main/schema/.markdownlint.yaml
 
@@ -7,11 +8,11 @@ default: true
 # MD013/line-length - Line length
 MD013:
   # Number of characters
-  line_length: 10
+  line_length: 9999
   # Number of characters for headings
-  heading_line_length: 10
+  heading_line_length: 9999
   # Number of characters for code blocks
-  code_block_line_length: 10
+  code_block_line_length: 9999
 
 # MD024/no-duplicate-heading/no-duplicate-header - Multiple headings with the same content
 MD024:
