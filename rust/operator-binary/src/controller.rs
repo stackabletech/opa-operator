@@ -296,6 +296,7 @@ pub fn build_server_role_service(opa: &OpaCluster) -> Result<Service> {
             }]),
             selector: Some(role_selector_labels(opa, APP_NAME, &role_name)),
             type_: Some("NodePort".to_string()),
+            internal_traffic_policy: Some("Local".to_string()),
             ..ServiceSpec::default()
         }),
         status: None,
