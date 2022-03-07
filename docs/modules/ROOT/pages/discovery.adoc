@@ -1,0 +1,51 @@
+:clusterName: simple-opa
+:namespace: stackable
+:packageName: opa-test
+:policyName: allow
+
+= Discovery Profiles
+
+The Stackable Operator for OpenPolicyAgent (OPA) creates a single discovery profile that allows access to the OPA cluster which is published into the Kubernetes cluster as a
+https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmap-v1-core[`ConfigMap`] object.
+
+== Profiles
+
+=== Default
+
+This profile allows access to the OPA cluster from inside the Kubernetes cluster, and connects directly to the NodePort `Service`.
+
+We ensure local access via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`]. This means that https://kubernetes.io/docs/concepts/workloads/pods/[`Pods`] accessing OPA via the service discovery will be routed to the OPA `Pod` on the same https://kubernetes.io/docs/concepts/architecture/nodes/[`Node`] to reduce request latency. This feature is only activated per default in Kubernetes versions https://github.com/kubernetes/kubernetes/pull/103462[`1.22`] or higher.
+
+== Contents
+
+Given the following OPA cluster:
+[subs="attributes"]
+----
+apiVersion: opa.stackable.tech/v1alpha1
+kind: OpaCluster
+metadata:
+  name: {clusterName} # <1>
+  namespace: {namespace} # <2>
+spec:
+  version:
+  servers:
+    roleGroups:
+      default:
+        selector:
+          matchLabels:
+            kubernetes.io/os: linux
+----
+<1> Name of the OPA cluster which is the name of the `ConfigMap` created for this discovery profile.
+<2> Namespace of the `ConfigMap` created for this discovery profile.
+
+The discovery profile contains the following field:
+
+`OPA`:: A connection string for cluster internal OPA requests. Provided the cluster example above, the connection string is created as follows: http://{clusterName}.{namespace}.svc.cluster.local:8081/ where
+`{clusterName}` represents the name and `{namespace}` the namespace of the cluster.
+
+This connection string points to the base URL (and web UI) of the OPA cluster. In order to query policies you have to configure your product and its OPA url as follows, given the rego package name `{packageName}` and the policy name `{policyName}`:
+
+[subs="attributes"]
+----
+http://{clusterName}.{namespace}.svc.cluster.local:8081/v1/data/{packageName}/{policyName}
+----
