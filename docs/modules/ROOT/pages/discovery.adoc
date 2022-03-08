@@ -10,14 +10,6 @@ https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmap-v
 
 == Profiles
 
-=== Default
-
-This profile allows access to the OPA cluster from inside the Kubernetes cluster, and connects directly to the NodePort `Service`.
-
-We ensure local access via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`]. This means that https://kubernetes.io/docs/concepts/workloads/pods/[`Pods`] accessing OPA via the service discovery will be routed to the OPA `Pod` on the same https://kubernetes.io/docs/concepts/architecture/nodes/[`Node`] to reduce request latency. This feature is only activated per default in Kubernetes versions https://github.com/kubernetes/kubernetes/pull/103462[`1.22`] or higher.
-
-== Contents
-
 Given the following OPA cluster:
 [subs="attributes"]
 ----
@@ -27,16 +19,20 @@ metadata:
   name: {clusterName} # <1>
   namespace: {namespace} # <2>
 spec:
-  version:
-  servers:
-    roleGroups:
-      default:
-        selector:
-          matchLabels:
-            kubernetes.io/os: linux
+  [...]
 ----
 <1> Name of the OPA cluster which is the name of the `ConfigMap` created for this discovery profile.
 <2> Namespace of the `ConfigMap` created for this discovery profile.
+
+The published `ConfigMap` name and namespace are equal to the cluster name and namespace. In this case `{namespace}/{clusterName}`.
+
+=== Default
+
+This profile allows access to the OPA cluster from inside the Kubernetes cluster, and connects directly to the NodePort `Service`.
+
+We ensure local access via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`]. This means that https://kubernetes.io/docs/concepts/workloads/pods/[`Pods`] accessing OPA via the service discovery will be routed to the OPA `Pod` on the same https://kubernetes.io/docs/concepts/architecture/nodes/[`Node`] to reduce request latency. This feature is only activated per default in Kubernetes versions https://github.com/kubernetes/kubernetes/pull/103462[`1.22`] or higher.
+
+== Contents
 
 The discovery profile contains the following field:
 
