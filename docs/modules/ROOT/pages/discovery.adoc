@@ -3,15 +3,17 @@
 :packageName: opa-test
 :policyName: allow
 
-= Discovery Profiles
+= Discovery
 
-The Stackable Operator for OpenPolicyAgent (OPA) creates a single discovery profile that allows access to the OPA cluster which is published into the Kubernetes cluster as a
-https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmap-v1-core[`ConfigMap`] object.
+The Stackable Operator for OpenPolicyAgent (OPA) publishes a discovery https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmap-v1-core[`ConfigMap`], which exposes a client configuration bundle that allows access to the OPA cluster.
 
-== Profiles
+The bundle includes a connection string to access the OPA cluster. This string may be used by other operators or tools to configure their products with access to OPA. This is limited to internal cluster access.
+
+== Example
 
 Given the following OPA cluster:
-[subs="attributes"]
+
+[source,yaml,subs="normal,callouts"]
 ----
 apiVersion: opa.stackable.tech/v1alpha1
 kind: OpaCluster
@@ -21,20 +23,16 @@ metadata:
 spec:
   [...]
 ----
-<1> Name of the OPA cluster which is the name of the `ConfigMap` created for this discovery profile.
-<2> Namespace of the `ConfigMap` created for this discovery profile.
+<1> The name of the OPA cluster, which is also the name of the created discovery `ConfigMap`.
+<2> The namespace of the discovery `ConfigMap`.
 
-The published `ConfigMap` name and namespace are equal to the cluster name and namespace. In this case `{namespace}/{clusterName}`.
-
-=== Default
-
-This profile allows access to the OPA cluster from inside the Kubernetes cluster, and connects directly to the NodePort `Service`.
+The resulting discovery `ConfigMap` is `{namespace}/{clusterName}`.
 
 We ensure local access via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`]. This means that https://kubernetes.io/docs/concepts/workloads/pods/[`Pods`] accessing OPA via the service discovery will be routed to the OPA `Pod` on the same https://kubernetes.io/docs/concepts/architecture/nodes/[`Node`] to reduce request latency. This feature is only activated per default in Kubernetes versions https://github.com/kubernetes/kubernetes/pull/103462[`1.22`] or higher.
 
 == Contents
 
-The discovery profile contains the following fields where `{clusterName}` represents the name and `{namespace}` the namespace of the cluster:
+The `{namespace}/{clusterName}` discovery `ConfigMap` contains the following fields where `{clusterName}` represents the name and `{namespace}` the namespace of the cluster:
 
 `OPA`::
 ====
