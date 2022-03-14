@@ -8,6 +8,8 @@ but should not be required reading for regular use.
 We run an OPA on each node, because we want to avoid requiring network round trips for services making
 policy queries (which are often chained in serial, and block other tasks in the products).
 
+We ensure local access via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`]. This means that https://kubernetes.io/docs/concepts/workloads/pods/[`Pods`] accessing OPA via the service discovery will be routed to the OPA `Pod` on the same https://kubernetes.io/docs/concepts/architecture/nodes/[`Node`] to reduce request latency and network traffic. This feature is only activated per default in Kubernetes versions https://github.com/kubernetes/kubernetes/pull/103462[`1.22`] or higher.
+
 == OPA Bundle Builder
 
 Each OPA pod runs a container that watches for `ConfigMap` objects labeled `opa.stackable.tech/bundle`.
