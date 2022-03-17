@@ -12,6 +12,8 @@ TAG    := $(shell git rev-parse --short HEAD)
 
 VERSION := $(shell cargo metadata --format-version 1 | jq '.packages[] | select(.name=="stackable-opa-operator") | .version')
 
+SHELL=/bin/bash -euo pipefail
+
 ## Docker related targets
 docker-build:
 	docker build --force-rm -t "docker.stackable.tech/stackable/opa-operator:${VERSION}" -f docker/Dockerfile .
@@ -38,7 +40,7 @@ chart-clean:
 	rm -rf deploy/helm/opa-operator/crds
 
 version:
-	yq eval -i '.version = ${VERSION} | .appVersion = ${VERSION}' deploy/helm/opa-operator/Chart.yaml
+	yq eval -i '.version = ${VERSION} | .appVersion = ${VERSION}' /dev/stdin < deploy/helm/opa-operator/Chart.yaml
 
 config:
 	if [ -d "deploy/config-spec/" ]; then\
@@ -48,7 +50,7 @@ config:
 
 crds:
 	mkdir -p deploy/helm/opa-operator/crds
-	cargo run crd | yq eval '.metadata.annotations["helm.sh/resource-policy"]="keep"' - > deploy/helm/opa-operator/crds/crds.yaml
+	cargo run --bin stackable-opa-operator -- crd | yq eval '.metadata.annotations["helm.sh/resource-policy"]="keep"' - > deploy/helm/opa-operator/crds/crds.yaml
 
 chart-lint: compile-chart
 	docker run -it -v $(shell pwd):/build/helm-charts -w /build/helm-charts quay.io/helmpack/chart-testing:v3.5.0  ct lint --config deploy/helm/ct.yaml
