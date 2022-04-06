@@ -18,16 +18,17 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- `operator-rs` `0.10.0` -> `0.15.0` ([#241], [#244], [] ).
+- `operator-rs` `0.10.0` -> `0.15.0` ([#241], [#244], [#273]).
 - BREAKING: Renamed custom resource from `OpenPolicyAgent` to `OpaCluster` ([#244]).
 
 ### Removed
 
-- `regoRuleReference` from OpaConfig and CRD respectively.
+- `regoRuleReference` from OpaConfig and CRD respectively ([#273]).
 
 [#241]: https://github.com/stackabletech/opa-operator/pull/241
 [#244]: https://github.com/stackabletech/opa-operator/pull/244
 [#252]: https://github.com/stackabletech/opa-operator/pull/252
+[#273]: https://github.com/stackabletech/opa-operator/pull/273
 
 ## [0.8.0] - 2022-02-14
 
