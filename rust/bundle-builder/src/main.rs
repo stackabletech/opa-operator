@@ -7,8 +7,8 @@ use stackable_operator::client;
 use stackable_operator::error;
 use stackable_operator::k8s_openapi::api::core::v1::ConfigMap;
 use stackable_operator::kube::api::ListParams;
+use stackable_operator::kube::runtime::controller::Action;
 use stackable_operator::kube::runtime::controller::Context;
-use stackable_operator::kube::runtime::controller::ReconcilerAction;
 use stackable_operator::kube::runtime::Controller;
 use stackable_operator::kube::Api;
 use stackable_operator::logging::controller::report_controller_reconciled;
@@ -136,10 +136,7 @@ fn make_web_server() -> futures::future::IntoStream<impl futures::Future<Output 
 /// before being moved to to [`BUNDLES_ACTIVE_DIR`]/bundle.tar.gz for serving.
 ///
 /// The root of the tar file is always "bundles".
-async fn update_bundle(
-    bundle: Arc<ConfigMap>,
-    ctx: Context<Ctx>,
-) -> Result<ReconcilerAction, Error> {
+async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Context<Ctx>) -> Result<Action, Error> {
     let name = bundle
         .metadata
         .name
@@ -182,15 +179,11 @@ async fn update_bundle(
         None => tracing::error!("empty config map {}", name),
     }
 
-    Ok(ReconcilerAction {
-        requeue_after: None,
-    })
+    Ok(Action::await_change())
 }
 
-pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
-    ReconcilerAction {
-        requeue_after: Some(Duration::from_secs(5)),
-    }
+pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> Action {
+    Action::requeue(Duration::from_secs(5))
 }
 
 #[cfg(test)]

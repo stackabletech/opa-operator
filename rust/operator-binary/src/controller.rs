@@ -3,7 +3,7 @@
 use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME, REGO_RULE_REFERENCE};
+use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME};
 use stackable_operator::builder::SecurityContextBuilder;
 use stackable_operator::k8s_openapi::api::core::v1::{
     EmptyDirVolumeSource, HTTPGetAction, Probe, ServiceAccount,
@@ -23,7 +23,7 @@ use stackable_operator::{
         apimachinery::pkg::apis::meta::v1::LabelSelector,
     },
     kube::runtime::{
-        controller::{Context, ReconcilerAction},
+        controller::{Action, Context},
         reflector::ObjectRef,
     },
     labels::{role_group_selector_labels, role_selector_labels},
@@ -124,7 +124,7 @@ impl ReconcilerError for Error {
     }
 }
 
-pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<ReconcilerAction> {
+pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Action> {
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(&*opa);
     let client = ctx.get_ref().client.clone();
@@ -194,7 +194,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Re
             role_group: rolegroup_name.to_string(),
         };
 
-        let rg_configmap = build_server_rolegroup_config_map(&rolegroup, &opa, rolegroup_config)?;
+        let rg_configmap = build_server_rolegroup_config_map(&rolegroup, &opa)?;
         let rg_daemonset = build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config)?;
         let rg_service = build_rolegroup_service(&opa, &rolegroup)?;
 
@@ -227,9 +227,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Re
             .context(ApplyDiscoveryConfigSnafu)?;
     }
 
-    Ok(ReconcilerAction {
-        requeue_after: None,
-    })
+    Ok(Action::await_change())
 }
 
 fn build_opa_builder_serviceaccount(
@@ -345,34 +343,28 @@ fn build_rolegroup_service(
 fn build_server_rolegroup_config_map(
     rolegroup: &RoleGroupRef<OpaCluster>,
     opa: &OpaCluster,
-    server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
 ) -> Result<ConfigMap> {
-    let config = server_config
-        .get(&PropertyNameKind::File(CONFIG_FILE.to_string()))
-        .map(Cow::Borrowed)
-        .unwrap_or_default();
-    let mut cm = ConfigMapBuilder::new();
-    cm.metadata(
-        ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(rolegroup.object_name())
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(
-                opa,
-                APP_NAME,
-                opa_version(opa)?,
-                &rolegroup.role,
-                &rolegroup.role_group,
-            )
-            .build(),
-    );
-    if let Some(rego_reference) = config.get(REGO_RULE_REFERENCE) {
-        cm.add_data(CONFIG_FILE, build_config_file(rego_reference));
-    }
-    cm.build().with_context(|_| BuildRoleGroupConfigSnafu {
-        rolegroup: rolegroup.clone(),
-    })
+    ConfigMapBuilder::new()
+        .metadata(
+            ObjectMetaBuilder::new()
+                .name_and_namespace(opa)
+                .name(rolegroup.object_name())
+                .ownerreference_from_resource(opa, None, Some(true))
+                .context(ObjectMissingMetadataForOwnerRefSnafu)?
+                .with_recommended_labels(
+                    opa,
+                    APP_NAME,
+                    opa_version(opa)?,
+                    &rolegroup.role,
+                    &rolegroup.role_group,
+                )
+                .build(),
+        )
+        .add_data(CONFIG_FILE, build_config_file())
+        .build()
+        .with_context(|_| BuildRoleGroupConfigSnafu {
+            rolegroup: rolegroup.clone(),
+        })
 }
 
 /// The rolegroup [`DaemonSet`] runs the rolegroup, as configured by the administrator.
@@ -556,18 +548,15 @@ pub fn opa_version(opa: &OpaCluster) -> Result<&str> {
     opa.spec.version.as_deref().context(ObjectHasNoVersionSnafu)
 }
 
-pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> ReconcilerAction {
-    ReconcilerAction {
-        requeue_after: Some(Duration::from_secs(5)),
-    }
+pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> Action {
+    Action::requeue(Duration::from_secs(5))
 }
 
-fn build_config_file(rego_rule_reference: &str) -> String {
-    format!(
-        "
+fn build_config_file() -> &'static str {
+    "
 services:
   - name: stackable
-    url: {}
+    url: http://localhost:3030/opa/v1
 
 bundles:
   stackable:
@@ -576,9 +565,7 @@ bundles:
     persist: true
     polling:
       min_delay_seconds: 10
-      max_delay_seconds: 20",
-        rego_rule_reference
-    )
+      max_delay_seconds: 20"
 }
 
 fn build_opa_start_command() -> Vec<String> {
