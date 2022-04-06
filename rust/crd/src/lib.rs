@@ -8,7 +8,6 @@ use strum::{Display, EnumIter, EnumString};
 
 pub const APP_NAME: &str = "opa";
 pub const CONFIG_FILE: &str = "config.yaml";
-pub const REGO_RULE_REFERENCE: &str = "regoRuleReference";
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
@@ -34,9 +33,7 @@ pub struct OpaSpec {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpaConfig {
-    pub rego_rule_reference: Option<String>,
-}
+pub struct OpaConfig {}
 
 impl Configuration for OpaConfig {
     type Configurable = OpaCluster;
@@ -61,17 +58,9 @@ impl Configuration for OpaConfig {
         &self,
         _resource: &Self::Configurable,
         _role_name: &str,
-        file: &str,
+        _file: &str,
     ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
-        let mut config = BTreeMap::new();
-
-        if file == CONFIG_FILE {
-            if let Some(rego) = &self.rego_rule_reference {
-                config.insert(REGO_RULE_REFERENCE.to_string(), Some(rego.to_string()));
-            }
-        }
-
-        Ok(config)
+        Ok(BTreeMap::new())
     }
 }
 

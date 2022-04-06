@@ -1,34 +1,12 @@
 ---
 apiVersion: v1
 data:
-  properties.yaml: |-
+  properties.yaml: |
     version: 0.1.0
     spec:
-      units:
-        - unit: &unitUrl
-            name: "url"
-            regex: "^((https?|ftp|file)://)?[-a-zA-Z0-9+&@#}/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]"
-            examples:
-              - "https://www.stackable.de/blog/"
+      units: []
 
-    properties:
-      - property: &opaRegoRuleReference
-          propertyNames:
-            - name: "regoRuleReference"
-              kind:
-                type: "file"
-                file: "config.yaml"
-          datatype:
-            type: "string"
-            unit: *unitUrl
-          defaultValues:
-            - fromVersion: "0.0.0"
-              value: "http://localhost:3030/opa/v1"
-          roles:
-            - name: "server"
-              required: true
-          asOfVersion: "0.0.0"
-          description: "The url of the RegoRule server"
+    properties: []
 kind: ConfigMap
 metadata:
   name: opa-operator-configmap

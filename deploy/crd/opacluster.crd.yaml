@@ -31,10 +31,6 @@ spec:
                       type: object
                     config:
                       default: {}
-                      properties:
-                        regoRuleReference:
-                          nullable: true
-                          type: string
                       type: object
                     configOverrides:
                       additionalProperties:
@@ -58,10 +54,6 @@ spec:
                             type: object
                           config:
                             default: {}
-                            properties:
-                              regoRuleReference:
-                                nullable: true
-                                type: string
                             type: object
                           configOverrides:
                             additionalProperties:
