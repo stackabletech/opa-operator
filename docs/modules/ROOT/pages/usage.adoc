@@ -34,7 +34,7 @@ Alternatively, the OPA servers can load bundles from a remote server when a `reg
 == Monitoring
 
 The managed OPA instances are automatically configured to export Prometheus metrics. See
-xref:home::monitoring.adoc[] for more details.
+xref:home:operators:monitoring.adoc[] for more details.
 
 == Configuration & Environment Overrides
 
