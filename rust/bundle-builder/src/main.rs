@@ -198,11 +198,11 @@ mod tests {
 
     use stackable_operator::builder::{ConfigMapBuilder, ObjectMetaBuilder};
     use stackable_operator::kube::runtime::controller::Context;
-    use tempdir::TempDir;
+    use tempfile::TempDir;
 
     #[test]
     pub fn test_update_bundle() {
-        let tmp = TempDir::new("test-bundle-builder").unwrap();
+        let tmp = TempDir::new().unwrap();
         let active = tmp.path().join("active");
         let incoming = tmp.path().join("incoming");
         let tmp = tmp.path().join("tmp");

@@ -22,5 +22,5 @@ tar = "0.4"
 flate2 = "1.0"
 
 [dev-dependencies]
-tempdir = "0.3"
+tempfile = "3.3"
 tokio-test = "0.4"
