@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 - `operator-rs` `0.10.0` -> `0.15.0` ([#241], [#244], [#273]).
 - BREAKING: Renamed custom resource from `OpenPolicyAgent` to `OpaCluster` ([#244]).
+- Replace the `tempdir` crate with `tempfile` ([#287]).
 
 ### Removed
 
@@ -29,6 +30,7 @@ All notable changes to this project will be documented in this file.
 [#244]: https://github.com/stackabletech/opa-operator/pull/244
 [#252]: https://github.com/stackabletech/opa-operator/pull/252
 [#273]: https://github.com/stackabletech/opa-operator/pull/273
+[#287]: https://github.com/stackabletech/opa-operator/pull/287
 
 ## [0.8.0] - 2022-02-14
 
@@ -48,6 +50,7 @@ All notable changes to this project will be documented in this file.
 ## [0.7.0] - 2022-01-27
 
 ### Changed
+
 - BREAKING: STFU rework ([#146]).
 - BREAKING: regoRuleReference in config now optional ([#188]).
 - Version now a String instead of enum ([#156]).
@@ -55,7 +58,8 @@ All notable changes to this project will be documented in this file.
 - Custom resource example now points to regorule-operator service ([#177]).
 - `snafu` `0.6.0` → `0.7.0` ([#188]).
 
-### Removed 
+### Removed
+
 - Configurable Port from code and product config ([#188]).
 
 [#146]: https://github.com/stackabletech/opa-operator/pull/146
@@ -68,12 +72,14 @@ All notable changes to this project will be documented in this file.
 ## [0.5.0] - 2021-11-12
 
 ### Changed
+
 - `operator-rs` `0.3.0` → `0.4.0` ([#119]).
-- Adapted pod image and container command to docker image ([#119]). 
+- Adapted pod image and container command to docker image ([#119]).
 - BREAKING CRD: Fixed typos `Reporule` to `Regorule` ([#119]).
 - Adapted documentation to represent new workflow with docker images ([#119]).
 
 ### Removed
+
 - BREAKING monitoring: container port `metrics` temporarily removed (cannot assign the same port to `client` and `metrics`). This will not work with the current monitoring approach ([#119]).
 
 [#119]: https://github.com/stackabletech/opa-operator/pull/119
@@ -90,8 +96,9 @@ All notable changes to this project will be documented in this file.
 - Renamed crd/util to crd::discovery and added deprecated reexport for backwards compatibility ([#103]).
 
 ### Fixed
+
 - Moved `wait_until_crds_present` to operator-binary (preparation for commands) ([#115]).
- 
+
 [#115]: https://github.com/stackabletech/opa-operator/pull/115
 [#103]: https://github.com/stackabletech/opa-operator/pull/103
 
@@ -112,6 +119,7 @@ All notable changes to this project will be documented in this file.
 ## [0.3.0] - 2021-09-20
 
 ### Added
+
 - Added versioning code from operator-rs for up and downgrades ([#86]).
 - Added `ProductVersion` to status ([#86]).
 - Added `Condition` to status ([#86]).
@@ -121,6 +129,7 @@ All notable changes to this project will be documented in this file.
 ## [0.2.0] - 2021-09-14
 
 ### Changed
+
 - **Breaking:** Repository structure was changed and the -server crate renamed to -binary. As part of this change the -server suffix was removed from both the package name for os packages and the name of the executable ([#72]).
 
 ## [0.1.0] - 2021.09.07
