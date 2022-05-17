@@ -1,0 +1,6 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: kubectl cp -n $NAMESPACE ./test-regorule.py  test-regorule-0:/tmp
+  - script: kubectl cp -n $NAMESPACE ./requirements.txt test-regorule-0:/tmp
+  - script: kubectl exec -n $NAMESPACE test-regorule-0 -- pip install --user -r /tmp/requirements.txt

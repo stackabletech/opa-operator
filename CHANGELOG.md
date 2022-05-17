@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - The command line argument `--watch-namespace` for the `run` subcommand or
   the environment variable `WATCH_NAMESPACE` can be used to instruct the
   operator to watch a particular namespace. ([#244])
+- Added `kuttl` tests from `integration-test` repository ([#xxx])
 
 ### Changed
 
@@ -31,6 +32,7 @@ All notable changes to this project will be documented in this file.
 [#252]: https://github.com/stackabletech/opa-operator/pull/252
 [#273]: https://github.com/stackabletech/opa-operator/pull/273
 [#287]: https://github.com/stackabletech/opa-operator/pull/287
+[#xxx]: https://github.com/stackabletech/opa-operator/pull/xxx
 
 ## [0.8.0] - 2022-02-14
 

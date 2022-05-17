@@ -1,0 +1,22 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-regorule
+  labels:
+    app: test-regorule
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-regorule
+  template:
+    metadata:
+      labels:
+        app: test-regorule
+    spec:
+      containers:
+      - name: test-regorule
+        image: python:3.10-slim
+        stdin: true
+        tty: true
