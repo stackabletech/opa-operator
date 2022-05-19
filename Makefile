@@ -33,7 +33,7 @@ docker: docker-build docker-publish
 docker-release: docker-build-latest docker-publish
 
 ## Chart related targets
-compile-chart: version crds config 
+compile-chart: version crds config
 
 chart-clean:
 	rm -rf deploy/helm/opa-operator/configs
