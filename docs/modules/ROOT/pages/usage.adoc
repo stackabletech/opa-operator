@@ -16,7 +16,7 @@ To create a single node OPA (v0.37.2) cluster with Prometheus metrics exposed on
     metadata:
       name: simple-opa
     spec:
-      version: "0.37.2"
+      version: "0.37.2-stackable0.2.0"
       servers:
         roleGroups:
           default:
@@ -24,6 +24,11 @@ To create a single node OPA (v0.37.2) cluster with Prometheus metrics exposed on
               matchLabels:
                 kubernetes.io/os: linux
 ----
+
+Please note that the version you need to specify is not only the version of OPA which you want to roll out, but has to be amended with a Stackable version as shown.
+This Stackable version is the version of the underlying container image which is used to execute the processes.
+For a list of available versions please check our https://repo.stackable.tech/#browse/browse:docker:v2%2Fstackable%2Fdruid%2Ftags[image registry].
+It should generally be safe to simply use the latest image version that is available.
 
 == Bundle Sources
 

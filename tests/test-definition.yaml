@@ -2,7 +2,7 @@
 dimensions:
   - name: opa
     values:
-      - 0.37.2
+      - 0.37.2-stackable0.2.0
 tests:
   - name: smoke
     dimensions:

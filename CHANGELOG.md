@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - `operator-rs` `0.10.0` -> `0.15.0` ([#241], [#244], [#273]).
 - BREAKING: Renamed custom resource from `OpenPolicyAgent` to `OpaCluster` ([#244]).
 - Replace the `tempdir` crate with `tempfile` ([#287]).
+- [BREAKING] Specifying the product version has been changed to adhere to [ADR018](https://docs.stackable.tech/home/contributor/adr/ADR018-product_image_versioning.html) instead of just specifying the product version you will now have to add the Stackable image version as well, so `version: 3.5.8` becomes (for example) `version: 3.5.8-stackable0.1.0` ([#xxx])
 
 ### Removed
 
@@ -33,6 +34,7 @@ All notable changes to this project will be documented in this file.
 [#273]: https://github.com/stackabletech/opa-operator/pull/273
 [#287]: https://github.com/stackabletech/opa-operator/pull/287
 [#289]: https://github.com/stackabletech/opa-operator/pull/289
+[#xxx]: https://github.com/stackabletech/opa-operator/pull/xxx
 
 ## [0.8.0] - 2022-02-14
 

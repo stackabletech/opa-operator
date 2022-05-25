@@ -381,7 +381,7 @@ fn build_server_rolegroup_daemonset(
 ) -> Result<DaemonSet> {
     let opa_version = opa_version(opa)?;
     let image = format!(
-        "docker.stackable.tech/stackable/opa:{}-stackable0",
+        "docker.stackable.tech/stackable/opa:{}",
         opa_version
     );
     let sa_name = format!(
