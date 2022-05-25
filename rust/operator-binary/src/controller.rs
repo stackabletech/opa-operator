@@ -380,10 +380,7 @@ fn build_server_rolegroup_daemonset(
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
 ) -> Result<DaemonSet> {
     let opa_version = opa_version(opa)?;
-    let image = format!(
-        "docker.stackable.tech/stackable/opa:{}",
-        opa_version
-    );
+    let image = format!("docker.stackable.tech/stackable/opa:{}", opa_version);
     let sa_name = format!(
         "{}-{}",
         opa.metadata.name.as_ref().unwrap(),
