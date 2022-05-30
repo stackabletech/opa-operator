@@ -1,5 +1,6 @@
 name: opa
-version: master
+version: nightly
 title: Stackable Operator for OPA
 nav:
   - modules/ROOT/nav.adoc
+prerelease: true
