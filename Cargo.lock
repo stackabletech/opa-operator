@@ -1793,7 +1793,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-bundle-builder"
-version = "0.9.0"
+version = "0.10.0-nightly"
 dependencies = [
  "flate2",
  "futures 0.3.21",
@@ -1812,7 +1812,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-crd"
-version = "0.9.0"
+version = "0.10.0-nightly"
 dependencies = [
  "semver",
  "serde",
@@ -1824,7 +1824,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-operator"
-version = "0.9.0"
+version = "0.10.0-nightly"
 dependencies = [
  "built",
  "clap",
