@@ -3,4 +3,5 @@ kind: TestAssert
 metadata:
   name: install-opa
 commands:
-  - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 300s
+  - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 301s
+    timeout: 300
