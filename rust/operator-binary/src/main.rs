@@ -3,7 +3,7 @@ mod discovery;
 
 use clap::Parser;
 use futures::StreamExt;
-use stackable_opa_crd::OpaCluster;
+use stackable_opa_crd::{OpaCluster, APP_NAME};
 use stackable_operator::cli::ProductOperatorRun;
 use stackable_operator::namespace::WatchNamespace;
 use stackable_operator::{
@@ -16,14 +16,11 @@ use stackable_operator::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
     },
-    kube::{
-        api::ListParams,
-        runtime::{controller::Context, Controller},
-        Api, CustomResourceExt,
-    },
+    kube::{api::ListParams, runtime::Controller, Api, CustomResourceExt},
     logging::controller::report_controller_reconciled,
     product_config::ProductConfigManager,
 };
+use std::sync::Arc;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -46,8 +43,6 @@ struct OpaRun {
 
 #[tokio::main]
 async fn main() -> Result<(), error::Error> {
-    stackable_operator::logging::initialize_logging("OPA_OPERATOR_LOG");
-
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => println!("{}", serde_yaml::to_string(&OpaCluster::crd())?),
@@ -57,8 +52,15 @@ async fn main() -> Result<(), error::Error> {
                 ProductOperatorRun {
                     product_config,
                     watch_namespace,
+                    tracing_target,
                 },
         }) => {
+            stackable_operator::logging::initialize_logging(
+                "OPA_OPERATOR_LOG",
+                APP_NAME,
+                tracing_target,
+            );
+
             stackable_operator::utils::print_startup_string(
                 built_info::PKG_DESCRIPTION,
                 built_info::PKG_VERSION,
@@ -108,7 +110,7 @@ async fn create_controller(
         .run(
             controller::reconcile_opa,
             controller::error_policy,
-            Context::new(controller::Ctx {
+            Arc::new(controller::Ctx {
                 client: client.clone(),
                 product_config,
                 opa_bundle_builder_clusterrole,
