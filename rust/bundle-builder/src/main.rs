@@ -1,26 +1,25 @@
-use flate2::write::GzEncoder;
-use flate2::Compression;
-use futures::FutureExt;
-use futures::StreamExt;
+use flate2::{write::GzEncoder, Compression};
+use futures::{FutureExt, StreamExt};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_operator::client;
-use stackable_operator::error;
-use stackable_operator::k8s_openapi::api::core::v1::ConfigMap;
-use stackable_operator::kube::api::ListParams;
-use stackable_operator::kube::runtime::controller::Action;
-use stackable_operator::kube::runtime::controller::Context;
-use stackable_operator::kube::runtime::Controller;
-use stackable_operator::kube::Api;
-use stackable_operator::logging::controller::report_controller_reconciled;
-use stackable_operator::logging::controller::ReconcilerError;
-use std::env;
-use std::fs::create_dir_all;
-use std::fs::rename;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
+use stackable_operator::logging::TracingTarget;
+use stackable_operator::{
+    client, error,
+    k8s_openapi::api::core::v1::ConfigMap,
+    kube::{
+        api::ListParams,
+        runtime::{controller::Action, Controller},
+        Api,
+    },
+    logging::controller::{report_controller_reconciled, ReconcilerError},
+};
+use std::{
+    env,
+    fs::{create_dir_all, rename, File},
+    io::prelude::*,
+    path::Path,
+    sync::Arc,
+    time::Duration,
+};
 use strum::{EnumDiscriminants, IntoStaticStr};
 use tar::Builder;
 use warp::Filter;
@@ -67,7 +66,11 @@ const BUNDLE_NAME: &str = "bundle.tar.gz";
 
 #[tokio::main]
 async fn main() -> Result<(), error::Error> {
-    stackable_operator::logging::initialize_logging("OPA_BUNDLE_BUILDER_LOG");
+    stackable_operator::logging::initialize_logging(
+        "OPA_BUNDLE_BUILDER_LOG",
+        "opa-bundle-builder",
+        TracingTarget::None,
+    );
 
     let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
 
@@ -84,7 +87,7 @@ async fn main() -> Result<(), error::Error> {
             .run(
                 update_bundle,
                 error_policy,
-                Context::new(Ctx {
+                Arc::new(Ctx {
                     active: BUNDLES_ACTIVE_DIR.to_string(),
                     incoming: BUNDLES_INCOMING_DIR.to_string(),
                     tmp: BUNDLES_TMP_DIR.to_string(),
@@ -136,7 +139,7 @@ fn make_web_server() -> futures::future::IntoStream<impl futures::Future<Output 
 /// before being moved to to [`BUNDLES_ACTIVE_DIR`]/bundle.tar.gz for serving.
 ///
 /// The root of the tar file is always "bundles".
-async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Context<Ctx>) -> Result<Action, Error> {
+async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Arc<Ctx>) -> Result<Action, Error> {
     let name = bundle
         .metadata
         .name
@@ -145,9 +148,9 @@ async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Context<Ctx>) -> Result<Acti
 
     match bundle.data.as_ref() {
         Some(rules) => {
-            let incoming = ctx.get_ref().incoming.as_str();
-            let active = ctx.get_ref().active.as_str();
-            let tmp = ctx.get_ref().tmp.as_str();
+            let incoming = ctx.incoming.as_str();
+            let active = ctx.active.as_str();
+            let tmp = ctx.tmp.as_str();
 
             let temp_full_path = Path::new(incoming).join(Path::new(name.as_str()));
             create_dir_all(&temp_full_path).with_context(|_| OpaBundleDirSnafu)?;
@@ -169,7 +172,7 @@ async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Context<Ctx>) -> Result<Acti
             let mut tar_builder = Builder::new(gz_encoder);
 
             tar_builder
-                .append_dir_all("bundles", ctx.get_ref().incoming.as_str())
+                .append_dir_all("bundles", incoming)
                 .context(AppendToBundleTarFailedSnafu)?;
             tar_builder.finish().context(CreateBundleTarFailedSnafu)?;
 
@@ -182,7 +185,7 @@ async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Context<Ctx>) -> Result<Acti
     Ok(Action::await_change())
 }
 
-pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> Action {
+pub fn error_policy(_error: &Error, _ctx: Arc<Ctx>) -> Action {
     Action::requeue(Duration::from_secs(5))
 }
 
@@ -197,7 +200,6 @@ mod tests {
     use std::sync::Arc;
 
     use stackable_operator::builder::{ConfigMapBuilder, ObjectMetaBuilder};
-    use stackable_operator::kube::runtime::controller::Context;
     use tempfile::TempDir;
 
     #[test]
@@ -217,7 +219,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let context = Context::new(Ctx {
+        let context = Arc::new(Ctx {
             active: String::from(active.to_str().unwrap()),
             incoming: String::from(incoming.to_str().unwrap()),
             tmp: String::from(tmp.to_str().unwrap()),

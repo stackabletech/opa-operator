@@ -22,10 +22,7 @@ use stackable_operator::{
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
     },
-    kube::runtime::{
-        controller::{Action, Context},
-        reflector::ObjectRef,
-    },
+    kube::runtime::{controller::Action, reflector::ObjectRef},
     labels::{role_group_selector_labels, role_selector_labels},
     logging::controller::ReconcilerError,
     product_config::{types::PropertyNameKind, ProductConfigManager},
@@ -124,10 +121,10 @@ impl ReconcilerError for Error {
     }
 }
 
-pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Action> {
+pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(&*opa);
-    let client = ctx.get_ref().client.clone();
+    let client = ctx.client.clone();
     let opa_version = opa_version(&opa)?;
 
     let validated_config = validate_all_roles_and_groups_config(
@@ -147,7 +144,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Ac
             .into(),
         )
         .context(ProductConfigTransformSnafu)?,
-        &ctx.get_ref().product_config,
+        &ctx.product_config,
         false,
         false,
     )
@@ -168,7 +165,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Context<Ctx>) -> Result<Ac
         .context(ApplyRoleServiceSnafu)?;
 
     let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
-        build_opa_builder_serviceaccount(&opa, &ctx.get_ref().opa_bundle_builder_clusterrole)?;
+        build_opa_builder_serviceaccount(&opa, &ctx.opa_bundle_builder_clusterrole)?;
 
     client
         .apply_patch(
@@ -545,7 +542,7 @@ pub fn opa_version(opa: &OpaCluster) -> Result<&str> {
     opa.spec.version.as_deref().context(ObjectHasNoVersionSnafu)
 }
 
-pub fn error_policy(_error: &Error, _ctx: Context<Ctx>) -> Action {
+pub fn error_policy(_error: &Error, _ctx: Arc<Ctx>) -> Action {
     Action::requeue(Duration::from_secs(5))
 }
 
