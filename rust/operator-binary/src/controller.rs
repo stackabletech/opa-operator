@@ -5,12 +5,12 @@ use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME};
 use stackable_operator::builder::SecurityContextBuilder;
+use stackable_operator::cluster_resources::ClusterResources;
 use stackable_operator::k8s_openapi::api::core::v1::{
     EmptyDirVolumeSource, HTTPGetAction, Probe, ServiceAccount,
 };
 use stackable_operator::k8s_openapi::api::rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject};
 use stackable_operator::k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
-use stackable_operator::k8s_openapi::Resource;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
     k8s_openapi::{
@@ -22,7 +22,10 @@ use stackable_operator::{
         },
         apimachinery::pkg::apis::meta::v1::LabelSelector,
     },
-    kube::runtime::{controller::Action, reflector::ObjectRef},
+    kube::{
+        runtime::{controller::Action, reflector::ObjectRef},
+        Resource,
+    },
     labels::{role_group_selector_labels, role_selector_labels},
     logging::controller::ReconcilerError,
     product_config::{types::PropertyNameKind, ProductConfigManager},
@@ -37,6 +40,7 @@ use std::{
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
+const CONTROLLER_NAME: &str = "opa-operator";
 const FIELD_MANAGER_SCOPE: &str = "openpolicyagent";
 
 pub const CONFIG_FILE: &str = "config.yaml";
@@ -62,6 +66,14 @@ pub enum Error {
     ObjectHasNoVersion,
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
+    #[snafu(display("failed to create cluster resources"))]
+    CreateClusterResources {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to delete orphaned resources"))]
+    FinalizeClusterResources {
+        source: stackable_operator::error::Error,
+    },
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
         source: stackable_operator::error::Error,
@@ -154,13 +166,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
+    let mut cluster_resources =
+        ClusterResources::new(APP_NAME, CONTROLLER_NAME, &opa.object_ref(&()))
+            .context(CreateClusterResourcesSnafu)?;
+
     let server_role_service = build_server_role_service(&opa)?;
-    let server_role_service = client
-        .apply_patch(
-            FIELD_MANAGER_SCOPE,
-            &server_role_service,
-            &server_role_service,
-        )
+    let server_role_service = cluster_resources
+        .add(&client, &server_role_service)
         .await
         .context(ApplyRoleServiceSnafu)?;
 
@@ -195,34 +207,40 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         let rg_daemonset = build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config)?;
         let rg_service = build_rolegroup_service(&opa, &rolegroup)?;
 
-        client
-            .apply_patch(FIELD_MANAGER_SCOPE, &rg_configmap, &rg_configmap)
+        cluster_resources
+            .add(&client, &rg_configmap)
             .await
             .with_context(|_| ApplyRoleGroupConfigSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
-        client
-            .apply_patch(FIELD_MANAGER_SCOPE, &rg_daemonset, &rg_daemonset)
+        cluster_resources
+            .add(&client, &rg_daemonset)
             .await
             .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
-        client
-            .apply_patch(FIELD_MANAGER_SCOPE, &rg_service, &rg_service)
+        cluster_resources
+            .add(&client, &rg_service)
             .await
             .with_context(|_| ApplyRoleGroupServiceSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
     }
 
-    for discovery_cm in build_discovery_configmaps(&*opa, &*opa, &server_role_service)
-        .context(BuildDiscoveryConfigSnafu)?
+    for discovery_cm in
+        build_discovery_configmaps(&*opa, CONTROLLER_NAME, &*opa, &server_role_service)
+            .context(BuildDiscoveryConfigSnafu)?
     {
-        client
-            .apply_patch(FIELD_MANAGER_SCOPE, &discovery_cm, &discovery_cm)
+        cluster_resources
+            .add(&client, &discovery_cm)
             .await
             .context(ApplyDiscoveryConfigSnafu)?;
     }
+
+    cluster_resources
+        .finalize(&client)
+        .await
+        .context(FinalizeClusterResourcesSnafu)?;
 
     Ok(Action::await_change())
 }
@@ -239,7 +257,14 @@ fn build_opa_builder_serviceaccount(
             .name(&sa_name)
             .ownerreference_from_resource(opa, None, Some(true))
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
+            .with_recommended_labels(
+                opa,
+                APP_NAME,
+                opa_version(opa)?,
+                CONTROLLER_NAME,
+                &role_name,
+                "global",
+            )
             .build(),
         ..ServiceAccount::default()
     };
@@ -250,16 +275,23 @@ fn build_opa_builder_serviceaccount(
             .name(binding_name)
             .ownerreference_from_resource(opa, None, Some(true))
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
+            .with_recommended_labels(
+                opa,
+                APP_NAME,
+                opa_version(opa)?,
+                CONTROLLER_NAME,
+                &role_name,
+                "global",
+            )
             .build(),
         role_ref: RoleRef {
-            api_group: ClusterRole::GROUP.to_string(),
-            kind: ClusterRole::KIND.to_string(),
+            api_group: ClusterRole::group(&()).to_string(),
+            kind: ClusterRole::kind(&()).to_string(),
             name: opa_bundle_builder_clusterrole.to_string(),
         },
         subjects: Some(vec![Subject {
-            api_group: Some(ServiceAccount::GROUP.to_string()),
-            kind: ServiceAccount::KIND.to_string(),
+            api_group: Some(ServiceAccount::group(&()).to_string()),
+            kind: ServiceAccount::kind(&()).to_string(),
             name: sa_name,
             namespace: sa.metadata.namespace.clone(),
         }]),
@@ -280,7 +312,14 @@ pub fn build_server_role_service(opa: &OpaCluster) -> Result<Service> {
             .name(&role_svc_name)
             .ownerreference_from_resource(opa, None, Some(true))
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(opa, APP_NAME, opa_version(opa)?, &role_name, "global")
+            .with_recommended_labels(
+                opa,
+                APP_NAME,
+                opa_version(opa)?,
+                CONTROLLER_NAME,
+                &role_name,
+                "global",
+            )
             .build(),
         spec: Some(ServiceSpec {
             ports: Some(vec![ServicePort {
@@ -315,6 +354,7 @@ fn build_rolegroup_service(
                 opa,
                 APP_NAME,
                 opa_version(opa)?,
+                CONTROLLER_NAME,
                 &rolegroup.role,
                 &rolegroup.role_group,
             )
@@ -352,6 +392,7 @@ fn build_server_rolegroup_config_map(
                     opa,
                     APP_NAME,
                     opa_version(opa)?,
+                    CONTROLLER_NAME,
                     &rolegroup.role,
                     &rolegroup.role_group,
                 )
@@ -490,6 +531,7 @@ fn build_server_rolegroup_daemonset(
                 opa,
                 APP_NAME,
                 opa_version,
+                CONTROLLER_NAME,
                 &rolegroup_ref.role,
                 &rolegroup_ref.role_group,
             )
@@ -510,6 +552,7 @@ fn build_server_rolegroup_daemonset(
                         opa,
                         APP_NAME,
                         opa_version,
+                        CONTROLLER_NAME,
                         &rolegroup_ref.role,
                         &rolegroup_ref.role_group,
                     )

@@ -28,17 +28,21 @@ pub enum Error {
 /// Builds discovery [`ConfigMap`]s for connecting to a [`OpaCluster`] for all expected scenarios
 pub fn build_discovery_configmaps(
     owner: &impl Resource<DynamicType = ()>,
+    managed_by: &str,
     opa: &OpaCluster,
     svc: &Service,
 ) -> Result<Vec<ConfigMap>, Error> {
     let name = owner.name();
-    Ok(vec![build_discovery_configmap(&name, owner, opa, svc)?])
+    Ok(vec![build_discovery_configmap(
+        &name, owner, managed_by, opa, svc,
+    )?])
 }
 
 /// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`OpaCluster`]
 fn build_discovery_configmap(
     name: &str,
     owner: &impl Resource<DynamicType = ()>,
+    managed_by: &str,
     opa: &OpaCluster,
     svc: &Service,
 ) -> Result<ConfigMap, Error> {
@@ -64,6 +68,7 @@ fn build_discovery_configmap(
                     opa,
                     APP_NAME,
                     opa_version(opa).as_deref().unwrap_or("unknown"),
+                    managed_by,
                     &OpaRole::Server.to_string(),
                     "discovery",
                 )
