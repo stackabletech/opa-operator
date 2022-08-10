@@ -1,0 +1,23 @@
+= First steps
+
+TODO
+
+create this file:
+
+[source,yaml]
+include::example$code/opa.yaml[]
+
+apply it:
+
+[source,bash]
+include::example$code/getting_started.sh[tag=apply-opa-cluster]
+
+opa cluster is there
+
+
+== Rule
+
+[source,yaml]
+----
+include::example$code/simple-rule.yaml[]
+----
