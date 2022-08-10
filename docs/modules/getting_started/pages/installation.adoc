@@ -48,4 +48,4 @@ Helm will deploy the Operator in a Kubernetes Deployment and apply the CRDs for 
 
 == What's next
 
-xref:first_steps.adoc[TODO].
+xref:first_steps.adoc[Deploy OPA, a policy rule and query it].
