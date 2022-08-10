@@ -1,52 +1,68 @@
 = First steps
 
-TODO
+After you went through the xref:installation.adoc[], on this page you will deploy OPA, deploy your first rule and query it from the command line.
 
-create this file:
+== Deploy OPA
+
+To deploy OPA, you just need to create an OpaCluster resource in Kubernetes and the Operator will create OPA instance. Create a file called `opa.yaml` with the following contents:
 
 [source,yaml]
 include::example$code/opa.yaml[]
 
-apply it:
+and apply it:
 
 [source,bash]
 include::example$code/getting_started.sh[tag=apply-opa-cluster]
 
-opa cluster is there
-
+This will create an OPA cluster. The Operator deploys a DaemonSet, so every node in your cluster will have an OPA instance.
 
 == Rule
+
+Now deploy first rule to the Agent. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
 
 [source,yaml]
 ----
 include::example$code/simple-rule.yaml[]
 ----
 
+and apply it:
+
 apply it:
 
 [source,bash]
 include::example$code/getting_started.sh[tag=apply-rule-file]
 
-== make requests
+The Operator will read the rule file, bundle it and publish the bundle to all OPA instances.
+
+== Make requests
+
+Now that you have deployed the rule, you can query OPA for it. First, port-forward the service to connect to OPA:
+
+[source,bash]
+include::example$code/getting_started.sh[tag=port-forwarding]
+
+Then, request the `hello` rule:
 
 [source,bash]
 include::example$code/getting_started.sh[tag=request-hello]
 
-expected response:
+As it was defined in the rule file, the response should be `true`:
 
 [source,json]
 include::example$code/expected_response_hello.json[]
 
-another request
+You can also request the other rule, `world`:
 
 [source,bash]
 include::example$code/getting_started.sh[tag=request-world]
 
-expected response:
+And see a different response:
 
 [source,json]
 include::example$code/expected_response_world.json[]
 
+Great! You've set up OPA, deployed a rule and queried it!
+
 == What's next
 
-TODO
+Have a look at the xref:ROOT:usage.adoc[] page for more configuration options of the Operator.

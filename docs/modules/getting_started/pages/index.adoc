@@ -8,6 +8,7 @@ You will need:
 
 * a Kubernetes cluster
 * kubectl
+* curl
 * optional: Helm
 
 == What's next
