@@ -32,7 +32,7 @@ stackablectl operator install opa=0.10.0-nightly
 # end::stackablectl-install-operators[]
 ;;
 *)
-echo "Need to give 'helm' or 'stackablectl' as an argument for which installation method to use!"
+echo "Need to provide 'helm' or 'stackablectl' as an argument for which installation method to use!"
 exit 1
 ;;
 esac
