@@ -38,7 +38,7 @@ You can also use Helm to install the Operator. Add the Stackable Helm repository
 include::example$code/getting_started.sh[tag=helm-add-repo]
 ----
 
-Then install the Stackable Operators:
+Then install the Stackable OPA Operator:
 [source,bash]
 ----
 include::example$code/getting_started.sh[tag=helm-install-operators]

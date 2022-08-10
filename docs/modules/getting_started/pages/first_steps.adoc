@@ -4,7 +4,7 @@ After you went through the xref:installation.adoc[], on this page you will deplo
 
 == Deploy OPA
 
-To deploy OPA, you just need to create an OpaCluster resource in Kubernetes and the Operator will create OPA instance. Create a file called `opa.yaml` with the following contents:
+To deploy OPA, you just need to create an OpaCluster resource in Kubernetes and the Operator will create the OPA instances. Create a file called `opa.yaml` with the following contents:
 
 [source,yaml]
 include::example$code/opa.yaml[]
@@ -16,9 +16,9 @@ include::example$code/getting_started.sh[tag=apply-opa-cluster]
 
 This will create an OPA cluster. The Operator deploys a DaemonSet, so every node in your cluster will have an OPA instance.
 
-== Rule
+== Deploy a rule
 
-Now deploy first rule to the Agent. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
+Now deploy first link:https://www.openpolicyagent.org/docs/latest/policy-language/[Rego rule] to the Agent. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
 
 [source,yaml]
 ----
@@ -27,16 +27,14 @@ include::example$code/simple-rule.yaml[]
 
 and apply it:
 
-apply it:
-
 [source,bash]
 include::example$code/getting_started.sh[tag=apply-rule-file]
 
 The Operator will read the rule file, bundle it and publish the bundle to all OPA instances.
 
-== Make requests
+== Make policy requests
 
-Now that you have deployed the rule, you can query OPA for it. First, port-forward the service to connect to OPA:
+Now that you have deployed the rule, you can query OPA for it. First, port-forward the service so you can query it from outside the Kubernetes cluster:
 
 [source,bash]
 include::example$code/getting_started.sh[tag=port-forwarding]
