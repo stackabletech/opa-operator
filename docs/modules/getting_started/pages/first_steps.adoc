@@ -21,3 +21,32 @@ opa cluster is there
 ----
 include::example$code/simple-rule.yaml[]
 ----
+
+apply it:
+
+[source,bash]
+include::example$code/getting_started.sh[tag=apply-rule-file]
+
+== make requests
+
+[source,bash]
+include::example$code/getting_started.sh[tag=request-hello]
+
+expected response:
+
+[source,json]
+include::example$code/expected_response_hello.json[]
+
+another request
+
+[source,bash]
+include::example$code/getting_started.sh[tag=request-world]
+
+expected response:
+
+[source,json]
+include::example$code/expected_response_world.json[]
+
+== What's next
+
+TODO

@@ -1,0 +1,6 @@
+---
+helm:
+  repo_name: stackable-dev
+  repo_url: https://repo.stackable.tech/repository/helm-dev/
+versions:
+  opa: 0.10.0-nightly
