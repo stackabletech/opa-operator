@@ -1,0 +1,45 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+  labels:
+    opa.stackable.tech/bundle: "true"
+data:
+  test.rego: |
+    package test
+    
+    hello {
+      true
+    }
+
+    world {
+      false
+    }
+---
+apiVersion: opa.stackable.tech/v1alpha1
+kind: OpaCluster
+metadata:
+  name: opa
+spec:
+  version: {{ test_scenario['values']['opa'] }}
+  servers:
+    config:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 1Gi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+    roleGroups:
+      resources-from-role: {}
+      resources-from-role-group:
+        config:
+          resources:
+            requests:
+              cpu: 300m
+              memory: 3Gi
+            limits:
+              cpu: "3"
+              memory: 3Gi
