@@ -8,3 +8,6 @@ tests:
   - name: smoke
     dimensions:
       - opa
+  - name: resources
+    dimensions:
+      - opa

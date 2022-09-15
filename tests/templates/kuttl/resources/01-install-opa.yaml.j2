@@ -26,20 +26,18 @@ spec:
   servers:
     config:
       resources:
-        requests:
-          cpu: 100m
-          memory: 1Gi
-        limits:
-          cpu: "1"
-          memory: 1Gi
+        cpu:
+          min: 100m
+          max: "1"
+        memory:
+          limit: 1Gi
     roleGroups:
       resources-from-role: {}
       resources-from-role-group:
         config:
           resources:
-            requests:
-              cpu: 300m
-              memory: 3Gi
-            limits:
-              cpu: "3"
-              memory: 3Gi
+            cpu:
+              min: 300m
+              max: "3"
+            memory:
+              limit: 3Gi

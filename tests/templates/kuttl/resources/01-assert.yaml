@@ -1,3 +1,4 @@
+---
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 commands:
@@ -14,14 +15,15 @@ spec:
   template:
     spec:
       containers:
-        - name: opa
-          resources:
-            requests:
-              cpu: 100m
-              memory: 1Gi
-            limits:
-              cpu: "1"
-              memory: 1Gi
+      - name: opa
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1Gi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+      - name: opa-bundle-builder
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -31,11 +33,12 @@ spec:
   template:
     spec:
       containers:
-        - name: opa
-          resources:
-            requests:
-              cpu: 300m
-              memory: 3Gi
-            limits:
-              cpu: "3"
-              memory: 3Gi
+      - name: opa
+        resources:
+          requests:
+            cpu: 300m
+            memory: 3Gi
+          limits:
+            cpu: "3"
+            memory: 3Gi
+      - name: opa-bundle-builder
