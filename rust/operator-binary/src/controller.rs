@@ -3,8 +3,9 @@
 use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME};
+use stackable_opa_crd::{OpaCluster, OpaRole, OpaStorageConfig, APP_NAME};
 use stackable_operator::builder::SecurityContextBuilder;
+use stackable_operator::commons::resources::{NoRuntimeLimits, Resources};
 use stackable_operator::k8s_openapi::api::core::v1::{
     EmptyDirVolumeSource, HTTPGetAction, Probe, ServiceAccount,
 };
@@ -112,6 +113,8 @@ pub enum Error {
     ProductConfigTransform {
         source: stackable_operator::product_config_utils::ConfigError,
     },
+    #[snafu(display("failed to resolve and merge resource config for role and role group"))]
+    FailedToResolveResourceConfig,
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -191,8 +194,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             role_group: rolegroup_name.to_string(),
         };
 
+        let resources = opa
+            .resolve_resource_config_for_role_and_rolegroup(&OpaRole::Server, &rolegroup)
+            .context(FailedToResolveResourceConfigSnafu)?;
+
         let rg_configmap = build_server_rolegroup_config_map(&rolegroup, &opa)?;
-        let rg_daemonset = build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config)?;
+        let rg_daemonset =
+            build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config, &resources)?;
         let rg_service = build_rolegroup_service(&opa, &rolegroup)?;
 
         client
@@ -375,6 +383,7 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     opa: &OpaCluster,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
+    resources: &Resources<OpaStorageConfig, NoRuntimeLimits>,
 ) -> Result<DaemonSet> {
     let opa_version = opa_version(opa)?;
     let image = format!("docker.stackable.tech/stackable/opa:{}", opa_version);
@@ -400,6 +409,7 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
+        .resources(resources.clone().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),

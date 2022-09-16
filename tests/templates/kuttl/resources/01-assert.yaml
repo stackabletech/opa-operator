@@ -1,0 +1,44 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+commands:
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role --timeout 301s
+    timeout: 300
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role-group --timeout 301s
+    timeout: 300
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: opa-server-resources-from-role
+spec:
+  template:
+    spec:
+      containers:
+        - name: opa
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+        - name: opa-bundle-builder
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: opa-server-resources-from-role-group
+spec:
+  template:
+    spec:
+      containers:
+        - name: opa
+          resources:
+            requests:
+              cpu: 300m
+              memory: 3Gi
+            limits:
+              cpu: "3"
+              memory: 3Gi
+        - name: opa-bundle-builder

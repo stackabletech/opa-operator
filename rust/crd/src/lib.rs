@@ -1,8 +1,14 @@
 use serde::{Deserialize, Serialize};
-use stackable_operator::kube::CustomResource;
-use stackable_operator::product_config_utils::{ConfigError, Configuration};
-use stackable_operator::role_utils::Role;
-use stackable_operator::schemars::{self, JsonSchema};
+use stackable_operator::{
+    commons::resources::{CpuLimits, MemoryLimits, NoRuntimeLimits, Resources},
+    config::merge::Merge,
+    k8s_openapi::apimachinery::pkg::api::resource::Quantity,
+    kube::CustomResource,
+    product_config_utils::{ConfigError, Configuration},
+    role_utils::Role,
+    role_utils::RoleGroupRef,
+    schemars::{self, JsonSchema},
+};
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
 
@@ -31,9 +37,31 @@ pub struct OpaSpec {
     pub version: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, Merge, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpaConfig {}
+pub struct OpaStorageConfig {}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaConfig {
+    pub resources: Option<Resources<OpaStorageConfig, NoRuntimeLimits>>,
+}
+
+impl OpaConfig {
+    fn default_resources() -> Resources<OpaStorageConfig, NoRuntimeLimits> {
+        Resources {
+            cpu: CpuLimits {
+                min: Some(Quantity("200m".to_owned())),
+                max: Some(Quantity("2".to_owned())),
+            },
+            memory: MemoryLimits {
+                limit: Some(Quantity("2Gi".to_owned())),
+                runtime_limits: NoRuntimeLimits {},
+            },
+            storage: OpaStorageConfig {},
+        }
+    }
+}
 
 impl Configuration for OpaConfig {
     type Configurable = OpaCluster;
@@ -96,5 +124,41 @@ impl OpaCluster {
             self.server_role_service_name()?,
             self.metadata.namespace.as_ref()?
         ))
+    }
+
+    /// Retrieve and merge resource configs for role and role groups
+    pub fn resolve_resource_config_for_role_and_rolegroup(
+        &self,
+        role: &OpaRole,
+        rolegroup_ref: &RoleGroupRef<OpaCluster>,
+    ) -> Option<Resources<OpaStorageConfig, NoRuntimeLimits>> {
+        // Initialize the result with all default values as baseline
+        let conf_defaults = OpaConfig::default_resources();
+
+        let role = match role {
+            OpaRole::Server => &self.spec.servers,
+        };
+
+        // Retrieve role resource config
+        let mut conf_role: Resources<OpaStorageConfig, NoRuntimeLimits> =
+            role.config.config.resources.clone().unwrap_or_default();
+
+        // Retrieve rolegroup specific resource config
+        let mut conf_rolegroup: Resources<OpaStorageConfig, NoRuntimeLimits> = role
+            .role_groups
+            .get(&rolegroup_ref.role_group)
+            .and_then(|rg| rg.config.config.resources.clone())
+            .unwrap_or_default();
+
+        // Merge more specific configs into default config
+        // Hierarchy is:
+        // 1. RoleGroup
+        // 2. Role
+        // 3. Default
+        conf_role.merge(&conf_defaults);
+        conf_rolegroup.merge(&conf_role);
+
+        tracing::debug!("Merged resource config: {:?}", conf_rolegroup);
+        Some(conf_rolegroup)
     }
 }
