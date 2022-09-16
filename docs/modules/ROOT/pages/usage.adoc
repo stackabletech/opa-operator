@@ -100,7 +100,7 @@ servers:
 
 In this example, each OPA container in the `default` role group will have a maximum of 2 gigabytes of memory. To be more precise, these memory limits apply to the container running OPA but not to any sidecar containers (e.g. the BundleBuilder) that are part of the pod.
 
-A general rule of thumb on how to size the memory for OPA is described https://www.openpolicyagent.org/docs/latest/policy-performance/#resource-utilization[here].
+A general rule of thumb on how to size the memory for OPA is described https://www.openpolicyagent.org/docs/latest/policy-performance/#resource-utilization[in the OPA documentation].
 
 For more details regarding Kubernetes memory requests and limits see: https://kubernetes.io/docs/tasks/configure-pod-container/assign-memory-resource/[Assign Memory Resources to Containers and Pods].
 
@@ -131,12 +131,11 @@ servers:
     default:
       config:
         resources:
-          requests:
-            cpu: 200m
-            memory: 2Gi
-          limits:
-            cpu: "2"
-            memory: 2Gi
+          cpu:
+            min: '200m'
+            max: "2"
+          memory:
+            limit: '2Gi'
 ----
 
 WARNING: The default values are _most likely_ not sufficient to run a proper cluster in production. Please adapt according to your requirements.
