@@ -12,5 +12,12 @@ We ensure local access via an https://kubernetes.io/docs/concepts/services-netwo
 
 == OPA Bundle Builder
 
-Each OPA pod runs a container that watches for `ConfigMap` objects labeled `opa.stackable.tech/bundle`.
-All `ConfigMap`s are bundled together in a single `bundle.tar.gz` file that is served to the colocated OPA container.
+Users can manage the Rego-rules evaluated by an OPA cluster by creating, updating and deleting `ConfigMap` resources.
+
+The role of the bundle builder is to convert these ressources to bundles (`tar.gz` files) that are loaded by OPA regularly.
+The bundle builder runs in a side container of the OPA `Pod`s as a simple HTTP server that OPA uses for Rego-rule ingestion.
+
+Users have to label `ConfigMap` ressources with `opa.stackable.tech/bundle` and provide a `name` property that is used as
+file name to store the rules themselves in the bundle.
+
+NOTE: Kubernetes limits the size of `ConfigMap`s to 1MB. Users have to take this limit into consideration when manging Rego-rules.
