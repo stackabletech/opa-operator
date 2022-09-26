@@ -39,7 +39,7 @@ A connection string for cluster internal OPA requests. Provided the cluster exam
 [subs="attributes"]
     http://{clusterName}.{namespace}.svc.cluster.local:8081/
 
-This connection string points to the base URL (and web UI) of the OPA cluster. In order to query policies you have to configure your product and its OPA url as follows, given the rego package name `{packageName}` and the policy name `{policyName}`:
+This connection string points to the base URL (and web UI) of the OPA cluster. In order to query policies you have to configure your product and its OPA url as follows, given the bundle package name `{packageName}` and the policy name `{policyName}`:
 
 [subs="attributes"]
     http://{clusterName}.{namespace}.svc.cluster.local:8081/v1/data/{packageName}/{policyName}
