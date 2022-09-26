@@ -14,13 +14,13 @@ We ensure local access via an https://kubernetes.io/docs/concepts/services-netwo
 
 Users can manage the Rego-rules evaluated by an OPA cluster by creating, updating and deleting `ConfigMap` resources.
 
-The role of the bundle builder is to convert these ressources to bundles (`tar.gz` files) and make it available as a HTTP endpoint.
+The role of the bundle builder is to convert these ressources to bundles (`tar.gz` files) and make them available as a HTTP endpoint.
 The bundle builder runs in a side container of the OPA `Pod` as a simple HTTP server that OPA querying regularly
 (every 20 to 30 seconds) for updates.
 
-NOTE: Kubernetes limits the size of `ConfigMap`s to 1MB. Users have to take this limit into consideration when manging Rego-rules.
+NOTE: Kubernetes limits the size of `ConfigMap`s to 1MB. Users have to take this limit into consideration when manging policy rules.
 
-Only `ConfigMap`s labeled with `opa.stackable.tech/bundle` are watched by the builder when updating bundles. The name of
+Only ConfigMaps labeled with `opa.stackable.tech/bundle: "true"` are considered by the builder when updating bundles. The name of
 the `data` entries in the `ConfigMap` are used as file names when storing the rules in the bundle.
 
 NOTE: Currently it is the user's responsability to make sure these names do not collide.
