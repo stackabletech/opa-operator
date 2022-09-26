@@ -30,11 +30,38 @@ This Stackable version is the version of the underlying container image which is
 For a list of available versions please check our https://repo.stackable.tech/#browse/browse:docker:v2%2Fstackable%2Fdruid%2Ftags[image registry].
 It should generally be safe to simply use the latest image version that is available.
 
-== Bundle Sources
+== Policy Language
 
-OPA bundles are generated from `ConfigMap` objects by a side car container running along side the OPA server.
+Users can define policies by using Rego, OPAs https://www.openpolicyagent.org/docs/latest/policy-language/[policy language].
 
-Alternatively, the OPA servers can load bundles from a remote server when a `regoRuleReference` is configured in the role group's `config` section.
+Policy definitionas are deployed as `ConfigMap` resources as described in xref:implementation-notes.adoc[implementation notes].
+
+Here is an example:
+
+[source,yaml]
+----
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+  labels:
+    opa.stackable.tech/bundle: "true" # <1>
+data:
+  test.rego: | # <2>
+    package test
+
+    hello {
+      true
+    }
+
+    world {
+      false
+    }
+----
+<1> Mark this `ConfigMap` as a bundle source.
+<2> `test.rego` is the file name to use inside the bundle for these rules.
+
 
 == Monitoring
 
