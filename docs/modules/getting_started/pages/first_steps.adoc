@@ -16,9 +16,9 @@ include::example$code/getting_started.sh[tag=apply-opa-cluster]
 
 This will create an OPA cluster. The Operator deploys a DaemonSet, so every node in your cluster will have an OPA instance.
 
-== Deploy a rule
+== Deploy a policy rule
 
-Now deploy first link:https://www.openpolicyagent.org/docs/latest/policy-language/[Rego rule] to the Agent. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
+Now deploy the first link:https://www.openpolicyagent.org/docs/latest/policy-language/[policy rule] to OPA. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
 
 [source,yaml]
 ----
