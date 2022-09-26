@@ -23,4 +23,4 @@ NOTE: Kubernetes limits the size of `ConfigMap`s to 1MB. Users have to take this
 Only ConfigMaps labeled with `opa.stackable.tech/bundle: "true"` are considered by the builder when updating bundles. The name of
 the `data` entries in the `ConfigMap` are used as file names when storing the rules in the bundle.
 
-NOTE: Currently it is the user's responsability to make sure these names do not collide.
+NOTE: Currently it is the user's responsibility to make sure these names do not collide (as they will override each other).
