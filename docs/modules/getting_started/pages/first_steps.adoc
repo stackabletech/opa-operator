@@ -18,7 +18,7 @@ This will create an OPA cluster. The Operator deploys a DaemonSet, so every node
 
 == Deploy a policy rule
 
-Now deploy first link:https://www.openpolicyagent.org/docs/latest/policy-language/[policy rule] to the Agent. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
+Now deploy the first link:https://www.openpolicyagent.org/docs/latest/policy-language/[policy rule] to OPA. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
 
 [source,yaml]
 ----
