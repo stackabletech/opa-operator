@@ -8,9 +8,11 @@ All notable changes to this project will be documented in this file.
 
 - CPU and memory limits are now configurable ([#347]).
 - Better documentation on the bundle builder ([#350])
+- Support OPA 0.45.0 ([#360]).
 
 [#347]: https://github.com/stackabletech/opa-operator/pull/347
 [#350]: https://github.com/stackabletech/opa-operator/pull/350
+[#360]: https://github.com/stackabletech/opa-operator/pull/360
 
 ## [0.10.0] - 2022-09-06
 
