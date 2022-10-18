@@ -33,13 +33,7 @@ allow = [
     "Unicode-DFS-2016",
     "Zlib"
 ]
-
-exceptions = [
-    { name = "stackable-opa-crd", allow = ["OSL-3.0"] },
-    { name = "stackable-opa-operator", allow = ["OSL-3.0"] },
-    { name = "stackable-opa-operator-binary", allow = ["OSL-3.0"] },
-    { name = "stackable-opa-bundle-builder", allow = ["OSL-3.0"] },
-    ]
+private = { ignore = true }
 
 [[licenses.clarify]]
 name = "ring"
