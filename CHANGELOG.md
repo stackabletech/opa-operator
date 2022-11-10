@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Updated stackable image versions ([#374]).
+
+[#374]: https://github.com/stackabletech/opa-operator/pull/374
+
 ## [0.11.0] - 2022-11-07
 
 ### Added
