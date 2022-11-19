@@ -1,7 +1,6 @@
 use flate2::{write::GzEncoder, Compression};
 use futures::{FutureExt, StreamExt};
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_operator::logging::TracingTarget;
 use stackable_operator::{
     client, error,
     k8s_openapi::api::core::v1::ConfigMap,
@@ -10,7 +9,10 @@ use stackable_operator::{
         runtime::{controller::Action, Controller},
         Api,
     },
-    logging::controller::{report_controller_reconciled, ReconcilerError},
+    logging::{
+        controller::{report_controller_reconciled, ReconcilerError},
+        TracingTarget,
+    },
 };
 use std::{
     env,
@@ -23,6 +25,8 @@ use std::{
 use strum::{EnumDiscriminants, IntoStaticStr};
 use tar::Builder;
 use warp::Filter;
+
+const BUNDLE_BUILDER_CONTROLLER_NAME: &str = "bundlebuilder";
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(IntoStaticStr))]
@@ -72,7 +76,7 @@ async fn main() -> Result<(), error::Error> {
         TracingTarget::None,
     );
 
-    let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
+    let client = client::create_client(Some(OPERATOR_NAME.to_string())).await?;
 
     match env::var(WATCH_NAMESPACE_ENV) {
         Ok(namespace) => {
@@ -82,7 +86,7 @@ async fn main() -> Result<(), error::Error> {
 
             let controller = Controller::new(
                 configmaps_api,
-                ListParams::default().labels("opa.stackable.tech/bundle"),
+                ListParams::default().labels(&format!("{OPERATOR_NAME}/bundle")),
             )
             .run(
                 update_bundle,
@@ -94,7 +98,11 @@ async fn main() -> Result<(), error::Error> {
                 }),
             )
             .map(|res| {
-                report_controller_reconciled(&client, "opaclusters.opa.stackable.tech", &res)
+                report_controller_reconciled(
+                    &client,
+                    &format!("{BUNDLE_BUILDER_CONTROLLER_NAME}.{OPERATOR_NAME}"),
+                    &res,
+                )
             });
 
             futures::stream::select(controller, web_server)

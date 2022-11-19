@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
+use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
-    commons::resources::{CpuLimits, MemoryLimits, NoRuntimeLimits, Resources},
-    config::merge::Merge,
+    commons::resources::{
+        CpuLimitsFragment, MemoryLimitsFragment, NoRuntimeLimits, NoRuntimeLimitsFragment,
+        Resources, ResourcesFragment,
+    },
+    config::{fragment, fragment::Fragment, fragment::ValidationError, merge::Merge},
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
     product_config_utils::{ConfigError, Configuration},
@@ -14,6 +18,14 @@ use strum::{Display, EnumIter, EnumString};
 
 pub const APP_NAME: &str = "opa";
 pub const CONFIG_FILE: &str = "config.yaml";
+
+#[derive(Snafu, Debug)]
+pub enum Error {
+    #[snafu(display("object defines no version"))]
+    ObjectHasNoVersion,
+    #[snafu(display("fragment validation failure"))]
+    FragmentValidationFailure { source: ValidationError },
+}
 
 #[derive(Clone, CustomResource, Debug, Deserialize, JsonSchema, Serialize)]
 #[kube(
@@ -37,28 +49,40 @@ pub struct OpaSpec {
     pub version: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, Merge, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, JsonSchema, PartialEq, Fragment)]
+#[fragment_attrs(
+    derive(
+        Clone,
+        Debug,
+        Default,
+        Deserialize,
+        Merge,
+        JsonSchema,
+        PartialEq,
+        Serialize
+    ),
+    serde(rename_all = "camelCase")
+)]
 pub struct OpaStorageConfig {}
 
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfig {
-    pub resources: Option<Resources<OpaStorageConfig, NoRuntimeLimits>>,
+    pub resources: Option<ResourcesFragment<OpaStorageConfig, NoRuntimeLimits>>,
 }
 
 impl OpaConfig {
-    fn default_resources() -> Resources<OpaStorageConfig, NoRuntimeLimits> {
-        Resources {
-            cpu: CpuLimits {
+    fn default_resources() -> ResourcesFragment<OpaStorageConfig, NoRuntimeLimits> {
+        ResourcesFragment {
+            cpu: CpuLimitsFragment {
                 min: Some(Quantity("200m".to_owned())),
                 max: Some(Quantity("2".to_owned())),
             },
-            memory: MemoryLimits {
+            memory: MemoryLimitsFragment {
                 limit: Some(Quantity("2Gi".to_owned())),
-                runtime_limits: NoRuntimeLimits {},
+                runtime_limits: NoRuntimeLimitsFragment {},
             },
-            storage: OpaStorageConfig {},
+            storage: OpaStorageConfigFragment {},
         }
     }
 }
@@ -112,6 +136,14 @@ pub enum OpaRole {
 }
 
 impl OpaCluster {
+    /// The image version provided in the `spec.version` field
+    pub fn image_version(&self) -> Result<&str, Error> {
+        self.spec
+            .version
+            .as_deref()
+            .context(ObjectHasNoVersionSnafu)
+    }
+
     /// The name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_name(&self) -> Option<String> {
         self.metadata.name.clone()
@@ -131,7 +163,7 @@ impl OpaCluster {
         &self,
         role: &OpaRole,
         rolegroup_ref: &RoleGroupRef<OpaCluster>,
-    ) -> Option<Resources<OpaStorageConfig, NoRuntimeLimits>> {
+    ) -> Result<Resources<OpaStorageConfig, NoRuntimeLimits>, Error> {
         // Initialize the result with all default values as baseline
         let conf_defaults = OpaConfig::default_resources();
 
@@ -140,11 +172,11 @@ impl OpaCluster {
         };
 
         // Retrieve role resource config
-        let mut conf_role: Resources<OpaStorageConfig, NoRuntimeLimits> =
+        let mut conf_role: ResourcesFragment<OpaStorageConfig, NoRuntimeLimits> =
             role.config.config.resources.clone().unwrap_or_default();
 
         // Retrieve rolegroup specific resource config
-        let mut conf_rolegroup: Resources<OpaStorageConfig, NoRuntimeLimits> = role
+        let mut conf_rolegroup: ResourcesFragment<OpaStorageConfig, NoRuntimeLimits> = role
             .role_groups
             .get(&rolegroup_ref.role_group)
             .and_then(|rg| rg.config.config.resources.clone())
@@ -159,6 +191,6 @@ impl OpaCluster {
         conf_rolegroup.merge(&conf_role);
 
         tracing::debug!("Merged resource config: {:?}", conf_rolegroup);
-        Some(conf_rolegroup)
+        fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
     }
 }

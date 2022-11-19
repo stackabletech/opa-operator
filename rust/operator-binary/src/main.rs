@@ -1,13 +1,13 @@
 mod controller;
 mod discovery;
 
+use crate::controller::OPA_CONTROLLER_NAME;
+
 use clap::Parser;
 use futures::StreamExt;
 use stackable_opa_crd::{OpaCluster, APP_NAME};
-use stackable_operator::cli::ProductOperatorRun;
-use stackable_operator::namespace::WatchNamespace;
 use stackable_operator::{
-    cli::Command,
+    cli::{Command, ProductOperatorRun},
     client,
     client::Client,
     error,
@@ -16,15 +16,19 @@ use stackable_operator::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
     },
-    kube::{api::ListParams, runtime::Controller, Api, CustomResourceExt},
+    kube::{api::ListParams, runtime::Controller, Api},
     logging::controller::report_controller_reconciled,
+    namespace::WatchNamespace,
     product_config::ProductConfigManager,
+    CustomResourceExt,
 };
 use std::sync::Arc;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
+
+const OPERATOR_NAME: &str = "opa.stackable.tech";
 
 #[derive(Parser)]
 #[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
@@ -45,7 +49,9 @@ struct OpaRun {
 async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
-        Command::Crd => println!("{}", serde_yaml::to_string(&OpaCluster::crd())?),
+        Command::Crd => {
+            OpaCluster::print_yaml_schema()?;
+        }
         Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
             common:
@@ -73,7 +79,8 @@ async fn main() -> Result<(), error::Error> {
                 "deploy/config-spec/properties.yaml",
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
-            let client = client::create_client(Some("opa.stackable.tech".to_string())).await?;
+
+            let client = client::create_client(Some(OPERATOR_NAME.to_string())).await?;
             create_controller(
                 client,
                 product_config,
@@ -117,7 +124,11 @@ async fn create_controller(
             }),
         )
         .map(|res| {
-            report_controller_reconciled(&client, "openpolicyagents.opa.stackable.tech", &res)
+            report_controller_reconciled(
+                &client,
+                &format!("{OPA_CONTROLLER_NAME}.{OPERATOR_NAME}"),
+                &res,
+            )
         })
         .collect::<()>()
         .await;
