@@ -49,6 +49,7 @@ pub struct OpaSpec {
     pub version: Option<String>,
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, JsonSchema, PartialEq, Fragment)]
 #[fragment_attrs(
     derive(
