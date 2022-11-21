@@ -1,12 +1,12 @@
+use crate::controller::{build_recommended_labels, APP_PORT};
+
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaCluster, OpaRole, APP_NAME};
+use stackable_opa_crd::{OpaCluster, OpaRole};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ObjectMetaBuilder},
     k8s_openapi::api::core::v1::{ConfigMap, Service},
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
 };
-
-use crate::controller::{opa_version, APP_PORT};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -19,6 +19,8 @@ pub enum Error {
     NoName,
     #[snafu(display("object has no namespace associated"))]
     NoNamespace,
+    #[snafu(display("object has no version associated"))]
+    NoVersion { source: stackable_opa_crd::Error },
     #[snafu(display("failed to build ConfigMap"))]
     BuildConfigMap {
         source: stackable_operator::error::Error,
@@ -31,7 +33,7 @@ pub fn build_discovery_configmaps(
     opa: &OpaCluster,
     svc: &Service,
 ) -> Result<Vec<ConfigMap>, Error> {
-    let name = owner.name();
+    let name = owner.name_any();
     Ok(vec![build_discovery_configmap(&name, owner, opa, svc)?])
 }
 
@@ -60,13 +62,12 @@ fn build_discovery_configmap(
                 .with_context(|_| ObjectMissingMetadataForOwnerRefSnafu {
                     opa: ObjectRef::from_obj(opa),
                 })?
-                .with_recommended_labels(
+                .with_recommended_labels(build_recommended_labels(
                     opa,
-                    APP_NAME,
-                    opa_version(opa).as_deref().unwrap_or("unknown"),
+                    opa.image_version().context(NoVersionSnafu)?,
                     &OpaRole::Server.to_string(),
                     "discovery",
-                )
+                ))
                 .build(),
         )
         .add_data("OPA", url)

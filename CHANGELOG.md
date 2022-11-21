@@ -7,8 +7,10 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Updated stackable image versions ([#374]).
+- `operator-rs` `0.22.0` -> `0.27.1` ([#377]).
 
 [#374]: https://github.com/stackabletech/opa-operator/pull/374
+[#377]: https://github.com/stackabletech/opa-operator/pull/377
 
 ## [0.11.0] - 2022-11-07
 
