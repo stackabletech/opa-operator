@@ -1994,6 +1994,7 @@ dependencies = [
  "pin-project",
  "semver",
  "snafu",
+ "stackable-opa-crd",
  "stackable-operator",
  "strum",
  "tar",

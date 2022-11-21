@@ -5,7 +5,7 @@ use crate::controller::OPA_CONTROLLER_NAME;
 
 use clap::Parser;
 use futures::StreamExt;
-use stackable_opa_crd::{OpaCluster, APP_NAME};
+use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
     client,
@@ -27,8 +27,6 @@ use std::sync::Arc;
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
-
-const OPERATOR_NAME: &str = "opa.stackable.tech";
 
 #[derive(Parser)]
 #[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]

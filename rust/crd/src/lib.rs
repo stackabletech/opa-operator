@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
 
 pub const APP_NAME: &str = "opa";
+pub const OPERATOR_NAME: &str = "opa.stackable.tech";
+
 pub const CONFIG_FILE: &str = "config.yaml";
 
 #[derive(Snafu, Debug)]
@@ -52,6 +54,7 @@ pub struct OpaSpec {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, JsonSchema, PartialEq, Fragment)]
 #[fragment_attrs(
+    allow(clippy::derive_partial_eq_without_eq),
     derive(
         Clone,
         Debug,
@@ -66,6 +69,7 @@ pub struct OpaSpec {
 )]
 pub struct OpaStorageConfig {}
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfig {

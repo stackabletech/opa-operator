@@ -1,6 +1,7 @@
 use flate2::{write::GzEncoder, Compression};
 use futures::{FutureExt, StreamExt};
 use snafu::{OptionExt, ResultExt, Snafu};
+use stackable_opa_crd::OPERATOR_NAME;
 use stackable_operator::{
     client, error,
     k8s_openapi::api::core::v1::ConfigMap,
@@ -80,7 +81,7 @@ async fn main() -> Result<(), error::Error> {
 
     match env::var(WATCH_NAMESPACE_ENV) {
         Ok(namespace) => {
-            let configmaps_api: Api<ConfigMap> = client.get_namespaced_api(namespace.as_ref());
+            let configmaps_api: Api<ConfigMap> = client.get_api(namespace.as_ref());
 
             let web_server = make_web_server();
 
@@ -193,7 +194,7 @@ async fn update_bundle(bundle: Arc<ConfigMap>, ctx: Arc<Ctx>) -> Result<Action, 
     Ok(Action::await_change())
 }
 
-pub fn error_policy(_error: &Error, _ctx: Arc<Ctx>) -> Action {
+pub fn error_policy<T>(_obj: Arc<T>, _error: &Error, _ctx: Arc<Ctx>) -> Action {
     Action::requeue(Duration::from_secs(5))
 }
 

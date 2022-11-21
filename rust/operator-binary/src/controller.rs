@@ -2,10 +2,9 @@
 
 use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
-use crate::OPERATOR_NAME;
 
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaCluster, OpaRole, OpaStorageConfig, APP_NAME};
+use stackable_opa_crd::{OpaCluster, OpaRole, OpaStorageConfig, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     builder::{
         ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,

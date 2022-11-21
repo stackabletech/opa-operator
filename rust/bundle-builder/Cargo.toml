@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "0.27.1" }
+stackable-opa-crd = { path = "../crd" }
 
 futures = { version = "0.3", features = ["compat"] }
 semver = "1.0"
