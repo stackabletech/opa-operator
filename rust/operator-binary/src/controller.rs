@@ -5,11 +5,9 @@ use crate::discovery::{self, build_discovery_configmaps};
 
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, OpaRole, OpaStorageConfig, APP_NAME, OPERATOR_NAME};
+use stackable_operator::k8s_openapi::api::core::v1::PodSecurityContext;
 use stackable_operator::{
-    builder::{
-        ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
-        SecurityContextBuilder,
-    },
+    builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
     commons::resources::{NoRuntimeLimits, Resources},
     k8s_openapi::{
         api::{
@@ -481,19 +479,12 @@ fn build_server_rolegroup_daemonset(
             "-x".to_string(),
             "-c".to_string(),
             [
-                format!("mkdir -p {}", BUNDLES_ACTIVE_DIR),
-                format!("mkdir -p {}", BUNDLES_INCOMING_DIR),
-                format!("mkdir -p {}", BUNDLES_TMP_DIR),
-                format!("chown -R stackable:stackable {}", BUNDLES_ACTIVE_DIR),
-                format!("chown -R stackable:stackable {}", BUNDLES_INCOMING_DIR),
-                format!("chown -R stackable:stackable {}", BUNDLES_TMP_DIR),
-                format!("chmod -R a=,u=rwX {}", BUNDLES_ACTIVE_DIR),
-                format!("chmod -R a=,u=rwX {}", BUNDLES_INCOMING_DIR),
-                format!("chmod -R a=,u=rwX {}", BUNDLES_TMP_DIR),
+                format!("mkdir -p {BUNDLES_ACTIVE_DIR}"),
+                format!("mkdir -p {BUNDLES_INCOMING_DIR}"),
+                format!("mkdir -p {BUNDLES_TMP_DIR}"),
             ]
             .join(" && "),
         ])
-        .security_context(SecurityContextBuilder::run_as_root())
         .add_volume_mount("bundles", "/bundles")
         .build();
 
@@ -546,6 +537,12 @@ fn build_server_rolegroup_daemonset(
                     ..Volume::default()
                 })
                 .service_account_name(sa_name)
+                .security_context(PodSecurityContext {
+                    run_as_user: Some(1000),
+                    run_as_group: Some(1000),
+                    fs_group: Some(1000),
+                    ..PodSecurityContext::default()
+                })
                 .build_template(),
             ..DaemonSetSpec::default()
         }),
