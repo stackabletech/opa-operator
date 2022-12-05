@@ -548,6 +548,7 @@ fn build_server_rolegroup_daemonset(
                         &rolegroup_ref.role_group,
                     ))
                 })
+                .image_pull_secrets_from_product_image(resolved_product_image)
                 .add_container(container_opa)
                 .add_container(container_bundle_builder)
                 .add_init_container(init_container)
