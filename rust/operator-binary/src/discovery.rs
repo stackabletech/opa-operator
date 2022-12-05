@@ -20,8 +20,6 @@ pub enum Error {
     NoName,
     #[snafu(display("object has no namespace associated"))]
     NoNamespace,
-    #[snafu(display("object has no version associated"))]
-    NoVersion { source: stackable_opa_crd::Error },
     #[snafu(display("failed to build ConfigMap"))]
     BuildConfigMap {
         source: stackable_operator::error::Error,

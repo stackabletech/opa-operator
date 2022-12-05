@@ -62,8 +62,6 @@ pub struct Ctx {
 #[strum_discriminants(derive(IntoStaticStr))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object defines no version"))]
-    ObjectHasNoVersion { source: stackable_opa_crd::Error },
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
     #[snafu(display("failed to apply role Service"))]

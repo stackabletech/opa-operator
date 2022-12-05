@@ -26,8 +26,6 @@ pub const CONFIG_FILE: &str = "config.yaml";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("object defines no version"))]
-    ObjectHasNoVersion,
     #[snafu(display("fragment validation failure"))]
     FragmentValidationFailure { source: ValidationError },
 }
