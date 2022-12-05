@@ -435,8 +435,7 @@ fn build_server_rolegroup_daemonset(
         .collect::<Vec<_>>();
     let container_opa = ContainerBuilder::new("opa")
         .expect("invalid hard-coded container name")
-        .image(resolved_product_image.image.clone())
-        .image_pull_policy(resolved_product_image.image_pull_policy.clone())
+        .image_from_product_image(resolved_product_image)
         .command(build_opa_start_command())
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
