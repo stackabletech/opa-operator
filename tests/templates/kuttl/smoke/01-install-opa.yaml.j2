@@ -22,7 +22,9 @@ kind: OpaCluster
 metadata:
   name: test-opa
 spec:
-  version: {{ test_scenario['values']['opa'] }}
+  image:
+    productVersion: "{{ test_scenario['values']['opa'].split('-stackable')[0] }}"
+    stackableVersion: "{{ test_scenario['values']['opa'].split('-stackable')[1] }}"
   servers:
     roleGroups:
       default:
