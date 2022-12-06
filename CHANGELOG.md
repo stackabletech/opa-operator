@@ -9,10 +9,12 @@ All notable changes to this project will be documented in this file.
 - Updated stackable image versions ([#374]).
 - `operator-rs` `0.22.0` -> `0.27.1` ([#377]).
 - Don't run init container as root and avoid chmod and chowning ([#382]).
+- [BREAKING] Use Product image selection instead of version. `spec.version` has been replaced by `spec.image` ([#385]).
 
 [#374]: https://github.com/stackabletech/opa-operator/pull/374
 [#377]: https://github.com/stackabletech/opa-operator/pull/377
 [#382]: https://github.com/stackabletech/opa-operator/pull/382
+[#385]: https://github.com/stackabletech/opa-operator/pull/385
 
 ## [0.11.0] - 2022-11-07
 

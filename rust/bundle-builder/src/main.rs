@@ -33,8 +33,6 @@ const BUNDLE_BUILDER_CONTROLLER_NAME: &str = "bundlebuilder";
 #[strum_discriminants(derive(IntoStaticStr))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object defines no version"))]
-    ObjectHasNoVersion,
     #[snafu(display("opa bundle has no name"))]
     OpaBundleHasNoName,
     #[snafu(display("opa bundle dir error"))]

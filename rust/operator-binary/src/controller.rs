@@ -5,16 +5,19 @@ use crate::discovery::{self, build_discovery_configmaps};
 
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, OpaRole, OpaStorageConfig, APP_NAME, OPERATOR_NAME};
-use stackable_operator::k8s_openapi::api::core::v1::PodSecurityContext;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
-    commons::resources::{NoRuntimeLimits, Resources},
+    commons::{
+        product_image_selection::ResolvedProductImage,
+        resources::{NoRuntimeLimits, Resources},
+    },
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
                 ConfigMap, ConfigMapVolumeSource, EmptyDirVolumeSource, EnvVar, HTTPGetAction,
-                Probe, Service, ServiceAccount, ServicePort, ServiceSpec, Volume,
+                PodSecurityContext, Probe, Service, ServiceAccount, ServicePort, ServiceSpec,
+                Volume,
             },
             rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject},
         },
@@ -47,6 +50,8 @@ pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 
+const DOCKER_IMAGE_BASE_NAME: &str = "opa";
+
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
@@ -57,8 +62,6 @@ pub struct Ctx {
 #[strum_discriminants(derive(IntoStaticStr))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
-    #[snafu(display("object defines no version"))]
-    ObjectHasNoVersion { source: stackable_opa_crd::Error },
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
     #[snafu(display("failed to apply role Service"))]
@@ -126,10 +129,10 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(&*opa);
     let client = ctx.client.clone();
-    let opa_version = opa.image_version().context(ObjectHasNoVersionSnafu)?;
+    let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
 
     let validated_config = validate_all_roles_and_groups_config(
-        opa_version,
+        &resolved_product_image.product_version,
         &transform_all_roles_to_config(
             &*opa,
             [(
@@ -155,7 +158,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
-    let server_role_service = build_server_role_service(&opa)?;
+    let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
     let server_role_service = client
         .apply_patch(
             OPA_CONTROLLER_NAME,
@@ -166,7 +169,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .context(ApplyRoleServiceSnafu)?;
 
     let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
-        build_opa_builder_serviceaccount(&opa, &ctx.opa_bundle_builder_clusterrole)?;
+        build_opa_builder_serviceaccount(
+            &opa,
+            &resolved_product_image,
+            &ctx.opa_bundle_builder_clusterrole,
+        )?;
 
     client
         .apply_patch(
@@ -196,10 +203,16 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .resolve_resource_config_for_role_and_rolegroup(&OpaRole::Server, &rolegroup)
             .context(FailedToResolveResourceConfigSnafu)?;
 
-        let rg_configmap = build_server_rolegroup_config_map(&rolegroup, &opa)?;
-        let rg_daemonset =
-            build_server_rolegroup_daemonset(&rolegroup, &opa, rolegroup_config, &resources)?;
-        let rg_service = build_rolegroup_service(&opa, &rolegroup)?;
+        let rg_configmap =
+            build_server_rolegroup_config_map(&opa, &resolved_product_image, &rolegroup)?;
+        let rg_daemonset = build_server_rolegroup_daemonset(
+            &opa,
+            &resolved_product_image,
+            &rolegroup,
+            rolegroup_config,
+            &resources,
+        )?;
+        let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
 
         client
             .apply_patch(OPA_CONTROLLER_NAME, &rg_configmap, &rg_configmap)
@@ -221,8 +234,9 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             })?;
     }
 
-    for discovery_cm in build_discovery_configmaps(&*opa, &*opa, &server_role_service)
-        .context(BuildDiscoveryConfigSnafu)?
+    for discovery_cm in
+        build_discovery_configmaps(&*opa, &*opa, &resolved_product_image, &server_role_service)
+            .context(BuildDiscoveryConfigSnafu)?
     {
         client
             .apply_patch(OPA_CONTROLLER_NAME, &discovery_cm, &discovery_cm)
@@ -235,9 +249,9 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
 
 fn build_opa_builder_serviceaccount(
     opa: &OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
     opa_bundle_builder_clusterrole: &str,
 ) -> Result<(ServiceAccount, RoleBinding)> {
-    let version = opa.image_version().context(ObjectHasNoVersionSnafu)?;
     let role_name = OpaRole::Server.to_string();
     let sa_name = format!("{}-{}", opa.metadata.name.as_ref().unwrap(), role_name);
     let sa = ServiceAccount {
@@ -246,7 +260,12 @@ fn build_opa_builder_serviceaccount(
             .name(&sa_name)
             .ownerreference_from_resource(opa, None, Some(true))
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(opa, version, &role_name, "global"))
+            .with_recommended_labels(build_recommended_labels(
+                opa,
+                &resolved_product_image.app_version_label,
+                &role_name,
+                "global",
+            ))
             .build(),
         ..ServiceAccount::default()
     };
@@ -257,7 +276,12 @@ fn build_opa_builder_serviceaccount(
             .name(binding_name)
             .ownerreference_from_resource(opa, None, Some(true))
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(opa, version, &role_name, "global"))
+            .with_recommended_labels(build_recommended_labels(
+                opa,
+                &resolved_product_image.app_version_label,
+                &role_name,
+                "global",
+            ))
             .build(),
         role_ref: RoleRef {
             api_group: ClusterRole::GROUP.to_string(),
@@ -276,7 +300,10 @@ fn build_opa_builder_serviceaccount(
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
-pub fn build_server_role_service(opa: &OpaCluster) -> Result<Service> {
+pub fn build_server_role_service(
+    opa: &OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
+) -> Result<Service> {
     let role_name = OpaRole::Server.to_string();
     let role_svc_name = opa
         .server_role_service_name()
@@ -289,7 +316,7 @@ pub fn build_server_role_service(opa: &OpaCluster) -> Result<Service> {
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
             .with_recommended_labels(build_recommended_labels(
                 opa,
-                opa.image_version().context(ObjectHasNoVersionSnafu)?,
+                &resolved_product_image.app_version_label,
                 &role_name,
                 "global",
             ))
@@ -315,6 +342,7 @@ pub fn build_server_role_service(opa: &OpaCluster) -> Result<Service> {
 /// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
 fn build_rolegroup_service(
     opa: &OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<OpaCluster>,
 ) -> Result<Service> {
     Ok(Service {
@@ -325,7 +353,7 @@ fn build_rolegroup_service(
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
             .with_recommended_labels(build_recommended_labels(
                 opa,
-                opa.image_version().context(ObjectHasNoVersionSnafu)?,
+                &resolved_product_image.app_version_label,
                 &rolegroup.role,
                 &rolegroup.role_group,
             ))
@@ -349,8 +377,9 @@ fn build_rolegroup_service(
 
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the administrator
 fn build_server_rolegroup_config_map(
-    rolegroup: &RoleGroupRef<OpaCluster>,
     opa: &OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
+    rolegroup: &RoleGroupRef<OpaCluster>,
 ) -> Result<ConfigMap> {
     ConfigMapBuilder::new()
         .metadata(
@@ -361,7 +390,7 @@ fn build_server_rolegroup_config_map(
                 .context(ObjectMissingMetadataForOwnerRefSnafu)?
                 .with_recommended_labels(build_recommended_labels(
                     opa,
-                    opa.image_version().context(ObjectHasNoVersionSnafu)?,
+                    &resolved_product_image.app_version_label,
                     &rolegroup.role,
                     &rolegroup.role_group,
                 ))
@@ -382,13 +411,12 @@ fn build_server_rolegroup_config_map(
 /// We run an OPA on each node, because we want to avoid requiring network roundtrips for services making
 /// policy queries (which are often chained in serial, and block other tasks in the products).
 fn build_server_rolegroup_daemonset(
-    rolegroup_ref: &RoleGroupRef<OpaCluster>,
     opa: &OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
+    rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     resources: &Resources<OpaStorageConfig, NoRuntimeLimits>,
 ) -> Result<DaemonSet> {
-    let opa_version = opa.image_version().context(ObjectHasNoVersionSnafu)?;
-    let image = format!("docker.stackable.tech/stackable/opa:{}", opa_version);
     let sa_name = format!(
         "{}-{}",
         opa.metadata.name.as_ref().unwrap(),
@@ -407,7 +435,7 @@ fn build_server_rolegroup_daemonset(
         .collect::<Vec<_>>();
     let container_opa = ContainerBuilder::new("opa")
         .expect("invalid hard-coded container name")
-        .image(image)
+        .image_from_product_image(resolved_product_image)
         .command(build_opa_start_command())
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
@@ -496,7 +524,7 @@ fn build_server_rolegroup_daemonset(
             .context(ObjectMissingMetadataForOwnerRefSnafu)?
             .with_recommended_labels(build_recommended_labels(
                 opa,
-                opa_version,
+                &resolved_product_image.app_version_label,
                 &rolegroup_ref.role,
                 &rolegroup_ref.role_group,
             ))
@@ -515,11 +543,12 @@ fn build_server_rolegroup_daemonset(
                 .metadata_builder(|m| {
                     m.with_recommended_labels(build_recommended_labels(
                         opa,
-                        opa_version,
+                        &resolved_product_image.app_version_label,
                         &rolegroup_ref.role,
                         &rolegroup_ref.role_group,
                     ))
                 })
+                .image_pull_secrets_from_product_image(resolved_product_image)
                 .add_container(container_opa)
                 .add_container(container_bundle_builder)
                 .add_init_container(init_container)
