@@ -16,7 +16,7 @@ futures = { version = "0.3", features = ["compat"] }
 semver = "1.0"
 snafu = "0.7"
 strum = { version = "0.24", features = ["derive"] }
-tokio = { version = "1.22", features = ["full"] }
+tokio = { version = "1.23", features = ["full"] }
 tracing = "0.1"
 pin-project = "1.0"
 warp = "0.3"
