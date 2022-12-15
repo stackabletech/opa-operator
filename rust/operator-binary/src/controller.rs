@@ -1,6 +1,5 @@
 //! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
 
-use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
 
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -51,6 +50,7 @@ pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
+const DOCKER_BUNDLE_BUILDER_IMAGE_BASE_NAME: &str = "opa-bundle-builder";
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -130,6 +130,10 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let opa_ref = ObjectRef::from_obj(&*opa);
     let client = ctx.client.clone();
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
+    let resolved_bundle_builder_image = opa
+        .spec
+        .bundle_builder_image
+        .resolve(DOCKER_BUNDLE_BUILDER_IMAGE_BASE_NAME);
 
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
@@ -208,6 +212,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         let rg_daemonset = build_server_rolegroup_daemonset(
             &opa,
             &resolved_product_image,
+            &resolved_bundle_builder_image,
             &rolegroup,
             rolegroup_config,
             &resources,
@@ -413,6 +418,7 @@ fn build_server_rolegroup_config_map(
 fn build_server_rolegroup_daemonset(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
+    resolved_bundle_builder_image: &ResolvedProductImage,
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     resources: &Resources<OpaStorageConfig, NoRuntimeLimits>,
@@ -464,10 +470,7 @@ fn build_server_rolegroup_daemonset(
 
     let container_bundle_builder = ContainerBuilder::new("opa-bundle-builder")
         .expect("invalid hard-coded container name")
-        .image(format!(
-            "docker.stackable.tech/stackable/opa-bundle-builder:{}",
-            PKG_VERSION
-        ))
+        .image_from_product_image(resolved_bundle_builder_image)
         .command(vec![String::from("/stackable-opa-bundle-builder")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
@@ -496,10 +499,7 @@ fn build_server_rolegroup_daemonset(
 
     let init_container = ContainerBuilder::new("init-container")
         .expect("invalid hard-coded container name")
-        .image(format!(
-            "docker.stackable.tech/stackable/opa-bundle-builder:{}",
-            PKG_VERSION
-        ))
+        .image_from_product_image(resolved_bundle_builder_image)
         .command(vec!["bash".to_string()])
         .args(vec![
             "-euo".to_string(),
@@ -548,10 +548,12 @@ fn build_server_rolegroup_daemonset(
                         &rolegroup_ref.role_group,
                     ))
                 })
-                .image_pull_secrets_from_product_image(resolved_product_image)
+                .add_init_container(init_container)
                 .add_container(container_opa)
                 .add_container(container_bundle_builder)
-                .add_init_container(init_container)
+                .image_pull_secrets_from_product_image(&resolved_product_image)
+                // This will merge / extend existing secrets from "resolved_product_image"
+                .image_pull_secrets_from_product_image(&resolved_bundle_builder_image)
                 .add_volume(Volume {
                     name: "config".to_string(),
                     config_map: Some(ConfigMapVolumeSource {

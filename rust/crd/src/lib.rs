@@ -48,7 +48,11 @@ pub struct OpaSpec {
     pub servers: Role<OpaConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped: Option<bool>,
+    /// The OPA image to use
     pub image: ProductImage,
+    /// The OPA bundle builder image to use. Except for custom images, the provided productVersion
+    /// and stackableVersion should be identical to the ones used in the OPA `image`
+    pub bundle_builder_image: ProductImage,
 }
 
 #[allow(clippy::derive_partial_eq_without_eq)]
