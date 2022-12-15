@@ -50,8 +50,7 @@ pub struct OpaSpec {
     pub stopped: Option<bool>,
     /// The OPA image to use
     pub image: ProductImage,
-    /// The OPA bundle builder image to use. Except for custom images, the provided productVersion
-    /// and stackableVersion should be identical to the ones used in the OPA `image`
+    /// The OPA bundle builder image to use
     pub bundle_builder_image: ProductImage,
 }
 

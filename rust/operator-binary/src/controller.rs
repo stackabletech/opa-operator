@@ -470,7 +470,12 @@ fn build_server_rolegroup_daemonset(
 
     let container_bundle_builder = ContainerBuilder::new("opa-bundle-builder")
         .expect("invalid hard-coded container name")
-        .image_from_product_image(resolved_bundle_builder_image)
+        // TODO: use image_from_product_image as soon as the bundle builder versioning is fixed
+        //.image_from_product_image(resolved_bundle_builder_image)
+        .image(extract_image_for_bundle_builder(
+            &resolved_bundle_builder_image.image,
+        ))
+        .image_pull_policy(&resolved_bundle_builder_image.image_pull_policy)
         .command(vec![String::from("/stackable-opa-bundle-builder")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
@@ -499,7 +504,12 @@ fn build_server_rolegroup_daemonset(
 
     let init_container = ContainerBuilder::new("init-container")
         .expect("invalid hard-coded container name")
-        .image_from_product_image(resolved_bundle_builder_image)
+        // TODO: use image_from_product_image as soon as the bundle builder versioning is fixed
+        //.image_from_product_image(resolved_bundle_builder_image)
+        .image(extract_image_for_bundle_builder(
+            &resolved_bundle_builder_image.image,
+        ))
+        .image_pull_policy(&resolved_bundle_builder_image.image_pull_policy)
         .command(vec!["bash".to_string()])
         .args(vec![
             "-euo".to_string(),
@@ -646,5 +656,39 @@ pub fn build_recommended_labels<'a, T>(
         controller_name: OPA_CONTROLLER_NAME,
         role,
         role_group,
+    }
+}
+
+// This is a workaround until the OPA bundle builder adheres to the stackable versioning
+fn extract_image_for_bundle_builder(image: &str) -> &str {
+    // Remove the -stackablex.x.x version
+    // TODO: Improve. This will fail if a custom repo or anything else contains "-stackable"
+    image.split("-stackable").next().unwrap_or(image)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_image_for_bundle_builder() {
+        let stackable_image =
+            "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0-stackable0.1.0";
+        assert_eq!(
+            "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0",
+            extract_image_for_bundle_builder(stackable_image)
+        );
+
+        let custom_image = "other.company.tech/company/bundle-builder:0.11.0";
+        assert_eq!(
+            "other.company.tech/company/bundle-builder:0.11.0",
+            extract_image_for_bundle_builder(custom_image)
+        );
+
+        let nightly_image = "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0-nightly";
+        assert_eq!(
+            "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0-nightly",
+            extract_image_for_bundle_builder(nightly_image)
+        );
     }
 }

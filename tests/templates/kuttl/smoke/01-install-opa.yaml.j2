@@ -26,8 +26,8 @@ spec:
     productVersion: "{{ test_scenario['values']['opa'].split('-stackable')[0] }}"
     stackableVersion: "{{ test_scenario['values']['opa'].split('-stackable')[1] }}"
   bundleBuilderImage:
-    productVersion: "{{ test_scenario['values']['opa'].split('-stackable')[0] }}"
-    stackableVersion: "{{ test_scenario['values']['opa'].split('-stackable')[1] }}"
+    productVersion: "{{ test_scenario['values']['opa-bundle-builder'] }}"
+    stackableVersion: "{{ test_scenario['values']['opa-bundle-builder'] }}"
   servers:
     roleGroups:
       default:
