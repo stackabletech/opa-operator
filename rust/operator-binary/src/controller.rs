@@ -544,7 +544,7 @@ fn build_server_rolegroup_daemonset(
                 .add_init_container(init_container)
                 .add_container(container_opa)
                 .add_container(container_bundle_builder)
-                .image_pull_secrets_from_product_image(&resolved_product_image)
+                .image_pull_secrets_from_product_image(resolved_product_image)
                 .add_volume(Volume {
                     name: "config".to_string(),
                     config_map: Some(ConfigMapVolumeSource {
