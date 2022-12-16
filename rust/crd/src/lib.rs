@@ -48,6 +48,7 @@ pub struct OpaSpec {
     pub servers: Role<OpaConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped: Option<bool>,
+    /// The OPA image to use
     pub image: ProductImage,
 }
 

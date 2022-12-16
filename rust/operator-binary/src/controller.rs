@@ -1,6 +1,5 @@
 //! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
 
-use crate::built_info::PKG_VERSION;
 use crate::discovery::{self, build_discovery_configmaps};
 
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -464,11 +463,8 @@ fn build_server_rolegroup_daemonset(
 
     let container_bundle_builder = ContainerBuilder::new("opa-bundle-builder")
         .expect("invalid hard-coded container name")
-        .image(format!(
-            "docker.stackable.tech/stackable/opa-bundle-builder:{}",
-            PKG_VERSION
-        ))
-        .command(vec![String::from("/stackable-opa-bundle-builder")])
+        .image_from_product_image(resolved_product_image)
+        .command(vec![String::from("/stackable/opa-bundle-builder")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
         .readiness_probe(Probe {
@@ -496,10 +492,7 @@ fn build_server_rolegroup_daemonset(
 
     let init_container = ContainerBuilder::new("init-container")
         .expect("invalid hard-coded container name")
-        .image(format!(
-            "docker.stackable.tech/stackable/opa-bundle-builder:{}",
-            PKG_VERSION
-        ))
+        .image_from_product_image(resolved_product_image)
         .command(vec!["bash".to_string()])
         .args(vec![
             "-euo".to_string(),
@@ -548,10 +541,10 @@ fn build_server_rolegroup_daemonset(
                         &rolegroup_ref.role_group,
                     ))
                 })
-                .image_pull_secrets_from_product_image(resolved_product_image)
+                .add_init_container(init_container)
                 .add_container(container_opa)
                 .add_container(container_bundle_builder)
-                .add_init_container(init_container)
+                .image_pull_secrets_from_product_image(resolved_product_image)
                 .add_volume(Volume {
                     name: "config".to_string(),
                     config_map: Some(ConfigMapVolumeSource {
