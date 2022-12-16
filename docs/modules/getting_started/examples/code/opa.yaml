@@ -6,10 +6,7 @@ metadata:
 spec:
   image:
     productVersion: 0.45.0
-    stackableVersion: 0.2.0
-  bundleBuilderimage:
-    productVersion: 0.11.0
-    stackableVersion: 0.1.0
+    stackableVersion: 0.3.0
   servers:
     roleGroups:
       default:

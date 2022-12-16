@@ -50,7 +50,6 @@ pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
-const DOCKER_BUNDLE_BUILDER_IMAGE_BASE_NAME: &str = "opa-bundle-builder";
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -130,10 +129,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let opa_ref = ObjectRef::from_obj(&*opa);
     let client = ctx.client.clone();
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
-    let resolved_bundle_builder_image = opa
-        .spec
-        .bundle_builder_image
-        .resolve(DOCKER_BUNDLE_BUILDER_IMAGE_BASE_NAME);
 
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
@@ -212,7 +207,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         let rg_daemonset = build_server_rolegroup_daemonset(
             &opa,
             &resolved_product_image,
-            &resolved_bundle_builder_image,
             &rolegroup,
             rolegroup_config,
             &resources,
@@ -418,7 +412,6 @@ fn build_server_rolegroup_config_map(
 fn build_server_rolegroup_daemonset(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    resolved_bundle_builder_image: &ResolvedProductImage,
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     resources: &Resources<OpaStorageConfig, NoRuntimeLimits>,
@@ -470,13 +463,8 @@ fn build_server_rolegroup_daemonset(
 
     let container_bundle_builder = ContainerBuilder::new("opa-bundle-builder")
         .expect("invalid hard-coded container name")
-        // TODO: use image_from_product_image as soon as the bundle builder versioning is fixed
-        //.image_from_product_image(resolved_bundle_builder_image)
-        .image(extract_image_for_bundle_builder(
-            &resolved_bundle_builder_image.image,
-        ))
-        .image_pull_policy(&resolved_bundle_builder_image.image_pull_policy)
-        .command(vec![String::from("/stackable-opa-bundle-builder")])
+        .image_from_product_image(resolved_product_image)
+        .command(vec![String::from("/stackable/opa-bundle-builder")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
         .readiness_probe(Probe {
@@ -504,12 +492,7 @@ fn build_server_rolegroup_daemonset(
 
     let init_container = ContainerBuilder::new("init-container")
         .expect("invalid hard-coded container name")
-        // TODO: use image_from_product_image as soon as the bundle builder versioning is fixed
-        //.image_from_product_image(resolved_bundle_builder_image)
-        .image(extract_image_for_bundle_builder(
-            &resolved_bundle_builder_image.image,
-        ))
-        .image_pull_policy(&resolved_bundle_builder_image.image_pull_policy)
+        .image_from_product_image(resolved_product_image)
         .command(vec!["bash".to_string()])
         .args(vec![
             "-euo".to_string(),
@@ -562,8 +545,6 @@ fn build_server_rolegroup_daemonset(
                 .add_container(container_opa)
                 .add_container(container_bundle_builder)
                 .image_pull_secrets_from_product_image(&resolved_product_image)
-                // This will merge / extend existing secrets from "resolved_product_image"
-                .image_pull_secrets_from_product_image(&resolved_bundle_builder_image)
                 .add_volume(Volume {
                     name: "config".to_string(),
                     config_map: Some(ConfigMapVolumeSource {
@@ -656,39 +637,5 @@ pub fn build_recommended_labels<'a, T>(
         controller_name: OPA_CONTROLLER_NAME,
         role,
         role_group,
-    }
-}
-
-// This is a workaround until the OPA bundle builder adheres to the stackable versioning
-fn extract_image_for_bundle_builder(image: &str) -> &str {
-    // Remove the -stackablex.x.x version
-    // TODO: Improve. This will fail if a custom repo or anything else contains "-stackable"
-    image.split("-stackable").next().unwrap_or(image)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_image_for_bundle_builder() {
-        let stackable_image =
-            "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0-stackable0.1.0";
-        assert_eq!(
-            "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0",
-            extract_image_for_bundle_builder(stackable_image)
-        );
-
-        let custom_image = "other.company.tech/company/bundle-builder:0.11.0";
-        assert_eq!(
-            "other.company.tech/company/bundle-builder:0.11.0",
-            extract_image_for_bundle_builder(custom_image)
-        );
-
-        let nightly_image = "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0-nightly";
-        assert_eq!(
-            "docker.stackable.tech/stackable/opa-bundle-builder:0.11.0-nightly",
-            extract_image_for_bundle_builder(nightly_image)
-        );
     }
 }
