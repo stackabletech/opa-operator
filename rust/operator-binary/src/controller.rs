@@ -126,14 +126,14 @@ impl ReconcilerError for Error {
 
 pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
     tracing::info!("Starting reconcile");
-    let opa_ref = ObjectRef::from_obj(&*opa);
+    let opa_ref = ObjectRef::from_obj(opa.as_ref());
     let client = ctx.client.clone();
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
 
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
         &transform_all_roles_to_config(
-            &*opa,
+            opa.as_ref(),
             [(
                 OpaRole::Server.to_string(),
                 (
@@ -233,9 +233,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             })?;
     }
 
-    for discovery_cm in
-        build_discovery_configmaps(&*opa, &*opa, &resolved_product_image, &server_role_service)
-            .context(BuildDiscoveryConfigSnafu)?
+    for discovery_cm in build_discovery_configmaps(
+        opa.as_ref(),
+        opa.as_ref(),
+        &resolved_product_image,
+        &server_role_service,
+    )
+    .context(BuildDiscoveryConfigSnafu)?
     {
         client
             .apply_patch(OPA_CONTROLLER_NAME, &discovery_cm, &discovery_cm)
