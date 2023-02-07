@@ -1,0 +1,8 @@
+* xref:opa:getting_started/index.adoc[]
+** xref:opa:getting_started/installation.adoc[]
+** xrefopa::getting_started/first_steps.adoc[]
+* xref:opa:usage.adoc[]
+* xref:opa:configuration.adoc[]
+* xref:opa:implementation-notes.adoc[]
+* Concepts
+** xref:opa:discovery.adoc[]
