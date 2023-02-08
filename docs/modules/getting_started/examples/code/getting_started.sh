@@ -8,6 +8,8 @@ set -euo pipefail
 # forward and query the OPA.
 # No running processes are left behind (i.e. the port-forwarding is closed at the end)
 
+cd "$(dirname "$0")"
+
 if [ $# -eq 0 ]
 then
   echo "Installation method argument ('helm' or 'stackablectl') required."
