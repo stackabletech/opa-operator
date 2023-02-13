@@ -19,7 +19,7 @@ After you have installed stackablectl run the following command to install the O
 
 [source,bash]
 ----
-include::example$code/getting_started.sh[tag=stackablectl-install-operators]
+include::example$getting_started/getting_started.sh[tag=stackablectl-install-operators]
 ----
 
 The tool will show
@@ -35,17 +35,17 @@ TIP: Consult the xref:stackablectl::quickstart.adoc[] to learn more about how to
 You can also use Helm to install the Operator. Add the Stackable Helm repository:
 [source,bash]
 ----
-include::example$code/getting_started.sh[tag=helm-add-repo]
+include::example$getting_started/getting_started.sh[tag=helm-add-repo]
 ----
 
 Then install the Stackable OPA Operator:
 [source,bash]
 ----
-include::example$code/getting_started.sh[tag=helm-install-operators]
+include::example$getting_started/getting_started.sh[tag=helm-install-operators]
 ----
 
 Helm will deploy the Operator in a Kubernetes Deployment and apply the CRDs for the OPA service. You are now ready to deploy OPA in Kubernetes.
 
 == What's next
 
-xref:first_steps.adoc[Deploy OPA, a policy rule and query it].
+xref:getting_started/first_steps.adoc[Deploy OPA, a policy rule and query it].
