@@ -175,17 +175,20 @@ impl OpaCluster {
     /// Retrieve and merge resource configs for role and role groups
     pub fn merged_config(
         &self,
+        role: &OpaRole,
         rolegroup_ref: &RoleGroupRef<OpaCluster>,
     ) -> Result<OpaConfig, Error> {
         // Initialize the result with all default values as baseline
         let conf_defaults = OpaConfig::default_config();
 
-        let mut conf_role = self.spec.servers.config.config.to_owned();
+        let opa_role = match role {
+            OpaRole::Server => &self.spec.servers,
+        };
+
+        let mut conf_role = opa_role.config.config.to_owned();
 
         // Retrieve rolegroup specific resource config
-        let mut conf_rolegroup = self
-            .spec
-            .servers
+        let mut conf_rolegroup = opa_role
             .role_groups
             .get(&rolegroup_ref.role_group)
             .context(MissingRoleGroupSnafu {

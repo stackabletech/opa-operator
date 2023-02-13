@@ -198,7 +198,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         };
 
         let merged_config = opa
-            .merged_config(&rolegroup)
+            .merged_config(&OpaRole::Server, &rolegroup)
             .context(FailedToResolveConfigSnafu)?;
 
         let rg_configmap =
