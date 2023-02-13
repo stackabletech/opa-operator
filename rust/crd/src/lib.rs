@@ -12,6 +12,7 @@ use stackable_operator::{
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
     product_config_utils::{ConfigError, Configuration},
+    product_logging::{self, spec::Logging},
     role_utils::Role,
     role_utils::RoleGroupRef,
     schemars::{self, JsonSchema},
@@ -52,6 +53,10 @@ pub struct OpaSpec {
     pub stopped: Option<bool>,
     /// The OPA image to use
     pub image: ProductImage,
+    /// Name of the Vector aggregator discovery ConfigMap.
+    /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vector_aggregator_config_map_name: Option<String>,
 }
 
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -72,6 +77,28 @@ pub struct OpaSpec {
 )]
 pub struct OpaStorageConfig {}
 
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    EnumIter,
+    JsonSchema,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum Container {
+    Prepare,
+    Vector,
+    BundleBuilder,
+    Opa,
+}
+
 #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
 #[fragment_attrs(
     derive(
@@ -88,12 +115,15 @@ pub struct OpaStorageConfig {}
 )]
 pub struct OpaConfig {
     #[fragment_attrs(serde(default))]
+    pub logging: Logging<Container>,
+    #[fragment_attrs(serde(default))]
     pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
 }
 
 impl OpaConfig {
     fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {
+            logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
                 cpu: CpuLimitsFragment {
                     min: Some(Quantity("200m".to_owned())),
