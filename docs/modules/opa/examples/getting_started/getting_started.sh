@@ -52,9 +52,14 @@ echo "Applying the rule file"
 kubectl apply -f simple-rule.yaml
 # end::apply-rule-file[]
 
+# The bundle builder will update the bundle almost immediately, but OPA can take up to
+# max_delay_seconds: 20 (see ConfigMap)
+# to poll the bundle
+sleep 21
+
 echo "Starting port-forwarding of port 8081"
 # tag::port-forwarding[]
-kubectl port-forward svc/simple-opa 8081 2>&1 >/dev/null &
+kubectl port-forward svc/simple-opa 8081 > /dev/null 2>&1 &
 # end::port-forwarding[]
 PORT_FORWARD_PID=$!
 trap "kill $PORT_FORWARD_PID" EXIT
