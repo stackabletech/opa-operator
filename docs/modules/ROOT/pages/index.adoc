@@ -1,0 +1,3 @@
+= Stackable Operator for OPA (OpenPolicyAgent)
+
+The latest docs are at xref:home:opa:index.adoc[].
