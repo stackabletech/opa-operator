@@ -5,8 +5,8 @@ metadata:
   name: simple-opa
 spec:
   image:
-    productVersion: 0.45.0
-    stackableVersion: 0.3.0
+    productVersion: "0.45.0"
+    stackableVersion: "23.4.0-rc1"
   servers:
     roleGroups:
       default:

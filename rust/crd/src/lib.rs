@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use snafu::{ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
         product_image_selection::ProductImage,
@@ -26,6 +26,8 @@ pub const CONFIG_FILE: &str = "config.yaml";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
+    #[snafu(display("the role group [{role_group}] is missing"))]
+    MissingRoleGroup { role_group: String },
     #[snafu(display("fragment validation failure"))]
     FragmentValidationFailure { source: ValidationError },
 }
@@ -45,7 +47,7 @@ pub enum Error {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
-    pub servers: Role<OpaConfig>,
+    pub servers: Role<OpaConfigFragment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped: Option<bool>,
     /// The OPA image to use
@@ -53,7 +55,7 @@ pub struct OpaSpec {
 }
 
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, Debug, Default, JsonSchema, PartialEq, Fragment)]
+#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
 #[fragment_attrs(
     allow(clippy::derive_partial_eq_without_eq),
     derive(
@@ -70,30 +72,44 @@ pub struct OpaSpec {
 )]
 pub struct OpaStorageConfig {}
 
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
+#[fragment_attrs(
+    derive(
+        Clone,
+        Debug,
+        Default,
+        Deserialize,
+        Merge,
+        JsonSchema,
+        PartialEq,
+        Serialize
+    ),
+    serde(rename_all = "camelCase")
+)]
 pub struct OpaConfig {
-    pub resources: Option<ResourcesFragment<OpaStorageConfig, NoRuntimeLimits>>,
+    #[fragment_attrs(serde(default))]
+    pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
 }
 
 impl OpaConfig {
-    fn default_resources() -> ResourcesFragment<OpaStorageConfig, NoRuntimeLimits> {
-        ResourcesFragment {
-            cpu: CpuLimitsFragment {
-                min: Some(Quantity("200m".to_owned())),
-                max: Some(Quantity("2".to_owned())),
+    fn default_config() -> OpaConfigFragment {
+        OpaConfigFragment {
+            resources: ResourcesFragment {
+                cpu: CpuLimitsFragment {
+                    min: Some(Quantity("200m".to_owned())),
+                    max: Some(Quantity("2".to_owned())),
+                },
+                memory: MemoryLimitsFragment {
+                    limit: Some(Quantity("2Gi".to_owned())),
+                    runtime_limits: NoRuntimeLimitsFragment {},
+                },
+                storage: OpaStorageConfigFragment {},
             },
-            memory: MemoryLimitsFragment {
-                limit: Some(Quantity("2Gi".to_owned())),
-                runtime_limits: NoRuntimeLimitsFragment {},
-            },
-            storage: OpaStorageConfigFragment {},
         }
     }
 }
 
-impl Configuration for OpaConfig {
+impl Configuration for OpaConfigFragment {
     type Configurable = OpaCluster;
 
     fn compute_env(
@@ -157,28 +173,30 @@ impl OpaCluster {
     }
 
     /// Retrieve and merge resource configs for role and role groups
-    pub fn resolve_resource_config_for_role_and_rolegroup(
+    pub fn merged_config(
         &self,
         role: &OpaRole,
         rolegroup_ref: &RoleGroupRef<OpaCluster>,
-    ) -> Result<Resources<OpaStorageConfig, NoRuntimeLimits>, Error> {
+    ) -> Result<OpaConfig, Error> {
         // Initialize the result with all default values as baseline
-        let conf_defaults = OpaConfig::default_resources();
+        let conf_defaults = OpaConfig::default_config();
 
-        let role = match role {
+        let opa_role = match role {
             OpaRole::Server => &self.spec.servers,
         };
 
-        // Retrieve role resource config
-        let mut conf_role: ResourcesFragment<OpaStorageConfig, NoRuntimeLimits> =
-            role.config.config.resources.clone().unwrap_or_default();
+        let mut conf_role = opa_role.config.config.to_owned();
 
         // Retrieve rolegroup specific resource config
-        let mut conf_rolegroup: ResourcesFragment<OpaStorageConfig, NoRuntimeLimits> = role
+        let mut conf_rolegroup = opa_role
             .role_groups
             .get(&rolegroup_ref.role_group)
-            .and_then(|rg| rg.config.config.resources.clone())
-            .unwrap_or_default();
+            .context(MissingRoleGroupSnafu {
+                role_group: rolegroup_ref.role_group.clone(),
+            })?
+            .to_owned()
+            .config
+            .config;
 
         // Merge more specific configs into default config
         // Hierarchy is:
@@ -188,7 +206,7 @@ impl OpaCluster {
         conf_role.merge(&conf_defaults);
         conf_rolegroup.merge(&conf_role);
 
-        tracing::debug!("Merged resource config: {:?}", conf_rolegroup);
+        tracing::debug!("Merged config: {:?}", conf_rolegroup);
         fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
     }
 }

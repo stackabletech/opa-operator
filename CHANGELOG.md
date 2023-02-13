@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- `operator-rs` `0.27.1` -> `0.35.0` ([#411]).
+- Fragmented `OpaConfig` ([#411]).
+- Bumped stackable image versions to `23.4.0-rc1` ([#411]).
+
+[#411]: https://github.com/stackabletech/opa-operator/pull/411
+
+## [23.1.0] - 2023-01-23
+
+### Changed
+
 - Updated stackable image versions ([#374]).
 - `operator-rs` `0.22.0` -> `0.27.1` ([#377]).
 - Don't run init container as root and avoid chmod and chowning ([#382]).

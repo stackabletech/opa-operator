@@ -3,13 +3,10 @@
 use crate::discovery::{self, build_discovery_configmaps};
 
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{OpaCluster, OpaRole, OpaStorageConfig, APP_NAME, OPERATOR_NAME};
+use stackable_opa_crd::{OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
-    commons::{
-        product_image_selection::ResolvedProductImage,
-        resources::{NoRuntimeLimits, Resources},
-    },
+    commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
@@ -61,6 +58,8 @@ pub struct Ctx {
 #[strum_discriminants(derive(IntoStaticStr))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
+    #[snafu(display("object does not define meta name"))]
+    NoName,
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
     #[snafu(display("failed to apply role Service"))]
@@ -113,8 +112,8 @@ pub enum Error {
     ProductConfigTransform {
         source: stackable_operator::product_config_utils::ConfigError,
     },
-    #[snafu(display("failed to resolve and merge resource config for role and role group"))]
-    FailedToResolveResourceConfig { source: stackable_opa_crd::Error },
+    #[snafu(display("failed to resolve and merge config for role and role group"))]
+    FailedToResolveConfig { source: stackable_opa_crd::Error },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -198,9 +197,9 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             role_group: rolegroup_name.to_string(),
         };
 
-        let resources = opa
-            .resolve_resource_config_for_role_and_rolegroup(&OpaRole::Server, &rolegroup)
-            .context(FailedToResolveResourceConfigSnafu)?;
+        let merged_config = opa
+            .merged_config(&OpaRole::Server, &rolegroup)
+            .context(FailedToResolveConfigSnafu)?;
 
         let rg_configmap =
             build_server_rolegroup_config_map(&opa, &resolved_product_image, &rolegroup)?;
@@ -209,7 +208,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &resolved_product_image,
             &rolegroup,
             rolegroup_config,
-            &resources,
+            &merged_config,
         )?;
         let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
 
@@ -418,11 +417,11 @@ fn build_server_rolegroup_daemonset(
     resolved_product_image: &ResolvedProductImage,
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
-    resources: &Resources<OpaStorageConfig, NoRuntimeLimits>,
+    merged_config: &OpaConfig,
 ) -> Result<DaemonSet> {
     let sa_name = format!(
         "{}-{}",
-        opa.metadata.name.as_ref().unwrap(),
+        opa.metadata.name.as_ref().context(NoNameSnafu)?,
         rolegroup_ref.role
     );
 
@@ -443,7 +442,7 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
-        .resources(resources.clone().into())
+        .resources(merged_config.resources.to_owned().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
