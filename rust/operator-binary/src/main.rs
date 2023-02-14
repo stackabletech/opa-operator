@@ -3,7 +3,7 @@ mod discovery;
 
 use crate::controller::OPA_CONTROLLER_NAME;
 
-use clap::Parser;
+use clap::{crate_description, crate_version, Parser};
 use futures::StreamExt;
 use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
@@ -26,10 +26,11 @@ use std::sync::Arc;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
+    pub const TARGET_PLATFORM: Option<&str> = option_env!("TARGET");
 }
 
 #[derive(Parser)]
-#[clap(about = built_info::PKG_DESCRIPTION, author = stackable_operator::cli::AUTHOR)]
+#[clap(about, author)]
 struct Opts {
     #[clap(subcommand)]
     cmd: Command<OpaRun>,
@@ -66,10 +67,10 @@ async fn main() -> Result<(), error::Error> {
             );
 
             stackable_operator::utils::print_startup_string(
-                built_info::PKG_DESCRIPTION,
-                built_info::PKG_VERSION,
+                crate_description!(),
+                crate_version!(),
                 built_info::GIT_VERSION,
-                built_info::TARGET,
+                built_info::TARGET_PLATFORM.unwrap_or("unknown target"),
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
