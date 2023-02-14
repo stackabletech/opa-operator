@@ -1,5 +1,6 @@
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{Container, OpaCluster};
+use stackable_operator::product_logging::spec::LogLevel;
 use stackable_operator::{
     builder::ConfigMapBuilder,
     client::Client,
@@ -33,6 +34,24 @@ pub enum Error {
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 const VECTOR_AGGREGATOR_CM_ENTRY: &str = "ADDRESS";
+
+#[derive(strum::Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum OpaLogLevel {
+    Debug,
+    Info,
+    Error,
+}
+
+impl From<LogLevel> for OpaLogLevel {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::TRACE | LogLevel::DEBUG => Self::Debug,
+            LogLevel::INFO => Self::Info,
+            LogLevel::WARN | LogLevel::ERROR | LogLevel::FATAL | LogLevel::NONE => Self::Error,
+        }
+    }
+}
 
 /// Return the address of the Vector aggregator if the corresponding ConfigMap name is given in the
 /// cluster spec
@@ -96,4 +115,19 @@ pub fn extend_role_group_config_map(
     }
 
     Ok(())
+}
+
+pub fn opa_capture_shell_output(
+    log_dir: &str,
+    container: &str,
+    //log_config: &AutomaticContainerLogConfig,
+    log_file: &str,
+) -> String {
+    let log_file_dir = format!("{log_dir}/{container}");
+
+    vec![
+        format!("mkdir --parents {log_file_dir}"),
+        format!("exec > >(tee {log_file_dir}/{log_file})"),
+    ]
+    .join(" && ")
 }

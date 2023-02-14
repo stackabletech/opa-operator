@@ -1,7 +1,9 @@
 //! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
 
 use crate::discovery::{self, build_discovery_configmaps};
-use crate::product_logging::{extend_role_group_config_map, resolve_vector_aggregator_address};
+use crate::product_logging::{
+    extend_role_group_config_map, opa_capture_shell_output, resolve_vector_aggregator_address,
+};
 
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
@@ -508,12 +510,26 @@ fn build_server_rolegroup_daemonset(
     prepare_container_args.push(format!("mkdir -p {BUNDLES_TMP_DIR}"));
 
     let bundle_builder_container_name = &Container::BundleBuilder.to_string();
+    let mut bundle_builder_container_args = vec![
+        opa_capture_shell_output(
+            STACKABLE_LOG_DIR,
+            &bundle_builder_container_name,
+            "bundle_builder.log",
+        ),
+        String::from("/stackable/opa-bundle-builder"),
+    ];
     let mut cb_bundle_builder = ContainerBuilder::new(&bundle_builder_container_name)
         .with_context(|_| IllegalContainerNameSnafu {
             container_name: bundle_builder_container_name,
         })?;
 
     let opa_container_name = &Container::Opa.to_string();
+    let mut opa_container_args = vec![
+        //opa_capture_shell_output(STACKABLE_LOG_DIR, &opa_container_name, "opa.json"),
+        "mkdir --parents /stackable/log/opa && exec 2> >(tee /stackable/log/opa/opa.json)"
+            .to_string(),
+        format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml"),
+    ];
     let mut cb_opa =
         ContainerBuilder::new(&opa_container_name).with_context(|_| IllegalContainerNameSnafu {
             container_name: opa_container_name,
@@ -534,7 +550,15 @@ fn build_server_rolegroup_daemonset(
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
-        .command(vec![String::from("/stackable/opa-bundle-builder")])
+        //.command(vec![String::from("/stackable/opa-bundle-builder")])
+        .command(vec![
+            "bash".to_string(),
+            "-euo".to_string(),
+            "pipefail".to_string(),
+            "-x".to_string(),
+            "-c".to_string(),
+        ])
+        .args(vec![bundle_builder_container_args.join(" && ")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_volume_mount("bundles", "/bundles")
         .add_volume_mount("log", STACKABLE_LOG_DIR)
@@ -562,7 +586,15 @@ fn build_server_rolegroup_daemonset(
 
     cb_opa
         .image_from_product_image(resolved_product_image)
-        .command(build_opa_start_command())
+        //.command(build_opa_start_command())
+        .command(vec![
+            "bash".to_string(),
+            "-euo".to_string(),
+            "pipefail".to_string(),
+            "-x".to_string(),
+            "-c".to_string(),
+        ])
+        .args(vec![opa_container_args.join(" && ")])
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
