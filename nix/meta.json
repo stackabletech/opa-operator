@@ -1,0 +1,1 @@
+{"operator": {"name": "opa-operator", "extra_crates": ["stackable-opa-bundle-builder"], "pretty_string": "OpenPolicyAgent", "product_string": "opa", "url": "stackabletech/opa-operator.git"}}
