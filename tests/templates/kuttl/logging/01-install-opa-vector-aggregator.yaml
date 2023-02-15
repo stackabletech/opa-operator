@@ -12,6 +12,6 @@ commands:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: vector-aggregator-discovery
+  name: opa-vector-aggregator-discovery
 data:
   ADDRESS: opa-vector-aggregator:6123
