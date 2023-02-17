@@ -70,6 +70,31 @@ data:
 The managed OPA instances are automatically configured to export Prometheus metrics. See
 xref:home:operators:monitoring.adoc[] for more details.
 
+== Log aggregation
+
+The logs can be forwarded to a Vector log aggregator by providing a discovery
+ConfigMap for the aggregator and by enabling the log agent:
+
+[source,yaml]
+----
+spec:
+  vectorAggregatorConfigMapName: vector-aggregator-discovery
+  servers:
+    config:
+      logging:
+        enableVectorAgent: true
+        containers:
+          opa:
+            loggers:
+              ROOT:
+                level: INFO
+----
+
+The Stackable operator for OPA only supports automatic log configuration due to the lack of customization for the OPA logging. There can be no other `loggers` than the `ROOT` logger.
+
+Further information on how to configure logging, can be found in
+xref:home:concepts:logging.adoc[].
+
 == Configuration & Environment Overrides
 
 The cluster definition also supports overriding configuration properties and environment variables, either per role or per role group, where the more specific override (role group) has precedence over the less specific one (role).
