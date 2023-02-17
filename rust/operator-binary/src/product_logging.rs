@@ -117,12 +117,7 @@ pub fn extend_role_group_config_map(
     Ok(())
 }
 
-pub fn opa_capture_shell_output(
-    log_dir: &str,
-    container: &str,
-    //log_config: &AutomaticContainerLogConfig,
-    log_file: &str,
-) -> String {
+pub fn opa_capture_shell_output(log_dir: &str, container: &str, log_file: &str) -> String {
     let log_file_dir = format!("{log_dir}/{container}");
 
     vec![
