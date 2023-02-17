@@ -38,6 +38,12 @@ customConfig:
       condition: >-
         starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "vector"
+    automaticLogConfigServerPrepare:
+      type: filter
+      inputs: [vector]
+      condition: >-
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
+        .container == "prepare"
   sinks:
     out:
       inputs: [automaticLogConfig*] # , customLogConfig*]

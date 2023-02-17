@@ -33,6 +33,14 @@ spec:
           logging:
             enableVectorAgent: true
             containers:
+              opa:
+                console:
+                  level: INFO
+                file:
+                  level: INFO
+                loggers:
+                  ROOT:
+                    level: INFO
               bundle-builder:
                 console:
                   level: INFO
@@ -49,7 +57,7 @@ spec:
                 loggers:
                   ROOT:
                     level: INFO
-              opa:
+              prepare:
                 console:
                   level: INFO
                 file:
