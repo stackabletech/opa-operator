@@ -3,14 +3,13 @@
 use crate::discovery::{self, build_discovery_configmaps};
 use crate::product_logging::{
     extend_role_group_config_map, opa_capture_shell_output, resolve_vector_aggregator_address,
-    OpaLogLevel,
+    BundleBuilderLogLevel, OpaLogLevel,
 };
 
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME, STACKABLE_LOG_DIR,
 };
-use stackable_operator::product_logging::spec::AutomaticContainerLogConfig;
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
     commons::product_image_selection::ResolvedProductImage,
@@ -36,7 +35,7 @@ use stackable_operator::{
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
-        spec::{ContainerLogConfig, ContainerLogConfigChoice},
+        spec::{AutomaticContainerLogConfig, ContainerLogConfig, ContainerLogConfigChoice},
     },
     role_utils::RoleGroupRef,
 };
@@ -488,23 +487,23 @@ fn build_server_rolegroup_daemonset(
         })
         .collect::<Vec<_>>();
 
-    let prepare_container_name = &Container::Prepare.to_string();
+    let prepare_container_name = Container::Prepare.to_string();
     let mut cb_prepare = ContainerBuilder::new(&prepare_container_name).with_context(|_| {
         IllegalContainerNameSnafu {
-            container_name: prepare_container_name,
+            container_name: prepare_container_name.to_string(),
         }
     })?;
 
-    let bundle_builder_container_name = &Container::BundleBuilder.to_string();
+    let bundle_builder_container_name = Container::BundleBuilder.to_string();
     let mut cb_bundle_builder = ContainerBuilder::new(&bundle_builder_container_name)
         .with_context(|_| IllegalContainerNameSnafu {
-            container_name: bundle_builder_container_name,
+            container_name: bundle_builder_container_name.to_string(),
         })?;
 
-    let opa_container_name = &Container::Opa.to_string();
+    let opa_container_name = Container::Opa.to_string();
     let mut cb_opa =
         ContainerBuilder::new(&opa_container_name).with_context(|_| IllegalContainerNameSnafu {
-            container_name: opa_container_name,
+            container_name: opa_container_name.to_string(),
         })?;
 
     cb_prepare
@@ -518,7 +517,7 @@ fn build_server_rolegroup_daemonset(
         ])
         .args(vec![build_prepare_start_command(
             merged_config,
-            prepare_container_name,
+            &prepare_container_name,
         )
         .join(" && ")])
         .add_volume_mount("bundles", "/bundles")
@@ -526,7 +525,6 @@ fn build_server_rolegroup_daemonset(
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
-        //.command(vec![String::from("/stackable/opa-bundle-builder")])
         .command(vec![
             "bash".to_string(),
             "-euo".to_string(),
@@ -535,10 +533,14 @@ fn build_server_rolegroup_daemonset(
             "-c".to_string(),
         ])
         .args(vec![build_bundle_builder_start_command(
-            bundle_builder_container_name,
+            &bundle_builder_container_name,
         )
         .join(" && ")])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
+        .add_env_var(
+            "OPA_BUNDLE_BUILDER_LOG",
+            bundle_builder_log_level(merged_config).to_string(),
+        )
         .add_volume_mount("bundles", "/bundles")
         .add_volume_mount("log", STACKABLE_LOG_DIR)
         .readiness_probe(Probe {
@@ -572,7 +574,7 @@ fn build_server_rolegroup_daemonset(
             "pipefail".to_string(),
             "-c".to_string(),
         ])
-        .args(vec![build_opa_start_command(&merged_config).join(" && ")])
+        .args(vec![build_opa_start_command(merged_config).join(" && ")])
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
@@ -731,6 +733,25 @@ fn build_bundle_builder_start_command(container_name: &str) -> Vec<String> {
         opa_capture_shell_output(STACKABLE_LOG_DIR, container_name, "bundle_builder.log"),
         String::from("/stackable/opa-bundle-builder"),
     ]
+}
+
+fn bundle_builder_log_level(merged_config: &OpaConfig) -> BundleBuilderLogLevel {
+    if let Some(ContainerLogConfig {
+        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
+    }) = merged_config
+        .logging
+        .containers
+        .get(&Container::BundleBuilder)
+    {
+        if let Some(logger) = log_config
+            .loggers
+            .get(AutomaticContainerLogConfig::ROOT_LOGGER)
+        {
+            return BundleBuilderLogLevel::from(logger.level);
+        }
+    }
+
+    BundleBuilderLogLevel::Info
 }
 
 fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) -> Vec<String> {

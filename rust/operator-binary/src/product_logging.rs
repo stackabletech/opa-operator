@@ -53,6 +53,28 @@ impl From<LogLevel> for OpaLogLevel {
     }
 }
 
+#[derive(strum::Display)]
+#[strum(serialize_all = "UPPERCASE")]
+pub enum BundleBuilderLogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl From<LogLevel> for BundleBuilderLogLevel {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::TRACE => Self::Trace,
+            LogLevel::DEBUG => Self::Debug,
+            LogLevel::INFO => Self::Info,
+            LogLevel::WARN => Self::Warn,
+            LogLevel::ERROR | LogLevel::FATAL | LogLevel::NONE => Self::Error,
+        }
+    }
+}
+
 /// Return the address of the Vector aggregator if the corresponding ConfigMap name is given in the
 /// cluster spec
 pub async fn resolve_vector_aggregator_address(
