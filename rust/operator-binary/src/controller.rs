@@ -2,8 +2,8 @@
 
 use crate::discovery::{self, build_discovery_configmaps};
 use crate::product_logging::{
-    extend_role_group_config_map, opa_capture_shell_output, resolve_vector_aggregator_address,
-    BundleBuilderLogLevel, OpaLogLevel,
+    extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
+    OpaLogLevel,
 };
 
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -59,6 +59,21 @@ pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
+
+// ~ 5 MB
+const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES: u32 = 5000000;
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 2;
+// ~ 5 MB
+const MAX_OPA_LOG_FILE_SIZE_IN_BYTES: u32 = 5000000;
+const OPA_ROLLING_LOG_FILES: u32 = 2;
+// ~ 1 MB
+const MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES: u32 = 1000000;
+
+const LOG_FILE_VOLUME_SIZE_IN_MB: u32 = ((MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES
+    * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
+    + (MAX_OPA_LOG_FILE_SIZE_IN_BYTES * OPA_ROLLING_LOG_FILES)
+    + MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES)
+    / 1000000;
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -532,10 +547,9 @@ fn build_server_rolegroup_daemonset(
             "-x".to_string(),
             "-c".to_string(),
         ])
-        .args(vec![build_bundle_builder_start_command(
-            &bundle_builder_container_name,
-        )
-        .join(" && ")])
+        .args(vec![format!(
+            "/stackable/opa-bundle-builder |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{bundle_builder_container_name}"
+        )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_env_var(
             "OPA_BUNDLE_BUILDER_LOG",
@@ -567,14 +581,17 @@ fn build_server_rolegroup_daemonset(
 
     cb_opa
         .image_from_product_image(resolved_product_image)
-        //.command(build_opa_start_command())
         .command(vec![
             "bash".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
         ])
-        .args(vec![build_opa_start_command(merged_config).join(" && ")])
+        .args(vec![build_opa_start_command(
+            merged_config,
+            &opa_container_name,
+        )
+        .join(" && ")])
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
@@ -631,8 +648,7 @@ fn build_server_rolegroup_daemonset(
         name: "log".to_string(),
         empty_dir: Some(EmptyDirVolumeSource {
             medium: None,
-            // TODO: determine size
-            size_limit: Some(Quantity(format!("20Mi"))),
+            size_limit: Some(Quantity(format!("{LOG_FILE_VOLUME_SIZE_IN_MB}Mi"))),
         }),
         ..Volume::default()
     })
@@ -707,7 +723,7 @@ decision_logs:
 "
 }
 
-fn build_opa_start_command(merged_config: &OpaConfig) -> Vec<String> {
+fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> Vec<String> {
     let mut opa_log_level = OpaLogLevel::Info;
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -722,16 +738,7 @@ fn build_opa_start_command(merged_config: &OpaConfig) -> Vec<String> {
     }
 
     vec![
-        "mkdir --parents /stackable/log/opa && exec 2> >(tee /stackable/log/opa/opa.json)"
-            .to_string(),
-        format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level}"),
-    ]
-}
-
-fn build_bundle_builder_start_command(container_name: &str) -> Vec<String> {
-    vec![
-        opa_capture_shell_output(STACKABLE_LOG_DIR, container_name, "bundle_builder.log"),
-        String::from("/stackable/opa-bundle-builder"),
+        format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level} |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"),
     ]
 }
 

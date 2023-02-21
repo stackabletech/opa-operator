@@ -138,13 +138,3 @@ pub fn extend_role_group_config_map(
 
     Ok(())
 }
-
-pub fn opa_capture_shell_output(log_dir: &str, container: &str, log_file: &str) -> String {
-    let log_file_dir = format!("{log_dir}/{container}");
-
-    vec![
-        format!("mkdir --parents {log_file_dir}"),
-        format!("exec > >(tee {log_file_dir}/{log_file})"),
-    ]
-    .join(" && ")
-}
