@@ -547,8 +547,8 @@ fn build_server_rolegroup_daemonset(
             "-x".to_string(),
             "-c".to_string(),
         ])
-        .args(vec![format!(
-            "/stackable/opa-bundle-builder |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{bundle_builder_container_name}"
+        .args(vec![build_bundle_builder_start_command(
+            &bundle_builder_container_name,
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_env_var(
@@ -740,6 +740,12 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> V
     vec![
         format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level} |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"),
     ]
+}
+
+fn build_bundle_builder_start_command(container_name: &str) -> String {
+    format!(
+        "/stackable/opa-bundle-builder |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"
+    )
 }
 
 fn bundle_builder_log_level(merged_config: &OpaConfig) -> BundleBuilderLogLevel {
