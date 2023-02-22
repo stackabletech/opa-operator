@@ -23,6 +23,9 @@ spec:
               cpu: "1"
               memory: 1Gi
         - name: opa-bundle-builder
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -41,3 +44,6 @@ spec:
               cpu: "3"
               memory: 3Gi
         - name: opa-bundle-builder
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}
