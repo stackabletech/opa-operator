@@ -10,6 +10,7 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME, STACKABLE_LOG_DIR,
 };
+use stackable_operator::product_logging::spec::{AppenderConfig, LogLevel};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
     commons::product_image_selection::ResolvedProductImage,
@@ -548,6 +549,7 @@ fn build_server_rolegroup_daemonset(
             "-c".to_string(),
         ])
         .args(vec![build_bundle_builder_start_command(
+            merged_config,
             &bundle_builder_container_name,
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
@@ -590,8 +592,7 @@ fn build_server_rolegroup_daemonset(
         .args(vec![build_opa_start_command(
             merged_config,
             &opa_container_name,
-        )
-        .join(" && ")])
+        )])
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount("config", "/stackable/config")
@@ -723,29 +724,72 @@ decision_logs:
 "
 }
 
-fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> Vec<String> {
+fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
     let mut opa_log_level = OpaLogLevel::Info;
+    let mut console_logging_off = false;
+
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(&Container::Opa)
     {
-        if let Some(logger) = log_config
-            .loggers
-            .get(AutomaticContainerLogConfig::ROOT_LOGGER)
+        // Retrieve the file log level for OPA and convert to OPA log levels
+        if let Some(AppenderConfig {
+            level: Some(log_level),
+        }) = log_config.file
         {
-            opa_log_level = OpaLogLevel::from(logger.level);
+            opa_log_level = OpaLogLevel::from(log_level);
+        }
+
+        // We need to check if the console logging is deactivated (NONE)
+        // This will result in not using `tee` later on in the start command
+        if let Some(AppenderConfig {
+            level: Some(log_level),
+        }) = log_config.console
+        {
+            console_logging_off = log_level == LogLevel::NONE
         }
     }
 
-    vec![
-        format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level} |& tee >(/stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})"),
-    ]
+    let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level}");
+
+    if console_logging_off {
+        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"));
+    } else {
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})"));
+    }
+
+    start_command
 }
 
-fn build_bundle_builder_start_command(container_name: &str) -> String {
-    format!(
-        "/stackable/opa-bundle-builder |& tee >(/stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})"
-    )
+fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
+    let mut console_logging_off = false;
+
+    // We need to check if the console logging is deactivated (NONE)
+    // This will result in not using `tee` later on in the start command
+    if let Some(ContainerLogConfig {
+        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
+    }) = merged_config
+        .logging
+        .containers
+        .get(&Container::BundleBuilder)
+    {
+        if let Some(AppenderConfig {
+            level: Some(log_level),
+        }) = log_config.console
+        {
+            console_logging_off = log_level == LogLevel::NONE
+        }
+    };
+
+    let mut start_command = "/stackable/opa-bundle-builder".to_string();
+
+    if console_logging_off {
+        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"))
+    } else {
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})"));
+    }
+
+    start_command
 }
 
 fn bundle_builder_log_level(merged_config: &OpaConfig) -> BundleBuilderLogLevel {
