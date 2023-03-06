@@ -50,11 +50,16 @@ pub enum Error {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
+    pub cluster_config: OpaClusterConfig,
     pub servers: Role<OpaConfigFragment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stopped: Option<bool>,
     /// The OPA image to use
     pub image: ProductImage,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize)]
+pub struct OpaClusterConfig {
     /// Name of the Vector aggregator discovery ConfigMap.
     /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
     #[serde(skip_serializing_if = "Option::is_none")]

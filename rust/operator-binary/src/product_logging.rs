@@ -82,7 +82,7 @@ pub async fn resolve_vector_aggregator_address(
     client: &Client,
 ) -> Result<Option<String>> {
     let vector_aggregator_address = if let Some(vector_aggregator_config_map_name) =
-        &opa.spec.vector_aggregator_config_map_name
+        &opa.spec.cluster_config.vector_aggregator_config_map_name
     {
         let vector_aggregator_address = client
             .get::<ConfigMap>(
