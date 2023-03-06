@@ -520,7 +520,6 @@ fn build_server_rolegroup_daemonset(
             "bash".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
-            "-x".to_string(),
             "-c".to_string(),
         ])
         .args(vec![build_prepare_start_command(
@@ -537,7 +536,6 @@ fn build_server_rolegroup_daemonset(
             "bash".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
-            "-x".to_string(),
             "-c".to_string(),
         ])
         .args(vec![build_bundle_builder_start_command(
@@ -816,8 +814,11 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
         ));
     }
 
+    prepare_container_args.push(format!("echo \"Create dir [{BUNDLES_ACTIVE_DIR}]\""));
     prepare_container_args.push(format!("mkdir -p {BUNDLES_ACTIVE_DIR}"));
+    prepare_container_args.push(format!("echo \"Create dir [{BUNDLES_INCOMING_DIR}]\""));
     prepare_container_args.push(format!("mkdir -p {BUNDLES_INCOMING_DIR}"));
+    prepare_container_args.push(format!("echo \"Create dir [{BUNDLES_TMP_DIR}]\""));
     prepare_container_args.push(format!("mkdir -p {BUNDLES_TMP_DIR}"));
 
     prepare_container_args
