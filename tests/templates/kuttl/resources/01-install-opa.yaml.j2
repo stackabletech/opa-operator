@@ -7,6 +7,10 @@ spec:
   image:
     productVersion: "{{ test_scenario['values']['opa-latest'].split('-stackable')[0] }}"
     stackableVersion: "{{ test_scenario['values']['opa-latest'].split('-stackable')[1] }}"
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+  clusterConfig:
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
   servers:
     config:
       resources:
@@ -15,6 +19,8 @@ spec:
           max: "1"
         memory:
           limit: 1Gi
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
     roleGroups:
       resources-from-role: {}
       resources-from-role-group:
@@ -25,3 +31,5 @@ spec:
               max: "3"
             memory:
               limit: 3Gi
+          logging:
+            enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}

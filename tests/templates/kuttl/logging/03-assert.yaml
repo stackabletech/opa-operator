@@ -1,14 +1,12 @@
 ---
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
-metadata:
-  name: test-regorule
 timeout: 300
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: test-regorule
+  name: opa-test-runner
 status:
   readyReplicas: 1
   replicas: 1

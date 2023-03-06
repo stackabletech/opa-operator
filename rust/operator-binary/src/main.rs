@@ -1,5 +1,6 @@
 mod controller;
 mod discovery;
+mod product_logging;
 
 use crate::controller::OPA_CONTROLLER_NAME;
 

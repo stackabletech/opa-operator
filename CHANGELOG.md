@@ -6,11 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- `operator-rs` `0.27.1` -> `0.35.0` ([#411]).
+- `operator-rs` `0.27.1` -> `0.37.0` ([#411], [#420]).
 - Fragmented `OpaConfig` ([#411]).
-- Bumped stackable image versions to `23.4.0-rc1` ([#411]).
+- Bumped stackable image versions to `23.4.0-rc2` ([#420]).
+- Enabled logging ([#420]).
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
+[#420]: https://github.com/stackabletech/opa-operator/pull/420
 
 ## [23.1.0] - 2023-01-23
 
