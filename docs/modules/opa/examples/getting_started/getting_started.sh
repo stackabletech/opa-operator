@@ -22,13 +22,13 @@ helm repo add stackable-dev https://repo.stackable.tech/repository/helm-dev/
 # end::helm-add-repo[]
 echo "Installing Operators with Helm"
 # tag::helm-install-operators[]
-helm install --wait opa-operator stackable-dev/opa-operator --version 0.12.0-nightly
+helm install --wait opa-operator stackable-dev/opa-operator --version 0.0.0-dev
 # end::helm-install-operators[]
 ;;
 "stackablectl")
 echo "installing Operators with stackablectl"
 # tag::stackablectl-install-operators[]
-stackablectl operator install opa=0.12.0-nightly
+stackablectl operator install opa=0.0.0-dev
 # end::stackablectl-install-operators[]
 ;;
 *)
