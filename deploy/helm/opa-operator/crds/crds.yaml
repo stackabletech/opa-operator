@@ -26,7 +26,7 @@ spec:
               properties:
                 clusterConfig:
                   properties:
-                    vector_aggregator_config_map_name:
+                    vectorAggregatorConfigMapName:
                       description: Name of the Vector aggregator discovery ConfigMap. It must contain the key `ADDRESS` with the address of the Vector aggregator.
                       nullable: true
                       type: string
