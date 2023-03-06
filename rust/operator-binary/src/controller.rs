@@ -7,9 +7,8 @@ use crate::product_logging::{
 };
 
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{
-    Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME, STACKABLE_LOG_DIR,
-};
+use stackable_opa_crd::{Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
+use stackable_operator::builder::VolumeBuilder;
 use stackable_operator::product_logging::spec::{AppenderConfig, LogLevel};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
@@ -18,9 +17,8 @@ use stackable_operator::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, ConfigMapVolumeSource, EmptyDirVolumeSource, EnvVar, HTTPGetAction,
-                PodSecurityContext, Probe, Service, ServiceAccount, ServicePort, ServiceSpec,
-                Volume,
+                ConfigMap, EnvVar, HTTPGetAction, PodSecurityContext, Probe, Service,
+                ServiceAccount, ServicePort, ServiceSpec,
             },
             rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject},
         },
@@ -58,6 +56,13 @@ pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
+
+const CONFIG_VOLUME_NAME: &str = "config";
+const CONFIG_DIR: &str = "/stackable/config";
+const LOG_VOLUME_NAME: &str = "log";
+const LOG_DIR: &str = "/stackable/log";
+const BUNDLES_VOLUME_NAME: &str = "bundles";
+const BUNDLES_DIR: &str = "/bundles";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -527,8 +532,8 @@ fn build_server_rolegroup_daemonset(
             &prepare_container_name,
         )
         .join(" && ")])
-        .add_volume_mount("bundles", "/bundles")
-        .add_volume_mount("log", STACKABLE_LOG_DIR);
+        .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR);
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
@@ -547,8 +552,8 @@ fn build_server_rolegroup_daemonset(
             "OPA_BUNDLE_BUILDER_LOG",
             bundle_builder_log_level(merged_config).to_string(),
         )
-        .add_volume_mount("bundles", "/bundles")
-        .add_volume_mount("log", STACKABLE_LOG_DIR)
+        .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
@@ -585,8 +590,8 @@ fn build_server_rolegroup_daemonset(
         )])
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
-        .add_volume_mount("config", "/stackable/config")
-        .add_volume_mount("log", STACKABLE_LOG_DIR)
+        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
         .resources(merged_config.resources.to_owned().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
@@ -622,27 +627,24 @@ fn build_server_rolegroup_daemonset(
     .add_container(cb_opa.build())
     .add_container(cb_bundle_builder.build())
     .image_pull_secrets_from_product_image(resolved_product_image)
-    .add_volume(Volume {
-        name: "config".to_string(),
-        config_map: Some(ConfigMapVolumeSource {
-            name: Some(rolegroup_ref.object_name()),
-            ..ConfigMapVolumeSource::default()
-        }),
-        ..Volume::default()
-    })
-    .add_volume(Volume {
-        name: "bundles".to_string(),
-        empty_dir: Some(EmptyDirVolumeSource::default()),
-        ..Volume::default()
-    })
-    .add_volume(Volume {
-        name: "log".to_string(),
-        empty_dir: Some(EmptyDirVolumeSource {
-            medium: None,
-            size_limit: Some(Quantity(format!("{LOG_FILE_VOLUME_SIZE_IN_MB}Mi"))),
-        }),
-        ..Volume::default()
-    })
+    .add_volume(
+        VolumeBuilder::new(CONFIG_VOLUME_NAME)
+            .with_config_map(rolegroup_ref.object_name())
+            .build(),
+    )
+    .add_volume(
+        VolumeBuilder::new(BUNDLES_VOLUME_NAME)
+            .with_empty_dir(None::<String>, None)
+            .build(),
+    )
+    .add_volume(
+        VolumeBuilder::new(LOG_VOLUME_NAME)
+            .with_empty_dir(
+                None::<String>,
+                Some(Quantity(format!("{LOG_FILE_VOLUME_SIZE_IN_MB}Mi"))),
+            )
+            .build(),
+    )
     .service_account_name(sa_name)
     .security_context(PodSecurityContext {
         run_as_user: Some(1000),
@@ -654,8 +656,8 @@ fn build_server_rolegroup_daemonset(
     if merged_config.logging.enable_vector_agent {
         pb.add_container(product_logging::framework::vector_container(
             resolved_product_image,
-            "config",
-            "log",
+            CONFIG_VOLUME_NAME,
+            LOG_VOLUME_NAME,
             merged_config.logging.containers.get(&Container::Vector),
         ));
     }
@@ -743,9 +745,9 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
     let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level}");
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"));
+        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
@@ -774,9 +776,9 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     let mut start_command = "/stackable/opa-bundle-builder".to_string();
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}"))
+        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
@@ -808,7 +810,7 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
     }) = merged_config.logging.containers.get(&Container::Prepare)
     {
         prepare_container_args.push(product_logging::framework::capture_shell_output(
-            STACKABLE_LOG_DIR,
+            LOG_DIR,
             container_name,
             log_config,
         ));

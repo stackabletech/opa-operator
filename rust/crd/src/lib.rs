@@ -25,8 +25,6 @@ pub const OPERATOR_NAME: &str = "opa.stackable.tech";
 
 pub const CONFIG_FILE: &str = "config.yaml";
 
-pub const STACKABLE_LOG_DIR: &str = "/stackable/log";
-
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("the role group [{role_group}] is missing"))]
@@ -59,6 +57,7 @@ pub struct OpaSpec {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OpaClusterConfig {
     /// Name of the Vector aggregator discovery ConfigMap.
     /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
