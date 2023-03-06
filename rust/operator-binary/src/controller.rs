@@ -742,7 +742,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         }
     }
 
-    let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c /stackable/config/config.yaml -l {opa_log_level}");
+    let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level}");
 
     if console_logging_off {
         start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));

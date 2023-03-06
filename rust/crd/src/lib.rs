@@ -48,6 +48,7 @@ pub enum Error {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
+    #[serde(default)]
     pub cluster_config: OpaClusterConfig,
     pub servers: Role<OpaConfigFragment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
