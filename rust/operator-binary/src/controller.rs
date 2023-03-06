@@ -142,10 +142,9 @@ pub enum Error {
     },
     #[snafu(display("failed to resolve and merge config for role and role group"))]
     FailedToResolveConfig { source: stackable_opa_crd::Error },
-    #[snafu(display("illegal container name: [{container_name}]"))]
+    #[snafu(display("illegal container name"))]
     IllegalContainerName {
         source: stackable_operator::error::Error,
-        container_name: String,
     },
     #[snafu(display("failed to resolve the Vector aggregator address"))]
     ResolveVectorAggregatorAddress {
@@ -504,23 +503,16 @@ fn build_server_rolegroup_daemonset(
         .collect::<Vec<_>>();
 
     let prepare_container_name = Container::Prepare.to_string();
-    let mut cb_prepare = ContainerBuilder::new(&prepare_container_name).with_context(|_| {
-        IllegalContainerNameSnafu {
-            container_name: prepare_container_name.to_string(),
-        }
-    })?;
+    let mut cb_prepare =
+        ContainerBuilder::new(&prepare_container_name).context(IllegalContainerNameSnafu)?;
 
     let bundle_builder_container_name = Container::BundleBuilder.to_string();
-    let mut cb_bundle_builder = ContainerBuilder::new(&bundle_builder_container_name)
-        .with_context(|_| IllegalContainerNameSnafu {
-            container_name: bundle_builder_container_name.to_string(),
-        })?;
+    let mut cb_bundle_builder =
+        ContainerBuilder::new(&bundle_builder_container_name).context(IllegalContainerNameSnafu)?;
 
     let opa_container_name = Container::Opa.to_string();
     let mut cb_opa =
-        ContainerBuilder::new(&opa_container_name).with_context(|_| IllegalContainerNameSnafu {
-            container_name: opa_container_name.to_string(),
-        })?;
+        ContainerBuilder::new(&opa_container_name).context(IllegalContainerNameSnafu)?;
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
