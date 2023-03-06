@@ -25,7 +25,8 @@ spec:
   image:
     productVersion: "{{ test_scenario['values']['opa'].split('-stackable')[0] }}"
     stackableVersion: "{{ test_scenario['values']['opa'].split('-stackable')[1] }}"
-  vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
+  clusterConfig:
+    vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
   servers:
     roleGroups:
       automatic-log-config:
