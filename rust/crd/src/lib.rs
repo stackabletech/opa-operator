@@ -26,7 +26,6 @@ pub const OPERATOR_NAME: &str = "opa.stackable.tech";
 pub const CONFIG_FILE: &str = "config.yaml";
 
 pub const STACKABLE_LOG_DIR: &str = "/stackable/log";
-pub const STACKABLE_LOG_CONFIG_DIR: &str = "/stackable/log_config";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
