@@ -703,6 +703,7 @@ fn build_config_file() -> &'static str {
     // This will log decisions to the console, but also sends an extra `decision_id` field in the
     // API JSON response. This currently leads to our Java authorizers (Druid, Trino) failing to
     // deserialize the JSON object since they only expect to have a `result` field returned.
+    // see https://github.com/stackabletech/opa-operator/issues/422
     "
 services:
   - name: stackable
@@ -716,6 +717,9 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20
+
+decision_logs:
+    console: true
 "
 }
 
