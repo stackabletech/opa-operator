@@ -45,7 +45,7 @@ kubectl apply -f opa.yaml
 sleep 5
 
 echo "Waiting on rollout ..."
-kubectl rollout status --watch daemonset/simple-opa-server-default
+kubectl rollout status --watch daemonset/simple-opa-server-default --timeout=300s
 
 echo "Applying the rule file"
 # tag::apply-rule-file[]
