@@ -697,6 +697,12 @@ pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Ac
 }
 
 fn build_config_file() -> &'static str {
+    // We currently do not activate decision logging like
+    // decision_logs:
+    //     console: true
+    // This will log decisions to the console, but also sends an extra `decision_id` field in the
+    // API JSON response. This currently leads to our Java authorizers (Druid, Trino) failing to
+    // deserialize the JSON object since they only expect to have a `result` field returned.
     "
 services:
   - name: stackable
@@ -710,9 +716,6 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20
-
-decision_logs:
-    console: true
 "
 }
 
