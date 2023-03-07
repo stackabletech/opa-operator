@@ -717,9 +717,6 @@ bundles:
     polling:
       min_delay_seconds: 10
       max_delay_seconds: 20
-
-decision_logs:
-    console: true
 "
 }
 
