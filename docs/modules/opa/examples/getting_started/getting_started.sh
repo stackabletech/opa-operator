@@ -20,15 +20,18 @@ echo "Adding 'stackable-dev' Helm Chart repository"
 # tag::helm-add-repo[]
 helm repo add stackable-dev https://repo.stackable.tech/repository/helm-dev/
 # end::helm-add-repo[]
+echo "Updating Helm repo"
+helm repo update
+
 echo "Installing Operators with Helm"
 # tag::helm-install-operators[]
-helm install --wait opa-operator stackable-dev/opa-operator --version 0.12.0-nightly
+helm install --wait opa-operator stackable-dev/opa-operator --version 0.0.0-dev
 # end::helm-install-operators[]
 ;;
 "stackablectl")
 echo "installing Operators with stackablectl"
 # tag::stackablectl-install-operators[]
-stackablectl operator install opa=0.12.0-nightly
+stackablectl operator install opa=0.0.0-dev
 # end::stackablectl-install-operators[]
 ;;
 *)
@@ -42,10 +45,10 @@ echo "Creating OPA cluster"
 kubectl apply -f opa.yaml
 # end::apply-opa-cluster[]
 
-sleep 5
+sleep 15
 
 echo "Waiting on rollout ..."
-kubectl rollout status --watch daemonset/simple-opa-server-default
+kubectl rollout status --watch --timeout=5m daemonset/simple-opa-server-default
 
 echo "Applying the rule file"
 # tag::apply-rule-file[]
