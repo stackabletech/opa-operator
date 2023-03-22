@@ -247,7 +247,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
 
-    let mut ds_cond_builder = DaemonSetConditionBuilder::new(opa.as_ref());
+    let mut ds_cond_builder = DaemonSetConditionBuilder::new();
 
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
@@ -313,7 +313,10 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     }
 
     let status = OpaClusterStatus {
-        conditions: stackable_operator::status::compute_conditions(&[ds_cond_builder]),
+        conditions: stackable_operator::status::compute_conditions(
+            opa.as_ref(),
+            &[ds_cond_builder],
+        ),
     };
 
     client
