@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Cluster status conditions ([#428])
+
 ### Changed
 
 - `operator-rs` `0.27.1` -> `0.37.0` ([#411], [#420]).
