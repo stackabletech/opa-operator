@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Cluster status conditions ([#xxx])
+- Cluster status conditions ([#428])
 ### Changed
 
 - `operator-rs` `0.27.1` -> `0.37.0` ([#411], [#420]).
@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
-[#xxx]: https://github.com/stackabletech/opa-operator/pull/xxx
+[#428]: https://github.com/stackabletech/opa-operator/pull/428
 
 ## [23.1.0] - 2023-01-23
 
