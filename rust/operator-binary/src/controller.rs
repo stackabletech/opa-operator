@@ -39,7 +39,7 @@ use stackable_operator::{
         spec::{AutomaticContainerLogConfig, ContainerLogConfig, ContainerLogConfigChoice},
     },
     role_utils::RoleGroupRef,
-    status::condition::daemonset::DaemonSetConditionBuilder,
+    status::condition::{compute_conditions, daemonset::DaemonSetConditionBuilder},
 };
 use std::{
     borrow::Cow,
@@ -313,10 +313,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     }
 
     let status = OpaClusterStatus {
-        conditions: stackable_operator::status::compute_conditions(
-            opa.as_ref(),
-            &[ds_cond_builder],
-        ),
+        conditions: compute_conditions(opa.as_ref(), &[&ds_cond_builder]),
     };
 
     client

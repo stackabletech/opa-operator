@@ -16,7 +16,7 @@ use stackable_operator::{
     role_utils::Role,
     role_utils::RoleGroupRef,
     schemars::{self, JsonSchema},
-    status::{ClusterCondition, HasStatusCondition},
+    status::condition::{ClusterCondition, HasStatusCondition},
 };
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
