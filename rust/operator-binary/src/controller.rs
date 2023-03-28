@@ -172,7 +172,7 @@ impl ReconcilerError for Error {
 pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(opa.as_ref());
-    let client = ctx.client.clone();
+    let client = &ctx.client;
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
 
     let validated_config = validate_all_roles_and_groups_config(

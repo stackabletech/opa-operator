@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
+        cluster_operation::ClusterOperation,
         product_image_selection::ProductImage,
         resources::{
             CpuLimitsFragment, MemoryLimitsFragment, NoRuntimeLimits, NoRuntimeLimitsFragment,
@@ -48,11 +49,13 @@ pub enum Error {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
+    /// Global OPA cluster configuration that applies to all roles and role groups.
     #[serde(default)]
     pub cluster_config: OpaClusterConfig,
+    /// Cluster operations like pause reconciliation or cluster stop.
+    pub cluster_operation: ClusterOperation,
+    /// OPA server configuration.
     pub servers: Role<OpaConfigFragment>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stopped: Option<bool>,
     /// The OPA image to use
     pub image: ProductImage,
 }
