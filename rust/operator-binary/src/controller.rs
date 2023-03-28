@@ -8,10 +8,12 @@ use crate::product_logging::{
 
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
-use stackable_operator::builder::VolumeBuilder;
-use stackable_operator::product_logging::spec::{AppenderConfig, LogLevel};
 use stackable_operator::{
-    builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
+    builder::{
+        ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
+        VolumeBuilder,
+    },
+    cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::{
         api::{
@@ -27,14 +29,20 @@ use stackable_operator::{
         },
         Resource,
     },
-    kube::runtime::{controller::Action, reflector::ObjectRef},
+    kube::{
+        runtime::{controller::Action, reflector::ObjectRef},
+        Resource as KubeResource,
+    },
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
     product_config::{types::PropertyNameKind, ProductConfigManager},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
-        spec::{AutomaticContainerLogConfig, ContainerLogConfig, ContainerLogConfigChoice},
+        spec::{
+            AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
+            ContainerLogConfigChoice, LogLevel,
+        },
     },
     role_utils::RoleGroupRef,
 };
@@ -160,6 +168,14 @@ pub enum Error {
         source: crate::product_logging::Error,
         cm_name: String,
     },
+    #[snafu(display("failed to create cluster resources"))]
+    FailedToCreateClusterResources {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to delete orphaned resources"))]
+    DeleteOrphans {
+        source: stackable_operator::error::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -174,6 +190,15 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let opa_ref = ObjectRef::from_obj(opa.as_ref());
     let client = &ctx.client;
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
+
+    let mut cluster_resources = ClusterResources::new(
+        APP_NAME,
+        OPERATOR_NAME,
+        OPA_CONTROLLER_NAME,
+        &opa.object_ref(&()),
+        ClusterResourceApplyStrategy::from(&opa.spec.cluster_operation),
+    )
+    .context(FailedToCreateClusterResourcesSnafu)?;
 
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
@@ -203,12 +228,8 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .unwrap_or_default();
 
     let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
-    let server_role_service = client
-        .apply_patch(
-            OPA_CONTROLLER_NAME,
-            &server_role_service,
-            &server_role_service,
-        )
+    let server_role_service = cluster_resources
+        .add(client, server_role_service)
         .await
         .context(ApplyRoleServiceSnafu)?;
 
@@ -218,21 +239,12 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &resolved_product_image,
             &ctx.opa_bundle_builder_clusterrole,
         )?;
-
-    client
-        .apply_patch(
-            OPA_CONTROLLER_NAME,
-            &opa_builder_role_serviceaccount,
-            &opa_builder_role_serviceaccount,
-        )
+    cluster_resources
+        .add(client, opa_builder_role_serviceaccount)
         .await
         .context(ApplyRoleServiceAccountSnafu)?;
-    client
-        .apply_patch(
-            OPA_CONTROLLER_NAME,
-            &opa_builder_role_rolebinding,
-            &opa_builder_role_rolebinding,
-        )
+    cluster_resources
+        .add(client, opa_builder_role_rolebinding)
         .await
         .context(ApplyRoleRoleBindingSnafu)?;
 
@@ -258,6 +270,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &merged_config,
             vector_aggregator_address.as_deref(),
         )?;
+        let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
             &opa,
             &resolved_product_image,
@@ -265,24 +278,25 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             rolegroup_config,
             &merged_config,
         )?;
-        let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
 
-        client
-            .apply_patch(OPA_CONTROLLER_NAME, &rg_configmap, &rg_configmap)
+        cluster_resources
+            .add(client, rg_configmap)
             .await
             .with_context(|_| ApplyRoleGroupConfigSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
-        client
-            .apply_patch(OPA_CONTROLLER_NAME, &rg_daemonset, &rg_daemonset)
-            .await
-            .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
-                rolegroup: rolegroup.clone(),
-            })?;
-        client
-            .apply_patch(OPA_CONTROLLER_NAME, &rg_service, &rg_service)
+
+        cluster_resources
+            .add(client, rg_service)
             .await
             .with_context(|_| ApplyRoleGroupServiceSnafu {
+                rolegroup: rolegroup.clone(),
+            })?;
+
+        cluster_resources
+            .add(client, rg_daemonset)
+            .await
+            .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
     }
@@ -300,6 +314,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .await
             .context(ApplyDiscoveryConfigSnafu)?;
     }
+
+    cluster_resources
+        .delete_orphaned_resources(client)
+        .await
+        .context(DeleteOrphansSnafu)?;
 
     Ok(Action::await_change())
 }
