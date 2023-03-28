@@ -212,6 +212,15 @@ impl OpaCluster {
         ))
     }
 
+    pub fn node_selector(&self, role_group: &str) -> Option<BTreeMap<String, String>> {
+        self.spec
+            .servers
+            .role_groups
+            .get(role_group)
+            .and_then(|rg| rg.selector.as_ref())
+            .and_then(|selector| selector.match_labels.clone())
+    }
+
     /// Retrieve and merge resource configs for role and role groups
     pub fn merged_config(
         &self,
