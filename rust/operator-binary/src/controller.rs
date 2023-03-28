@@ -248,7 +248,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleRoleBindingSnafu)?;
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, &client)
+    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
 
