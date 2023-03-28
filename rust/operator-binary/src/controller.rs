@@ -228,6 +228,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .unwrap_or_default();
 
     let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
+    // required for discovery config map later
     let server_role_service = cluster_resources
         .add(client, server_role_service)
         .await
@@ -309,8 +310,8 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     )
     .context(BuildDiscoveryConfigSnafu)?
     {
-        client
-            .apply_patch(OPA_CONTROLLER_NAME, &discovery_cm, &discovery_cm)
+        cluster_resources
+            .add(client, discovery_cm)
             .await
             .context(ApplyDiscoveryConfigSnafu)?;
     }
