@@ -53,6 +53,7 @@ pub struct OpaSpec {
     #[serde(default)]
     pub cluster_config: OpaClusterConfig,
     /// Cluster operations like pause reconciliation or cluster stop.
+    #[serde(default)]
     pub cluster_operation: ClusterOperation,
     /// OPA server configuration.
     pub servers: Role<OpaConfigFragment>,

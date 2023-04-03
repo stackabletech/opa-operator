@@ -34,6 +34,9 @@ spec:
                       type: string
                   type: object
                 clusterOperation:
+                  default:
+                    stopped: false
+                    reconciliationPaused: false
                   description: Cluster operations like pause reconciliation or cluster stop.
                   properties:
                     reconciliationPaused:
@@ -402,7 +405,6 @@ spec:
                     - roleGroups
                   type: object
               required:
-                - clusterOperation
                 - image
                 - servers
               type: object
