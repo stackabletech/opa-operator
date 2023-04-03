@@ -1,0 +1,6 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 300
+commands:
+  # Wait for at least one pod come back up
+  - script: sleep 5 && kubectl -n $NAMESPACE get pods | grep "opa-server-default-*" | grep Running

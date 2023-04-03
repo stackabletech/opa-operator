@@ -1,0 +1,14 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 180
+commands:
+  # Wait for the daemon set status to reflect changes
+  - script: sleep 5
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+status:
+  numberReady: 0
