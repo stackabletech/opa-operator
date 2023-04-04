@@ -9,6 +9,7 @@ use crate::product_logging::{
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
 use stackable_operator::builder::VolumeBuilder;
+use stackable_operator::kube::ResourceExt;
 use stackable_operator::product_logging::spec::{AppenderConfig, LogLevel};
 use stackable_operator::{
     builder::{ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder},
@@ -264,6 +265,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
+            &opa_builder_role_serviceaccount.name_unchecked(),
         )?;
         let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
 
@@ -489,13 +491,8 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
+    sa_name: &str,
 ) -> Result<DaemonSet> {
-    let sa_name = format!(
-        "{}-{}",
-        opa.metadata.name.as_ref().context(NoNameSnafu)?,
-        rolegroup_ref.role
-    );
-
     let env = server_config
         .get(&PropertyNameKind::Env)
         .iter()
