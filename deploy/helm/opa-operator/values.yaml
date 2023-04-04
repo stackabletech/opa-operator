@@ -2,7 +2,7 @@
 ---
 image:
   repository: docker.stackable.tech/stackable/opa-operator
-  pullPolicy: Always #IfNotPresent
+  pullPolicy: Always # IfNotPresent
 
 imagePullSecrets: []
 nameOverride: ""
