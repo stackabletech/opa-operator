@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Fragmented `OpaConfig` ([#411]).
 - Bumped stackable image versions to `23.4.0-rc2` ([#420]).
 - Enabled logging ([#420]).
-- Openshift compatibility ([#431]).
+- Openshift compatibility: extended roles ([#431]).
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
