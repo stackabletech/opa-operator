@@ -8,7 +8,7 @@ use crate::product_logging::{
 
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
-use stackable_operator::builder::VolumeBuilder;
+use stackable_operator::builder::{PodSecurityContextBuilder, VolumeBuilder};
 use stackable_operator::kube::ResourceExt;
 use stackable_operator::product_logging::spec::{AppenderConfig, LogLevel};
 use stackable_operator::{
@@ -18,8 +18,8 @@ use stackable_operator::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, EnvVar, HTTPGetAction, PodSecurityContext, Probe, Service,
-                ServiceAccount, ServicePort, ServiceSpec,
+                ConfigMap, EnvVar, HTTPGetAction, Probe, Service, ServiceAccount, ServicePort,
+                ServiceSpec,
             },
             rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject},
         },
@@ -643,12 +643,13 @@ fn build_server_rolegroup_daemonset(
             .build(),
     )
     .service_account_name(sa_name)
-    .security_context(PodSecurityContext {
-        run_as_user: Some(1000),
-        run_as_group: Some(1000),
-        fs_group: Some(1000),
-        ..PodSecurityContext::default()
-    });
+    .security_context(
+        PodSecurityContextBuilder::new()
+            .run_as_user(1000)
+            .run_as_group(0)
+            .fs_group(1000)
+            .build(),
+    );
 
     if merged_config.logging.enable_vector_agent {
         pb.add_container(product_logging::framework::vector_container(
