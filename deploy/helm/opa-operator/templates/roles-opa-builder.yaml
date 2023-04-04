@@ -11,3 +11,13 @@ rules:
       - get
       - watch
       - list
+{{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    resourceNames:
+      - opa-scc
+    verbs:
+      - use
+{{ end }}
