@@ -156,6 +156,7 @@ rules:
       - serviceaccounts
     verbs:
       - get
+      - list
   - apiGroups:
       - events.k8s.io
     resources:
