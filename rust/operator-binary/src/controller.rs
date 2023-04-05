@@ -9,6 +9,7 @@ use crate::product_logging::{
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
 use stackable_operator::builder::{PodSecurityContextBuilder, VolumeBuilder};
+use stackable_operator::commons::rbac::build_rbac_resources;
 use stackable_operator::kube::ResourceExt;
 use stackable_operator::product_logging::spec::{AppenderConfig, LogLevel};
 use stackable_operator::{
@@ -100,10 +101,6 @@ pub enum Error {
     ApplyRoleService {
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to apply role ServiceAccount"))]
-    ApplyRoleServiceAccount {
-        source: stackable_operator::error::Error,
-    },
     #[snafu(display("failed to apply global RoleBinding"))]
     ApplyRoleRoleBinding {
         source: stackable_operator::error::Error,
@@ -161,6 +158,16 @@ pub enum Error {
         source: crate::product_logging::Error,
         cm_name: String,
     },
+    #[snafu(display("failed to patch service account: {source}"))]
+    ApplyServiceAccount {
+        name: String,
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to patch role binding: {source}"))]
+    ApplyRoleBinding {
+        name: String,
+        source: stackable_operator::error::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -175,6 +182,20 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let opa_ref = ObjectRef::from_obj(opa.as_ref());
     let client = ctx.client.clone();
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
+
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), "opa");
+    client
+        .apply_patch(OPA_CONTROLLER_NAME, &rbac_sa, &rbac_sa)
+        .await
+        .with_context(|_| ApplyServiceAccountSnafu {
+            name: rbac_sa.name_unchecked(),
+        })?;
+    client
+        .apply_patch(OPA_CONTROLLER_NAME, &rbac_rolebinding, &rbac_rolebinding)
+        .await
+        .with_context(|_| ApplyRoleBindingSnafu {
+            name: rbac_rolebinding.name_unchecked(),
+        })?;
 
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
@@ -213,30 +234,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
-        build_opa_builder_serviceaccount(
-            &opa,
-            &resolved_product_image,
-            &ctx.opa_bundle_builder_clusterrole,
-        )?;
-
-    client
-        .apply_patch(
-            OPA_CONTROLLER_NAME,
-            &opa_builder_role_serviceaccount,
-            &opa_builder_role_serviceaccount,
-        )
-        .await
-        .context(ApplyRoleServiceAccountSnafu)?;
-    client
-        .apply_patch(
-            OPA_CONTROLLER_NAME,
-            &opa_builder_role_rolebinding,
-            &opa_builder_role_rolebinding,
-        )
-        .await
-        .context(ApplyRoleRoleBindingSnafu)?;
-
     let vector_aggregator_address = resolve_vector_aggregator_address(&opa, &client)
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
@@ -265,7 +262,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
-            &opa_builder_role_serviceaccount.name_unchecked(),
+            &rbac_sa.name_unchecked(),
         )?;
         let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
 
@@ -304,57 +301,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     }
 
     Ok(Action::await_change())
-}
-
-fn build_opa_builder_serviceaccount(
-    opa: &OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    opa_bundle_builder_clusterrole: &str,
-) -> Result<(ServiceAccount, RoleBinding)> {
-    let role_name = OpaRole::Server.to_string();
-    let sa_name = format!("{}-{}", opa.metadata.name.as_ref().unwrap(), role_name);
-    let sa = ServiceAccount {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&sa_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        ..ServiceAccount::default()
-    };
-    let binding_name = &sa_name;
-    let binding = RoleBinding {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(binding_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        role_ref: RoleRef {
-            api_group: ClusterRole::GROUP.to_string(),
-            kind: ClusterRole::KIND.to_string(),
-            name: opa_bundle_builder_clusterrole.to_string(),
-        },
-        subjects: Some(vec![Subject {
-            api_group: Some(ServiceAccount::GROUP.to_string()),
-            kind: ServiceAccount::KIND.to_string(),
-            name: sa_name,
-            namespace: sa.metadata.namespace.clone(),
-        }]),
-    };
-    Ok((sa, binding))
 }
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
