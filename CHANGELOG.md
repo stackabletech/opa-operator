@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- [BREAKING] Support specifying Service type.
+  This enables us to later switch non-breaking to using `ListenerClasses` for the exposure of Services.
+  This change is breaking, because - for security reasons - we default to the `cluster-internal` `ListenerClass`.
+  If you need your cluster to be accessible from outside of Kubernetes you need to set `clusterConfig.listenerClass`
+  to `external-unstable` or `external-stable` ([#432]).
 - `operator-rs` `0.27.1` -> `0.39.0` ([#411], [#420], [#430]).
 - Fragmented `OpaConfig` ([#411]).
 - Bumped stackable image versions to `23.4.0-rc2` ([#420]).
@@ -20,6 +25,7 @@ All notable changes to this project will be documented in this file.
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
 [#428]: https://github.com/stackabletech/opa-operator/pull/428
 [#430]: https://github.com/stackabletech/opa-operator/pull/430
+[#432]: https://github.com/stackabletech/opa-operator/pull/432
 
 ## [23.1.0] - 2023-01-23
 
