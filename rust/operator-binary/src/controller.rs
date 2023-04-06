@@ -209,20 +209,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     )
     .context(FailedToCreateClusterResourcesSnafu)?;
 
-    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), "opa");
-    client
-        .apply_patch(OPERATOR_NAME, &rbac_sa, &rbac_sa)
-        .await
-        .with_context(|_| ApplyServiceAccountSnafu {
-            name: rbac_sa.name_any(),
-        })?;
-    client
-        .apply_patch(OPERATOR_NAME, &rbac_rolebinding, &rbac_rolebinding)
-        .await
-        .with_context(|_| ApplyRoleBindingSnafu {
-            name: rbac_rolebinding.name_any(),
-        })?;
-
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
         &transform_all_roles_to_config(
@@ -250,6 +236,10 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
+    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+        .await
+        .context(ResolveVectorAggregatorAddressSnafu)?;
+
     let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
     // required for discovery config map later
     let server_role_service = cluster_resources
@@ -257,9 +247,19 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, &client)
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), APP_NAME);
+    client
+        .apply_patch(OPERATOR_NAME, &rbac_sa, &rbac_sa)
         .await
-        .context(ResolveVectorAggregatorAddressSnafu)?;
+        .with_context(|_| ApplyServiceAccountSnafu {
+            name: rbac_sa.name_any(),
+        })?;
+    client
+        .apply_patch(OPERATOR_NAME, &rbac_rolebinding, &rbac_rolebinding)
+        .await
+        .with_context(|_| ApplyRoleBindingSnafu {
+            name: rbac_rolebinding.name_any(),
+        })?;
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
