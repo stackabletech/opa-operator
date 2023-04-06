@@ -445,7 +445,7 @@ spec:
                           - Available
                           - Degraded
                           - Progressing
-                          - Paused
+                          - ReconciliationPaused
                           - Stopped
                         type: string
                     required:
