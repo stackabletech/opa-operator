@@ -110,32 +110,32 @@ pub enum Error {
     ApplyRoleService {
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to apply Service for {}", rolegroup))]
+    #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
+    #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to apply ConfigMap for {}", rolegroup))]
+    #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to apply DaemonSet for {}", rolegroup))]
+    #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to patch service account: {source}"))]
+    #[snafu(display("failed to patch service account [{name}]"))]
     ApplyServiceAccount {
         name: String,
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to patch role binding: {source}"))]
+    #[snafu(display("failed to patch role binding [{name}]"))]
     ApplyRoleBinding {
         name: String,
         source: stackable_operator::error::Error,
@@ -214,13 +214,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .apply_patch(OPA_CONTROLLER_NAME, &rbac_sa, &rbac_sa)
         .await
         .with_context(|_| ApplyServiceAccountSnafu {
-            name: rbac_sa.name_unchecked(),
+            name: rbac_sa.name_any(),
         })?;
     client
         .apply_patch(OPA_CONTROLLER_NAME, &rbac_rolebinding, &rbac_rolebinding)
         .await
         .with_context(|_| ApplyRoleBindingSnafu {
-            name: rbac_rolebinding.name_unchecked(),
+            name: rbac_rolebinding.name_any(),
         })?;
 
     let validated_config = validate_all_roles_and_groups_config(
