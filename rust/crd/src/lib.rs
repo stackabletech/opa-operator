@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
+        cluster_operation::ClusterOperation,
         product_image_selection::ProductImage,
         resources::{
             CpuLimitsFragment, MemoryLimitsFragment, NoRuntimeLimits, NoRuntimeLimitsFragment,
@@ -50,11 +51,14 @@ pub enum Error {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
+    /// Global OPA cluster configuration that applies to all roles and role groups.
     #[serde(default)]
     pub cluster_config: OpaClusterConfig,
+    /// Cluster operations like pause reconciliation or cluster stop.
+    #[serde(default)]
+    pub cluster_operation: ClusterOperation,
+    /// OPA server configuration.
     pub servers: Role<OpaConfigFragment>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stopped: Option<bool>,
     /// The OPA image to use
     pub image: ProductImage,
 }
@@ -209,6 +213,15 @@ impl OpaCluster {
             self.server_role_service_name()?,
             self.metadata.namespace.as_ref()?
         ))
+    }
+
+    pub fn node_selector(&self, role_group: &str) -> Option<BTreeMap<String, String>> {
+        self.spec
+            .servers
+            .role_groups
+            .get(role_group)
+            .and_then(|rg| rg.selector.as_ref())
+            .and_then(|selector| selector.match_labels.clone())
     }
 
     /// Retrieve and merge resource configs for role and role groups
