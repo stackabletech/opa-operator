@@ -1,0 +1,13 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 180
+commands:
+  - script: kubectl -n $NAMESPACE wait --for=condition=reconciliationPaused opaclusters.opa.stackable.tech/test-opa --timeout 181s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+status:
+  numberReady: 0

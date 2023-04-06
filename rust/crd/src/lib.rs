@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
+        cluster_operation::ClusterOperation,
         product_image_selection::ProductImage,
         resources::{
             CpuLimitsFragment, MemoryLimitsFragment, NoRuntimeLimits, NoRuntimeLimitsFragment,
@@ -16,6 +17,7 @@ use stackable_operator::{
     role_utils::Role,
     role_utils::RoleGroupRef,
     schemars::{self, JsonSchema},
+    status::condition::{ClusterCondition, HasStatusCondition},
 };
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
@@ -39,6 +41,7 @@ pub enum Error {
     version = "v1alpha1",
     kind = "OpaCluster",
     shortname = "opa",
+    status = "OpaClusterStatus",
     namespaced,
     crates(
         kube_core = "stackable_operator::kube::core",
@@ -48,11 +51,14 @@ pub enum Error {
 )]
 #[serde(rename_all = "camelCase")]
 pub struct OpaSpec {
+    /// Global OPA cluster configuration that applies to all roles and role groups.
     #[serde(default)]
     pub cluster_config: OpaClusterConfig,
+    /// Cluster operations like pause reconciliation or cluster stop.
+    #[serde(default)]
+    pub cluster_operation: ClusterOperation,
+    /// OPA server configuration.
     pub servers: Role<OpaConfigFragment>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stopped: Option<bool>,
     /// The OPA image to use
     pub image: ProductImage,
 }
@@ -209,6 +215,15 @@ impl OpaCluster {
         ))
     }
 
+    pub fn node_selector(&self, role_group: &str) -> Option<BTreeMap<String, String>> {
+        self.spec
+            .servers
+            .role_groups
+            .get(role_group)
+            .and_then(|rg| rg.selector.as_ref())
+            .and_then(|selector| selector.match_labels.clone())
+    }
+
     /// Retrieve and merge resource configs for role and role groups
     pub fn merged_config(
         &self,
@@ -245,5 +260,20 @@ impl OpaCluster {
 
         tracing::debug!("Merged config: {:?}", conf_rolegroup);
         fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
+    }
+}
+
+#[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaClusterStatus {
+    pub conditions: Vec<ClusterCondition>,
+}
+
+impl HasStatusCondition for OpaCluster {
+    fn conditions(&self) -> Vec<ClusterCondition> {
+        match &self.status {
+            Some(status) => status.conditions.clone(),
+            None => vec![],
+        }
     }
 }

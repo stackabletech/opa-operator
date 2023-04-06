@@ -45,6 +45,7 @@ rules:
     resources:
       - daemonsets
     verbs:
+      - get
       - create
       - delete
       - list

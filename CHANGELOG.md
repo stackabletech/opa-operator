@@ -4,9 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Cluster status conditions ([#428]).
+- Extend cluster resources for status and cluster operation (paused, stopped) ([430]).
+
 ### Changed
 
-- `operator-rs` `0.27.1` -> `0.37.0` ([#411], [#420]).
+- `operator-rs` `0.27.1` -> `0.39.0` ([#411], [#420], [#430]).
 - Fragmented `OpaConfig` ([#411]).
 - Bumped stackable image versions to `23.4.0-rc2` ([#420]).
 - Enabled logging ([#420]).
@@ -14,6 +19,8 @@ All notable changes to this project will be documented in this file.
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
+[#428]: https://github.com/stackabletech/opa-operator/pull/428
+[#430]: https://github.com/stackabletech/opa-operator/pull/430
 [#431]: https://github.com/stackabletech/opa-operator/pull/431
 
 ## [23.1.0] - 2023-01-23
