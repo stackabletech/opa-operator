@@ -17,6 +17,7 @@ use stackable_operator::{
     role_utils::Role,
     role_utils::RoleGroupRef,
     schemars::{self, JsonSchema},
+    status::condition::{ClusterCondition, HasStatusCondition},
 };
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
@@ -40,6 +41,7 @@ pub enum Error {
     version = "v1alpha1",
     kind = "OpaCluster",
     shortname = "opa",
+    status = "OpaClusterStatus",
     namespaced,
     crates(
         kube_core = "stackable_operator::kube::core",
@@ -258,5 +260,20 @@ impl OpaCluster {
 
         tracing::debug!("Merged config: {:?}", conf_rolegroup);
         fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
+    }
+}
+
+#[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaClusterStatus {
+    pub conditions: Vec<ClusterCondition>,
+}
+
+impl HasStatusCondition for OpaCluster {
+    fn conditions(&self) -> Vec<ClusterCondition> {
+        match &self.status {
+            Some(status) => status.conditions.clone(),
+            None => vec![],
+        }
     }
 }

@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Cluster status conditions ([#428])
 - Extend cluster resources for status and cluster operation (paused, stopped) ([430]).
 
 ### Changed
@@ -17,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
+[#428]: https://github.com/stackabletech/opa-operator/pull/428
 [#430]: https://github.com/stackabletech/opa-operator/pull/430
 
 ## [23.1.0] - 2023-01-23

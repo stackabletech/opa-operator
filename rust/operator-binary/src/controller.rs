@@ -7,7 +7,9 @@ use crate::product_logging::{
 };
 
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{Container, OpaCluster, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME};
+use stackable_opa_crd::{
+    Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
+};
 use stackable_operator::{
     builder::{
         ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
@@ -45,6 +47,10 @@ use stackable_operator::{
         },
     },
     role_utils::RoleGroupRef,
+    status::condition::{
+        compute_conditions, daemonset::DaemonSetConditionBuilder,
+        operations::ClusterOperationsConditionBuilder,
+    },
 };
 use std::{
     borrow::Cow,
@@ -176,6 +182,10 @@ pub enum Error {
     DeleteOrphans {
         source: stackable_operator::error::Error,
     },
+    #[snafu(display("failed to update status"))]
+    ApplyStatus {
+        source: stackable_operator::error::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -253,6 +263,8 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
 
+    let mut ds_cond_builder = DaemonSetConditionBuilder::default();
+
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
@@ -286,20 +298,20 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .with_context(|_| ApplyRoleGroupConfigSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
-
         cluster_resources
             .add(client, rg_service)
             .await
             .with_context(|_| ApplyRoleGroupServiceSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
-
-        cluster_resources
-            .add(client, rg_daemonset)
-            .await
-            .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
-                rolegroup: rolegroup.clone(),
-            })?;
+        ds_cond_builder.add(
+            cluster_resources
+                .add(client, rg_daemonset)
+                .await
+                .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
+                    rolegroup: rolegroup.clone(),
+                })?,
+        );
     }
 
     for discovery_cm in build_discovery_configmaps(
@@ -315,6 +327,21 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .await
             .context(ApplyDiscoveryConfigSnafu)?;
     }
+
+    let cluster_operation_cond_builder =
+        ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
+
+    let status = OpaClusterStatus {
+        conditions: compute_conditions(
+            opa.as_ref(),
+            &[&ds_cond_builder, &cluster_operation_cond_builder],
+        ),
+    };
+
+    client
+        .apply_patch_status(OPERATOR_NAME, &*opa, &status)
+        .await
+        .context(ApplyStatusSnafu)?;
 
     cluster_resources
         .delete_orphaned_resources(client)

@@ -4,3 +4,4 @@ kind: TestAssert
 timeout: 300
 commands:
   - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 301s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 301s
