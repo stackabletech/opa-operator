@@ -211,13 +211,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
 
     let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), "opa");
     client
-        .apply_patch(OPA_CONTROLLER_NAME, &rbac_sa, &rbac_sa)
+        .apply_patch(OPERATOR_NAME, &rbac_sa, &rbac_sa)
         .await
         .with_context(|_| ApplyServiceAccountSnafu {
             name: rbac_sa.name_any(),
         })?;
     client
-        .apply_patch(OPA_CONTROLLER_NAME, &rbac_rolebinding, &rbac_rolebinding)
+        .apply_patch(OPERATOR_NAME, &rbac_rolebinding, &rbac_rolebinding)
         .await
         .with_context(|_| ApplyRoleBindingSnafu {
             name: rbac_rolebinding.name_any(),
@@ -288,7 +288,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
-            &rbac_sa.name_unchecked(),
+            &rbac_sa.name_any(),
         )?;
 
         cluster_resources
