@@ -47,7 +47,10 @@ use stackable_operator::{
         },
     },
     role_utils::RoleGroupRef,
-    status::condition::{compute_conditions, daemonset::DaemonSetConditionBuilder},
+    status::condition::{
+        compute_conditions, daemonset::DaemonSetConditionBuilder,
+        operations::ClusterOperationsConditionBuilder,
+    },
 };
 use std::{
     borrow::Cow,
@@ -325,8 +328,14 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .context(ApplyDiscoveryConfigSnafu)?;
     }
 
+    let cluster_operation_cond_builder =
+        ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
+
     let status = OpaClusterStatus {
-        conditions: compute_conditions(opa.as_ref(), &[&ds_cond_builder]),
+        conditions: compute_conditions(
+            opa.as_ref(),
+            &[&ds_cond_builder, &cluster_operation_cond_builder],
+        ),
     };
 
     client
