@@ -4,5 +4,7 @@
 * xref:opa:usage.adoc[]
 * xref:opa:configuration.adoc[]
 * xref:opa:implementation-notes.adoc[]
+* xref:opa:cluster_operations.adoc[]
 * Concepts
 ** xref:opa:discovery.adoc[]
+
