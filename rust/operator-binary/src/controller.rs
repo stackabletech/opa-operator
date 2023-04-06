@@ -305,8 +305,8 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
                 rolegroup: rolegroup.clone(),
             })?;
         ds_cond_builder.add(
-            client
-                .apply_patch(OPA_CONTROLLER_NAME, &rg_daemonset, &rg_daemonset)
+            cluster_resources
+                .add(client, rg_daemonset)
                 .await
                 .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                     rolegroup: rolegroup.clone(),
