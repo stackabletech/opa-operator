@@ -261,6 +261,20 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             name: rbac_rolebinding.name_any(),
         })?;
 
+    cluster_resources
+        .add(client, rbac_sa.clone())
+        .await
+        .with_context(|_| ApplyServiceAccountSnafu {
+            name: rbac_sa.name_any(),
+        })?;
+
+    cluster_resources
+        .add(client, rbac_rolebinding.clone())
+        .await
+        .with_context(|_| ApplyRoleBindingSnafu {
+            name: rbac_rolebinding.name_any(),
+        })?;
+
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
