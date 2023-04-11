@@ -10,7 +10,6 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
 };
-use stackable_operator::kube::ResourceExt;
 use stackable_operator::{
     builder::{
         ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
@@ -31,7 +30,7 @@ use stackable_operator::{
     },
     kube::{
         runtime::{controller::Action, reflector::ObjectRef},
-        Resource as KubeResource,
+        Resource as KubeResource, ResourceExt,
     },
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
@@ -258,19 +257,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         cluster_resources.get_required_labels(),
     )
     .context(BuildRbacResourcesSnafu)?;
-
-    client
-        .apply_patch(OPA_CONTROLLER_NAME, &rbac_sa, &rbac_sa)
-        .await
-        .with_context(|_| ApplyServiceAccountSnafu {
-            name: rbac_sa.name_any(),
-        })?;
-    client
-        .apply_patch(OPA_CONTROLLER_NAME, &rbac_rolebinding, &rbac_rolebinding)
-        .await
-        .with_context(|_| ApplyRoleBindingSnafu {
-            name: rbac_rolebinding.name_any(),
-        })?;
 
     cluster_resources
         .add(client, rbac_sa.clone())
