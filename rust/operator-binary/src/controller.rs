@@ -131,14 +131,12 @@ pub enum Error {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to patch service account [{name}]"))]
+    #[snafu(display("failed to patch service account [{APP_NAME}-sa]"))]
     ApplyServiceAccount {
-        name: String,
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to patch role binding [{name}]"))]
+    #[snafu(display("failed to patch role binding [{APP_NAME}-rolebinding]"))]
     ApplyRoleBinding {
-        name: String,
         source: stackable_operator::error::Error,
     },
     #[snafu(display("failed to update status"))]
@@ -259,32 +257,14 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     )
     .context(BuildRbacResourcesSnafu)?;
 
-    client
-        .apply_patch(OPA_CONTROLLER_NAME, &rbac_sa, &rbac_sa)
+    let rbac_sa = cluster_resources
+        .add(client, rbac_sa)
         .await
-        .with_context(|_| ApplyServiceAccountSnafu {
-            name: rbac_sa.name_any(),
-        })?;
-    client
-        .apply_patch(OPA_CONTROLLER_NAME, &rbac_rolebinding, &rbac_rolebinding)
-        .await
-        .with_context(|_| ApplyRoleBindingSnafu {
-            name: rbac_rolebinding.name_any(),
-        })?;
-
+        .context(ApplyServiceAccountSnafu)?;
     cluster_resources
-        .add(client, rbac_sa.clone())
+        .add(client, rbac_rolebinding)
         .await
-        .with_context(|_| ApplyServiceAccountSnafu {
-            name: rbac_sa.name_any(),
-        })?;
-
-    cluster_resources
-        .add(client, rbac_rolebinding.clone())
-        .await
-        .with_context(|_| ApplyRoleBindingSnafu {
-            name: rbac_rolebinding.name_any(),
-        })?;
+        .context(ApplyRoleBindingSnafu)?;
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
