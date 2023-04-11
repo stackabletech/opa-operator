@@ -10,6 +10,7 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
 };
+use stackable_operator::kube::ResourceExt;
 use stackable_operator::{
     builder::{
         ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
@@ -30,7 +31,7 @@ use stackable_operator::{
     },
     kube::{
         runtime::{controller::Action, reflector::ObjectRef},
-        Resource as KubeResource, ResourceExt,
+        Resource as KubeResource,
     },
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
@@ -185,6 +186,10 @@ pub enum Error {
     DeleteOrphans {
         source: stackable_operator::error::Error,
     },
+    #[snafu(display("failed to build RBAC resources"))]
+    BuildRbacResources {
+        source: stackable_operator::error::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -247,7 +252,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), APP_NAME);
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(
+        opa.as_ref(),
+        APP_NAME,
+        cluster_resources.get_required_labels(),
+    )
+    .context(BuildRbacResourcesSnafu)?;
+
     client
         .apply_patch(OPA_CONTROLLER_NAME, &rbac_sa, &rbac_sa)
         .await
