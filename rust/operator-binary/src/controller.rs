@@ -99,7 +99,7 @@ pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
     pub opa_bundle_builder_clusterrole: String,
-    pub group_fetcher_image: String,
+    pub user_info_fetcher_image: String,
 }
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -291,7 +291,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
-            &ctx.group_fetcher_image,
+            &ctx.user_info_fetcher_image,
         )?;
 
         cluster_resources
@@ -540,7 +540,7 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
-    group_fetcher_image: &str,
+    user_info_fetcher_image: &str,
 ) -> Result<DaemonSet> {
     let sa_name = format!(
         "{}-{}",
@@ -571,8 +571,8 @@ fn build_server_rolegroup_daemonset(
     let mut cb_opa =
         ContainerBuilder::new(&opa_container_name).context(IllegalContainerNameSnafu)?;
 
-    let mut cb_group_fetcher =
-        ContainerBuilder::new("group-fetcher").context(IllegalContainerNameSnafu)?;
+    let mut cb_user_info_fetcher =
+        ContainerBuilder::new("user-info-fetcher").context(IllegalContainerNameSnafu)?;
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
@@ -668,10 +668,12 @@ fn build_server_rolegroup_daemonset(
             ..Probe::default()
         });
 
-    cb_group_fetcher.image(group_fetcher_image).command(vec![
-        "stackable-opa-operator".to_string(),
-        "group-fetcher".to_string(),
-    ]);
+    cb_user_info_fetcher
+        .image(user_info_fetcher_image)
+        .command(vec![
+            "stackable-opa-operator".to_string(),
+            "user-info-fetcher".to_string(),
+        ]);
 
     let mut pb = PodBuilder::new();
 
@@ -686,7 +688,7 @@ fn build_server_rolegroup_daemonset(
     .add_init_container(cb_prepare.build())
     .add_container(cb_opa.build())
     .add_container(cb_bundle_builder.build())
-    .add_container(cb_group_fetcher.build())
+    .add_container(cb_user_info_fetcher.build())
     .image_pull_secrets_from_product_image(resolved_product_image)
     .node_selector_opt(opa.node_selector(&rolegroup_ref.role_group))
     .add_volume(

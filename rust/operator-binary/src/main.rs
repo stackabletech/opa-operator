@@ -1,7 +1,7 @@
 mod controller;
 mod discovery;
-mod group_fetcher;
 mod product_logging;
+mod user_info_fetcher;
 
 use crate::controller::OPA_CONTROLLER_NAME;
 
@@ -42,7 +42,7 @@ struct Opts {
 enum Cmd {
     #[clap(flatten)]
     Common(Command<OpaRun>),
-    GroupFetcher {},
+    UserInfoFetcher {},
 }
 
 #[derive(clap::Parser)]
@@ -59,7 +59,7 @@ struct OpaRun {
 async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
-        Cmd::GroupFetcher {} => group_fetcher::run().await,
+        Cmd::UserInfoFetcher {} => user_info_fetcher::run().await,
         Cmd::Common(Command::Crd) => {
             OpaCluster::print_yaml_schema()?;
         }
@@ -115,7 +115,7 @@ async fn create_controller(
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
     opa_bundle_builder_clusterrole: String,
-    group_fetcher_image: String,
+    user_info_fetcher_image: String,
 ) -> OperatorResult<()> {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
@@ -135,7 +135,7 @@ async fn create_controller(
                 client: client.clone(),
                 product_config,
                 opa_bundle_builder_clusterrole,
-                group_fetcher_image,
+                user_info_fetcher_image,
             }),
         )
         .map(|res| {
