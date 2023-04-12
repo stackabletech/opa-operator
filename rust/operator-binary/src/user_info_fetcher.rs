@@ -7,6 +7,7 @@ use axum::{
 };
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
+use stackable_operator::k8s_openapi::api::networking::v1::IngressLoadBalancerIngress;
 
 pub async fn run() {
     let app = Router::new().route("/user", post(get_user_info));
@@ -35,6 +36,12 @@ struct GroupMembership {
     path: String,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RoleMembership {
+    name: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GroupMembershipRequest {
@@ -45,6 +52,7 @@ struct GroupMembershipRequest {
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
     groups: Vec<GroupMembership>,
+    roles: Vec<RoleMembership>,
 }
 
 async fn get_user_info(Json(req): Json<GroupMembershipRequest>) -> Json<UserInfo> {
@@ -100,5 +108,18 @@ async fn get_user_info(Json(req): Json<GroupMembershipRequest>) -> Json<UserInfo
         .json::<Vec<GroupMembership>>()
         .await
         .unwrap();
-    Json(UserInfo { groups })
+    let roles = http
+        .get(format!(
+            "{KEYCLOAK}/admin/realms/{REALM}/users/{user_id}/role-mappings/realm/composite"
+        ))
+        .bearer_auth(&authn.access_token)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json::<Vec<RoleMembership>>()
+        .await
+        .unwrap();
+    Json(UserInfo { groups, roles })
 }
