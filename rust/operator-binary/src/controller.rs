@@ -13,27 +13,24 @@ use stackable_opa_crd::{
 use stackable_operator::{
     builder::{
         ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
-        VolumeBuilder,
+        PodSecurityContextBuilder, VolumeBuilder,
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
-    commons::product_image_selection::ResolvedProductImage,
+    commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, EnvVar, HTTPGetAction, PodSecurityContext, Probe, Service,
-                ServiceAccount, ServicePort, ServiceSpec,
+                ConfigMap, EnvVar, HTTPGetAction, Probe, Service, ServicePort, ServiceSpec,
             },
-            rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject},
         },
         apimachinery::pkg::{
             api::resource::Quantity, apis::meta::v1::LabelSelector, util::intstr::IntOrString,
         },
-        Resource,
     },
     kube::{
         runtime::{controller::Action, reflector::ObjectRef},
-        Resource as KubeResource,
+        Resource as KubeResource, ResourceExt,
     },
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
@@ -113,33 +110,37 @@ pub enum Error {
     ApplyRoleService {
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to apply role ServiceAccount"))]
-    ApplyRoleServiceAccount {
-        source: stackable_operator::error::Error,
-    },
-    #[snafu(display("failed to apply global RoleBinding"))]
-    ApplyRoleRoleBinding {
-        source: stackable_operator::error::Error,
-    },
-    #[snafu(display("failed to apply Service for {}", rolegroup))]
+    #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
+    #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to apply ConfigMap for {}", rolegroup))]
+    #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to apply DaemonSet for {}", rolegroup))]
+    #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
+    },
+    #[snafu(display("failed to patch service account"))]
+    ApplyServiceAccount {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to patch role binding"))]
+    ApplyRoleBinding {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to update status"))]
+    ApplyStatus {
+        source: stackable_operator::error::Error,
     },
     #[snafu(display("invalid product config"))]
     InvalidProductConfig {
@@ -182,8 +183,8 @@ pub enum Error {
     DeleteOrphans {
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to update status"))]
-    ApplyStatus {
+    #[snafu(display("failed to build RBAC resources"))]
+    BuildRbacResources {
         source: stackable_operator::error::Error,
     },
 }
@@ -237,6 +238,10 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
+    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+        .await
+        .context(ResolveVectorAggregatorAddressSnafu)?;
+
     let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
     // required for discovery config map later
     let server_role_service = cluster_resources
@@ -244,24 +249,21 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
-        build_opa_builder_serviceaccount(
-            &opa,
-            &resolved_product_image,
-            &ctx.opa_bundle_builder_clusterrole,
-        )?;
-    cluster_resources
-        .add(client, opa_builder_role_serviceaccount)
-        .await
-        .context(ApplyRoleServiceAccountSnafu)?;
-    cluster_resources
-        .add(client, opa_builder_role_rolebinding)
-        .await
-        .context(ApplyRoleRoleBindingSnafu)?;
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(
+        opa.as_ref(),
+        APP_NAME,
+        cluster_resources.get_required_labels(),
+    )
+    .context(BuildRbacResourcesSnafu)?;
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+    let rbac_sa = cluster_resources
+        .add(client, rbac_sa)
         .await
-        .context(ResolveVectorAggregatorAddressSnafu)?;
+        .context(ApplyServiceAccountSnafu)?;
+    cluster_resources
+        .add(client, rbac_rolebinding)
+        .await
+        .context(ApplyRoleBindingSnafu)?;
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
@@ -290,6 +292,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
+            &rbac_sa.name_any(),
         )?;
 
         cluster_resources
@@ -349,57 +352,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .context(DeleteOrphansSnafu)?;
 
     Ok(Action::await_change())
-}
-
-fn build_opa_builder_serviceaccount(
-    opa: &OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    opa_bundle_builder_clusterrole: &str,
-) -> Result<(ServiceAccount, RoleBinding)> {
-    let role_name = OpaRole::Server.to_string();
-    let sa_name = format!("{}-{}", opa.metadata.name.as_ref().unwrap(), role_name);
-    let sa = ServiceAccount {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&sa_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        ..ServiceAccount::default()
-    };
-    let binding_name = &sa_name;
-    let binding = RoleBinding {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(binding_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        role_ref: RoleRef {
-            api_group: ClusterRole::GROUP.to_string(),
-            kind: ClusterRole::KIND.to_string(),
-            name: opa_bundle_builder_clusterrole.to_string(),
-        },
-        subjects: Some(vec![Subject {
-            api_group: Some(ServiceAccount::GROUP.to_string()),
-            kind: ServiceAccount::KIND.to_string(),
-            name: sa_name,
-            namespace: sa.metadata.namespace.clone(),
-        }]),
-    };
-    Ok((sa, binding))
 }
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
@@ -538,13 +490,8 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
+    sa_name: &str,
 ) -> Result<DaemonSet> {
-    let sa_name = format!(
-        "{}-{}",
-        opa.metadata.name.as_ref().context(NoNameSnafu)?,
-        rolegroup_ref.role
-    );
-
     let env = server_config
         .get(&PropertyNameKind::Env)
         .iter()
@@ -696,12 +643,13 @@ fn build_server_rolegroup_daemonset(
             .build(),
     )
     .service_account_name(sa_name)
-    .security_context(PodSecurityContext {
-        run_as_user: Some(1000),
-        run_as_group: Some(1000),
-        fs_group: Some(1000),
-        ..PodSecurityContext::default()
-    });
+    .security_context(
+        PodSecurityContextBuilder::new()
+            .run_as_user(1000)
+            .run_as_group(0)
+            .fs_group(1000)
+            .build(),
+    );
 
     if merged_config.logging.enable_vector_agent {
         pb.add_container(product_logging::framework::vector_container(

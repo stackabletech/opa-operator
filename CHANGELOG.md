@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Cluster status conditions ([#428])
+- Cluster status conditions ([#428]).
 - Extend cluster resources for status and cluster operation (paused, stopped) ([430]).
 
 ### Changed
@@ -16,15 +16,18 @@ All notable changes to this project will be documented in this file.
   This change is breaking, because - for security reasons - we default to the `cluster-internal` `ListenerClass`.
   If you need your cluster to be accessible from outside of Kubernetes you need to set `clusterConfig.listenerClass`
   to `external-unstable` or `external-stable` ([#432]).
-- `operator-rs` `0.27.1` -> `0.39.0` ([#411], [#420], [#430]).
+- `operator-rs` `0.27.1` -> `0.40.1` ([#411], [#420], [#430], [#431]).
 - Fragmented `OpaConfig` ([#411]).
 - Bumped stackable image versions to `23.4.0-rc2` ([#420]).
 - Enabled logging ([#420]).
+- Openshift compatibility: extended roles ([#431]).
+- Use operator-rs `build_rbac_resources` method ([#431]).
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
 [#428]: https://github.com/stackabletech/opa-operator/pull/428
 [#430]: https://github.com/stackabletech/opa-operator/pull/430
+[#431]: https://github.com/stackabletech/opa-operator/pull/431
 [#432]: https://github.com/stackabletech/opa-operator/pull/432
 
 ## [23.1.0] - 2023-01-23
