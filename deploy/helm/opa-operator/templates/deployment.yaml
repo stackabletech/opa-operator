@@ -14,11 +14,12 @@ spec:
       {{- include "operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        {{- with .Values.podAnnotations }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       labels:
         {{- include "operator.selectorLabels" . | nindent 8 }}
     spec:
@@ -43,6 +44,11 @@ spec:
           env:
             - name: OPA_BUNDLE_BUILDER_CLUSTERROLE
               value: {{ include "operator.fullname" . }}-opa-bundle-builder-clusterrole
+            - name: OPERATOR_IMAGE
+              # Tilt can use recognize annotations as image paths, but not env variables
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['image']
       volumes:
         - name: config-spec
           configMap:

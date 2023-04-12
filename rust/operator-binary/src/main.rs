@@ -1,5 +1,6 @@
 mod controller;
 mod discovery;
+mod group_fetcher;
 mod product_logging;
 
 use crate::controller::OPA_CONTROLLER_NAME;
@@ -34,13 +35,22 @@ pub mod built_info {
 #[clap(about, author)]
 struct Opts {
     #[clap(subcommand)]
-    cmd: Command<OpaRun>,
+    cmd: Cmd,
+}
+
+#[derive(Parser)]
+enum Cmd {
+    #[clap(flatten)]
+    Common(Command<OpaRun>),
+    GroupFetcher {},
 }
 
 #[derive(clap::Parser)]
 struct OpaRun {
     #[clap(long, env)]
     opa_bundle_builder_clusterrole: String,
+    #[clap(long, env)]
+    operator_image: String,
     #[clap(flatten)]
     common: ProductOperatorRun,
 }
@@ -49,18 +59,20 @@ struct OpaRun {
 async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
-        Command::Crd => {
+        Cmd::GroupFetcher {} => group_fetcher::run().await,
+        Cmd::Common(Command::Crd) => {
             OpaCluster::print_yaml_schema()?;
         }
-        Command::Run(OpaRun {
+        Cmd::Common(Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
+            operator_image,
             common:
                 ProductOperatorRun {
                     product_config,
                     watch_namespace,
                     tracing_target,
                 },
-        }) => {
+        })) => {
             stackable_operator::logging::initialize_logging(
                 "OPA_OPERATOR_LOG",
                 APP_NAME,
@@ -86,6 +98,7 @@ async fn main() -> Result<(), error::Error> {
                 product_config,
                 watch_namespace,
                 opa_builder_clusterrole,
+                operator_image,
             )
             .await?;
         }
@@ -102,6 +115,7 @@ async fn create_controller(
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
     opa_bundle_builder_clusterrole: String,
+    group_fetcher_image: String,
 ) -> OperatorResult<()> {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
@@ -121,6 +135,7 @@ async fn create_controller(
                 client: client.clone(),
                 product_config,
                 opa_bundle_builder_clusterrole,
+                group_fetcher_image,
             }),
         )
         .map(|res| {

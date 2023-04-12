@@ -27,7 +27,7 @@ rec {
   dockerImage = pkgs.dockerTools.streamLayeredImage {
     name = dockerName;
     tag = dockerTag;
-    contents = [ pkgs.bashInteractive pkgs.coreutils pkgs.util-linuxMinimal ];
+    contents = [ pkgs.bashInteractive pkgs.coreutils pkgs.util-linuxMinimal build ];
     config = {
     Env =
       let
