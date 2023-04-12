@@ -9,7 +9,7 @@ use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 
 pub async fn run() {
-    let app = Router::new().route("/user/groups", post(get_user_groups));
+    let app = Router::new().route("/user", post(get_user_info));
     axum::Server::bind(&"127.0.0.1:9476".parse().unwrap())
         .serve(app.into_make_service())
         .with_graceful_shutdown(tokio::signal::ctrl_c().map(Result::unwrap))
@@ -41,7 +41,13 @@ struct GroupMembershipRequest {
     username: String,
 }
 
-async fn get_user_groups(Json(req): Json<GroupMembershipRequest>) -> Json<Vec<GroupMembership>> {
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserInfo {
+    groups: Vec<GroupMembership>,
+}
+
+async fn get_user_info(Json(req): Json<GroupMembershipRequest>) -> Json<UserInfo> {
     let http = reqwest::Client::default();
     const KEYCLOAK: &str = "http://192.168.122.1:8080";
     const ADMIN_REALM: &str = "master";
@@ -94,5 +100,5 @@ async fn get_user_groups(Json(req): Json<GroupMembershipRequest>) -> Json<Vec<Gr
         .json::<Vec<GroupMembership>>()
         .await
         .unwrap();
-    Json(groups)
+    Json(UserInfo { groups })
 }

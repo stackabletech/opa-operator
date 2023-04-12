@@ -17,5 +17,5 @@ data:
       false
     }
 
-    userGroups(username) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user/groups", "body": {"username": username}, "headers": {"Content-Type": "application/json"}}).body
-    currentUserGroups := userGroups(input.username)
+    userInfo(username) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"username": username}, "headers": {"Content-Type": "application/json"}}).body
+    currentUserInfo := userInfo(input.username)
