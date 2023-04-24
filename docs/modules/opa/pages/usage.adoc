@@ -18,7 +18,7 @@ To create a single node OPA (v0.45.0) cluster with Prometheus metrics exposed on
     spec:
       image:
         productVersion: "0.45.0"
-        stackableVersion: "23.4.0-rc2"
+        stackableVersion: "0.0.0-dev"
       servers:
         roleGroups:
           default:

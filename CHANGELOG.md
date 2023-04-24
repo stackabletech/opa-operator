@@ -7,8 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Operator-rs: `0.40.1` -> `0.41.0` ([#440]).
+- Use 0.0.0-dev product images for testing ([#xxx)
+- Use testing-tools 0.2.0 ([#xxx])
 
 [#440]: https://github.com/stackabletech/opa-operator/pull/440
+[#xxx]: https://github.com/stackabletech/opa-operator/pull/xxx
 
 ## [23.4.0] - 2023-04-17
 
