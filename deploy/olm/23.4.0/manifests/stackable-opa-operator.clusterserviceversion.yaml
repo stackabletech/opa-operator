@@ -65,7 +65,7 @@ spec:
 
   relatedImages:
     - name: opa-operator
-      image: docker.stackable.tech/stackable/hiopave-operator:23.4.0
+      image: docker.stackable.tech/stackable/opa-operator:23.4.0
   install:
     # strategy indicates what type of deployment artifacts are used
     strategy: deployment
