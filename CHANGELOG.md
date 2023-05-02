@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Generate OLM bundle for Release 23.4.0 ([#442]).
+
 ### Changed
 
 - Operator-rs: `0.40.1` -> `0.41.0` ([#440]).
@@ -12,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 [#440]: https://github.com/stackabletech/opa-operator/pull/440
 [#441]: https://github.com/stackabletech/opa-operator/pull/441
+[#442]: https://github.com/stackabletech/opa-operator/pull/442
 
 ## [23.4.0] - 2023-04-17
 
