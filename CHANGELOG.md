@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [23.4.1] - 2023-05-17
+
+### Fixed
+
+- Migrate "opa-bundle-builder" container name from <= 23.1 releases ([#445]).
+
+[#445]: https://github.com/stackabletech/opa-operator/pull/445
+
 ## [23.4.0] - 2023-04-17
 
 ### Added
