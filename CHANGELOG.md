@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Generate OLM bundle for Release 23.4.0 ([#442]).
+- Missing CRD defaults for `status.conditions` field ([#443]).
 
 ### Changed
 
@@ -21,6 +22,7 @@ All notable changes to this project will be documented in this file.
 [#440]: https://github.com/stackabletech/opa-operator/pull/440
 [#441]: https://github.com/stackabletech/opa-operator/pull/441
 [#442]: https://github.com/stackabletech/opa-operator/pull/442
+[#443]: https://github.com/stackabletech/opa-operator/pull/443
 [#445]: https://github.com/stackabletech/opa-operator/pull/445
 
 ## [23.4.0] - 2023-04-17
