@@ -6,6 +6,7 @@ use crate::product_logging::{
     OpaLogLevel,
 };
 
+use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
@@ -309,12 +310,33 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             })?;
         ds_cond_builder.add(
             cluster_resources
-                .add(client, rg_daemonset)
+                .add(client, rg_daemonset.clone())
                 .await
                 .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                     rolegroup: rolegroup.clone(),
                 })?,
         );
+
+        // Previous version of opa-operator used the field manager scope "opacluster" to write out a DaemonSet with the bundle-builder container called "opa-bundle-builder".
+        // During https://github.com/stackabletech/opa-operator/pull/420 it was renamed to "bundle-builder".
+        // As we are now using the field manager scope "opa.stackable.tech_opacluster", our old changes (with the old container) will stay valid.
+        // We have to use the old field manager scope and post an empty path to get rid of it
+        // https://github.com/stackabletech/issues/issues/390 will implement a proper fix, e.g. also fixing Services and ConfigMaps
+        // For details see https://github.com/stackabletech/opa-operator/issues/444
+        tracing::trace!(
+            "Removing old field manager scope \"opacluster\" of DaemonSet {daemonset_name} to remove the \"opa-bundle-builder\" container. \
+            See https://github.com/stackabletech/opa-operator/issues/444 and https://github.com/stackabletech/issues/issues/390 for details.",
+            daemonset_name = rg_daemonset.name_any()
+        );
+        client
+            .apply_patch(
+                "opacluster",
+                &rg_daemonset,
+                // We can hardcode this here, as https://github.com/stackabletech/issues/issues/390 will solve the general problem and we always have created DaemonSets using the "apps/v1" version
+                json!({"apiVersion": "apps/v1", "kind": "DaemonSet"}),
+            )
+            .await
+            .context(ApplyRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
     for discovery_cm in build_discovery_configmaps(

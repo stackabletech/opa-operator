@@ -12,13 +12,18 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Operator-rs: `0.40.1` -> `0.41.0` ([#440]).
-- Use 0.0.0-dev product images for testing ([#441])
-- Use testing-tools 0.2.0 ([#441])
+- Use 0.0.0-dev product images for testing ([#441]).
+- Use testing-tools 0.2.0 ([#441]).
+
+### Fixed
+
+- Migrate "opa-bundle-builder" container name from <= 23.1 releases ([#445]).
 
 [#440]: https://github.com/stackabletech/opa-operator/pull/440
 [#441]: https://github.com/stackabletech/opa-operator/pull/441
 [#442]: https://github.com/stackabletech/opa-operator/pull/442
 [#443]: https://github.com/stackabletech/opa-operator/pull/443
+[#445]: https://github.com/stackabletech/opa-operator/pull/445
 
 ## [23.4.0] - 2023-04-17
 
