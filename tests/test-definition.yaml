@@ -2,12 +2,12 @@
 dimensions:
   - name: opa
     values:
-      - 0.37.2-stackable23.4.0
-      - 0.41.0-stackable23.4.0
-      - 0.45.0-stackable23.4.0
+      - 0.37.2-stackable23.4.1
+      - 0.41.0-stackable23.4.1
+      - 0.45.0-stackable23.4.1
   - name: opa-latest
     values:
-      - 0.45.0-stackable23.4.0
+      - 0.45.0-stackable23.4.1
 tests:
   - name: smoke
     dimensions:
