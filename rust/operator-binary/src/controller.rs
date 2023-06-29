@@ -13,8 +13,8 @@ use stackable_opa_crd::{
 };
 use stackable_operator::{
     builder::{
-        ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
-        PodSecurityContextBuilder, VolumeBuilder,
+        resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
+        FieldPathEnvVar, ObjectMetaBuilder, PodBuilder, PodSecurityContextBuilder, VolumeBuilder,
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
@@ -551,7 +551,8 @@ fn build_server_rolegroup_daemonset(
         )
         .join(" && ")])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR);
+        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
@@ -572,6 +573,14 @@ fn build_server_rolegroup_daemonset(
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .resources(
+            ResourceRequirementsBuilder::new()
+                .with_cpu_request("100m")
+                .with_cpu_limit("200m")
+                .with_memory_request("128Mi")
+                .with_memory_limit("128Mi")
+                .build(),
+        )
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
@@ -679,6 +688,12 @@ fn build_server_rolegroup_daemonset(
             CONFIG_VOLUME_NAME,
             LOG_VOLUME_NAME,
             merged_config.logging.containers.get(&Container::Vector),
+            ResourceRequirementsBuilder::new()
+                .with_cpu_request("250m")
+                .with_cpu_limit("500m")
+                .with_memory_request("128Mi")
+                .with_memory_limit("128Mi")
+                .build(),
         ));
     }
 
