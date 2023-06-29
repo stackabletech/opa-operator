@@ -158,10 +158,10 @@ servers:
       config:
         resources:
           cpu:
-            min: '200m'
-            max: "2"
+            min: 250m
+            max: 500m
           memory:
-            limit: '2Gi'
+            limit: 512Mi
 ----
 
 WARNING: The default values are _most likely_ not sufficient to run a proper cluster in production. Please adapt according to your requirements.

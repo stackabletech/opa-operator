@@ -179,7 +179,7 @@ impl OpaConfig {
                     max: Some(Quantity("500".to_owned())),
                 },
                 memory: MemoryLimitsFragment {
-                    limit: Some(Quantity("1Gi".to_owned())),
+                    limit: Some(Quantity("512Mi".to_owned())),
                     runtime_limits: NoRuntimeLimitsFragment {},
                 },
                 storage: OpaStorageConfigFragment {},
