@@ -1,0 +1,49 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 600
+commands:
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role --timeout 301s
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role-group --timeout 301s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: opa-server-resources-from-role
+spec:
+  template:
+    spec:
+      containers:
+        - name: opa
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+        - name: bundle-builder
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: opa-server-resources-from-role-group
+spec:
+  template:
+    spec:
+      containers:
+        - name: opa
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
+        - name: bundle-builder
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}

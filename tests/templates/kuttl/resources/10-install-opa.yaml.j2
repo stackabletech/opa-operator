@@ -15,10 +15,10 @@ spec:
     config:
       resources:
         cpu:
-          min: 100m
-          max: "1"
+          min: 200m
+          max: 300m
         memory:
-          limit: 1Gi
+          limit: 256Mi
       logging:
         enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
     roleGroups:
@@ -27,9 +27,9 @@ spec:
         config:
           resources:
             cpu:
-              min: 300m
-              max: "3"
+              min: 200m
+              max: 400m
             memory:
-              limit: 3Gi
+              limit: 512Mi
           logging:
             enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
