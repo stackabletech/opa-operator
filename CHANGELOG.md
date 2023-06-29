@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Operator-rs: `0.40.1` -> `0.41.0` ([#440]).
 - Use 0.0.0-dev product images for testing ([#441]).
 - Use testing-tools 0.2.0 ([#441]).
+- Added kuttl test suites ([#455])
 
 ### Fixed
 
@@ -28,6 +29,7 @@ All notable changes to this project will be documented in this file.
 [#445]: https://github.com/stackabletech/opa-operator/pull/445
 [#451]: https://github.com/stackabletech/opa-operator/pull/451
 [#453]: https://github.com/stackabletech/opa-operator/pull/453
+[#455]: https://github.com/stackabletech/opa-operator/pull/455
 
 ## [23.4.0] - 2023-04-17
 
