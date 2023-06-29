@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - Generate OLM bundle for Release 23.4.0 ([#442]).
 - Missing CRD defaults for `status.conditions` field ([#443]).
 - Support for OPA 0.51.0 ([#451]).
-- Add support for resource quotas ([#453]).
+- Set explicit resources on all containers ([#453]).
 
 ### Changed
 
