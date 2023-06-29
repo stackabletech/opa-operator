@@ -576,7 +576,7 @@ fn build_server_rolegroup_daemonset(
         .resources(
             ResourceRequirementsBuilder::new()
                 .with_cpu_request("100m")
-                .with_cpu_limit("250m")
+                .with_cpu_limit("200m")
                 .with_memory_request("128Mi")
                 .with_memory_limit("128Mi")
                 .build(),
