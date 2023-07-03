@@ -23,13 +23,16 @@ tests:
     dimensions:
       - opa-latest
 suites:
-  - name: latest
+  - name: nightly
     patch:
       - dimensions:
           - expr: last
-  - name: smoke
+  - name: smoke-latest
     select:
       - smoke
+    patch:
+      - dimensions:
+          - expr: last
   - name: openshift
     patch:
       - dimensions:
