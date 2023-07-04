@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Missing CRD defaults for `status.conditions` field ([#443]).
 - Support for OPA 0.51.0 ([#451]).
 - Set explicit resources on all containers ([#453]).
+- Support `podOverrides` ([#458]).
 
 ### Changed
 
@@ -32,6 +33,7 @@ All notable changes to this project will be documented in this file.
 [#453]: https://github.com/stackabletech/opa-operator/pull/453
 [#455]: https://github.com/stackabletech/opa-operator/pull/455
 [#456]: https://github.com/stackabletech/opa-operator/pull/456
+[#458]: https://github.com/stackabletech/opa-operator/pull/458
 
 ## [23.4.0] - 2023-04-17
 
