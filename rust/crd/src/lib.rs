@@ -15,11 +15,11 @@ use stackable_operator::{
     product_config_utils::{ConfigError, Configuration},
     product_logging::{self, spec::Logging},
     role_utils::Role,
-    role_utils::RoleGroupRef,
+    role_utils::{RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 use strum::{Display, EnumIter, EnumString};
 
 pub const APP_NAME: &str = "opa";
@@ -29,6 +29,15 @@ pub const CONFIG_FILE: &str = "config.yaml";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
+    #[snafu(display("the role {role} is not defined"))]
+    CannotRetrieveOpaRole { role: String },
+    #[snafu(display("the role group {role_group} is not defined"))]
+    CannotRetrieveOpaRoleGroup { role_group: String },
+    #[snafu(display("unknown role {role}"))]
+    UnknownOpaRole {
+        source: strum::ParseError,
+        role: String,
+    },
     #[snafu(display("the role group [{role_group}] is missing"))]
     MissingRoleGroup { role_group: String },
     #[snafu(display("fragment validation failure"))]
@@ -237,6 +246,30 @@ pub enum OpaRole {
 }
 
 impl OpaCluster {
+    /// Returns a reference to the role. Raises an error if the role is not defined.
+    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment> {
+        match role_variant {
+            OpaRole::Server => &self.spec.servers,
+        }
+    }
+
+    /// Returns a reference to the role group. Raises an error if the role or role group are not defined.
+    pub fn rolegroup(
+        &self,
+        rolegroup_ref: &RoleGroupRef<OpaCluster>,
+    ) -> Result<&RoleGroup<OpaConfigFragment>, Error> {
+        let role_variant =
+            OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
+                role: rolegroup_ref.role.to_owned(),
+            })?;
+        let role = self.role(&role_variant);
+        role.role_groups
+            .get(&rolegroup_ref.role_group)
+            .with_context(|| CannotRetrieveOpaRoleGroupSnafu {
+                role_group: rolegroup_ref.role_group.to_owned(),
+            })
+    }
+
     /// The name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_name(&self) -> Option<String> {
         self.metadata.name.clone()

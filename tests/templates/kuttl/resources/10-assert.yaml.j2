@@ -47,3 +47,24 @@ spec:
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
         - name: vector
 {% endif %}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: opa-server-resources-from-pod-overrides
+spec:
+  template:
+    spec:
+      containers:
+        - name: opa
+          resources:
+            requests:
+              cpu: 210m
+              memory: 256Mi
+            limits:
+              cpu: 310m
+              memory: 256Mi
+        - name: bundle-builder
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}
