@@ -16,8 +16,8 @@ All notable changes to this project will be documented in this file.
 - Operator-rs: `0.40.1` -> `0.41.0` ([#440]).
 - Use 0.0.0-dev product images for testing ([#441]).
 - Use testing-tools 0.2.0 ([#441]).
-- Added kuttl test suites ([#455])
-- Set resource limits on containers by default ([#456])
+- Added kuttl test suites ([#455]).
+- Set explicit resources on all containers ([#453], [#456]).
 
 ### Fixed
 
