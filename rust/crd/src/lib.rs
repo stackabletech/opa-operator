@@ -246,7 +246,7 @@ pub enum OpaRole {
 }
 
 impl OpaCluster {
-    /// Returns a reference to the role. Raises an error if the role is not defined.
+    /// Returns a reference to the role.
     pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment> {
         match role_variant {
             OpaRole::Server => &self.spec.servers,
