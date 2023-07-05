@@ -29,8 +29,6 @@ pub const CONFIG_FILE: &str = "config.yaml";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("the role {role} is not defined"))]
-    CannotRetrieveOpaRole { role: String },
     #[snafu(display("the role group {role_group} is not defined"))]
     CannotRetrieveOpaRoleGroup { role_group: String },
     #[snafu(display("unknown role {role}"))]
