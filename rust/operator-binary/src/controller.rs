@@ -11,6 +11,7 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
 };
+use stackable_operator::k8s_openapi::DeepMerge;
 use stackable_operator::{
     builder::{
         resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
@@ -105,6 +106,8 @@ pub struct Ctx {
 pub enum Error {
     #[snafu(display("object does not define meta name"))]
     NoName,
+    #[snafu(display("internal operator failure"))]
+    InternalOperatorFailure { source: stackable_opa_crd::Error },
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
     #[snafu(display("failed to apply role Service"))]
@@ -202,6 +205,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let opa_ref = ObjectRef::from_obj(opa.as_ref());
     let client = &ctx.client;
     let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
+    let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
         APP_NAME,
@@ -217,7 +221,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         &transform_all_roles_to_config(
             opa.as_ref(),
             [(
-                OpaRole::Server.to_string(),
+                opa_role.to_string(),
                 (
                     vec![
                         PropertyNameKind::File(CONFIG_FILE.to_string()),
@@ -235,7 +239,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     )
     .context(InvalidProductConfigSnafu)?;
     let role_server_config = validated_config
-        .get(&OpaRole::Server.to_string())
+        .get(&opa_role.to_string())
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
@@ -271,12 +275,12 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
-            role: OpaRole::Server.to_string(),
+            role: opa_role.to_string(),
             role_group: rolegroup_name.to_string(),
         };
 
         let merged_config = opa
-            .merged_config(&OpaRole::Server, &rolegroup)
+            .merged_config(&opa_role, &rolegroup)
             .context(FailedToResolveConfigSnafu)?;
 
         let rg_configmap = build_server_rolegroup_config_map(
@@ -290,6 +294,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         let rg_daemonset = build_server_rolegroup_daemonset(
             &opa,
             &resolved_product_image,
+            &opa_role,
             &rolegroup,
             rolegroup_config,
             &merged_config,
@@ -509,11 +514,17 @@ fn build_server_rolegroup_config_map(
 fn build_server_rolegroup_daemonset(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
+    opa_role: &OpaRole,
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
     sa_name: &str,
 ) -> Result<DaemonSet> {
+    let role = opa.role(opa_role);
+    let role_group = opa
+        .rolegroup(rolegroup_ref)
+        .context(InternalOperatorFailureSnafu)?;
+
     let env = server_config
         .get(&PropertyNameKind::Env)
         .iter()
@@ -697,6 +708,10 @@ fn build_server_rolegroup_daemonset(
         ));
     }
 
+    let mut pod_template = pb.build_template();
+    pod_template.merge_from(role.config.pod_overrides.clone());
+    pod_template.merge_from(role_group.config.pod_overrides.clone());
+
     Ok(DaemonSet {
         metadata: ObjectMetaBuilder::new()
             .name_and_namespace(opa)
@@ -720,7 +735,7 @@ fn build_server_rolegroup_daemonset(
                 )),
                 ..LabelSelector::default()
             },
-            template: pb.build_template(),
+            template: pod_template,
             ..DaemonSetSpec::default()
         }),
         status: None,
