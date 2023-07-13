@@ -81,23 +81,23 @@ const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
 // ~ 5 MB x 2
 // these sizes are needed both for the single file (for multilog) as well as the total (for the EmptyDir)
-const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE: u32 = 5;
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 2;
-const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES: MemoryQuantity = MemoryQuantity {
-    value: (OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES) as f32,
+const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: (OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES) as f32,
     unit: BinaryMultiple::Mebi,
 };
 // ~ 5 MB x 2
 // these sizes are needed both for the single file (for multilog) as well as the total (for the EmptyDir)
-const OPA_ROLLING_LOG_FILE_SIZE: u32 = 5;
+const OPA_ROLLING_LOG_FILE_SIZE_MB: u32 = 5;
 const OPA_ROLLING_LOG_FILES: u32 = 2;
-const MAX_OPA_LOG_FILE_SIZE_IN_BYTES: MemoryQuantity = MemoryQuantity {
-    value: (OPA_ROLLING_LOG_FILE_SIZE * OPA_ROLLING_LOG_FILES) as f32,
+const MAX_OPA_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: (OPA_ROLLING_LOG_FILE_SIZE_MB * OPA_ROLLING_LOG_FILES) as f32,
     unit: BinaryMultiple::Mebi,
 };
 
 // ~ 1 MB
-const MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES: MemoryQuantity = MemoryQuantity {
+const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
     value: 1.0,
     unit: BinaryMultiple::Mebi,
 };
@@ -690,9 +690,9 @@ fn build_server_rolegroup_daemonset(
                 medium: None,
                 size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
                     &[
-                        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES,
-                        MAX_OPA_LOG_FILE_SIZE_IN_BYTES,
-                        MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES,
+                        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
+                        MAX_OPA_LOG_FILE_SIZE,
+                        MAX_PREPARE_LOG_FILE_SIZE,
                     ],
                 )),
             })
@@ -813,9 +813,9 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
     let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level}");
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
+        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_MB} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_MB} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
@@ -844,9 +844,9 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     let mut start_command = "/stackable/opa-bundle-builder".to_string();
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
+        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
