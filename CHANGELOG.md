@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Operator-rs: `0.40.1` -> `0.41.0` ([#440]).
+- Operator-rs: `0.40.1` -> `0.44.0` ([#440], [#460]).
 - Use 0.0.0-dev product images for testing ([#441]).
 - Use testing-tools 0.2.0 ([#441]).
 - Added kuttl test suites ([#455]).
@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Migrate "opa-bundle-builder" container name from <= 23.1 releases ([#445]).
+- Increase the size limit of the log volume ([#460]).
 
 [#440]: https://github.com/stackabletech/opa-operator/pull/440
 [#441]: https://github.com/stackabletech/opa-operator/pull/441
@@ -34,6 +35,7 @@ All notable changes to this project will be documented in this file.
 [#455]: https://github.com/stackabletech/opa-operator/pull/455
 [#456]: https://github.com/stackabletech/opa-operator/pull/456
 [#458]: https://github.com/stackabletech/opa-operator/pull/458
+[#460]: https://github.com/stackabletech/opa-operator/pull/460
 
 ## [23.4.0] - 2023-04-17
 

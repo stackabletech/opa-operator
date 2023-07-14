@@ -11,7 +11,9 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
 };
+use stackable_operator::k8s_openapi::api::core::v1::EmptyDirVolumeSource;
 use stackable_operator::k8s_openapi::DeepMerge;
+use stackable_operator::memory::{BinaryMultiple, MemoryQuantity};
 use stackable_operator::{
     builder::{
         resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
@@ -26,9 +28,7 @@ use stackable_operator::{
                 ConfigMap, EnvVar, HTTPGetAction, Probe, Service, ServicePort, ServiceSpec,
             },
         },
-        apimachinery::pkg::{
-            api::resource::Quantity, apis::meta::v1::LabelSelector, util::intstr::IntOrString,
-        },
+        apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
     },
     kube::{
         runtime::{controller::Action, reflector::ObjectRef},
@@ -79,20 +79,32 @@ const BUNDLES_DIR: &str = "/bundles";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
-// ~ 5 MB
-const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES: u32 = 5000000;
+// bundle builder: ~ 5 MB x 2
+// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES: u32 =
+    OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * 1000000;
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 2;
-// ~ 5 MB
-const MAX_OPA_LOG_FILE_SIZE_IN_BYTES: u32 = 5000000;
+const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: (OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
+        as f32,
+    unit: BinaryMultiple::Mebi,
+};
+// opa logs: ~ 5 MB x 2
+// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+const OPA_ROLLING_LOG_FILE_SIZE_MB: u32 = 5;
+const OPA_ROLLING_LOG_FILE_SIZE_BYTES: u32 = OPA_ROLLING_LOG_FILE_SIZE_MB * 1000000;
 const OPA_ROLLING_LOG_FILES: u32 = 2;
-// ~ 1 MB
-const MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES: u32 = 1000000;
+const MAX_OPA_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: (OPA_ROLLING_LOG_FILE_SIZE_MB * OPA_ROLLING_LOG_FILES) as f32,
+    unit: BinaryMultiple::Mebi,
+};
 
-const LOG_FILE_VOLUME_SIZE_IN_MB: u32 = ((MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES
-    * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
-    + (MAX_OPA_LOG_FILE_SIZE_IN_BYTES * OPA_ROLLING_LOG_FILES)
-    + MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES)
-    / 1000000;
+// ~ 1 MB
+const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: 1.0,
+    unit: BinaryMultiple::Mebi,
+};
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -678,10 +690,16 @@ fn build_server_rolegroup_daemonset(
     )
     .add_volume(
         VolumeBuilder::new(LOG_VOLUME_NAME)
-            .with_empty_dir(
-                None::<String>,
-                Some(Quantity(format!("{LOG_FILE_VOLUME_SIZE_IN_MB}Mi"))),
-            )
+            .empty_dir(EmptyDirVolumeSource {
+                medium: None,
+                size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
+                    &[
+                        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
+                        MAX_OPA_LOG_FILE_SIZE,
+                        MAX_PREPARE_LOG_FILE_SIZE,
+                    ],
+                )),
+            })
             .build(),
     )
     .service_account_name(sa_name)
@@ -799,9 +817,9 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
     let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level}");
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
+        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
@@ -830,9 +848,9 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     let mut start_command = "/stackable/opa-bundle-builder".to_string();
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
+        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
