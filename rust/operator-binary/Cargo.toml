@@ -23,7 +23,7 @@ snafu = "0.7"
 strum = { version = "0.24", features = ["derive"] }
 tokio = { version = "1.28", features = ["full"] }
 tracing = "0.1"
-pin-project = "1.0"
+pin-project = "1.1"
 
 [build-dependencies]
 built = { version =  "0.5", features = ["chrono", "git2"] }
