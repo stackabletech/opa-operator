@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- `vector` `0.26.0` -> `0.31.0` ([#465]).
+- `operator-rs` `0.44.0` -> `0.45.0` ([#465]).
+
+[#465]: https://github.com/stackabletech/opa-operator/pull/465
+
 ## [23.7.0] - 2023-07-14
 
 ### Added
