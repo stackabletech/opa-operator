@@ -12,8 +12,8 @@ def check_processed_events():
                         nodes {
                             componentId
                             metrics {
-                                processedEventsTotal {
-                                    processedEventsTotal
+                                receivedEventsTotal {
+                                    receivedEventsTotal
                                 }
                             }
                         }
@@ -30,9 +30,9 @@ def check_processed_events():
 
     transforms = result['data']['transforms']['nodes']
     for transform in transforms:
-        processedEvents = transform['metrics']['processedEventsTotal']['processedEventsTotal']
+        receivedEvents = transform['metrics']['receivedEventsTotal']['receivedEventsTotal']
         componentId = transform['componentId']
-        assert processedEvents > 0, \
+        assert receivedEvents > 0, \
             f'No events were processed in "{componentId}".'
 
 
