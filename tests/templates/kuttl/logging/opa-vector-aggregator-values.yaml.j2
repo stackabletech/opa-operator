@@ -20,25 +20,25 @@ customConfig:
       type: vector
       version: "2"
   transforms:
-    automaticLogConfigServerOpa:
+    filteredAutomaticLogConfigServerOpa:
       type: filter
       inputs: [vector]
       condition: >-
         starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "opa"
-    automaticLogConfigServerBundleBuilder:
+    filteredAutomaticLogConfigServerBundleBuilder:
       type: filter
       inputs: [vector]
       condition: >-
         starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "bundle-builder"
-    automaticLogConfigServerVector:
+    filteredAutomaticLogConfigServerVector:
       type: filter
       inputs: [vector]
       condition: >-
         starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "vector"
-    automaticLogConfigServerPrepare:
+    filteredAutomaticLogConfigServerPrepare:
       type: filter
       inputs: [vector]
       condition: >-
