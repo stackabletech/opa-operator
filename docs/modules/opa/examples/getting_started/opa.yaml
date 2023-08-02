@@ -6,7 +6,6 @@ metadata:
 spec:
   image:
     productVersion: "0.51.0"
-    stackableVersion: "0.0.0-dev"
   servers:
     roleGroups:
       default:
