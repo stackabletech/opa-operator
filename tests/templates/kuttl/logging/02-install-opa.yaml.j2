@@ -23,8 +23,7 @@ metadata:
   name: test-opa
 spec:
   image:
-    productVersion: "{{ test_scenario['values']['opa'].split('-stackable')[0] }}"
-    stackableVersion: "{{ test_scenario['values']['opa'].split('-stackable')[1] }}"
+    productVersion: "{{ test_scenario['values']['opa'] }}"
   clusterConfig:
     vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
   servers:

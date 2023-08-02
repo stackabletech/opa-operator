@@ -216,7 +216,10 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(opa.as_ref());
     let client = &ctx.client;
-    let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
+    let resolved_product_image = opa
+        .spec
+        .image
+        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::CARGO_PKG_VERSION);
     let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
