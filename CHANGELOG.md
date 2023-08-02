@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Default stackableVersion to operator version ([#XXX]).
+- Default stackableVersion to operator version ([#467]).
+
+[#467]: https://github.com/stackabletech/opa-operator/pull/467
 
 ## [23.7.0] - 2023-07-14
 
