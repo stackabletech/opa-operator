@@ -8,6 +8,12 @@ All notable changes to this project will be documented in this file.
 
 - Default stackableVersion to operator version ([#467]).
 
+### Changed
+
+- `vector` `0.26.0` -> `0.31.0` ([#465]).
+- `operator-rs` `0.44.0` -> `0.45.1` ([#467]).
+
+[#465]: https://github.com/stackabletech/opa-operator/pull/465
 [#467]: https://github.com/stackabletech/opa-operator/pull/467
 
 ## [23.7.0] - 2023-07-14
