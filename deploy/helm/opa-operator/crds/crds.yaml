@@ -941,6 +941,15 @@ spec:
                                         format: int32
                                         type: integer
                                     type: object
+                                  resizePolicy:
+                                    items:
+                                      properties:
+                                        resourceName:
+                                          type: string
+                                        restartPolicy:
+                                          type: string
+                                      type: object
+                                    type: array
                                   resources:
                                     properties:
                                       claims:
@@ -1459,6 +1468,15 @@ spec:
                                         format: int32
                                         type: integer
                                     type: object
+                                  resizePolicy:
+                                    items:
+                                      properties:
+                                        resourceName:
+                                          type: string
+                                        restartPolicy:
+                                          type: string
+                                      type: object
+                                    type: array
                                   resources:
                                     properties:
                                       claims:
@@ -1983,6 +2001,15 @@ spec:
                                         format: int32
                                         type: integer
                                     type: object
+                                  resizePolicy:
+                                    items:
+                                      properties:
+                                        resourceName:
+                                          type: string
+                                        restartPolicy:
+                                          type: string
+                                      type: object
+                                    type: array
                                   resources:
                                     properties:
                                       claims:
@@ -3842,6 +3869,15 @@ spec:
                                               format: int32
                                               type: integer
                                           type: object
+                                        resizePolicy:
+                                          items:
+                                            properties:
+                                              resourceName:
+                                                type: string
+                                              restartPolicy:
+                                                type: string
+                                            type: object
+                                          type: array
                                         resources:
                                           properties:
                                             claims:
@@ -4360,6 +4396,15 @@ spec:
                                               format: int32
                                               type: integer
                                           type: object
+                                        resizePolicy:
+                                          items:
+                                            properties:
+                                              resourceName:
+                                                type: string
+                                              restartPolicy:
+                                                type: string
+                                            type: object
+                                          type: array
                                         resources:
                                           properties:
                                             claims:
@@ -4884,6 +4929,15 @@ spec:
                                               format: int32
                                               type: integer
                                           type: object
+                                        resizePolicy:
+                                          items:
+                                            properties:
+                                              resourceName:
+                                                type: string
+                                              restartPolicy:
+                                                type: string
+                                            type: object
+                                          type: array
                                         resources:
                                           properties:
                                             claims:
