@@ -4,6 +4,22 @@
 
 The Stackable Operator for the OpenPolicyAgent (OPA) manages OPA instances. OPA is an open-source policy engine that allows you to define, manage and enforce policies across a number of software systems. OPA promotes "policy-as-code"; policies are defined in the declarative Rego language.
 
+== Getting started
+
+== Operator model
+
+TODO
+
+image::opa_overview.drawio.svg[A diagram depicting the Kubernetes resources created by the Stackable Operator for OPA]
+
+== Dependencies and other Operators to connect to
+
+no dependencies at all (not even secret, commons)
+
+TODO which operator use it so far? .... Druid, Trino, Kafka
+
+// currently no demos
+
 == Supported Versions
 
 The Stackable Operator for OPA currently supports the following versions of OPA:
