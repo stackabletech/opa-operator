@@ -63,4 +63,4 @@ Great! You've set up OPA, deployed a rule and queried it!
 
 == What's next
 
-Have a look at the xref:usage.adoc[] page for more configuration options of the Operator.
+Have a look at the xref:usage-guide/index.adoc[] page for more configuration options of the Operator.

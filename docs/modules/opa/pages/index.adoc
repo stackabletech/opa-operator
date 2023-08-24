@@ -30,7 +30,7 @@ Currently the following products on the Stackable Data Platform support policy d
 * xref:kafka:usage-guide/security.adoc#_authorization[Apache Kafka]
 * xref:trino:usage_guide/security.adoc#_authorization[Trino]
 
-== Supported Versions
+== Supported versions
 
 The Stackable Operator for OPA currently supports the following versions of OPA:
 
