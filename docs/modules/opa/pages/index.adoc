@@ -1,18 +1,11 @@
 = Stackable Operator for OPA (OpenPolicyAgent)
+:description: The Stackable Operator for OPA is a Kubernetes operator that manages OPA instances. Learn about its features, resources, dependencies and demos, and see the list of supported OPA versions.
+:keywords: Stackable Operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, engineer, policy
 
-This is an operator for Kubernetes that can manage https://www.openpolicyagent.org/[OPA] servers.
-
-WARNING: This operator only works with images from the https://repo.stackable.tech/#browse/browse:docker:v2%2Fstackable%2Fopa[Stackable] repository
+The Stackable Operator for the OpenPolicyAgent (OPA) manages OPA instances. OPA is an open-source policy engine that allows you to define, manage and enforce policies across a number of software systems. OPA promotes "policy-as-code"; policies are defined in the declarative Rego language.
 
 == Supported Versions
 
 The Stackable Operator for OPA currently supports the following versions of OPA:
 
 include::partial$supported-versions.adoc[]
-
-== Getting the Docker image
-
-[source]
-----
-docker pull docker.stackable.tech/stackable/opa:<version>
-----
