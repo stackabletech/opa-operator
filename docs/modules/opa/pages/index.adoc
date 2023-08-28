@@ -14,7 +14,7 @@ The _OpaCluster_ custom resource is used to declare OPA instances, only one xref
 
 image::opa_overview.drawio.svg[A diagram depicting the Kubernetes resources created by the Stackable Operator for OPA]
 
-Rego rules are defined in ConfigMaps, which are labelled with the `opa.stackable.tech/bundle: "true"` label. Every OPA Pod has a sidecar `bundle-builder` container that collects these ConfigMaps and builds them into a policy bundle.
+Rego rules are defined in ConfigMaps, which are labeled with the `opa.stackable.tech/bundle: "true"` label. Every OPA Pod has a sidecar `bundle-builder` container that collects these ConfigMaps and builds them into a policy bundle. This ensures that policies can be updated on-the-fly.
 
 The Operator also creates a xref:concepts:service_discovery.adoc[service discovery ConfigMap] for the OPA instance. The discovery ConfigMap contains the URL of the OPA API.
 
