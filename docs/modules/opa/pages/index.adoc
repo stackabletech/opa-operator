@@ -10,7 +10,7 @@ The xref:getting_started/index.adoc[Getting started guide] will guide you throug
 
 == Operator model
 
-The _OpaCluster_ custom resource is used to declare OPA instances, only one xref:home:concepts:roles-and-role-groups.adoc[role] is defined: `server`. The biggest difference to other products on the Stackable Data Platform is that OPA is deployed as a DaemonSet (not as a StatefulSet). Policy decisions need to be made quick, so it is helpful to have an agent running on every node, to avoid network calls. For every role group a DaemonSet is created, with its own ConfigMap. The DaemonSet will then create a Pod for every node. Every role group also gets its own Service definition.
+The _OpaCluster_ custom resource is used to declare OPA instances, only one xref:home:concepts:roles-and-role-groups.adoc[role] is defined: `server`. OPA is deployed as a DaemonSet because policy decisions must to be fast and efficient. Therefore an OPA agent must be available on every Node to reduce latency and network calls. A DaemonSet with its own ConfigMap is created for every role group. The DaemonSet will then deploy a Pod on every node. Every role group also gets its own Service definition.
 
 image::opa_overview.drawio.svg[A diagram depicting the Kubernetes resources created by the Stackable Operator for OPA]
 
