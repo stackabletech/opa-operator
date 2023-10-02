@@ -10,6 +10,7 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
 };
+use stackable_operator::k8s_openapi::api::core::v1::SecretVolumeSource;
 use stackable_operator::{
     builder::{
         ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
@@ -77,6 +78,8 @@ const LOG_VOLUME_NAME: &str = "log";
 const LOG_DIR: &str = "/stackable/log";
 const BUNDLES_VOLUME_NAME: &str = "bundles";
 const BUNDLES_DIR: &str = "/bundles";
+const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
+const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -679,7 +682,18 @@ fn build_server_rolegroup_daemonset(
             "user-info-fetcher".to_string(),
         ])
         .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
+        .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR);
+
+    match &opa.spec.cluster_config.user_info_fetcher.backend {
+        stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
+        stackable_opa_crd::user_info_fetcher::Backend::Keycloak(_) => {
+            cb_user_info_fetcher.add_volume_mount(
+                USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                USER_INFO_FETCHER_CREDENTIALS_DIR,
+            );
+        }
+    }
 
     let mut pb = PodBuilder::new();
 
@@ -722,6 +736,20 @@ fn build_server_rolegroup_daemonset(
         fs_group: Some(1000),
         ..PodSecurityContext::default()
     });
+
+    match &opa.spec.cluster_config.user_info_fetcher.backend {
+        stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
+        stackable_opa_crd::user_info_fetcher::Backend::Keycloak(keycloak) => {
+            pb.add_volume(
+                VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                    .secret(SecretVolumeSource {
+                        secret_name: Some(keycloak.credentials_secret_name.clone()),
+                        ..Default::default()
+                    })
+                    .build(),
+            );
+        }
+    }
 
     if merged_config.logging.enable_vector_agent {
         pb.add_container(product_logging::framework::vector_container(

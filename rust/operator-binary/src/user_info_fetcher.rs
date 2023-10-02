@@ -13,21 +13,41 @@ use stackable_opa_crd::user_info_fetcher as crd;
 pub struct Args {
     #[clap(long, env)]
     config: PathBuf,
+    #[clap(long, env)]
+    credentials_dir: PathBuf,
 }
 
 #[derive(Clone)]
 struct AppState {
     config: Arc<crd::Config>,
     http: reqwest::Client,
+    credentials: Arc<Credentials>,
+}
+
+struct Credentials {
+    username: String,
+    password: String,
 }
 
 pub async fn run(args: Args) {
     let config =
         Arc::new(serde_json::from_slice(&tokio::fs::read(args.config).await.unwrap()).unwrap());
+    let credentials = Arc::new(Credentials {
+        username: tokio::fs::read_to_string(args.credentials_dir.join("username"))
+            .await
+            .unwrap(),
+        password: tokio::fs::read_to_string(args.credentials_dir.join("password"))
+            .await
+            .unwrap(),
+    });
     let http = reqwest::Client::default();
     let app = Router::new()
         .route("/user", post(get_user_info))
-        .with_state(AppState { config, http });
+        .with_state(AppState {
+            config,
+            http,
+            credentials,
+        });
     axum::Server::bind(&"127.0.0.1:9476".parse().unwrap())
         .serve(app.into_make_service())
         .with_graceful_shutdown(tokio::signal::ctrl_c().map(Result::unwrap))
@@ -76,7 +96,11 @@ async fn get_user_info(
     State(state): State<AppState>,
     Json(req): Json<GroupMembershipRequest>,
 ) -> Json<UserInfo> {
-    let AppState { config, http } = state;
+    let AppState {
+        config,
+        http,
+        credentials,
+    } = state;
     match &config.backend {
         crd::Backend::None {} => Json(UserInfo {
             groups: vec![],
@@ -94,10 +118,10 @@ async fn get_user_info(
                     "{keycloak_url}/realms/{admin_realm}/protocol/openid-connect/token"
                 ))
                 .form(&[
-                    ("client_id", &**client_id),
                     ("grant_type", "password"),
-                    ("username", "admin"),
-                    ("password", "admin"),
+                    ("client_id", client_id),
+                    ("username", &credentials.username),
+                    ("password", &credentials.password),
                 ])
                 .send()
                 .await
