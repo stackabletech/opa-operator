@@ -1,7 +1,6 @@
 mod controller;
 mod discovery;
 mod product_logging;
-mod user_info_fetcher;
 
 use crate::controller::OPA_CONTROLLER_NAME;
 
@@ -42,7 +41,6 @@ struct Opts {
 enum Cmd {
     #[clap(flatten)]
     Common(Command<OpaRun>),
-    UserInfoFetcher(user_info_fetcher::Args),
 }
 
 #[derive(clap::Parser)]
@@ -59,7 +57,6 @@ struct OpaRun {
 async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
-        Cmd::UserInfoFetcher(args) => user_info_fetcher::run(args).await,
         Cmd::Common(Command::Crd) => {
             OpaCluster::print_yaml_schema()?;
         }

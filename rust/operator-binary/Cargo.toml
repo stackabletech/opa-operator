@@ -24,10 +24,6 @@ strum = { version = "0.24", features = ["derive"] }
 tokio = { version = "1.25", features = ["full"] }
 tracing = "0.1"
 pin-project = "1.0"
-axum = "0.6.15"
-reqwest = { version = "0.11.16", features = ["json"] }
 
 [build-dependencies]
 built = { version =  "0.5", features = ["chrono", "git2"] }
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "0.39.0" }
-stackable-opa-crd = { path = "../crd" }

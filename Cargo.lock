@@ -1608,9 +1608,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.56"
+version = "1.0.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
+checksum = "3d433d9f1a3e8c1263d9456598b16fec66f4acc9a74dacffd35c7bb09b3a1328"
 dependencies = [
  "unicode-ident",
 ]
@@ -2070,10 +2070,28 @@ dependencies = [
 name = "stackable-opa-operator"
 version = "0.0.0-dev"
 dependencies = [
- "axum",
  "built",
  "clap",
  "fnv",
+ "futures 0.3.26",
+ "pin-project",
+ "semver",
+ "serde",
+ "serde_json",
+ "snafu",
+ "stackable-opa-crd",
+ "stackable-operator",
+ "strum",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "stackable-opa-user-info-fetcher"
+version = "0.0.0-dev"
+dependencies = [
+ "axum",
+ "clap",
  "futures 0.3.26",
  "pin-project",
  "reqwest",
@@ -2083,7 +2101,6 @@ dependencies = [
  "snafu",
  "stackable-opa-crd",
  "stackable-operator",
- "strum",
  "tokio",
  "tracing",
 ]

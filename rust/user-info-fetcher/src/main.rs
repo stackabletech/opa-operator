@@ -1,13 +1,12 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
-use axum::{
-    extract::{Query, State},
-    routing::{get, post},
-    Json, Router,
-};
+use axum::{extract::State, routing::post, Json, Router};
+use clap::Parser;
 use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use stackable_opa_crd::user_info_fetcher as crd;
+
+pub const APP_NAME: &str = "opa-user-info-fetcher";
 
 #[derive(clap::Parser)]
 pub struct Args {
@@ -15,6 +14,8 @@ pub struct Args {
     config: PathBuf,
     #[clap(long, env)]
     credentials_dir: PathBuf,
+    #[clap(flatten)]
+    common: stackable_operator::cli::ProductOperatorRun,
 }
 
 #[derive(Clone)]
@@ -29,7 +30,16 @@ struct Credentials {
     password: String,
 }
 
-pub async fn run(args: Args) {
+#[tokio::main]
+pub async fn main() {
+    let args = Args::parse();
+
+    stackable_operator::logging::initialize_logging(
+        "OPA_OPERATOR_LOG",
+        APP_NAME,
+        args.common.tracing_target,
+    );
+
     let config =
         Arc::new(serde_json::from_slice(&tokio::fs::read(args.config).await.unwrap()).unwrap());
     let credentials = Arc::new(Credentials {
