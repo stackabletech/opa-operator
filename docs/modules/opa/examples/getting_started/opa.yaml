@@ -4,6 +4,15 @@ kind: OpaCluster
 metadata:
   name: simple-opa
 spec:
+  clusterConfig:
+    userInfoFetcher:
+      backend:
+        keycloak:
+          url: http://192.168.122.1:8080
+          credentialsSecretName: opa-keycloak
+          adminRealm: master
+          userRealm: master
+          clientId: admin-cli
   image:
     productVersion: "0.45.0"
     stackableVersion: "23.4.0-rc2"
@@ -13,3 +22,11 @@ spec:
         selector:
           matchLabels:
             kubernetes.io/os: linux
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opa-keycloak
+stringData:
+  username: admin
+  password: admin

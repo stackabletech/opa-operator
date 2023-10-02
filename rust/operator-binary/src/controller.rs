@@ -508,7 +508,11 @@ fn build_server_rolegroup_config_map(
                 ))
                 .build(),
         )
-        .add_data(CONFIG_FILE, build_config_file());
+        .add_data(CONFIG_FILE, build_config_file())
+        .add_data(
+            "user-info-fetcher.json",
+            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info_fetcher).unwrap(),
+        );
 
     extend_role_group_config_map(
         rolegroup,
@@ -673,7 +677,9 @@ fn build_server_rolegroup_daemonset(
         .command(vec![
             "stackable-opa-operator".to_string(),
             "user-info-fetcher".to_string(),
-        ]);
+        ])
+        .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
+        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR);
 
     let mut pb = PodBuilder::new();
 

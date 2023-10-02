@@ -42,7 +42,7 @@ struct Opts {
 enum Cmd {
     #[clap(flatten)]
     Common(Command<OpaRun>),
-    UserInfoFetcher {},
+    UserInfoFetcher(user_info_fetcher::Args),
 }
 
 #[derive(clap::Parser)]
@@ -59,7 +59,7 @@ struct OpaRun {
 async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
-        Cmd::UserInfoFetcher {} => user_info_fetcher::run().await,
+        Cmd::UserInfoFetcher(args) => user_info_fetcher::run(args).await,
         Cmd::Common(Command::Crd) => {
             OpaCluster::print_yaml_schema()?;
         }

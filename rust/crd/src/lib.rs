@@ -22,6 +22,8 @@ use stackable_operator::{
 use std::collections::BTreeMap;
 use strum::{Display, EnumIter, EnumString};
 
+pub mod user_info_fetcher;
+
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";
 
@@ -83,6 +85,8 @@ pub struct OpaClusterConfig {
     /// * external-stable: Use a LoadBalancer service
     #[serde(default)]
     pub listener_class: CurrentlySupportedListenerClasses,
+    #[serde(default)]
+    pub user_info_fetcher: user_info_fetcher::Config,
 }
 
 // TODO: Temporary solution until listener-operator is finished
