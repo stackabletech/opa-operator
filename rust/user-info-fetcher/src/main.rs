@@ -1,6 +1,7 @@
 mod http_error;
 
 use std::{
+    collections::HashMap,
     net::AddrParseError,
     path::{Path, PathBuf},
     sync::Arc,
@@ -99,9 +100,10 @@ struct OAuthResponse {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BriefUserMetadata {
+struct UserMetadata {
     id: String,
-    username: String,
+    #[serde(default)]
+    attributes: HashMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -127,6 +129,7 @@ struct GroupMembershipRequest {
 struct UserInfo {
     groups: Vec<GroupMembership>,
     roles: Vec<RoleMembership>,
+    custom_attributes: HashMap<String, String>,
 }
 
 #[derive(Snafu, Debug)]
@@ -160,6 +163,7 @@ async fn get_user_info(
         crd::Backend::None {} => UserInfo {
             groups: vec![],
             roles: vec![],
+            custom_attributes: HashMap::new(),
         },
         crd::Backend::Keycloak(keycloak) => {
             keycloak_get_user_info(req, &http, &credentials, keycloak)
@@ -223,20 +227,17 @@ async fn keycloak_get_user_info(
     )
     .await
     .context(LogInSnafu)?;
-    let users = send_json_request::<Vec<BriefUserMetadata>>(
+    let users = send_json_request::<Vec<UserMetadata>>(
         http.get(format!("{user_realm_url}/users"))
-            .query(&[("briefRepresentation", "true"), ("username", &req.username)])
+            .query(&[("exact", "true"), ("username", &req.username)])
             .bearer_auth(&authn.access_token),
     )
     .await
     .context(SearchForUserSnafu)?;
-    // Search endpoint allows partial match, only allow users that match exactly
-    let BriefUserMetadata { id: user_id, .. } = users
-        .into_iter()
-        .find(|user| user.username == req.username)
-        .context(UserNotFoundSnafu {
-            username: req.username,
-        })?;
+    let user = users.into_iter().next().context(UserNotFoundSnafu {
+        username: req.username,
+    })?;
+    let user_id = &user.id;
     let groups = send_json_request::<Vec<GroupMembership>>(
         http.get(format!("{user_realm_url}/users/{user_id}/groups"))
             .bearer_auth(&authn.access_token),
@@ -251,5 +252,14 @@ async fn keycloak_get_user_info(
     )
     .await
     .context(RequestUserRolesSnafu)?;
-    Ok(UserInfo { groups, roles })
+    Ok(UserInfo {
+        groups,
+        roles,
+        custom_attributes: user
+            .attributes
+            .into_iter()
+            // FIXME: why does keycloak support multiple values? do we need to support this? doesn't seem to be exposed in gui
+            .filter_map(|(k, v)| Some((k, v.into_iter().next()?)))
+            .collect(),
+    })
 }
