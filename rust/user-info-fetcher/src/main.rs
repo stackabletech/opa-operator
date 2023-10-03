@@ -1,9 +1,18 @@
-use std::{path::PathBuf, sync::Arc};
+mod http_error;
+
+use std::{
+    net::AddrParseError,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use axum::{extract::State, routing::post, Json, Router};
 use clap::Parser;
 use futures::FutureExt;
-use serde::{Deserialize, Serialize};
+use hyper::StatusCode;
+use reqwest::RequestBuilder;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 
 pub const APP_NAME: &str = "opa-user-info-fetcher";
@@ -30,8 +39,29 @@ struct Credentials {
     password: String,
 }
 
+#[derive(Snafu, Debug)]
+enum StartupError {
+    #[snafu(display("unable to read config file from {path:?}"))]
+    ReadConfigFile {
+        source: std::io::Error,
+        path: PathBuf,
+    },
+    #[snafu(display("unable to parse config file"))]
+    ParseConfig { source: serde_json::Error },
+    #[snafu(display("failed to parse listen address"))]
+    ParseListenAddr { source: AddrParseError },
+    #[snafu(display("failed to run server"))]
+    RunServer { source: hyper::Error },
+}
+
+async fn read_config_file(path: &Path) -> Result<String, StartupError> {
+    tokio::fs::read_to_string(path)
+        .await
+        .context(ReadConfigFileSnafu { path })
+}
+
 #[tokio::main]
-pub async fn main() {
+async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
     stackable_operator::logging::initialize_logging(
@@ -40,15 +70,12 @@ pub async fn main() {
         args.common.tracing_target,
     );
 
-    let config =
-        Arc::new(serde_json::from_slice(&tokio::fs::read(args.config).await.unwrap()).unwrap());
+    let config = Arc::new(
+        serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?,
+    );
     let credentials = Arc::new(Credentials {
-        username: tokio::fs::read_to_string(args.credentials_dir.join("username"))
-            .await
-            .unwrap(),
-        password: tokio::fs::read_to_string(args.credentials_dir.join("password"))
-            .await
-            .unwrap(),
+        username: read_config_file(&args.credentials_dir.join("username")).await?,
+        password: read_config_file(&args.credentials_dir.join("password")).await?,
     });
     let http = reqwest::Client::default();
     let app = Router::new()
@@ -58,11 +85,11 @@ pub async fn main() {
             http,
             credentials,
         });
-    axum::Server::bind(&"127.0.0.1:9476".parse().unwrap())
+    axum::Server::bind(&"127.0.0.1:9476".parse().context(ParseListenAddrSnafu)?)
         .serve(app.into_make_service())
         .with_graceful_shutdown(tokio::signal::ctrl_c().map(Result::unwrap))
         .await
-        .unwrap();
+        .context(RunServerSnafu)
 }
 
 #[derive(Deserialize)]
@@ -102,89 +129,127 @@ struct UserInfo {
     roles: Vec<RoleMembership>,
 }
 
+#[derive(Snafu, Debug)]
+#[snafu(module)]
+enum GetUserInfoError {
+    #[snafu(display("failed to get user information from Keycloak"))]
+    Keycloak { source: KeycloakError },
+}
+impl http_error::Error for GetUserInfoError {
+    fn status_code(&self) -> hyper::StatusCode {
+        match self {
+            Self::Keycloak { source } => source.status_code(),
+        }
+    }
+}
+
+async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Result<T, reqwest::Error> {
+    req.send().await?.error_for_status()?.json().await
+}
+
 async fn get_user_info(
     State(state): State<AppState>,
     Json(req): Json<GroupMembershipRequest>,
-) -> Json<UserInfo> {
+) -> Result<Json<UserInfo>, http_error::JsonResponse<GetUserInfoError>> {
     let AppState {
         config,
         http,
         credentials,
     } = state;
-    match &config.backend {
-        crd::Backend::None {} => Json(UserInfo {
+    Ok(Json(match &config.backend {
+        crd::Backend::None {} => UserInfo {
             groups: vec![],
             roles: vec![],
-        }),
-        crd::Backend::Keycloak(crd::KeycloakBackend {
-            url: keycloak_url,
-            admin_realm,
-            user_realm,
-            credentials_secret_name: _,
-            client_id,
-        }) => {
-            let authn = http
-                .post(format!(
-                    "{keycloak_url}/realms/{admin_realm}/protocol/openid-connect/token"
-                ))
-                .form(&[
-                    ("grant_type", "password"),
-                    ("client_id", client_id),
-                    ("username", &credentials.username),
-                    ("password", &credentials.password),
-                ])
-                .send()
+        },
+        crd::Backend::Keycloak(keycloak) => {
+            keycloak_get_user_info(req, &http, &credentials, keycloak)
                 .await
-                .unwrap()
-                .error_for_status()
-                .unwrap()
-                .json::<OAuthResponse>()
-                .await
-                .unwrap();
-            let users = http
-                .get(format!("{keycloak_url}/admin/realms/{user_realm}/users"))
-                .query(&[("briefRepresentation", "true"), ("username", &req.username)])
-                .bearer_auth(&authn.access_token)
-                .send()
-                .await
-                .unwrap()
-                .error_for_status()
-                .unwrap()
-                .json::<Vec<BriefUserMetadata>>()
-                .await
-                .unwrap();
-            // Search endpoint allows partial match, only allow users that match exactly
-            let BriefUserMetadata { id: user_id, .. } = users
-                .into_iter()
-                .find(|user| user.username == req.username)
-                .unwrap();
-            let groups = http
-                .get(format!(
-                    "{keycloak_url}/admin/realms/{user_realm}/users/{user_id}/groups"
-                ))
-                .bearer_auth(&authn.access_token)
-                .send()
-                .await
-                .unwrap()
-                .error_for_status()
-                .unwrap()
-                .json::<Vec<GroupMembership>>()
-                .await
-                .unwrap();
-            let roles = http
-                .get(format!(
-                    "{keycloak_url}/admin/realms/{user_realm}/users/{user_id}/role-mappings/realm/composite"
-                ))
-                .bearer_auth(&authn.access_token)
-                .send()
-                .await
-                .unwrap()
-                .error_for_status()
-                .unwrap()
-                .json::<Vec<RoleMembership>>()
-                .await
-                .unwrap();
-            Json(UserInfo { groups, roles })
+                .context(get_user_info_error::KeycloakSnafu)?
+        }
+    }))
+}
+
+#[derive(Snafu, Debug)]
+#[snafu(module)]
+enum KeycloakError {
+    #[snafu(display("unable to log in (expired credentials?)"))]
+    LogIn { source: reqwest::Error },
+    #[snafu(display("unable to search for user"))]
+    SearchForUser { source: reqwest::Error },
+    #[snafu(display("user {username:?} was not found"))]
+    UserNotFound { username: String },
+    #[snafu(display("unable to request groups for user"))]
+    RequestUserGroups { source: reqwest::Error },
+    #[snafu(display("unable to request roles for user"))]
+    RequestUserRoles { source: reqwest::Error },
+}
+impl http_error::Error for KeycloakError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::LogIn { .. } => StatusCode::BAD_GATEWAY,
+            Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
+            Self::UserNotFound { .. } => StatusCode::NOT_FOUND,
+            Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
+            Self::RequestUserRoles { .. } => StatusCode::BAD_GATEWAY,
         }
     }
+}
+
+async fn keycloak_get_user_info(
+    req: GroupMembershipRequest,
+    http: &reqwest::Client,
+    credentials: &Credentials,
+    config: &crd::KeycloakBackend,
+) -> Result<UserInfo, KeycloakError> {
+    use keycloak_error::*;
+    let crd::KeycloakBackend {
+        url: keycloak_url,
+        admin_realm,
+        user_realm,
+        credentials_secret_name: _,
+        client_id,
+    } = config;
+    let user_realm_url = format!("{keycloak_url}/admin/realms/{user_realm}");
+    let authn = send_json_request::<OAuthResponse>(
+        http.post(format!(
+            "{keycloak_url}/realms/{admin_realm}/protocol/openid-connect/token"
+        ))
+        .form(&[
+            ("grant_type", "password"),
+            ("client_id", client_id),
+            ("username", &credentials.username),
+            ("password", &credentials.password),
+        ]),
+    )
+    .await
+    .context(LogInSnafu)?;
+    let users = send_json_request::<Vec<BriefUserMetadata>>(
+        http.get(format!("{user_realm_url}/users"))
+            .query(&[("briefRepresentation", "true"), ("username", &req.username)])
+            .bearer_auth(&authn.access_token),
+    )
+    .await
+    .context(SearchForUserSnafu)?;
+    // Search endpoint allows partial match, only allow users that match exactly
+    let BriefUserMetadata { id: user_id, .. } = users
+        .into_iter()
+        .find(|user| user.username == req.username)
+        .context(UserNotFoundSnafu {
+            username: req.username,
+        })?;
+    let groups = send_json_request::<Vec<GroupMembership>>(
+        http.get(format!("{user_realm_url}/users/{user_id}/groups"))
+            .bearer_auth(&authn.access_token),
+    )
+    .await
+    .context(RequestUserGroupsSnafu)?;
+    let roles = send_json_request::<Vec<RoleMembership>>(
+        http.get(format!(
+            "{user_realm_url}/users/{user_id}/role-mappings/realm/composite"
+        ))
+        .bearer_auth(&authn.access_token),
+    )
+    .await
+    .context(RequestUserRolesSnafu)?;
+    Ok(UserInfo { groups, roles })
 }
