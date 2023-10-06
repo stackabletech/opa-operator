@@ -1,5 +1,5 @@
 = Allowed Pod disruptions
 
-For OPA clusters we don't deploy any PodDisruptionBudgets (PDBs), as there is one instance per Kubernetes node running.
+For OPA clusters, the operator does not deploy any PodDisruptionBudgets (PDBs), as there is one instance per Kubernetes node running (Daemonset).
 When a Kubernetes node gets drained to gracefully shut it down, the OPA Pod get's evicted - there is no point in blocking the eviction.
 In case the OPA Pod terminated before the products depending on OPA (e.g. Trino coordinator) on the same node, the products can still use the OPA Service, as it will route to OPA Pods running on other Kubernetes nodes.
