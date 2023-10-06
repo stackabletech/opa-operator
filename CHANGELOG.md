@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Default stackableVersion to operator version ([#467]).
-- (Don't) support PodDisruptionBudgets ([#480]).
+- Document we don't create PodDisruptionBudgets ([#480]).
 
 ### Changed
 
