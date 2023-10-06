@@ -40,7 +40,7 @@ Currently the following products on the Stackable Data Platform support policy d
 
 * xref:druid:usage-guide/security.adoc#_authorization_with_open_policy_agent_opa[Apache Druid]
 * xref:kafka:usage-guide/security.adoc#_authorization[Apache Kafka]
-* xref:trino:usage_guide/security.adoc#_authorization[Trino]
+* xref:trino:usage-guide/security.adoc#_authorization[Trino]
 
 == Supported versions
 
