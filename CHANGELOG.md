@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - `vector` `0.26.0` -> `0.31.0` ([#465]).
-- `operator-rs` `0.44.0` -> `0.45.1` ([#467]).
+- `operator-rs` `0.44.0` -> `0.52.1` ([#467], [#480]).
 
 [#465]: https://github.com/stackabletech/opa-operator/pull/465
 [#467]: https://github.com/stackabletech/opa-operator/pull/467
