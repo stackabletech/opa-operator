@@ -7,14 +7,16 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Default stackableVersion to operator version ([#467]).
+- Document we don't create PodDisruptionBudgets ([#480]).
 
 ### Changed
 
 - `vector` `0.26.0` -> `0.31.0` ([#465]).
-- `operator-rs` `0.44.0` -> `0.45.1` ([#467]).
+- `operator-rs` `0.44.0` -> `0.52.1` ([#467], [#480]).
 
 [#465]: https://github.com/stackabletech/opa-operator/pull/465
 [#467]: https://github.com/stackabletech/opa-operator/pull/467
+[#480]: https://github.com/stackabletech/opa-operator/pull/480
 
 ## [23.7.0] - 2023-07-14
 
