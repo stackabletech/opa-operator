@@ -970,6 +970,8 @@ spec:
                                           type: string
                                         type: object
                                     type: object
+                                  restartPolicy:
+                                    type: string
                                   securityContext:
                                     properties:
                                       allowPrivilegeEscalation:
@@ -1497,6 +1499,8 @@ spec:
                                           type: string
                                         type: object
                                     type: object
+                                  restartPolicy:
+                                    type: string
                                   securityContext:
                                     properties:
                                       allowPrivilegeEscalation:
@@ -2030,6 +2034,8 @@ spec:
                                           type: string
                                         type: object
                                     type: object
+                                  restartPolicy:
+                                    type: string
                                   securityContext:
                                     properties:
                                       allowPrivilegeEscalation:
@@ -3037,6 +3043,10 @@ spec:
                               type: array
                           type: object
                       type: object
+                    roleConfig:
+                      default: {}
+                      description: This is a product-agnostic RoleConfig, with nothing in it. It is used e.g. by products that have nothing configurable at role level.
+                      type: object
                     roleGroups:
                       additionalProperties:
                         properties:
@@ -3898,6 +3908,8 @@ spec:
                                                 type: string
                                               type: object
                                           type: object
+                                        restartPolicy:
+                                          type: string
                                         securityContext:
                                           properties:
                                             allowPrivilegeEscalation:
@@ -4425,6 +4437,8 @@ spec:
                                                 type: string
                                               type: object
                                           type: object
+                                        restartPolicy:
+                                          type: string
                                         securityContext:
                                           properties:
                                             allowPrivilegeEscalation:
@@ -4958,6 +4972,8 @@ spec:
                                                 type: string
                                               type: object
                                           type: object
+                                        restartPolicy:
+                                          type: string
                                         securityContext:
                                           properties:
                                             allowPrivilegeEscalation:

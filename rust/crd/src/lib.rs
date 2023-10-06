@@ -15,7 +15,7 @@ use stackable_operator::{
     product_config_utils::{ConfigError, Configuration},
     product_logging::{self, spec::Logging},
     role_utils::Role,
-    role_utils::{RoleGroup, RoleGroupRef},
+    role_utils::{EmptyRoleConfig, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
 };
@@ -65,7 +65,7 @@ pub struct OpaSpec {
     #[serde(default)]
     pub cluster_operation: ClusterOperation,
     /// OPA server configuration.
-    pub servers: Role<OpaConfigFragment>,
+    pub servers: Role<OpaConfigFragment, EmptyRoleConfig>,
     /// The OPA image to use
     pub image: ProductImage,
 }
@@ -245,7 +245,7 @@ pub enum OpaRole {
 
 impl OpaCluster {
     /// Returns a reference to the role.
-    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment> {
+    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment, EmptyRoleConfig> {
         match role_variant {
             OpaRole::Server => &self.spec.servers,
         }
