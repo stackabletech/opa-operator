@@ -2,9 +2,5 @@
 // This is a separate file, since it is used by both the direct OPA documentation, and the overarching
 // Stackable Platform documentation.
 
+- 0.57.0
 - 0.51.0
-- 0.45.0
-- 0.41.0
-- 0.37.2
-- 0.28.0
-- 0.27.1
