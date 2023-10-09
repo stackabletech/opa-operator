@@ -15,7 +15,4 @@ spec:
       logging:
         enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
     roleGroups:
-      default:
-        selector:
-          matchLabels:
-            kubernetes.io/os: linux
+      default: {}
