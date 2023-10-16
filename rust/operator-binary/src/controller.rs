@@ -18,7 +18,6 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
-    duration::Duration,
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
@@ -51,6 +50,7 @@ use stackable_operator::{
         compute_conditions, daemonset::DaemonSetConditionBuilder,
         operations::ClusterOperationsConditionBuilder,
     },
+    time::Duration,
 };
 use std::{
     borrow::Cow,
