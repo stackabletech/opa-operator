@@ -11,9 +11,6 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
 };
-use stackable_operator::k8s_openapi::api::core::v1::EmptyDirVolumeSource;
-use stackable_operator::k8s_openapi::DeepMerge;
-use stackable_operator::memory::{BinaryMultiple, MemoryQuantity};
 use stackable_operator::{
     builder::{
         resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
@@ -21,14 +18,17 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
+    duration::Duration,
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, EnvVar, HTTPGetAction, Probe, Service, ServicePort, ServiceSpec,
+                ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, Service,
+                ServicePort, ServiceSpec,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
+        DeepMerge,
     },
     kube::{
         runtime::{controller::Action, reflector::ObjectRef},
@@ -36,6 +36,7 @@ use stackable_operator::{
     },
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
+    memory::{BinaryMultiple, MemoryQuantity},
     product_config::{types::PropertyNameKind, ProductConfigManager},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
@@ -55,7 +56,6 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     sync::Arc,
-    time::Duration,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
@@ -764,7 +764,7 @@ fn build_server_rolegroup_daemonset(
 }
 
 pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Action {
-    Action::requeue(Duration::from_secs(5))
+    Action::requeue(*Duration::from_secs(5))
 }
 
 fn build_config_file() -> &'static str {
