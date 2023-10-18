@@ -12,8 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- `vector` `0.26.0` -> `0.31.0` ([#465]).
-- `operator-rs` `0.44.0` -> `0.52.1` ([#467], [#480]).
+- `vector` `0.26.0` -> `0.33.0` ([#465], [#482]).
+- `operator-rs` `0.44.0` -> `0.55.0` ([#467], [#480], [#482]).
 
 ### Removed
 
