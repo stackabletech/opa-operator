@@ -9,7 +9,7 @@ use std::{
 
 use axum::{extract::State, routing::post, Json, Router};
 use clap::Parser;
-use futures::FutureExt;
+use futures::{future, pin_mut, FutureExt};
 use hyper::StatusCode;
 use reqwest::RequestBuilder;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -51,6 +51,8 @@ enum StartupError {
     ParseConfig { source: serde_json::Error },
     #[snafu(display("failed to parse listen address"))]
     ParseListenAddr { source: AddrParseError },
+    #[snafu(display("failed to register SIGTERM handler"))]
+    RegisterSigterm { source: std::io::Error },
     #[snafu(display("failed to run server"))]
     RunServer { source: hyper::Error },
 }
@@ -71,6 +73,18 @@ async fn main() -> Result<(), StartupError> {
         args.common.tracing_target,
     );
 
+    let shutdown_requested = tokio::signal::ctrl_c().map(|_| ());
+    #[cfg(unix)]
+    let shutdown_requested = {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .context(RegisterSigtermSnafu)?;
+        async move {
+            let sigterm = sigterm.recv().map(|_| ());
+            pin_mut!(shutdown_requested, sigterm);
+            future::select(shutdown_requested, sigterm).await;
+        }
+    };
+
     let config = Arc::new(
         serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?,
     );
@@ -88,7 +102,7 @@ async fn main() -> Result<(), StartupError> {
         });
     axum::Server::bind(&"127.0.0.1:9476".parse().context(ParseListenAddrSnafu)?)
         .serve(app.into_make_service())
-        .with_graceful_shutdown(tokio::signal::ctrl_c().map(Result::unwrap))
+        .with_graceful_shutdown(shutdown_requested)
         .await
         .context(RunServerSnafu)
 }
