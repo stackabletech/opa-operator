@@ -85,12 +85,19 @@ async fn main() -> Result<(), StartupError> {
         }
     };
 
-    let config = Arc::new(
+    let config = Arc::<crd::Config>::new(
         serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?,
     );
-    let credentials = Arc::new(Credentials {
-        username: read_config_file(&args.credentials_dir.join("username")).await?,
-        password: read_config_file(&args.credentials_dir.join("password")).await?,
+    let credentials = Arc::new(match &config.backend {
+        // FIXME: factor this out into each backend
+        crd::Backend::None {} => Credentials {
+            username: "".to_string(),
+            password: "".to_string(),
+        },
+        crd::Backend::Keycloak(_) => Credentials {
+            username: read_config_file(&args.credentials_dir.join("username")).await?,
+            password: read_config_file(&args.credentials_dir.join("password")).await?,
+        },
     });
     let http = reqwest::Client::default();
     let app = Router::new()
