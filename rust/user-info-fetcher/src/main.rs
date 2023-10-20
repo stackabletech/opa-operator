@@ -116,7 +116,7 @@ async fn main() -> Result<(), StartupError> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct GroupMembershipRequest {
+struct UserInfoRequest {
     username: String,
 }
 
@@ -156,7 +156,7 @@ impl http_error::Error for GetUserInfoError {
 
 async fn get_user_info(
     State(state): State<AppState>,
-    Json(req): Json<GroupMembershipRequest>,
+    Json(req): Json<UserInfoRequest>,
 ) -> Result<Json<UserInfo>, http_error::JsonResponse<GetUserInfoError>> {
     let AppState {
         config,

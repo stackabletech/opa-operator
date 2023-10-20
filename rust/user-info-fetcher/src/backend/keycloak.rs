@@ -5,7 +5,7 @@ use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 
-use crate::{http_error, util::send_json_request, Credentials, GroupMembershipRequest, UserInfo};
+use crate::{http_error, util::send_json_request, Credentials, UserInfo, UserInfoRequest};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -58,7 +58,7 @@ struct RoleMembership {
 }
 
 pub(crate) async fn get_user_info(
-    req: GroupMembershipRequest,
+    req: UserInfoRequest,
     http: &reqwest::Client,
     credentials: &Credentials,
     config: &crd::KeycloakBackend,
