@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{response::IntoResponse, Json};
 use hyper::StatusCode;
 use serde::Serialize;
@@ -5,9 +7,15 @@ use serde::Serialize;
 pub trait Error: std::error::Error {
     fn status_code(&self) -> StatusCode;
 }
+impl<T: Error> Error for Arc<T> {
+    fn status_code(&self) -> StatusCode {
+        let inner: &T = self;
+        inner.status_code()
+    }
+}
 
 pub struct JsonResponse<E> {
-    error: E,
+    pub error: E,
 }
 
 impl<E> From<E> for JsonResponse<E> {

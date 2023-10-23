@@ -4,7 +4,10 @@ use stackable_operator::schemars::{self, JsonSchema};
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
+    #[serde(default)]
     pub backend: Backend,
+    #[serde(default)]
+    pub cache: Cache,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -29,3 +32,7 @@ pub struct KeycloakBackend {
     pub user_realm: String,
     pub client_id: String,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Cache {}

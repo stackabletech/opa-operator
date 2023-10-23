@@ -58,7 +58,7 @@ struct RoleMembership {
 }
 
 pub(crate) async fn get_user_info(
-    req: UserInfoRequest,
+    req: &UserInfoRequest,
     http: &reqwest::Client,
     credentials: &Credentials,
     config: &crd::KeycloakBackend,
@@ -92,7 +92,7 @@ pub(crate) async fn get_user_info(
     .await
     .context(SearchForUserSnafu)?;
     let user = users.into_iter().next().context(UserNotFoundSnafu {
-        username: req.username,
+        username: &req.username,
     })?;
     let user_id = &user.id;
     let groups = send_json_request::<Vec<GroupMembership>>(

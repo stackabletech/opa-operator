@@ -12,6 +12,7 @@ use std::{
 use axum::{extract::State, routing::post, Json, Router};
 use clap::Parser;
 use futures::{future, pin_mut, FutureExt};
+use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
@@ -33,6 +34,7 @@ struct AppState {
     config: Arc<crd::Config>,
     http: reqwest::Client,
     credentials: Arc<Credentials>,
+    user_info_cache: Cache<UserInfoRequest, UserInfo>,
 }
 
 struct Credentials {
@@ -100,12 +102,14 @@ async fn main() -> Result<(), StartupError> {
         },
     });
     let http = reqwest::Client::default();
+    let user_info_cache = Cache::builder().name("user-info").build();
     let app = Router::new()
         .route("/user", post(get_user_info))
         .with_state(AppState {
             config,
             http,
             credentials,
+            user_info_cache,
         });
     axum::Server::bind(&"127.0.0.1:9476".parse().context(ParseListenAddrSnafu)?)
         .serve(app.into_make_service())
@@ -114,25 +118,25 @@ async fn main() -> Result<(), StartupError> {
         .context(RunServerSnafu)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequest {
     username: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct GroupRef {
     name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct RoleRef {
     name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
     groups: Vec<GroupRef>,
@@ -157,22 +161,29 @@ impl http_error::Error for GetUserInfoError {
 async fn get_user_info(
     State(state): State<AppState>,
     Json(req): Json<UserInfoRequest>,
-) -> Result<Json<UserInfo>, http_error::JsonResponse<GetUserInfoError>> {
+) -> Result<Json<UserInfo>, http_error::JsonResponse<Arc<GetUserInfoError>>> {
     let AppState {
         config,
         http,
         credentials,
+        user_info_cache,
     } = state;
-    Ok(Json(match &config.backend {
-        crd::Backend::None {} => UserInfo {
-            groups: vec![],
-            roles: vec![],
-            custom_attributes: HashMap::new(),
-        },
-        crd::Backend::Keycloak(keycloak) => {
-            backend::keycloak::get_user_info(req, &http, &credentials, keycloak)
-                .await
-                .context(get_user_info_error::KeycloakSnafu)?
-        }
-    }))
+    Ok(Json(
+        user_info_cache
+            .try_get_with_by_ref(&req, async {
+                match &config.backend {
+                    crd::Backend::None {} => Ok(UserInfo {
+                        groups: vec![],
+                        roles: vec![],
+                        custom_attributes: HashMap::new(),
+                    }),
+                    crd::Backend::Keycloak(keycloak) => {
+                        backend::keycloak::get_user_info(&req, &http, &credentials, keycloak)
+                            .await
+                            .context(get_user_info_error::KeycloakSnafu)
+                    }
+                }
+            })
+            .await?,
+    ))
 }
