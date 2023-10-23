@@ -9,11 +9,15 @@ edition = "2021"
 repository = "https://github.com/stackabletech/opa-operator"
 
 [workspace.dependencies]
+axum = "0.6.15"
 built = { version =  "0.6", features = ["chrono", "git2"] }
 clap = "4.3"
-futures = { version = "0.3", features = ["compat"] }
 fnv = "1.0"
+futures = { version = "0.3", features = ["compat"] }
+hyper = "0.14.27"
+moka = { version = "0.12.1", features = ["future"] }
 pin-project = "1.1"
+reqwest = { version = "0.11.16", features = ["json"] }
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
