@@ -40,5 +40,4 @@ helm_crds, helm_non_crds = filter_yaml(
 k8s_yaml(helm_non_crds)
 
 k8s_yaml('docs/modules/opa/examples/getting_started/opa.yaml')
-k8s_yaml('docs/modules/opa/examples/getting_started/simple-rule.yaml')
-k8s_resource(new_name='simple-opa', objects=['simple-opa:OpaCluster', 'test:ConfigMap'], extra_pod_selectors=[{'app.kubernetes.io/name': 'opa'}], port_forwards=['8081:8081', '9476:9476'])
+k8s_resource(new_name='simple-opa', objects=['simple-opa:OpaCluster'], extra_pod_selectors=[{'app.kubernetes.io/name': 'opa'}], port_forwards=['8081:8081', '9476:9476'])
