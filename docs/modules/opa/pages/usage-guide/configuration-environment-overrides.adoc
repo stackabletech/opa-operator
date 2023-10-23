@@ -1,0 +1,37 @@
+= Configuration & Environment Overrides
+
+The cluster definition also supports overriding configuration properties and environment variables, either per role or per role group, where the more specific override (role group) has precedence over the less specific one (role).
+
+IMPORTANT: Do not override port numbers. This will lead to faulty installations.
+
+== Configuration properties
+
+Currently, not supported for `config.yaml`.
+
+== Environment variables
+
+Environment variables can be (over)written by adding the `envOverrides` property.
+
+For example per role group:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      config: {}
+      envOverrides:
+        MY_ENV_VAR: "MY_VALUE"
+----
+
+or per role:
+
+[source,yaml]
+----
+servers:
+  envOverrides:
+    MY_ENV_VAR: "MY_VALUE"
+  roleGroups:
+    default:
+      config: {}
+----

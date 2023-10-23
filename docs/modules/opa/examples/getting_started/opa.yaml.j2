@@ -1,0 +1,11 @@
+---
+apiVersion: opa.stackable.tech/v1alpha1
+kind: OpaCluster
+metadata:
+  name: simple-opa
+spec:
+  image:
+    productVersion: "0.57.0"
+  servers:
+    roleGroups:
+      default: {}

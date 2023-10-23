@@ -14,14 +14,10 @@ spec:
           userRealm: master
           clientId: admin-cli
   image:
-    productVersion: "0.51.0"
-    stackableVersion: "23.7.0"
+    productVersion: "0.57.0"
   servers:
     roleGroups:
-      default:
-        selector:
-          matchLabels:
-            kubernetes.io/os: linux
+      default: {}
 ---
 apiVersion: v1
 kind: Secret

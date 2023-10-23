@@ -6,6 +6,7 @@ use crate::product_logging::{
     OpaLogLevel,
 };
 
+use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
     Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
@@ -13,31 +14,29 @@ use stackable_opa_crd::{
 use stackable_operator::k8s_openapi::api::core::v1::SecretVolumeSource;
 use stackable_operator::{
     builder::{
-        ConfigMapBuilder, ContainerBuilder, FieldPathEnvVar, ObjectMetaBuilder, PodBuilder,
-        VolumeBuilder,
+        resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
+        FieldPathEnvVar, ObjectMetaBuilder, PodBuilder, PodSecurityContextBuilder, VolumeBuilder,
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
-    commons::product_image_selection::ResolvedProductImage,
+    commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, EnvVar, HTTPGetAction, PodSecurityContext, Probe, Service,
-                ServiceAccount, ServicePort, ServiceSpec,
+                ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, Service,
+                ServicePort, ServiceSpec,
             },
-            rbac::v1::{ClusterRole, RoleBinding, RoleRef, Subject},
         },
-        apimachinery::pkg::{
-            api::resource::Quantity, apis::meta::v1::LabelSelector, util::intstr::IntOrString,
-        },
-        Resource,
+        apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
+        DeepMerge,
     },
     kube::{
         runtime::{controller::Action, reflector::ObjectRef},
-        Resource as KubeResource,
+        Resource as KubeResource, ResourceExt,
     },
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
+    memory::{BinaryMultiple, MemoryQuantity},
     product_config::{types::PropertyNameKind, ProductConfigManager},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
@@ -52,12 +51,12 @@ use stackable_operator::{
         compute_conditions, daemonset::DaemonSetConditionBuilder,
         operations::ClusterOperationsConditionBuilder,
     },
+    time::Duration,
 };
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     sync::Arc,
-    time::Duration,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
@@ -83,20 +82,32 @@ const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
-// ~ 5 MB
-const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES: u32 = 5000000;
+// bundle builder: ~ 5 MB x 2
+// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES: u32 =
+    OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * 1000000;
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 2;
-// ~ 5 MB
-const MAX_OPA_LOG_FILE_SIZE_IN_BYTES: u32 = 5000000;
+const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: (OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
+        as f32,
+    unit: BinaryMultiple::Mebi,
+};
+// opa logs: ~ 5 MB x 2
+// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+const OPA_ROLLING_LOG_FILE_SIZE_MB: u32 = 5;
+const OPA_ROLLING_LOG_FILE_SIZE_BYTES: u32 = OPA_ROLLING_LOG_FILE_SIZE_MB * 1000000;
 const OPA_ROLLING_LOG_FILES: u32 = 2;
-// ~ 1 MB
-const MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES: u32 = 1000000;
+const MAX_OPA_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: (OPA_ROLLING_LOG_FILE_SIZE_MB * OPA_ROLLING_LOG_FILES) as f32,
+    unit: BinaryMultiple::Mebi,
+};
 
-const LOG_FILE_VOLUME_SIZE_IN_MB: u32 = ((MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES
-    * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
-    + (MAX_OPA_LOG_FILE_SIZE_IN_BYTES * OPA_ROLLING_LOG_FILES)
-    + MAX_PREPARE_LOG_FILE_SIZE_IN_BYTES)
-    / 1000000;
+// ~ 1 MB
+const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: 1.0,
+    unit: BinaryMultiple::Mebi,
+};
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
@@ -111,39 +122,45 @@ pub struct Ctx {
 pub enum Error {
     #[snafu(display("object does not define meta name"))]
     NoName,
+    #[snafu(display("internal operator failure"))]
+    InternalOperatorFailure { source: stackable_opa_crd::Error },
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to apply role ServiceAccount"))]
-    ApplyRoleServiceAccount {
-        source: stackable_operator::error::Error,
-    },
-    #[snafu(display("failed to apply global RoleBinding"))]
-    ApplyRoleRoleBinding {
-        source: stackable_operator::error::Error,
-    },
-    #[snafu(display("failed to apply Service for {}", rolegroup))]
+    #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to build ConfigMap for {}", rolegroup))]
+    #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to apply ConfigMap for {}", rolegroup))]
+    #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
-    #[snafu(display("failed to apply DaemonSet for {}", rolegroup))]
+    #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
+    },
+    #[snafu(display("failed to patch service account"))]
+    ApplyServiceAccount {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to patch role binding"))]
+    ApplyRoleBinding {
+        source: stackable_operator::error::Error,
+    },
+    #[snafu(display("failed to update status"))]
+    ApplyStatus {
+        source: stackable_operator::error::Error,
     },
     #[snafu(display("invalid product config"))]
     InvalidProductConfig {
@@ -186,8 +203,8 @@ pub enum Error {
     DeleteOrphans {
         source: stackable_operator::error::Error,
     },
-    #[snafu(display("failed to update status"))]
-    ApplyStatus {
+    #[snafu(display("failed to build RBAC resources"))]
+    BuildRbacResources {
         source: stackable_operator::error::Error,
     },
 }
@@ -203,7 +220,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     tracing::info!("Starting reconcile");
     let opa_ref = ObjectRef::from_obj(opa.as_ref());
     let client = &ctx.client;
-    let resolved_product_image = opa.spec.image.resolve(DOCKER_IMAGE_BASE_NAME);
+    let resolved_product_image = opa
+        .spec
+        .image
+        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::CARGO_PKG_VERSION);
+    let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
         APP_NAME,
@@ -219,7 +240,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         &transform_all_roles_to_config(
             opa.as_ref(),
             [(
-                OpaRole::Server.to_string(),
+                opa_role.to_string(),
                 (
                     vec![
                         PropertyNameKind::File(CONFIG_FILE.to_string()),
@@ -237,9 +258,13 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     )
     .context(InvalidProductConfigSnafu)?;
     let role_server_config = validated_config
-        .get(&OpaRole::Server.to_string())
+        .get(&opa_role.to_string())
         .map(Cow::Borrowed)
         .unwrap_or_default();
+
+    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+        .await
+        .context(ResolveVectorAggregatorAddressSnafu)?;
 
     let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
     // required for discovery config map later
@@ -248,36 +273,33 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let (opa_builder_role_serviceaccount, opa_builder_role_rolebinding) =
-        build_opa_builder_serviceaccount(
-            &opa,
-            &resolved_product_image,
-            &ctx.opa_bundle_builder_clusterrole,
-        )?;
-    cluster_resources
-        .add(client, opa_builder_role_serviceaccount)
-        .await
-        .context(ApplyRoleServiceAccountSnafu)?;
-    cluster_resources
-        .add(client, opa_builder_role_rolebinding)
-        .await
-        .context(ApplyRoleRoleBindingSnafu)?;
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(
+        opa.as_ref(),
+        APP_NAME,
+        cluster_resources.get_required_labels(),
+    )
+    .context(BuildRbacResourcesSnafu)?;
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+    let rbac_sa = cluster_resources
+        .add(client, rbac_sa)
         .await
-        .context(ResolveVectorAggregatorAddressSnafu)?;
+        .context(ApplyServiceAccountSnafu)?;
+    cluster_resources
+        .add(client, rbac_rolebinding)
+        .await
+        .context(ApplyRoleBindingSnafu)?;
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
     for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
-            role: OpaRole::Server.to_string(),
+            role: opa_role.to_string(),
             role_group: rolegroup_name.to_string(),
         };
 
         let merged_config = opa
-            .merged_config(&OpaRole::Server, &rolegroup)
+            .merged_config(&opa_role, &rolegroup)
             .context(FailedToResolveConfigSnafu)?;
 
         let rg_configmap = build_server_rolegroup_config_map(
@@ -291,10 +313,12 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         let rg_daemonset = build_server_rolegroup_daemonset(
             &opa,
             &resolved_product_image,
+            &opa_role,
             &rolegroup,
             rolegroup_config,
             &merged_config,
             &ctx.user_info_fetcher_image,
+            &rbac_sa.name_any(),
         )?;
 
         cluster_resources
@@ -311,12 +335,33 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             })?;
         ds_cond_builder.add(
             cluster_resources
-                .add(client, rg_daemonset)
+                .add(client, rg_daemonset.clone())
                 .await
                 .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
                     rolegroup: rolegroup.clone(),
                 })?,
         );
+
+        // Previous version of opa-operator used the field manager scope "opacluster" to write out a DaemonSet with the bundle-builder container called "opa-bundle-builder".
+        // During https://github.com/stackabletech/opa-operator/pull/420 it was renamed to "bundle-builder".
+        // As we are now using the field manager scope "opa.stackable.tech_opacluster", our old changes (with the old container) will stay valid.
+        // We have to use the old field manager scope and post an empty path to get rid of it
+        // https://github.com/stackabletech/issues/issues/390 will implement a proper fix, e.g. also fixing Services and ConfigMaps
+        // For details see https://github.com/stackabletech/opa-operator/issues/444
+        tracing::trace!(
+            "Removing old field manager scope \"opacluster\" of DaemonSet {daemonset_name} to remove the \"opa-bundle-builder\" container. \
+            See https://github.com/stackabletech/opa-operator/issues/444 and https://github.com/stackabletech/issues/issues/390 for details.",
+            daemonset_name = rg_daemonset.name_any()
+        );
+        client
+            .apply_patch(
+                "opacluster",
+                &rg_daemonset,
+                // We can hardcode this here, as https://github.com/stackabletech/issues/issues/390 will solve the general problem and we always have created DaemonSets using the "apps/v1" version
+                json!({"apiVersion": "apps/v1", "kind": "DaemonSet"}),
+            )
+            .await
+            .context(ApplyRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
     for discovery_cm in build_discovery_configmaps(
@@ -354,57 +399,6 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .context(DeleteOrphansSnafu)?;
 
     Ok(Action::await_change())
-}
-
-fn build_opa_builder_serviceaccount(
-    opa: &OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    opa_bundle_builder_clusterrole: &str,
-) -> Result<(ServiceAccount, RoleBinding)> {
-    let role_name = OpaRole::Server.to_string();
-    let sa_name = format!("{}-{}", opa.metadata.name.as_ref().unwrap(), role_name);
-    let sa = ServiceAccount {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&sa_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        ..ServiceAccount::default()
-    };
-    let binding_name = &sa_name;
-    let binding = RoleBinding {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(binding_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        role_ref: RoleRef {
-            api_group: ClusterRole::GROUP.to_string(),
-            kind: ClusterRole::KIND.to_string(),
-            name: opa_bundle_builder_clusterrole.to_string(),
-        },
-        subjects: Some(vec![Subject {
-            api_group: Some(ServiceAccount::GROUP.to_string()),
-            kind: ServiceAccount::KIND.to_string(),
-            name: sa_name,
-            namespace: sa.metadata.namespace.clone(),
-        }]),
-    };
-    Ok((sa, binding))
 }
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
@@ -544,16 +538,17 @@ fn build_server_rolegroup_config_map(
 fn build_server_rolegroup_daemonset(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
+    opa_role: &OpaRole,
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
     user_info_fetcher_image: &str,
+    sa_name: &str,
 ) -> Result<DaemonSet> {
-    let sa_name = format!(
-        "{}-{}",
-        opa.metadata.name.as_ref().context(NoNameSnafu)?,
-        rolegroup_ref.role
-    );
+    let role = opa.role(opa_role);
+    let role_group = opa
+        .rolegroup(rolegroup_ref)
+        .context(InternalOperatorFailureSnafu)?;
 
     let env = server_config
         .get(&PropertyNameKind::Env)
@@ -595,7 +590,8 @@ fn build_server_rolegroup_daemonset(
         )
         .join(" && ")])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR);
+        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
@@ -616,6 +612,14 @@ fn build_server_rolegroup_daemonset(
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .resources(
+            ResourceRequirementsBuilder::new()
+                .with_cpu_request("100m")
+                .with_cpu_limit("200m")
+                .with_memory_request("128Mi")
+                .with_memory_limit("128Mi")
+                .build(),
+        )
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
@@ -720,19 +724,26 @@ fn build_server_rolegroup_daemonset(
     )
     .add_volume(
         VolumeBuilder::new(LOG_VOLUME_NAME)
-            .with_empty_dir(
-                None::<String>,
-                Some(Quantity(format!("{LOG_FILE_VOLUME_SIZE_IN_MB}Mi"))),
-            )
+            .empty_dir(EmptyDirVolumeSource {
+                medium: None,
+                size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
+                    &[
+                        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
+                        MAX_OPA_LOG_FILE_SIZE,
+                        MAX_PREPARE_LOG_FILE_SIZE,
+                    ],
+                )),
+            })
             .build(),
     )
     .service_account_name(sa_name)
-    .security_context(PodSecurityContext {
-        run_as_user: Some(1000),
-        run_as_group: Some(1000),
-        fs_group: Some(1000),
-        ..PodSecurityContext::default()
-    });
+    .security_context(
+        PodSecurityContextBuilder::new()
+            .run_as_user(1000)
+            .run_as_group(0)
+            .fs_group(1000)
+            .build(),
+    );
 
     match &opa.spec.cluster_config.user_info_fetcher.backend {
         stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
@@ -754,8 +765,18 @@ fn build_server_rolegroup_daemonset(
             CONFIG_VOLUME_NAME,
             LOG_VOLUME_NAME,
             merged_config.logging.containers.get(&Container::Vector),
+            ResourceRequirementsBuilder::new()
+                .with_cpu_request("250m")
+                .with_cpu_limit("500m")
+                .with_memory_request("128Mi")
+                .with_memory_limit("128Mi")
+                .build(),
         ));
     }
+
+    let mut pod_template = pb.build_template();
+    pod_template.merge_from(role.config.pod_overrides.clone());
+    pod_template.merge_from(role_group.config.pod_overrides.clone());
 
     Ok(DaemonSet {
         metadata: ObjectMetaBuilder::new()
@@ -780,7 +801,7 @@ fn build_server_rolegroup_daemonset(
                 )),
                 ..LabelSelector::default()
             },
-            template: pb.build_template(),
+            template: pod_template,
             ..DaemonSetSpec::default()
         }),
         status: None,
@@ -788,7 +809,7 @@ fn build_server_rolegroup_daemonset(
 }
 
 pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Action {
-    Action::requeue(Duration::from_secs(5))
+    Action::requeue(*Duration::from_secs(5))
 }
 
 fn build_config_file() -> &'static str {
@@ -844,9 +865,9 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
     let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level}");
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
+        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command
@@ -875,9 +896,9 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     let mut start_command = "/stackable/opa-bundle-builder".to_string();
 
     if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
+        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
     } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE_IN_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
+        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
     }
 
     start_command

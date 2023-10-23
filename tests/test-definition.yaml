@@ -2,12 +2,11 @@
 dimensions:
   - name: opa
     values:
-      - 0.37.2-stackable23.4.0-rc2
-      - 0.41.0-stackable23.4.0-rc2
-      - 0.45.0-stackable23.4.0-rc2
+      - 0.51.0
+      - 0.57.0
   - name: opa-latest
     values:
-      - 0.45.0-stackable23.4.0-rc2
+      - 0.57.0
 tests:
   - name: smoke
     dimensions:
@@ -21,3 +20,21 @@ tests:
   - name: cluster-operation
     dimensions:
       - opa-latest
+suites:
+  - name: nightly
+    patch:
+      - dimensions:
+          - expr: last
+  - name: smoke-latest
+    select:
+      - smoke
+    patch:
+      - dimensions:
+          - expr: last
+  - name: openshift
+    patch:
+      - dimensions:
+          - expr: last
+      - dimensions:
+          - name: openshift
+            expr: "true"

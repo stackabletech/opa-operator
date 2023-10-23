@@ -1,0 +1,31 @@
+= Defining policies
+
+Users can define policies by using Rego, OPAs https://www.openpolicyagent.org/docs/latest/policy-language/[policy language].
+
+Policy definitionas are deployed as `ConfigMap` resources as described in xref:implementation-notes.adoc[implementation notes].
+
+Here is an example:
+
+[source,yaml]
+----
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+  labels:
+    opa.stackable.tech/bundle: "true" # <1>
+data:
+  test.rego: | # <2>
+    package test
+
+    hello {
+      true
+    }
+
+    world {
+      false
+    }
+----
+<1> Mark this `ConfigMap` as a bundle source.
+<2> `test.rego` is the file name to use inside the bundle for these rules.

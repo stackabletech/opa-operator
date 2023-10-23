@@ -9,15 +9,16 @@ use futures::StreamExt;
 use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
-    client,
-    client::Client,
-    error,
-    error::OperatorResult,
+    client::{self, Client},
+    error::{self, OperatorResult},
     k8s_openapi::api::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
     },
-    kube::{api::ListParams, runtime::Controller, Api},
+    kube::{
+        runtime::{watcher, Controller},
+        Api,
+    },
     logging::controller::report_controller_reconciled,
     namespace::WatchNamespace,
     product_config::ProductConfigManager,
@@ -28,6 +29,7 @@ use std::sync::Arc;
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
     pub const TARGET_PLATFORM: Option<&str> = option_env!("TARGET");
+    pub const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 }
 
 #[derive(Parser)]
@@ -119,10 +121,10 @@ async fn create_controller(
     let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
     let services_api: Api<Service> = watch_namespace.get_api(&client);
 
-    let controller = Controller::new(opa_api, ListParams::default())
-        .owns(daemonsets_api, ListParams::default())
-        .owns(configmaps_api, ListParams::default())
-        .owns(services_api, ListParams::default());
+    let controller = Controller::new(opa_api, watcher::Config::default())
+        .owns(daemonsets_api, watcher::Config::default())
+        .owns(configmaps_api, watcher::Config::default())
+        .owns(services_api, watcher::Config::default());
 
     controller
         .run(

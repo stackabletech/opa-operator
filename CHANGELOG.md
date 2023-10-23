@@ -6,7 +6,64 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Cluster status conditions ([#428])
+- Default stackableVersion to operator version ([#467]).
+- Document we don't create PodDisruptionBudgets ([#480]).
+- Added support for 0.57.0 ([#482]).
+
+### Changed
+
+- `vector` `0.26.0` -> `0.33.0` ([#465], [#482]).
+- `operator-rs` `0.44.0` -> `0.55.0` ([#467], [#480], [#482]).
+
+### Removed
+
+- Removed support for versions 0.45.0, 0.41.0, 0.37.2, 0.28.0, 0.27.1 ([#482]).
+
+[#465]: https://github.com/stackabletech/opa-operator/pull/465
+[#467]: https://github.com/stackabletech/opa-operator/pull/467
+[#480]: https://github.com/stackabletech/opa-operator/pull/480
+[#482]: https://github.com/stackabletech/opa-operator/pull/482
+
+## [23.7.0] - 2023-07-14
+
+### Added
+
+- Generate OLM bundle for Release 23.4.0 ([#442]).
+- Missing CRD defaults for `status.conditions` field ([#443]).
+- Support for OPA 0.51.0 ([#451]).
+- Set explicit resources on all containers ([#453]).
+- Support `podOverrides` ([#458]).
+
+### Changed
+
+- Operator-rs: `0.40.1` -> `0.44.0` ([#440], [#460]).
+- Use 0.0.0-dev product images for testing ([#441]).
+- Use testing-tools 0.2.0 ([#441]).
+- Added kuttl test suites ([#455]).
+- Set explicit resources on all containers ([#453], [#456]).
+
+### Fixed
+
+- Migrate "opa-bundle-builder" container name from <= 23.1 releases ([#445]).
+- Increase the size limit of the log volume ([#460]).
+
+[#440]: https://github.com/stackabletech/opa-operator/pull/440
+[#441]: https://github.com/stackabletech/opa-operator/pull/441
+[#442]: https://github.com/stackabletech/opa-operator/pull/442
+[#443]: https://github.com/stackabletech/opa-operator/pull/443
+[#445]: https://github.com/stackabletech/opa-operator/pull/445
+[#451]: https://github.com/stackabletech/opa-operator/pull/451
+[#453]: https://github.com/stackabletech/opa-operator/pull/453
+[#455]: https://github.com/stackabletech/opa-operator/pull/455
+[#456]: https://github.com/stackabletech/opa-operator/pull/456
+[#458]: https://github.com/stackabletech/opa-operator/pull/458
+[#460]: https://github.com/stackabletech/opa-operator/pull/460
+
+## [23.4.0] - 2023-04-17
+
+### Added
+
+- Cluster status conditions ([#428]).
 - Extend cluster resources for status and cluster operation (paused, stopped) ([430]).
 
 ### Changed
@@ -16,15 +73,18 @@ All notable changes to this project will be documented in this file.
   This change is breaking, because - for security reasons - we default to the `cluster-internal` `ListenerClass`.
   If you need your cluster to be accessible from outside of Kubernetes you need to set `clusterConfig.listenerClass`
   to `external-unstable` or `external-stable` ([#432]).
-- `operator-rs` `0.27.1` -> `0.39.0` ([#411], [#420], [#430]).
+- `operator-rs` `0.27.1` -> `0.40.1` ([#411], [#420], [#430], [#431]).
 - Fragmented `OpaConfig` ([#411]).
 - Bumped stackable image versions to `23.4.0-rc2` ([#420]).
 - Enabled logging ([#420]).
+- Openshift compatibility: extended roles ([#431]).
+- Use operator-rs `build_rbac_resources` method ([#431]).
 
 [#411]: https://github.com/stackabletech/opa-operator/pull/411
 [#420]: https://github.com/stackabletech/opa-operator/pull/420
 [#428]: https://github.com/stackabletech/opa-operator/pull/428
 [#430]: https://github.com/stackabletech/opa-operator/pull/430
+[#431]: https://github.com/stackabletech/opa-operator/pull/431
 [#432]: https://github.com/stackabletech/opa-operator/pull/432
 
 ## [23.1.0] - 2023-01-23

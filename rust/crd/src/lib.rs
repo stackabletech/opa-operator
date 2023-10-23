@@ -15,11 +15,11 @@ use stackable_operator::{
     product_config_utils::{ConfigError, Configuration},
     product_logging::{self, spec::Logging},
     role_utils::Role,
-    role_utils::RoleGroupRef,
+    role_utils::{EmptyRoleConfig, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 use strum::{Display, EnumIter, EnumString};
 
 pub mod user_info_fetcher;
@@ -31,6 +31,13 @@ pub const CONFIG_FILE: &str = "config.yaml";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
+    #[snafu(display("the role group {role_group} is not defined"))]
+    CannotRetrieveOpaRoleGroup { role_group: String },
+    #[snafu(display("unknown role {role}"))]
+    UnknownOpaRole {
+        source: strum::ParseError,
+        role: String,
+    },
     #[snafu(display("the role group [{role_group}] is missing"))]
     MissingRoleGroup { role_group: String },
     #[snafu(display("fragment validation failure"))]
@@ -60,7 +67,7 @@ pub struct OpaSpec {
     #[serde(default)]
     pub cluster_operation: ClusterOperation,
     /// OPA server configuration.
-    pub servers: Role<OpaConfigFragment>,
+    pub servers: Role<OpaConfigFragment, EmptyRoleConfig>,
     /// The OPA image to use
     pub image: ProductImage,
 }
@@ -72,17 +79,17 @@ pub struct OpaClusterConfig {
     /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vector_aggregator_config_map_name: Option<String>,
-    /// In the future this setting will control, which ListenerClass <https://docs.stackable.tech/home/stable/listener-operator/listenerclass.html>
-    /// will be used to expose the service.
-    /// Currently only a subset of the ListenerClasses are supported by choosing the type of the created Services
-    /// by looking at the ListenerClass name specified,
-    /// In a future release support for custom ListenerClasses will be introduced without a breaking change:
+    /// This field controls which type of Service the Operator creates for this OpaCluster:
     ///
     /// * cluster-internal: Use a ClusterIP service
     ///
     /// * external-unstable: Use a NodePort service
     ///
     /// * external-stable: Use a LoadBalancer service
+    ///
+    /// This is a temporary solution with the goal to keep yaml manifests forward compatible.
+    /// In the future, this setting will control which ListenerClass <https://docs.stackable.tech/home/stable/listener-operator/listenerclass.html>
+    /// will be used to expose the service, and ListenerClass names will stay the same, allowing for a non-breaking change.
     #[serde(default)]
     pub listener_class: CurrentlySupportedListenerClasses,
     #[serde(default)]
@@ -179,11 +186,11 @@ impl OpaConfig {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
                 cpu: CpuLimitsFragment {
-                    min: Some(Quantity("200m".to_owned())),
-                    max: Some(Quantity("2".to_owned())),
+                    min: Some(Quantity("250m".to_owned())),
+                    max: Some(Quantity("500m".to_owned())),
                 },
                 memory: MemoryLimitsFragment {
-                    limit: Some(Quantity("2Gi".to_owned())),
+                    limit: Some(Quantity("256Mi".to_owned())),
                     runtime_limits: NoRuntimeLimitsFragment {},
                 },
                 storage: OpaStorageConfigFragment {},
@@ -241,6 +248,30 @@ pub enum OpaRole {
 }
 
 impl OpaCluster {
+    /// Returns a reference to the role.
+    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment, EmptyRoleConfig> {
+        match role_variant {
+            OpaRole::Server => &self.spec.servers,
+        }
+    }
+
+    /// Returns a reference to the role group. Raises an error if the role or role group are not defined.
+    pub fn rolegroup(
+        &self,
+        rolegroup_ref: &RoleGroupRef<OpaCluster>,
+    ) -> Result<&RoleGroup<OpaConfigFragment>, Error> {
+        let role_variant =
+            OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
+                role: rolegroup_ref.role.to_owned(),
+            })?;
+        let role = self.role(&role_variant);
+        role.role_groups
+            .get(&rolegroup_ref.role_group)
+            .with_context(|| CannotRetrieveOpaRoleGroupSnafu {
+                role_group: rolegroup_ref.role_group.to_owned(),
+            })
+    }
+
     /// The name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_name(&self) -> Option<String> {
         self.metadata.name.clone()
@@ -306,6 +337,7 @@ impl OpaCluster {
 #[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaClusterStatus {
+    #[serde(default)]
     pub conditions: Vec<ClusterCondition>,
 }
 
