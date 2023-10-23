@@ -1,5 +1,9 @@
+use derivative::Derivative;
 use serde::{Deserialize, Serialize};
-use stackable_operator::schemars::{self, JsonSchema};
+use stackable_operator::{
+    schemars::{self, JsonSchema},
+    time::Duration,
+};
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +37,17 @@ pub struct KeycloakBackend {
     pub client_id: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]
+#[derivative(Default)]
 #[serde(rename_all = "camelCase")]
-pub struct Cache {}
+pub struct Cache {
+    #[derivative(Default(value = "Cache::default_entry_time_to_live()"))]
+    #[serde(default = "Cache::default_entry_time_to_live")]
+    pub entry_time_to_live: Duration,
+}
+
+impl Cache {
+    const fn default_entry_time_to_live() -> Duration {
+        Duration::from_minutes_unchecked(1)
+    }
+}

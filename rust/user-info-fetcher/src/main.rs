@@ -102,7 +102,13 @@ async fn main() -> Result<(), StartupError> {
         },
     });
     let http = reqwest::Client::default();
-    let user_info_cache = Cache::builder().name("user-info").build();
+    let user_info_cache = {
+        let crd::Cache { entry_time_to_live } = config.cache;
+        Cache::builder()
+            .name("user-info")
+            .time_to_live(*entry_time_to_live)
+            .build()
+    };
     let app = Router::new()
         .route("/user", post(get_user_info))
         .with_state(AppState {

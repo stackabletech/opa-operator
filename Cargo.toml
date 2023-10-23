@@ -12,6 +12,7 @@ repository = "https://github.com/stackabletech/opa-operator"
 axum = "0.6.15"
 built = { version =  "0.6", features = ["chrono", "git2"] }
 clap = "4.3"
+derivative = "2.2.0"
 fnv = "1.0"
 futures = { version = "0.3", features = ["compat"] }
 hyper = "0.14.27"
