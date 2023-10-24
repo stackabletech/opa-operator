@@ -147,7 +147,7 @@ struct RoleRef {
 struct UserInfo {
     groups: Vec<GroupRef>,
     roles: Vec<RoleRef>,
-    custom_attributes: HashMap<String, String>,
+    custom_attributes: HashMap<String, Vec<String>>,
 }
 
 #[derive(Snafu, Debug)]

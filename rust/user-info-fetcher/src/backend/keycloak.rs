@@ -118,11 +118,6 @@ pub(crate) async fn get_user_info(
             .into_iter()
             .map(|role| crate::RoleRef { name: role.name })
             .collect(),
-        custom_attributes: user
-            .attributes
-            .into_iter()
-            // FIXME: why does keycloak support multiple values? do we need to support this? doesn't seem to be exposed in gui
-            .filter_map(|(k, v)| Some((k, v.into_iter().next()?)))
-            .collect(),
+        custom_attributes: user.attributes,
     })
 }
