@@ -141,12 +141,13 @@ async fn build_bundle(store: Store<ConfigMap>) -> Vec<u8> {
     info!("building bundle");
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), flate2::Compression::default()));
     for cm in store.state() {
+        let cm_ns = cm.metadata.namespace.as_deref().unwrap();
         let cm_name = cm.metadata.name.as_deref().unwrap();
         for (file_name, data) in cm.data.iter().flatten() {
             let mut header = file_header(data.as_bytes());
             tar.append_data(
                 &mut header,
-                format!("configmap/{cm_name}/{file_name}"),
+                format!("configmap/{cm_ns}/{cm_name}/{file_name}"),
                 data.as_bytes(),
             )
             .unwrap();
