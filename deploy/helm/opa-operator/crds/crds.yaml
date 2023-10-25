@@ -27,6 +27,11 @@ spec:
                 clusterConfig:
                   default:
                     listenerClass: cluster-internal
+                    userInfoFetcher:
+                      backend:
+                        none: {}
+                      cache:
+                        entryTimeToLive: 1m
                   description: Global OPA cluster configuration that applies to all roles and role groups.
                   properties:
                     listenerClass:
@@ -46,6 +51,53 @@ spec:
                         - external-unstable
                         - external-stable
                       type: string
+                    userInfoFetcher:
+                      default:
+                        backend:
+                          none: {}
+                        cache:
+                          entryTimeToLive: 1m
+                      properties:
+                        backend:
+                          default:
+                            none: {}
+                          oneOf:
+                            - required:
+                                - none
+                            - required:
+                                - keycloak
+                          properties:
+                            keycloak:
+                              properties:
+                                adminRealm:
+                                  type: string
+                                clientId:
+                                  type: string
+                                credentialsSecretName:
+                                  type: string
+                                url:
+                                  type: string
+                                userRealm:
+                                  type: string
+                              required:
+                                - adminRealm
+                                - clientId
+                                - credentialsSecretName
+                                - url
+                                - userRealm
+                              type: object
+                            none:
+                              type: object
+                          type: object
+                        cache:
+                          default:
+                            entryTimeToLive: 1m
+                          properties:
+                            entryTimeToLive:
+                              default: 1m
+                              type: string
+                          type: object
+                      type: object
                     vectorAggregatorConfigMapName:
                       description: Name of the Vector aggregator discovery ConfigMap. It must contain the key `ADDRESS` with the address of the Vector aggregator.
                       nullable: true
