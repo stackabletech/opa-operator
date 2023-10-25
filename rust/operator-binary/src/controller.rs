@@ -207,6 +207,8 @@ pub enum Error {
     BuildRbacResources {
         source: stackable_operator::error::Error,
     },
+    #[snafu(display("failed to serialize user info fetcher configuration"))]
+    SerializeUserInfoFetcherConfig { source: serde_json::Error },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -508,7 +510,8 @@ fn build_server_rolegroup_config_map(
         .add_data(CONFIG_FILE, build_config_file())
         .add_data(
             "user-info-fetcher.json",
-            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info_fetcher).unwrap(),
+            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info_fetcher)
+                .context(SerializeUserInfoFetcherConfigSnafu)?,
         );
 
     extend_role_group_config_map(
