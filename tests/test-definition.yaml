@@ -7,6 +7,9 @@ dimensions:
   - name: opa-latest
     values:
       - 0.57.0
+  - name: keycloak
+    values:
+      - 22.0.4
 tests:
   - name: smoke
     dimensions:
@@ -20,6 +23,10 @@ tests:
   - name: cluster-operation
     dimensions:
       - opa-latest
+  - name: keycloak-user-info
+    dimensions:
+      - opa-latest
+      - keycloak
 suites:
   - name: nightly
     patch:

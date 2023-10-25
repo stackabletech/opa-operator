@@ -684,7 +684,15 @@ fn build_server_rolegroup_daemonset(
         .command(vec!["stackable-opa-user-info-fetcher".to_string()])
         .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
         .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
-        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR);
+        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+        .resources(
+            ResourceRequirementsBuilder::new()
+                .with_cpu_request("100m")
+                .with_cpu_limit("200m")
+                .with_memory_request("128Mi")
+                .with_memory_limit("128Mi")
+                .build(),
+        );
 
     match &opa.spec.cluster_config.user_info_fetcher.backend {
         stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
