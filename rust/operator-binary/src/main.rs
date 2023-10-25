@@ -36,13 +36,7 @@ pub mod built_info {
 #[clap(about, author)]
 struct Opts {
     #[clap(subcommand)]
-    cmd: Cmd,
-}
-
-#[derive(Parser)]
-enum Cmd {
-    #[clap(flatten)]
-    Common(Command<OpaRun>),
+    cmd: Command<OpaRun>,
 }
 
 #[derive(clap::Parser)]
@@ -59,10 +53,10 @@ struct OpaRun {
 async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
-        Cmd::Common(Command::Crd) => {
+        Command::Crd => {
             OpaCluster::print_yaml_schema()?;
         }
-        Cmd::Common(Command::Run(OpaRun {
+        Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
             operator_image,
             common:
@@ -71,7 +65,7 @@ async fn main() -> Result<(), error::Error> {
                     watch_namespace,
                     tracing_target,
                 },
-        })) => {
+        }) => {
             stackable_operator::logging::initialize_logging(
                 "OPA_OPERATOR_LOG",
                 APP_NAME,
