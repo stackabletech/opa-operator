@@ -57,10 +57,12 @@ spec:
                           none: {}
                         cache:
                           entryTimeToLive: 1m
+                      description: Configures how to fetch additional metadata about users (such as group memberships) from an external directory service.
                       properties:
                         backend:
                           default:
                             none: {}
+                          description: The backend directory service to use.
                           oneOf:
                             - required:
                                 - none
@@ -68,16 +70,28 @@ spec:
                                 - keycloak
                           properties:
                             keycloak:
+                              description: Backend that fetches user information from Keycloak.
                               properties:
                                 adminRealm:
+                                  description: |-
+                                    The Keycloak realm that OPA's Keycloak account (as specified by `credentials_secret_name` exists in).
+
+                                    Typically `master`.
                                   type: string
                                 clientId:
+                                  description: The Keycloak client ID for OPA to log in with. It must be allowed to use Direct Grants.
                                   type: string
                                 credentialsSecretName:
+                                  description: |-
+                                    Name of a Secret that contains credentials to a Keycloak account with permission to read user metadata.
+
+                                    Must contain the fields `username` and `password`.
                                   type: string
                                 url:
+                                  description: URL of the Keycloak installation.
                                   type: string
                                 userRealm:
+                                  description: The Keycloak realm that user metadata should be resolved from.
                                   type: string
                               required:
                                 - adminRealm
@@ -87,14 +101,17 @@ spec:
                                 - userRealm
                               type: object
                             none:
+                              description: Dummy backend that adds no extra user information.
                               type: object
                           type: object
                         cache:
                           default:
                             entryTimeToLive: 1m
+                          description: Caching configuration.
                           properties:
                             entryTimeToLive:
                               default: 1m
+                              description: How long metadata about each user should be cached for.
                               type: string
                           type: object
                       type: object

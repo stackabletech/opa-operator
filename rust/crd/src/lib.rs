@@ -92,6 +92,8 @@ pub struct OpaClusterConfig {
     /// will be used to expose the service, and ListenerClass names will stay the same, allowing for a non-breaking change.
     #[serde(default)]
     pub listener_class: CurrentlySupportedListenerClasses,
+    /// Configures how to fetch additional metadata about users (such as group memberships)
+    /// from an external directory service.
     #[serde(default)]
     pub user_info_fetcher: user_info_fetcher::Config,
 }
