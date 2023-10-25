@@ -9,7 +9,7 @@ if __name__ == "__main__":
     all_args.add_argument("-u", "--url", required=True, help="OPA service url")
     args = vars(all_args.parse_args())
 
-    #url = 'http://test-opa-svc:8081/v1/data/currentUserInfo'
+    # url = 'http://test-opa-svc:8081/v1/data/currentUserInfo'
     params = {'strict-builtin-errors': 'true'}
     payload = {'input': {'username': 'admin'}}
     response = requests.post(args['url'], data=json.dumps(payload), params=params).json()
