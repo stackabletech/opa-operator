@@ -1,3 +1,5 @@
+use std::{collections::BTreeMap, str::FromStr};
+
 use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
@@ -19,7 +21,6 @@ use stackable_operator::{
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
 };
-use std::{collections::BTreeMap, str::FromStr};
 use strum::{Display, EnumIter, EnumString};
 
 pub const APP_NAME: &str = "opa";

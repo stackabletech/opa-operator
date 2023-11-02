@@ -1,11 +1,11 @@
 //! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
-
-use crate::discovery::{self, build_discovery_configmaps};
-use crate::product_logging::{
-    extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
-    OpaLogLevel,
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
 };
 
+use product_config::{types::PropertyNameKind, ProductConfigManager};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
@@ -36,7 +36,6 @@ use stackable_operator::{
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
-    product_config::{types::PropertyNameKind, ProductConfigManager},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
@@ -52,12 +51,15 @@ use stackable_operator::{
     },
     time::Duration,
 };
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
 use strum::{EnumDiscriminants, IntoStaticStr};
+
+use crate::{
+    discovery::{self, build_discovery_configmaps},
+    product_logging::{
+        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
+        OpaLogLevel,
+    },
+};
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 
@@ -118,87 +120,109 @@ pub struct Ctx {
 pub enum Error {
     #[snafu(display("object does not define meta name"))]
     NoName,
+
     #[snafu(display("internal operator failure"))]
     InternalOperatorFailure { source: stackable_opa_crd::Error },
+
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
+
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::error::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to patch service account"))]
     ApplyServiceAccount {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to patch role binding"))]
     ApplyRoleBinding {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to update status"))]
     ApplyStatus {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("invalid product config"))]
     InvalidProductConfig {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("object is missing metadata to build owner reference"))]
     ObjectMissingMetadataForOwnerRef {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to build discovery ConfigMap"))]
     BuildDiscoveryConfig { source: discovery::Error },
+
     #[snafu(display("failed to apply discovery ConfigMap"))]
     ApplyDiscoveryConfig {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to transform configs"))]
     ProductConfigTransform {
         source: stackable_operator::product_config_utils::ConfigError,
     },
+
     #[snafu(display("failed to resolve and merge config for role and role group"))]
     FailedToResolveConfig { source: stackable_opa_crd::Error },
+
     #[snafu(display("illegal container name"))]
     IllegalContainerName {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to resolve the Vector aggregator address"))]
     ResolveVectorAggregatorAddress {
         source: crate::product_logging::Error,
     },
+
     #[snafu(display("failed to add the logging configuration to the ConfigMap [{cm_name}]"))]
     InvalidLoggingConfig {
         source: crate::product_logging::Error,
         cm_name: String,
     },
+
     #[snafu(display("failed to create cluster resources"))]
     FailedToCreateClusterResources {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to delete orphaned resources"))]
     DeleteOrphans {
         source: stackable_operator::error::Error,
     },
+
     #[snafu(display("failed to build RBAC resources"))]
     BuildRbacResources {
         source: stackable_operator::error::Error,
