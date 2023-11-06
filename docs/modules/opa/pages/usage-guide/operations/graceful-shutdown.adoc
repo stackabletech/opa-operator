@@ -23,4 +23,4 @@ Once a server Pod is asked to terminate the following timeline occurs:
 
 1. The server stops accepting any new queries.
 2. The server waits until all running queries have finished.
-3. If the graceful shutdown doesn't complete quick enough (e.g. a query runs longer than the graceful shutdown period), after `<graceful shutdown period> + 5s safety overhead` the Pod gets killed, regardless if it has shut down gracefully or not. This is achieved by setting `terminationGracePeriodSeconds` on the server Pods. Currently running queries on the sever will fail.
+3. If the graceful shutdown doesn't complete quick enough (e.g. a query runs longer than the graceful shutdown period), after `<graceful shutdown period> + 5s safety overhead` the Pod gets killed, regardless if it has shut down gracefully or not. This is achieved by setting `terminationGracePeriodSeconds` on the server Pods. Running queries on the sever will fail.
