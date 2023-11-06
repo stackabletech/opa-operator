@@ -1,7 +1,26 @@
 = Graceful shutdown
 
-Graceful shutdown of OPA nodes is either not supported by the product itself
-or we have not implemented it yet.
+You can configure the graceful shutdown as described in xref:concepts:operations/graceful_shutdown.adoc[].
 
-Outstanding implementation work for the graceful shutdowns of all products where this functionality is relevant is tracked in
-https://github.com/stackabletech/issues/issues/357
+== Servers
+
+As a default, OPA servers have `2 minutes` to shut down gracefully.
+
+The OPA server process will receive a `SIGTERM` signal when Kubernetes wants to terminate the Pod.
+It will acknowledge the shutdown as shown in the log below and initiate a graceful shutdown.
+After the graceful shutdown timeout runs out, and the process still didn't exit, Kubernetes will issue a `SIGKILL` signal.
+
+[source,text]
+----
+{"level":"info","msg":"Shutting down...","time":"2023-11-06T15:16:08Z"}
+{"level":"info","msg":"Server shutdown.","time":"2023-11-06T15:16:08Z"}
+{"level":"info","msg":"Stopping bundle loader.","name":"stackable","plugin":"bundle","time":"2023-11-06T15:16:08Z"}
+----
+
+== Implementation
+
+Once a server Pod is asked to terminate the following timeline occurs:
+
+1. The server stops accepting any new queries.
+2. The server waits until all running queries have finished.
+3. If the graceful shutdown doesn't complete quick enough (e.g. a query runs longer than the graceful shutdown period), after `<graceful shutdown period> + 5s safety overhead` the Pod gets killed, regardless if it has shut down gracefully or not. This is achieved by setting `terminationGracePeriodSeconds` on the server Pods. Currently running queries on the sever will fail.
