@@ -25,6 +25,7 @@ use crate::controller::OPA_CONTROLLER_NAME;
 
 mod controller;
 mod discovery;
+mod operations;
 mod product_logging;
 
 pub mod built_info {

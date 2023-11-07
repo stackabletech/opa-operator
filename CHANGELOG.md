@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - Default stackableVersion to operator version ([#467]).
 - Document we don't create PodDisruptionBudgets ([#480]).
 - Added support for 0.57.0 ([#482]).
+- Support graceful shutdown ([#487]).
+- Disable OPA telemetry ([#487]).
 
 ### Changed
 
@@ -23,6 +25,7 @@ All notable changes to this project will be documented in this file.
 [#467]: https://github.com/stackabletech/opa-operator/pull/467
 [#480]: https://github.com/stackabletech/opa-operator/pull/480
 [#482]: https://github.com/stackabletech/opa-operator/pull/482
+[#487]: https://github.com/stackabletech/opa-operator/pull/487
 
 ## [23.7.0] - 2023-07-14
 
