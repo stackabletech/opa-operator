@@ -5,11 +5,13 @@ use std::{
     sync::Arc,
 };
 
+use indoc::formatdoc;
 use product_config::{types::PropertyNameKind, ProductConfigManager};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
-    Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
+    Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME,
+    DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
 };
 use stackable_operator::{
     builder::{
@@ -39,6 +41,7 @@ use stackable_operator::{
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
+        framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
         spec::{
             AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
             ContainerLogConfigChoice, LogLevel,
@@ -50,11 +53,13 @@ use stackable_operator::{
         operations::ClusterOperationsConditionBuilder,
     },
     time::Duration,
+    utils::COMMON_BASH_TRAP_FUNCTIONS,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
     discovery::{self, build_discovery_configmaps},
+    operations::graceful_shutdown::add_graceful_shutdown_config,
     product_logging::{
         extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
         OpaLogLevel,
@@ -75,7 +80,7 @@ pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 const CONFIG_VOLUME_NAME: &str = "config";
 const CONFIG_DIR: &str = "/stackable/config";
 const LOG_VOLUME_NAME: &str = "log";
-const LOG_DIR: &str = "/stackable/log";
+const STACKABLE_LOG_DIR: &str = "/stackable/log";
 const BUNDLES_VOLUME_NAME: &str = "bundles";
 const BUNDLES_DIR: &str = "/bundles";
 
@@ -226,6 +231,11 @@ pub enum Error {
     #[snafu(display("failed to build RBAC resources"))]
     BuildRbacResources {
         source: stackable_operator::error::Error,
+    },
+
+    #[snafu(display("failed to configure graceful shutdown"))]
+    GracefulShutdown {
+        source: crate::operations::graceful_shutdown::Error,
     },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -590,7 +600,8 @@ fn build_server_rolegroup_daemonset(
     cb_prepare
         .image_from_product_image(resolved_product_image)
         .command(vec![
-            "bash".to_string(),
+            "/bin/bash".to_string(),
+            "-x".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
@@ -601,13 +612,14 @@ fn build_server_rolegroup_daemonset(
         )
         .join(" && ")])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
         .command(vec![
-            "bash".to_string(),
+            "/bin/bash".to_string(),
+            "-x".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
@@ -622,7 +634,7 @@ fn build_server_rolegroup_daemonset(
             bundle_builder_log_level(merged_config).to_string(),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(
             ResourceRequirementsBuilder::new()
                 .with_cpu_request("100m")
@@ -656,7 +668,8 @@ fn build_server_rolegroup_daemonset(
     cb_opa
         .image_from_product_image(resolved_product_image)
         .command(vec![
-            "bash".to_string(),
+            "/bin/bash".to_string(),
+            "-x".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
@@ -668,7 +681,7 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(merged_config.resources.to_owned().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
@@ -752,6 +765,8 @@ fn build_server_rolegroup_daemonset(
                 .build(),
         ));
     }
+
+    add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;
 
     let mut pod_template = pb.build_template();
     pod_template.merge_from(role.config.pod_overrides.clone());
@@ -841,15 +856,30 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         }
     }
 
-    let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level}");
-
-    if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
-    } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
+    // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
+    formatdoc! {"
+        {COMMON_BASH_TRAP_FUNCTIONS}
+        {remove_vector_shutdown_file_command}
+        prepare_signal_handlers
+        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry{logging_redirects} &
+        wait_for_termination $!
+        {create_vector_shutdown_file_command}
+        ",
+        remove_vector_shutdown_file_command =
+            remove_vector_shutdown_file_command(STACKABLE_LOG_DIR),
+        create_vector_shutdown_file_command =
+            create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
+        shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
+        // Redirects matter!
+        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
+        // and not some utility (e.g. multilog or tee) process.
+        // See https://stackoverflow.com/a/8048493
+        logging_redirects = if console_logging_off {
+            format!(" &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+        } else {
+            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
+        },
     }
-
-    start_command
 }
 
 fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
@@ -872,15 +902,22 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
         }
     };
 
-    let mut start_command = "/stackable/opa-bundle-builder".to_string();
-
-    if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
-    } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
+    formatdoc! {"
+        {COMMON_BASH_TRAP_FUNCTIONS}
+        prepare_signal_handlers
+        /stackable/opa-bundle-builder{logging_redirects} &
+        wait_for_termination $!
+        ",
+        // Redirects matter!
+        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
+        // and not some utility (e.g. multilog or tee) process.
+        // See https://stackoverflow.com/a/8048493
+        logging_redirects = if console_logging_off {
+            format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+        } else {
+            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
+        },
     }
-
-    start_command
 }
 
 fn bundle_builder_log_level(merged_config: &OpaConfig) -> BundleBuilderLogLevel {
@@ -909,7 +946,7 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
     }) = merged_config.logging.containers.get(&Container::Prepare)
     {
         prepare_container_args.push(product_logging::framework::capture_shell_output(
-            LOG_DIR,
+            STACKABLE_LOG_DIR,
             container_name,
             log_config,
         ));
