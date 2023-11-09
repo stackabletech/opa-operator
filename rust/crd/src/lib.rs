@@ -95,7 +95,7 @@ pub struct OpaClusterConfig {
     /// Configures how to fetch additional metadata about users (such as group memberships)
     /// from an external directory service.
     #[serde(default)]
-    pub user_info: user_info_fetcher::Config,
+    pub user_info: Option<user_info_fetcher::Config>,
 }
 
 // TODO: Temporary solution until listener-operator is finished

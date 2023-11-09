@@ -9,7 +9,8 @@ use crate::product_logging::{
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
-    Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
+    user_info_fetcher, Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME,
+    OPERATOR_NAME,
 };
 use stackable_operator::k8s_openapi::api::core::v1::SecretVolumeSource;
 use stackable_operator::{
@@ -507,12 +508,14 @@ fn build_server_rolegroup_config_map(
                 ))
                 .build(),
         )
-        .add_data(CONFIG_FILE, build_config_file())
-        .add_data(
+        .add_data(CONFIG_FILE, build_config_file());
+
+    if let Some(user_info) = &opa.spec.cluster_config.user_info {
+        cm_builder.add_data(
             "user-info-fetcher.json",
-            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info)
-                .context(SerializeUserInfoFetcherConfigSnafu)?,
+            serde_json::to_string_pretty(user_info).context(SerializeUserInfoFetcherConfigSnafu)?,
         );
+    }
 
     extend_role_group_config_map(
         rolegroup,
@@ -682,28 +685,30 @@ fn build_server_rolegroup_daemonset(
             ..Probe::default()
         });
 
-    cb_user_info_fetcher
-        .image(user_info_fetcher_image)
-        .command(vec!["stackable-opa-user-info-fetcher".to_string()])
-        .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
-        .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
-        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
-        .resources(
-            ResourceRequirementsBuilder::new()
-                .with_cpu_request("100m")
-                .with_cpu_limit("200m")
-                .with_memory_request("128Mi")
-                .with_memory_limit("128Mi")
-                .build(),
-        );
-
-    match &opa.spec.cluster_config.user_info.backend {
-        stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
-        stackable_opa_crd::user_info_fetcher::Backend::Keycloak(_) => {
-            cb_user_info_fetcher.add_volume_mount(
-                USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-                USER_INFO_FETCHER_CREDENTIALS_DIR,
+    if let Some(user_info) = &opa.spec.cluster_config.user_info {
+        cb_user_info_fetcher
+            .image(user_info_fetcher_image)
+            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
+            .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
+            .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
+            .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+            .resources(
+                ResourceRequirementsBuilder::new()
+                    .with_cpu_request("100m")
+                    .with_cpu_limit("200m")
+                    .with_memory_request("128Mi")
+                    .with_memory_limit("128Mi")
+                    .build(),
             );
+
+        match &user_info.backend {
+            user_info_fetcher::Backend::None {} => {}
+            user_info_fetcher::Backend::Keycloak(_) => {
+                cb_user_info_fetcher.add_volume_mount(
+                    USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                    USER_INFO_FETCHER_CREDENTIALS_DIR,
+                );
+            }
         }
     }
 
@@ -720,7 +725,6 @@ fn build_server_rolegroup_daemonset(
     .add_init_container(cb_prepare.build())
     .add_container(cb_opa.build())
     .add_container(cb_bundle_builder.build())
-    .add_container(cb_user_info_fetcher.build())
     .image_pull_secrets_from_product_image(resolved_product_image)
     .node_selector_opt(opa.node_selector(&rolegroup_ref.role_group))
     .add_volume(
@@ -756,17 +760,20 @@ fn build_server_rolegroup_daemonset(
             .build(),
     );
 
-    match &opa.spec.cluster_config.user_info.backend {
-        stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
-        stackable_opa_crd::user_info_fetcher::Backend::Keycloak(keycloak) => {
-            pb.add_volume(
-                VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
-                    .secret(SecretVolumeSource {
-                        secret_name: Some(keycloak.credentials_secret_name.clone()),
-                        ..Default::default()
-                    })
-                    .build(),
-            );
+    if let Some(user_info) = &opa.spec.cluster_config.user_info {
+        pb.add_container(cb_user_info_fetcher.build());
+        match &user_info.backend {
+            user_info_fetcher::Backend::None {} => {}
+            user_info_fetcher::Backend::Keycloak(keycloak) => {
+                pb.add_volume(
+                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                        .secret(SecretVolumeSource {
+                            secret_name: Some(keycloak.credentials_secret_name.clone()),
+                            ..Default::default()
+                        })
+                        .build(),
+                );
+            }
         }
     }
 
