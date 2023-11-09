@@ -5,7 +5,7 @@ metadata:
   name: simple-opa
 spec:
   clusterConfig:
-    userInfoFetcher:
+    userInfo:
       backend:
         keycloak:
           url: http://192.168.122.1:8080

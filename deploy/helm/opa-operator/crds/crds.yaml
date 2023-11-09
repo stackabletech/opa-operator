@@ -27,7 +27,7 @@ spec:
                 clusterConfig:
                   default:
                     listenerClass: cluster-internal
-                    userInfoFetcher:
+                    userInfo:
                       backend:
                         none: {}
                       cache:
@@ -51,7 +51,7 @@ spec:
                         - external-unstable
                         - external-stable
                       type: string
-                    userInfoFetcher:
+                    userInfo:
                       default:
                         backend:
                           none: {}

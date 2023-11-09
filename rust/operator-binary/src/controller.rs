@@ -510,7 +510,7 @@ fn build_server_rolegroup_config_map(
         .add_data(CONFIG_FILE, build_config_file())
         .add_data(
             "user-info-fetcher.json",
-            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info_fetcher)
+            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info)
                 .context(SerializeUserInfoFetcherConfigSnafu)?,
         );
 
@@ -697,7 +697,7 @@ fn build_server_rolegroup_daemonset(
                 .build(),
         );
 
-    match &opa.spec.cluster_config.user_info_fetcher.backend {
+    match &opa.spec.cluster_config.user_info.backend {
         stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
         stackable_opa_crd::user_info_fetcher::Backend::Keycloak(_) => {
             cb_user_info_fetcher.add_volume_mount(
@@ -756,7 +756,7 @@ fn build_server_rolegroup_daemonset(
             .build(),
     );
 
-    match &opa.spec.cluster_config.user_info_fetcher.backend {
+    match &opa.spec.cluster_config.user_info.backend {
         stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
         stackable_opa_crd::user_info_fetcher::Backend::Keycloak(keycloak) => {
             pb.add_volume(
