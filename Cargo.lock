@@ -2259,6 +2259,7 @@ version = "0.0.0-dev"
 dependencies = [
  "axum",
  "clap",
+ "form_urlencoded",
  "futures 0.3.28",
  "hyper",
  "moka",

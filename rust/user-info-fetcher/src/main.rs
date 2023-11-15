@@ -127,7 +127,7 @@ async fn main() -> Result<(), StartupError> {
 #[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequest {
-    username: String,
+    user_id: String,
 }
 
 #[derive(Serialize, Clone, Debug)]

@@ -541,6 +541,7 @@ fn build_server_rolegroup_config_map(
 ///
 /// We run an OPA on each node, because we want to avoid requiring network roundtrips for services making
 /// policy queries (which are often chained in serial, and block other tasks in the products).
+#[allow(clippy::too_many_arguments)]
 fn build_server_rolegroup_daemonset(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,

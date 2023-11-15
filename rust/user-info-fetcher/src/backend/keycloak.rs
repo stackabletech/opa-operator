@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use hyper::StatusCode;
 use serde::Deserialize;
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 
 use crate::{http_error, util::send_json_request, Credentials, UserInfo, UserInfoRequest};
@@ -13,8 +13,11 @@ pub enum Error {
     LogIn { source: reqwest::Error },
     #[snafu(display("unable to search for user"))]
     SearchForUser { source: reqwest::Error },
-    #[snafu(display("user {username:?} was not found"))]
-    UserNotFound { username: String },
+    #[snafu(display("user with userId {user_id:?} was not found"))]
+    UserNotFound {
+        source: reqwest::Error,
+        user_id: String,
+    },
     #[snafu(display("unable to request groups for user"))]
     RequestUserGroups { source: reqwest::Error },
     #[snafu(display("unable to request roles for user"))]
@@ -40,7 +43,6 @@ struct OAuthResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
-    id: String,
     #[serde(default)]
     attributes: HashMap<String, Vec<String>>,
 }
@@ -84,26 +86,26 @@ pub(crate) async fn get_user_info(
     )
     .await
     .context(LogInSnafu)?;
-    let users = send_json_request::<Vec<UserMetadata>>(
-        http.get(format!("{user_realm_url}/users"))
-            .query(&[("exact", "true"), ("username", &req.username)])
+    let user_id = &req.user_id;
+    let user_id_urlencoded =
+        form_urlencoded::byte_serialize(user_id.as_bytes()).collect::<String>();
+    let user = send_json_request::<UserMetadata>(
+        http.get(format!("{user_realm_url}/users/{user_id_urlencoded}"))
             .bearer_auth(&authn.access_token),
     )
     .await
-    .context(SearchForUserSnafu)?;
-    let user = users.into_iter().next().context(UserNotFoundSnafu {
-        username: &req.username,
-    })?;
-    let user_id = &user.id;
+    .context(UserNotFoundSnafu { user_id })?;
     let groups = send_json_request::<Vec<GroupMembership>>(
-        http.get(format!("{user_realm_url}/users/{user_id}/groups"))
-            .bearer_auth(&authn.access_token),
+        http.get(format!(
+            "{user_realm_url}/users/{user_id_urlencoded}/groups"
+        ))
+        .bearer_auth(&authn.access_token),
     )
     .await
     .context(RequestUserGroupsSnafu)?;
     let roles = send_json_request::<Vec<RoleMembership>>(
         http.get(format!(
-            "{user_realm_url}/users/{user_id}/role-mappings/realm/composite"
+            "{user_realm_url}/users/{user_id_urlencoded}/role-mappings/realm/composite"
         ))
         .bearer_auth(&authn.access_token),
     )

@@ -15,14 +15,15 @@ stackable-opa-crd = { path = "../crd" }
 
 axum.workspace = true
 clap.workspace = true
+form_urlencoded.workspace = true
 futures.workspace = true
 hyper.workspace = true
 moka.workspace = true
 pin-project.workspace = true
 reqwest.workspace = true
 semver.workspace = true
-serde.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 snafu.workspace = true
 stackable-operator.workspace = true
 tokio.workspace = true
