@@ -1,6 +1,7 @@
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
+    commons::authentication::tls::TlsClientDetails,
     schemars::{self, JsonSchema},
     time::Duration,
 };
@@ -34,20 +35,41 @@ impl Default for Backend {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeycloakBackend {
-    /// URL of the Keycloak installation.
-    pub url: String,
+    /// Hostname of the identity provider, e.g. `my.keycloak.corp`.
+    pub hostname: String,
+
+    // FIXME (Techassi): This should be based on the scheme. How do we pass in the scheme?
+    /// Port of the identity provider. If TLS is used defaults to `443`,
+    /// otherwise to `80`.
+    pub port: Option<u16>,
+
+    /// Root HTTP path of the identity provider. Defaults to `/`.
+    #[serde(default = "default_root_path")]
+    pub root_path: String,
+
+    /// Use a TLS connection. If not specified no TLS will be used.
+    #[serde(flatten)]
+    pub tls: TlsClientDetails,
+
     /// Name of a Secret that contains credentials to a Keycloak account with permission to read user metadata.
     ///
     /// Must contain the fields `username` and `password`.
     pub credentials_secret_name: String,
+
     /// The Keycloak realm that OPA's Keycloak account (as specified by `credentials_secret_name` exists in).
     ///
     /// Typically `master`.
     pub admin_realm: String,
+
     /// The Keycloak realm that user metadata should be resolved from.
     pub user_realm: String,
+
     /// The Keycloak client ID for OPA to log in with. It must be allowed to use Direct Grants.
     pub client_id: String,
+}
+
+fn default_root_path() -> String {
+    "/".to_string()
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]

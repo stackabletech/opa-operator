@@ -1,4 +1,5 @@
 //! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
+
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
@@ -13,7 +14,6 @@ use stackable_opa_crd::{
     user_info_fetcher, Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME,
     DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
 };
-use stackable_operator::k8s_openapi::api::core::v1::SecretVolumeSource;
 use stackable_operator::{
     builder::{
         resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
@@ -39,7 +39,7 @@ use stackable_operator::{
     labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
-    product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
+    product_config_utils::transform_all_roles_to_config,
     product_logging::{
         self,
         framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
@@ -54,17 +54,20 @@ use stackable_operator::{
         operations::ClusterOperationsConditionBuilder,
     },
     time::Duration,
-    utils::COMMON_BASH_TRAP_FUNCTIONS,
+};
+use stackable_operator::{
+    k8s_openapi::api::core::v1::SecretVolumeSource,
+    product_config_utils::validate_all_roles_and_groups_config, utils::COMMON_BASH_TRAP_FUNCTIONS,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
+use crate::product_logging::{
+    extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
+    OpaLogLevel,
+};
 use crate::{
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
-    product_logging::{
-        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
-        OpaLogLevel,
-    },
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
