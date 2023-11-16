@@ -605,6 +605,8 @@ fn build_server_rolegroup_daemonset(
         })
         .collect::<Vec<_>>();
 
+    let mut pb = PodBuilder::new();
+
     let prepare_container_name = Container::Prepare.to_string();
     let mut cb_prepare =
         ContainerBuilder::new(&prepare_container_name).context(IllegalContainerNameSnafu)?;
@@ -744,16 +746,17 @@ fn build_server_rolegroup_daemonset(
 
         match &user_info.backend {
             user_info_fetcher::Backend::None {} => {}
-            user_info_fetcher::Backend::Keycloak(_) => {
+            user_info_fetcher::Backend::Keycloak(keycloak) => {
                 cb_user_info_fetcher.add_volume_mount(
                     USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
                     USER_INFO_FETCHER_CREDENTIALS_DIR,
                 );
+                keycloak
+                    .tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher]);
             }
         }
     }
-
-    let mut pb = PodBuilder::new();
 
     pb.metadata_builder(|m| {
         m.with_recommended_labels(build_recommended_labels(

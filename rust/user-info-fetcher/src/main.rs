@@ -1,7 +1,3 @@
-mod backend;
-mod http_error;
-mod util;
-
 use std::{
     collections::HashMap,
     net::AddrParseError,
@@ -13,9 +9,15 @@ use axum::{extract::State, routing::post, Json, Router};
 use clap::Parser;
 use futures::{future, pin_mut, FutureExt};
 use moka::future::Cache;
+use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
+use tokio::{fs::File, io::AsyncReadExt};
+
+mod backend;
+mod http_error;
+mod util;
 
 pub const APP_NAME: &str = "opa-user-info-fetcher";
 
@@ -49,14 +51,27 @@ enum StartupError {
         source: std::io::Error,
         path: PathBuf,
     },
+
     #[snafu(display("unable to parse config file"))]
     ParseConfig { source: serde_json::Error },
+
     #[snafu(display("failed to parse listen address"))]
     ParseListenAddr { source: AddrParseError },
+
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
+
     #[snafu(display("failed to run server"))]
     RunServer { source: hyper::Error },
+
+    #[snafu(display("failed to construct http client"))]
+    ConstructHttpClient { source: reqwest::Error },
+
+    #[snafu(display("failed to read ca certificate"))]
+    ReadCaCert { source: std::io::Error },
+
+    #[snafu(display("failed to parse ca certificate"))]
+    ParseCaCert { source: reqwest::Error },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -101,7 +116,30 @@ async fn main() -> Result<(), StartupError> {
             password: read_config_file(&args.credentials_dir.join("password")).await?,
         },
     });
-    let http = reqwest::Client::default();
+
+    let mut client_builder = ClientBuilder::new();
+
+    if let crd::Backend::Keycloak(keycloak) = &config.backend {
+        if keycloak.tls.use_tls() && !keycloak.tls.use_tls_verification() {
+            client_builder = client_builder.danger_accept_invalid_certs(true);
+        }
+        if let Some(tls_ca_cert_mount_path) = keycloak.tls.tls_ca_cert_mount_path() {
+            let mut buf = Vec::new();
+            File::open(tls_ca_cert_mount_path)
+                .await
+                .context(ReadCaCertSnafu)?
+                .read_to_end(&mut buf)
+                .await
+                .unwrap();
+            let ca_cert = reqwest::Certificate::from_pem(&buf).context(ParseCaCertSnafu)?;
+
+            client_builder = client_builder
+                .tls_built_in_root_certs(false)
+                .add_root_certificate(ca_cert);
+        }
+    }
+    let http = client_builder.build().context(ConstructHttpClientSnafu)?;
+
     let user_info_cache = {
         let crd::Cache { entry_time_to_live } = config.cache;
         Cache::builder()

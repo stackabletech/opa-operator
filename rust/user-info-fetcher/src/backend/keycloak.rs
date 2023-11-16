@@ -103,6 +103,7 @@ pub(crate) async fn get_user_info(
     let keycloak_url = wrapping_auth_provider
         .endpoint_url()
         .context(ParseOidcEndpointUrlSnafu)?;
+
     let authn = send_json_request::<OAuthResponse>(
         http.post(
             keycloak_url
@@ -134,7 +135,7 @@ pub(crate) async fn get_user_info(
     let groups = send_json_request::<Vec<GroupMembership>>(
         http.get(
             user_url
-                .join("/groups")
+                .join("groups")
                 .context(ConstructOidcEndpointPathSnafu)?,
         )
         .bearer_auth(&authn.access_token),
@@ -145,7 +146,7 @@ pub(crate) async fn get_user_info(
     let roles = send_json_request::<Vec<RoleMembership>>(
         http.get(
             user_url
-                .join("/role-mappings/realm/composite")
+                .join("role-mappings/realm/composite")
                 .context(ConstructOidcEndpointPathSnafu)?,
         )
         .bearer_auth(&authn.access_token),
