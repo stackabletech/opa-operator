@@ -1,11 +1,8 @@
-mod controller;
-mod discovery;
-mod product_logging;
-
-use crate::controller::OPA_CONTROLLER_NAME;
+use std::sync::Arc;
 
 use clap::{crate_description, crate_version, Parser};
 use futures::StreamExt;
+use product_config::ProductConfigManager;
 use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
@@ -21,10 +18,15 @@ use stackable_operator::{
     },
     logging::controller::report_controller_reconciled,
     namespace::WatchNamespace,
-    product_config::ProductConfigManager,
     CustomResourceExt,
 };
-use std::sync::Arc;
+
+use crate::controller::OPA_CONTROLLER_NAME;
+
+mod controller;
+mod discovery;
+mod operations;
+mod product_logging;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -43,8 +45,10 @@ struct Opts {
 struct OpaRun {
     #[clap(long, env)]
     opa_bundle_builder_clusterrole: String,
+
     #[clap(long, env)]
     operator_image: String,
+
     #[clap(flatten)]
     common: ProductOperatorRun,
 }

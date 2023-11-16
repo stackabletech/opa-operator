@@ -1,3 +1,5 @@
+use std::{collections::BTreeMap, str::FromStr};
+
 use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
@@ -18,8 +20,8 @@ use stackable_operator::{
     role_utils::{EmptyRoleConfig, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
+    time::Duration,
 };
-use std::{collections::BTreeMap, str::FromStr};
 use strum::{Display, EnumIter, EnumString};
 
 pub mod user_info_fetcher;
@@ -29,17 +31,24 @@ pub const OPERATOR_NAME: &str = "opa.stackable.tech";
 
 pub const CONFIG_FILE: &str = "config.yaml";
 
+pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
+/// Safety puffer to guarantee the graceful shutdown works every time.
+pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
+
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("the role group {role_group} is not defined"))]
     CannotRetrieveOpaRoleGroup { role_group: String },
+
     #[snafu(display("unknown role {role}"))]
     UnknownOpaRole {
         source: strum::ParseError,
         role: String,
     },
+
     #[snafu(display("the role group [{role_group}] is missing"))]
     MissingRoleGroup { role_group: String },
+
     #[snafu(display("fragment validation failure"))]
     FragmentValidationFailure { source: ValidationError },
 }
@@ -178,8 +187,13 @@ pub enum Container {
 pub struct OpaConfig {
     #[fragment_attrs(serde(default))]
     pub logging: Logging<Container>,
+
     #[fragment_attrs(serde(default))]
     pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
+
+    /// Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.
+    #[fragment_attrs(serde(default))]
+    pub graceful_shutdown_timeout: Option<Duration>,
 }
 
 impl OpaConfig {
@@ -197,6 +211,7 @@ impl OpaConfig {
                 },
                 storage: OpaStorageConfigFragment {},
             },
+            graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
     }
 }
