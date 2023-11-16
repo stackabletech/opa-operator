@@ -812,7 +812,7 @@ fn build_server_rolegroup_daemonset(
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
                         .secret(SecretVolumeSource {
-                            secret_name: Some(keycloak.credentials_secret_name.clone()),
+                            secret_name: Some(keycloak.client_credentials_secret.clone()),
                             ..Default::default()
                         })
                         .build(),

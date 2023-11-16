@@ -40,6 +40,7 @@ struct AppState {
 }
 
 struct Credentials {
+    // TODO: Find a better way of sharing behavior between different backends
     username: String,
     password: String,
 }
@@ -112,8 +113,8 @@ async fn main() -> Result<(), StartupError> {
             password: "".to_string(),
         },
         crd::Backend::Keycloak(_) => Credentials {
-            username: read_config_file(&args.credentials_dir.join("username")).await?,
-            password: read_config_file(&args.credentials_dir.join("password")).await?,
+            username: read_config_file(&args.credentials_dir.join("clientId")).await?,
+            password: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },
     });
 

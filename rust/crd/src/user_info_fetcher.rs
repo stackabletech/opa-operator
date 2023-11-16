@@ -51,10 +51,10 @@ pub struct KeycloakBackend {
     #[serde(flatten)]
     pub tls: TlsClientDetails,
 
-    /// Name of a Secret that contains credentials to a Keycloak account with permission to read user metadata.
+    /// Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
     ///
-    /// Must contain the fields `username` and `password`.
-    pub credentials_secret_name: String,
+    /// Must contain the fields `clientId` and `clientSecret`.
+    pub client_credentials_secret: String,
 
     /// The Keycloak realm that OPA's Keycloak account (as specified by `credentials_secret_name` exists in).
     ///
@@ -63,9 +63,6 @@ pub struct KeycloakBackend {
 
     /// The Keycloak realm that user metadata should be resolved from.
     pub user_realm: String,
-
-    /// The Keycloak client ID for OPA to log in with. It must be allowed to use Direct Grants.
-    pub client_id: String,
 }
 
 fn default_root_path() -> String {

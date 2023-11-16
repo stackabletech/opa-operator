@@ -80,10 +80,9 @@ pub(crate) async fn get_user_info(
     config: &crd::KeycloakBackend,
 ) -> Result<UserInfo, Error> {
     let crd::KeycloakBackend {
-        credentials_secret_name: _,
+        client_credentials_secret: _,
         admin_realm,
         user_realm,
-        client_id,
         hostname,
         port,
         root_path,
@@ -112,12 +111,8 @@ pub(crate) async fn get_user_info(
                 ))
                 .context(ConstructOidcEndpointPathSnafu)?,
         )
-        .form(&[
-            ("grant_type", "password"),
-            ("client_id", client_id),
-            ("username", &credentials.username),
-            ("password", &credentials.password),
-        ]),
+        .basic_auth(&credentials.username, Some(&credentials.password))
+        .form(&[("grant_type", "client_credentials")]),
     )
     .await
     .context(LogInSnafu)?;
