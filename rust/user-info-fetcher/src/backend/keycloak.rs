@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use hyper::StatusCode;
 use serde::Deserialize;
-use snafu::{ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use stackable_operator::commons::authentication::oidc;
 
@@ -17,10 +17,13 @@ pub enum Error {
     SearchForUser { source: reqwest::Error },
 
     #[snafu(display("user with userId {user_id:?} was not found"))]
-    UserNotFound {
+    UserNotFoundById {
         source: reqwest::Error,
         user_id: String,
     },
+
+    #[snafu(display("user with userName {user_name:?} was not found"))]
+    UserNotFoundByName { user_name: String },
 
     #[snafu(display("unable to request groups for user"))]
     RequestUserGroups { source: reqwest::Error },
@@ -40,7 +43,8 @@ impl http_error::Error for Error {
         match self {
             Self::LogIn { .. } => StatusCode::BAD_GATEWAY,
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
-            Self::UserNotFound { .. } => StatusCode::NOT_FOUND,
+            Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
+            Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
             Self::RequestUserRoles { .. } => StatusCode::BAD_GATEWAY,
             Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -54,9 +58,10 @@ struct OAuthResponse {
     access_token: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
+    id: String,
     #[serde(default)]
     attributes: HashMap<String, Vec<String>>,
 }
@@ -88,7 +93,6 @@ pub(crate) async fn get_user_info(
         root_path,
         tls,
     } = config;
-    let user_id = &req.user_id;
 
     // We re-use existent functionality from operator-rs, besides it being a bit of miss-use.
     let wrapping_auth_provider = oidc::AuthenticationProvider::new(
@@ -107,7 +111,7 @@ pub(crate) async fn get_user_info(
         http.post(
             keycloak_url
                 .join(&format!(
-                    "/realms/{admin_realm}/protocol/openid-connect/token"
+                    "realms/{admin_realm}/protocol/openid-connect/token"
                 ))
                 .context(ConstructOidcEndpointPathSnafu)?,
         )
@@ -117,15 +121,51 @@ pub(crate) async fn get_user_info(
     .await
     .context(LogInSnafu)?;
 
-    let user_url = keycloak_url
-        .join(&format!("admin/realms/{user_realm}/users/{user_id}/"))
+    let users_base_url = keycloak_url
+        .join(&format!("admin/realms/{user_realm}/users/"))
         .context(ConstructOidcEndpointPathSnafu)?;
 
-    let user = send_json_request::<UserMetadata>(
-        http.get(user_url.clone()).bearer_auth(&authn.access_token),
-    )
-    .await
-    .context(UserNotFoundSnafu { user_id })?;
+    let (user_id, user) = match req {
+        UserInfoRequest::UserInfoRequestById(req) => {
+            let user_id = &req.user_id;
+
+            let user = send_json_request::<UserMetadata>(
+                http.get(
+                    users_base_url
+                        .join(&user_id.to_string())
+                        .context(ConstructOidcEndpointPathSnafu)?,
+                )
+                .bearer_auth(&authn.access_token),
+            )
+            .await
+            .context(UserNotFoundByIdSnafu { user_id })?;
+
+            (user_id.clone(), user)
+        }
+        UserInfoRequest::UserInfoRequestByName(req) => {
+            let user_name = &req.user_name;
+            let users_url = users_base_url
+                .join(&format!("?username={user_name}&exact=true"))
+                .context(ConstructOidcEndpointPathSnafu)?;
+
+            let user = send_json_request::<Vec<UserMetadata>>(
+                http.get(users_url).bearer_auth(&authn.access_token),
+            )
+            .await
+            .context(SearchForUserSnafu)?
+            .first() // todo: we should probably fail if there are more than one record
+            .cloned()
+            .context(UserNotFoundByNameSnafu { user_name })?;
+
+            let user_id = &user.id;
+
+            (user_id.clone(), user)
+        }
+    };
+
+    let user_url = users_base_url
+        .join(&format!("{user_id}/"))
+        .context(ConstructOidcEndpointPathSnafu)?;
 
     let groups = send_json_request::<Vec<GroupMembership>>(
         http.get(

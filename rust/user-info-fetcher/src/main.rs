@@ -164,9 +164,22 @@ async fn main() -> Result<(), StartupError> {
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "camelCase", untagged)]
+enum UserInfoRequest {
+    UserInfoRequestById(UserInfoRequestById),
+    UserInfoRequestByName(UserInfoRequestByName),
+}
+
+#[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
-struct UserInfoRequest {
+struct UserInfoRequestById {
     user_id: String,
+}
+
+#[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "camelCase")]
+struct UserInfoRequestByName {
+    user_name: String,
 }
 
 #[derive(Serialize, Clone, Debug)]
