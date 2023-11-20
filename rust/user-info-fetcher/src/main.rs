@@ -121,7 +121,7 @@ async fn main() -> Result<(), StartupError> {
     let mut client_builder = ClientBuilder::new();
 
     if let crd::Backend::Keycloak(keycloak) = &config.backend {
-        if keycloak.tls.use_tls() && !keycloak.tls.use_tls_verification() {
+        if keycloak.tls.uses_tls() && !keycloak.tls.uses_tls_verification() {
             client_builder = client_builder.danger_accept_invalid_certs(true);
         }
         if let Some(tls_ca_cert_mount_path) = keycloak.tls.tls_ca_cert_mount_path() {
