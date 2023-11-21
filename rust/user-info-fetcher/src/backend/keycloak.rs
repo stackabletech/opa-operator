@@ -67,23 +67,19 @@ struct OAuthResponse {
 /// [issue-20292]: https://github.com/keycloak/keycloak/issues/20294
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// Represents https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#UserRepresentation
 struct UserMetadata {
     id: String,
     username: String,
     #[serde(default)]
     attributes: HashMap<String, Vec<String>>,
+    // Sadly `groups`` will no propagated properly, so we need to do a separate API call
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
     path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RoleMembership {
-    name: String,
 }
 
 pub(crate) async fn get_user_info(
@@ -133,22 +129,19 @@ pub(crate) async fn get_user_info(
         .join(&format!("admin/realms/{user_realm}/users/"))
         .context(ConstructOidcEndpointPathSnafu)?;
 
-    let (user_id, user) = match req {
+    let user_info = match req {
         UserInfoRequest::UserInfoRequestById(req) => {
-            let user_id = &req.user_id;
-
-            let user = send_json_request::<UserMetadata>(
+            let user_id = req.user_id.clone();
+            send_json_request::<UserMetadata>(
                 http.get(
                     users_base_url
-                        .join(&user_id.to_string())
+                        .join(&req.user_id)
                         .context(ConstructOidcEndpointPathSnafu)?,
                 )
                 .bearer_auth(&authn.access_token),
             )
             .await
-            .context(UserNotFoundByIdSnafu { user_id })?;
-
-            (user_id.clone(), user)
+            .context(UserNotFoundByIdSnafu { user_id })?
         }
         UserInfoRequest::UserInfoRequestByName(req) => {
             let user_name = &req.user_name;
@@ -156,29 +149,21 @@ pub(crate) async fn get_user_info(
                 .join(&format!("?username={user_name}&exact=true"))
                 .context(ConstructOidcEndpointPathSnafu)?;
 
-            let user = send_json_request::<Vec<UserMetadata>>(
+            send_json_request::<Vec<UserMetadata>>(
                 http.get(users_url).bearer_auth(&authn.access_token),
             )
             .await
             .context(SearchForUserSnafu)?
-            .first() // todo: we should probably fail if there are more than one record
+            .first() // FIXME: we should probably fail if there are more than one record
             .cloned()
-            .context(UserNotFoundByNameSnafu { user_name })?;
-
-            let user_id = &user.id;
-
-            (user_id.clone(), user)
+            .context(UserNotFoundByNameSnafu { user_name })?
         }
     };
 
-    let user_url = users_base_url
-        .join(&format!("{user_id}/"))
-        .context(ConstructOidcEndpointPathSnafu)?;
-
     let groups = send_json_request::<Vec<GroupMembership>>(
         http.get(
-            user_url
-                .join("groups")
+            users_base_url
+                .join(&format!("{}/groups", user_info.id))
                 .context(ConstructOidcEndpointPathSnafu)?,
         )
         .bearer_auth(&authn.access_token),
@@ -186,28 +171,10 @@ pub(crate) async fn get_user_info(
     .await
     .context(RequestUserGroupsSnafu)?;
 
-    let roles = send_json_request::<Vec<RoleMembership>>(
-        http.get(
-            user_url
-                .join("role-mappings/realm/composite")
-                .context(ConstructOidcEndpointPathSnafu)?,
-        )
-        .bearer_auth(&authn.access_token),
-    )
-    .await
-    .context(RequestUserRolesSnafu)?;
-
     Ok(UserInfo {
-        id: user_id,
-        username: user.username,
-        groups: groups
-            .into_iter()
-            .map(|group| crate::GroupRef { name: group.path })
-            .collect(),
-        roles: roles
-            .into_iter()
-            .map(|role| crate::RoleRef { name: role.name })
-            .collect(),
-        custom_attributes: user.attributes,
+        id: Some(user_info.id),
+        name: Some(user_info.username),
+        groups: groups.into_iter().map(|g| g.path).collect(),
+        custom_attributes: user_info.attributes,
     })
 }
