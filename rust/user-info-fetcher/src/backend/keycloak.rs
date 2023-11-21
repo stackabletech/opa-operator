@@ -172,8 +172,8 @@ pub(crate) async fn get_user_info(
     .context(RequestUserGroupsSnafu)?;
 
     Ok(UserInfo {
-        id: Some(user_info.id),
-        name: Some(user_info.username),
+        user_id: Some(user_info.id),
+        user_name: Some(user_info.username),
         groups: groups.into_iter().map(|g| g.path).collect(),
         custom_attributes: user_info.attributes,
     })

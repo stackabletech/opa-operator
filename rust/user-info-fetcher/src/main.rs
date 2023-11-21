@@ -198,9 +198,9 @@ struct RoleRef {
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
     /// This might be null in case the id is not known (e.g. the backend does not have this info).
-    id: Option<String>,
+    user_id: Option<String>,
     /// This might be null in case the username is not known (e.g. the backend does not have this info).
-    name: Option<String>,
+    user_name: Option<String>,
     groups: Vec<String>,
     custom_attributes: HashMap<String, Vec<String>>,
 }
@@ -247,8 +247,8 @@ async fn get_user_info(
                             _ => None,
                         };
                         Ok(UserInfo {
-                            id: user_id,
-                            name: user_name,
+                            user_id: user_id,
+                            user_name: user_name,
                             groups: vec![],
                             custom_attributes: HashMap::new(),
                         })
