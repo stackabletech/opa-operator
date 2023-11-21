@@ -67,13 +67,11 @@ struct OAuthResponse {
 /// [issue-20292]: https://github.com/keycloak/keycloak/issues/20294
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-/// Represents https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#UserRepresentation
 struct UserMetadata {
     id: String,
     username: String,
     #[serde(default)]
     attributes: HashMap<String, Vec<String>>,
-    // Sadly `groups`` will no propagated properly, so we need to do a separate API call
 }
 
 #[derive(Deserialize)]
