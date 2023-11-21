@@ -197,8 +197,11 @@ struct RoleRef {
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
-    groups: Vec<GroupRef>,
-    roles: Vec<RoleRef>,
+    /// This might be null in case the id is not known (e.g. the backend does not have this info).
+    id: Option<String>,
+    /// This might be null in case the username is not known (e.g. the backend does not have this info).
+    name: Option<String>,
+    groups: Vec<String>,
     custom_attributes: HashMap<String, Vec<String>>,
 }
 
@@ -230,11 +233,26 @@ async fn get_user_info(
         user_info_cache
             .try_get_with_by_ref(&req, async {
                 match &config.backend {
-                    crd::Backend::None {} => Ok(UserInfo {
-                        groups: vec![],
-                        roles: vec![],
-                        custom_attributes: HashMap::new(),
-                    }),
+                    crd::Backend::None {} => {
+                        let user_id = match &req {
+                            UserInfoRequest::UserInfoRequestById(UserInfoRequestById {
+                                user_id,
+                            }) => Some(user_id.clone()),
+                            _ => None,
+                        };
+                        let user_name = match &req {
+                            UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
+                                user_name,
+                            }) => Some(user_name.clone()),
+                            _ => None,
+                        };
+                        Ok(UserInfo {
+                            id: user_id,
+                            name: user_name,
+                            groups: vec![],
+                            custom_attributes: HashMap::new(),
+                        })
+                    }
                     crd::Backend::Keycloak(keycloak) => {
                         backend::keycloak::get_user_info(&req, &http, &credentials, keycloak)
                             .await
