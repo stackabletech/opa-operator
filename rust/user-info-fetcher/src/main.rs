@@ -194,9 +194,11 @@ struct RoleRef {
     name: String,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
+    id: String,
+    username: String,
     groups: Vec<GroupRef>,
     roles: Vec<RoleRef>,
     custom_attributes: HashMap<String, Vec<String>>,
@@ -230,11 +232,7 @@ async fn get_user_info(
         user_info_cache
             .try_get_with_by_ref(&req, async {
                 match &config.backend {
-                    crd::Backend::None {} => Ok(UserInfo {
-                        groups: vec![],
-                        roles: vec![],
-                        custom_attributes: HashMap::new(),
-                    }),
+                    crd::Backend::None {} => Ok(UserInfo::default()),
                     crd::Backend::Keycloak(keycloak) => {
                         backend::keycloak::get_user_info(&req, &http, &credentials, keycloak)
                             .await

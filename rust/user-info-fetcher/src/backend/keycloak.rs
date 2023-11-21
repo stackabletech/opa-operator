@@ -58,10 +58,18 @@ struct OAuthResponse {
     access_token: String,
 }
 
+/// The minimal structure of [UserRepresentation] that is returned by [`/users`][users] and [`/users/{id}`][user-by-id].
+/// <div class="warning">Some fields, such as `groups` are never present. See [keycloak/keycloak#20292][issue-20292]</div>
+///
+/// [users]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#_get_adminrealmsrealmusers
+/// [user-by-id]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#_get_adminrealmsrealmusersid
+/// [UserRepresentation]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#UserRepresentation
+/// [issue-20292]: https://github.com/keycloak/keycloak/issues/20294
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
     id: String,
+    username: String,
     #[serde(default)]
     attributes: HashMap<String, Vec<String>>,
 }
@@ -190,6 +198,8 @@ pub(crate) async fn get_user_info(
     .context(RequestUserRolesSnafu)?;
 
     Ok(UserInfo {
+        id: user_id,
+        username: user.username,
         groups: groups
             .into_iter()
             .map(|group| crate::GroupRef { name: group.path })
