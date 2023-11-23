@@ -198,9 +198,9 @@ struct RoleRef {
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
     /// This might be null in case the id is not known (e.g. the backend does not have this info).
-    user_id: Option<String>,
+    id: Option<String>,
     /// This might be null in case the username is not known (e.g. the backend does not have this info).
-    user_name: Option<String>,
+    username: Option<String>,
     groups: Vec<String>,
     custom_attributes: HashMap<String, Vec<String>>,
 }
