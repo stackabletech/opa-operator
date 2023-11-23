@@ -16,13 +16,13 @@ pub enum Error {
     #[snafu(display("unable to search for user"))]
     SearchForUser { source: reqwest::Error },
 
-    #[snafu(display("user with userId {user_id:?} was not found"))]
+    #[snafu(display("user with id {user_id:?} was not found"))]
     UserNotFoundById {
         source: reqwest::Error,
         user_id: String,
     },
 
-    #[snafu(display("user with userName {user_name:?} was not found"))]
+    #[snafu(display("user with username {user_name:?} was not found"))]
     UserNotFoundByName { user_name: String },
 
     #[snafu(display("unable to request groups for user"))]

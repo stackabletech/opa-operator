@@ -173,13 +173,13 @@ enum UserInfoRequest {
 #[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequestById {
-    user_id: String,
+    id: String,
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequestByName {
-    user_name: String,
+    username: String,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -235,20 +235,20 @@ async fn get_user_info(
                 match &config.backend {
                     crd::Backend::None {} => {
                         let user_id = match &req {
-                            UserInfoRequest::UserInfoRequestById(UserInfoRequestById {
-                                user_id,
-                            }) => Some(user_id.clone()),
+                            UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
+                                Some(user_id.clone())
+                            }
                             _ => None,
                         };
                         let user_name = match &req {
                             UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
-                                user_name,
+                                username,
                             }) => Some(user_name.clone()),
                             _ => None,
                         };
                         Ok(UserInfo {
-                            user_id: user_id,
-                            user_name: user_name,
+                            id: user_id,
+                            username: user_name,
                             groups: vec![],
                             custom_attributes: HashMap::new(),
                         })
