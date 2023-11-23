@@ -129,11 +129,11 @@ pub(crate) async fn get_user_info(
 
     let user_info = match req {
         UserInfoRequest::UserInfoRequestById(req) => {
-            let user_id = req.user_id.clone();
+            let user_id = req.id.clone();
             send_json_request::<UserMetadata>(
                 http.get(
                     users_base_url
-                        .join(&req.user_id)
+                        .join(&req.id)
                         .context(ConstructOidcEndpointPathSnafu)?,
                 )
                 .bearer_auth(&authn.access_token),
@@ -142,7 +142,7 @@ pub(crate) async fn get_user_info(
             .context(UserNotFoundByIdSnafu { user_id })?
         }
         UserInfoRequest::UserInfoRequestByName(req) => {
-            let user_name = &req.user_name;
+            let user_name = &req.username;
             let users_url = users_base_url
                 .join(&format!("?username={user_name}&exact=true"))
                 .context(ConstructOidcEndpointPathSnafu)?;
@@ -170,8 +170,8 @@ pub(crate) async fn get_user_info(
     .context(RequestUserGroupsSnafu)?;
 
     Ok(UserInfo {
-        user_id: Some(user_info.id),
-        user_name: Some(user_info.username),
+        id: Some(user_info.id),
+        username: Some(user_info.username),
         groups: groups.into_iter().map(|g| g.path).collect(),
         custom_attributes: user_info.attributes,
     })
