@@ -18,20 +18,20 @@ case "$1" in
 "helm")
 echo "Adding 'stackable-dev' Helm Chart repository"
 # tag::helm-add-repo[]
-helm repo add stackable-dev https://repo.stackable.tech/repository/helm-dev/
+helm repo add stackable-stable https://repo.stackable.tech/repository/helm-stable/
 # end::helm-add-repo[]
 echo "Updating Helm repo"
 helm repo update
 
 echo "Installing Operators with Helm"
 # tag::helm-install-operators[]
-helm install --wait opa-operator stackable-dev/opa-operator --version 0.0.0-dev
+helm install --wait opa-operator stackable-stable/opa-operator --version 23.11.0
 # end::helm-install-operators[]
 ;;
 "stackablectl")
 echo "installing Operators with stackablectl"
 # tag::stackablectl-install-operators[]
-stackablectl operator install opa=0.0.0-dev
+stackablectl operator install opa=23.11.0
 # end::stackablectl-install-operators[]
 ;;
 *)
