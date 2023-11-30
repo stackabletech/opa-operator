@@ -121,6 +121,9 @@ async fn main() -> Result<(), StartupError> {
 
     let mut client_builder = ClientBuilder::new();
 
+    // todo: I'm not so sure we should be doing all this keycloak specific stuff here
+    // I know it is for setting up the client, but an idea: make a trait for implementing backends
+    // The trait can do all this for a genric client using an implementation on the trait (eg: get_http_client() which will call self.uses_tls())
     if let crd::Backend::Keycloak(keycloak) = &config.backend {
         if keycloak.tls.uses_tls() && !keycloak.tls.uses_tls_verification() {
             client_builder = client_builder.danger_accept_invalid_certs(true);
@@ -215,6 +218,8 @@ enum GetUserInfoError {
 
 impl http_error::Error for GetUserInfoError {
     fn status_code(&self) -> hyper::StatusCode {
+        // todo: the warn here loses context about the scope in which the error occurred, eg: stackable_opa_user_info_fetcher::backend::keycloak
+        // Also, we should make the log level (warn vs error) more dynamic in the backend's impl `http_error::Error for Error`
         tracing::warn!(error = ?self, "Error while processing request");
         match self {
             Self::Keycloak { source } => source.status_code(),
