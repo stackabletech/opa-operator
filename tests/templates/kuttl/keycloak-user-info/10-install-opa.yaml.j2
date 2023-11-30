@@ -21,7 +21,6 @@ commands:
           currentUserInfoByUsername := userInfoByUsername(input.username)
           currentUserInfoById := userInfoById(input.id)
       ---
-      # todo: https (take from demo)
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
       metadata:
@@ -35,13 +34,12 @@ commands:
               keycloak:
                 hostname: keycloak.$NAMESPACE.svc.cluster.local
                 port: 8443
-                # rootPath:
                 tls:
                   verification:
                     server:
                       caCert:
-                        secretClass: tls
-                clientCredentialsSecret: opa-keycloak-userinfo-fetcher
+                        secretClass: keycloak-tls-$NAMESPACE
+                clientCredentialsSecret: user-info-fetcher-client-credentials
                 adminRealm: master
                 userRealm: master
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
@@ -53,13 +51,3 @@ commands:
               enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
           roleGroups:
             default: {}
-      ---
-      # todo: client authentication
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: opa-keycloak-userinfo-fetcher
-      stringData:
-        clientId: userinfo-fetcher
-        clientSecret: userinfofetcherclientsecret
-      EOF

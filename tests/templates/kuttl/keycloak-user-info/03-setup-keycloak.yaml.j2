@@ -3,14 +3,7 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
   - script: |
-      kubectl apply -n $NAMESPACE -f - <<EOF
-      ---
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: keycloak-clients
-      stringData:
-        userinfoFetcher: "userinfofetcherclientsecret"
+      kubectl apply -n $NAMESPACE -f - << EOF
       ---
       apiVersion: v1
       kind: Secret
@@ -19,6 +12,14 @@ commands:
       stringData:
         alice: "alicealice"
         bob: "bobbob"
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: user-info-fetcher-client-credentials
+      stringData:
+        clientId: user-info-fetcher
+        clientSecret: user-info-fetcher-client-secret
       ---
       apiVersion: batch/v1
       kind: Job
@@ -31,7 +32,7 @@ commands:
             restartPolicy: Never
             containers:
             - name: setup-keycloak
-              image: docker.stackable.tech/stackable/testing-tools:0.2.0-stackable0.0.0-dev # docker.stackable.tech/sandbox/nlarsen/testing-tools:0.2.0-stackable0.0.0-dev
+              image: docker.stackable.tech/stackable/testing-tools:0.2.0-stackable0.0.0-dev
               env:
                 - name: KEYCLOAK_ADMIN_PASSWORD
                   valueFrom:
@@ -48,11 +49,11 @@ commands:
                     secretKeyRef:
                       name: keycloak-users
                       key: bob
-                - name: USERINFO_FETCHER_CLIENT_SECRET
+                - name: USER_INFO_FETCHER_CLIENT_SECRET
                   valueFrom:
                     secretKeyRef:
-                      name: keycloak-clients
-                      key: userinfoFetcher
+                      name: user-info-fetcher-client-credentials
+                      key: clientSecret
               command:
                 - bash
                 - -x
@@ -78,14 +79,14 @@ commands:
                   echo "Adding alice to the superset-admin group"
                   kcadm.sh update \$COMMON_FLAGS "users/\$ALICE_UUID/groups/\$SUPERSET_ADMIN_GROUP_UUID"
 
-                  echo "Creating userinfo-fetcher client"
+                  echo "Creating user-info-fetcher client"
                   kcadm.sh create clients \$COMMON_FLAGS -f - << EOF || true
                   {
-                    "clientId": "userinfo-fetcher",
+                    "clientId": "user-info-fetcher",
                     "enabled": true,
                     "protocol": "openid-connect",
                     "clientAuthenticatorType": "client-secret",
-                    "secret": "\$USERINFO_FETCHER_CLIENT_SECRET",
+                    "secret": "\$USER_INFO_FETCHER_CLIENT_SECRET",
                     "redirectUris": [
                       "*"
                     ],
@@ -103,15 +104,15 @@ commands:
                     }
                   }
                   EOF
-                  # todo: is this needed if we are using Groups?
-                  kcadm.sh add-roles --uusername service-account-userinfo-fetcher --rolename admin \$COMMON_FLAGS
+
+                  kcadm.sh add-roles --uusername service-account-user-info-fetcher --rolename admin \$COMMON_FLAGS
               resources:
                   limits:
                     cpu: 1
-                    memory: 1Gi
+                    memory: 256Mi
                   requests:
                     cpu: 200m
-                    memory: 1Gi
+                    memory: 256Mi
               volumeMounts:
                 - name: tls
                   mountPath: /tls
@@ -125,7 +126,7 @@ commands:
                   volumeClaimTemplate:
                     metadata:
                       annotations:
-                        secrets.stackable.tech/class: tls # todo: make this tls-$NAMESPACE
+                        secrets.stackable.tech/class: keycloak-tls-$NAMESPACE
                         secrets.stackable.tech/format: tls-pkcs12
                         secrets.stackable.tech/format.compatibility.tls-pkcs12.password: changeit
                         secrets.stackable.tech/scope: pod
