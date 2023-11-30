@@ -1,0 +1,139 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      kubectl apply -n $NAMESPACE -f - <<EOF
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: keycloak-clients
+      stringData:
+        userinfoFetcher: "userinfofetcherclientsecret"
+      ---
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: keycloak-users
+      stringData:
+        alice: "alicealice"
+        bob: "bobbob"
+      ---
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: setup-keycloak
+      spec:
+        backoffLimit: 0
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+            - name: setup-keycloak
+              image: docker.stackable.tech/stackable/testing-tools:0.2.0-stackable0.0.0-dev # docker.stackable.tech/sandbox/nlarsen/testing-tools:0.2.0-stackable0.0.0-dev
+              env:
+                - name: KEYCLOAK_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: keycloak-admin-credentials
+                      key: admin
+                - name: ALICE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: keycloak-users
+                      key: alice
+                - name: BOB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: keycloak-users
+                      key: bob
+                - name: USERINFO_FETCHER_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: keycloak-clients
+                      key: userinfoFetcher
+              command:
+                - bash
+                - -x
+                - -euo
+                - pipefail
+                - -c
+                - |
+                  COMMON_FLAGS="--config kcadm.conf --truststore /tls/truststore.p12 --trustpass changeit"
+
+                  echo "Configuring credentials"
+                  kcadm.sh config credentials \$COMMON_FLAGS --server https://keycloak.$NAMESPACE.svc.cluster.local:8443 --realm master --user admin --password "\$KEYCLOAK_ADMIN_PASSWORD"
+
+                  echo "Adding users"
+                  ALICE_UUID=\$(kcadm.sh create users \$COMMON_FLAGS -s username=alice -s firstName=Alice -s lastName=Adams -s email=alice@mycorp.org -s enabled=true -o | jq -r .id)
+                  BOB_UUID=\$(  kcadm.sh create users \$COMMON_FLAGS -s username=bob   -s firstName=Bob   -s lastName=Bush  -s email=bob@mycorp.org   -s enabled=true -o | jq -r .id)
+
+                  echo "Setting user passwords"
+                  kcadm.sh set-password \$COMMON_FLAGS --username alice --new-password "\$ALICE_PASSWORD"
+                  kcadm.sh set-password \$COMMON_FLAGS --username bob   --new-password "\$BOB_PASSWORD"
+
+                  echo "Creating the superset-admin group"
+                  SUPERSET_ADMIN_GROUP_UUID=\$(kcadm.sh create groups \$COMMON_FLAGS -s name=superset-admin -o | jq -r .id)
+                  echo "Adding alice to the superset-admin group"
+                  kcadm.sh update \$COMMON_FLAGS "users/\$ALICE_UUID/groups/\$SUPERSET_ADMIN_GROUP_UUID"
+
+                  echo "Creating userinfo-fetcher client"
+                  kcadm.sh create clients \$COMMON_FLAGS -f - << EOF || true
+                  {
+                    "clientId": "userinfo-fetcher",
+                    "enabled": true,
+                    "protocol": "openid-connect",
+                    "clientAuthenticatorType": "client-secret",
+                    "secret": "\$USERINFO_FETCHER_CLIENT_SECRET",
+                    "redirectUris": [
+                      "*"
+                    ],
+                    "webOrigins": [
+                      "*"
+                    ],
+                    "publicClient": false,
+                    "standardFlowEnabled": false,
+                    "implicitFlowEnabled": false,
+                    "directAccessGrantsEnabled": false,
+                    "serviceAccountsEnabled": true,
+                    "attributes": {
+                      "oidc.ciba.grant.enabled": "true",
+                      "oauth2.device.authorization.grant.enabled": false
+                    }
+                  }
+                  EOF
+                  # todo: is this needed if we are using Groups?
+                  kcadm.sh add-roles --uusername service-account-userinfo-fetcher --rolename admin \$COMMON_FLAGS
+              resources:
+                  limits:
+                    cpu: 1
+                    memory: 1Gi
+                  requests:
+                    cpu: 200m
+                    memory: 1Gi
+              volumeMounts:
+                - name: tls
+                  mountPath: /tls
+            securityContext:
+              fsGroup: 1000
+              runAsGroup: 1000
+              runAsUser: 1000
+            volumes:
+              - name: tls
+                ephemeral:
+                  volumeClaimTemplate:
+                    metadata:
+                      annotations:
+                        secrets.stackable.tech/class: tls # todo: make this tls-$NAMESPACE
+                        secrets.stackable.tech/format: tls-pkcs12
+                        secrets.stackable.tech/format.compatibility.tls-pkcs12.password: changeit
+                        secrets.stackable.tech/scope: pod
+                    spec:
+                      storageClassName: secrets.stackable.tech
+                      accessModes:
+                        - ReadWriteOnce
+                      resources:
+                        requests:
+                          storage: "1"
+      EOF
