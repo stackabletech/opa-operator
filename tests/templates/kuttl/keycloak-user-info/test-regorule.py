@@ -3,33 +3,6 @@ import requests
 import argparse
 import json
 
-# Example result payloads
-# {
-#   "result": {
-#     "currentUserInfoByUsername": {
-#       "customAttributes": {},
-#       "groups": [
-#         "/superset-admin"
-#       ],
-#       "id": "af07f12c-a2db-40a7-93e0-874537bdf3f5",
-#       "username": "alice"
-#     }
-#   }
-# }
-
-# {
-#   "result": {
-#     "currentUserInfoById": {
-#       "customAttributes": {},
-#       "groups": [
-#         "/superset-admin"
-#       ],
-#       "id": "af07f12c-a2db-40a7-93e0-874537bdf3f5",
-#       "username": "alice"
-#     }
-#   }
-# }
-
 # todo: make the test more comprehensive to check customAttributes
 users_and_groups = {
     "alice": ["/superset-admin"],
@@ -52,7 +25,7 @@ def assertions(username, response, opa_attribute, expected_groups, expected_attr
     groups = sorted(response["result"][opa_attribute]["groups"])
     expected_groups = sorted(expected_groups)
     assert groups == expected_groups, f"got {groups}, expected: {expected_groups}"
-   
+
     # todo: split out customAttribute assertions
     print(f"Testing for {username} with customAttributes {expected_attributes}")
     custom_attributes = response["result"][opa_attribute]["customAttributes"]
@@ -74,7 +47,7 @@ if __name__ == "__main__":
             payload = {'input': {'username': username}}
             response = make_request(payload)
             assertions(username, response, "currentUserInfoByUsername", groups, {})
-            
+
             # do the reverse lookup
             user_id = response["result"]["currentUserInfoByUsername"]["id"]
             payload = {'input': {'id': user_id}}
