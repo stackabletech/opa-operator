@@ -13,8 +13,8 @@
 ** xref:opa:usage-guide/logging.adoc[]
 ** xref:opa:usage-guide/monitoring.adoc[]
 ** xref:opa:usage-guide/configuration-environment-overrides.adoc[]
-** xref:hdfs:usage-guide/operations/index.adoc[]
-*** xref:hdfs:usage-guide/operations/cluster-operations.adoc[]
-// *** xref:hdfs:usage-guide/operations/pod-placement.adoc[] Missing
-*** xref:hdfs:usage-guide/operations/pod-disruptions.adoc[]
-*** xref:hdfs:usage-guide/operations/graceful-shutdown.adoc[]
+** xref:opa:usage-guide/operations/index.adoc[]
+*** xref:opa:usage-guide/operations/cluster-operations.adoc[]
+// *** xref:opa:usage-guide/operations/pod-placement.adoc[] Missing
+*** xref:opa:usage-guide/operations/pod-disruptions.adoc[]
+*** xref:opa:usage-guide/operations/graceful-shutdown.adoc[]
