@@ -4,15 +4,6 @@ kind: OpaCluster
 metadata:
   name: simple-opa
 spec:
-  clusterConfig:
-    userInfo:
-      backend:
-        keycloak:
-          url: http://192.168.122.1:8080
-          credentialsSecretName: opa-keycloak
-          adminRealm: master
-          userRealm: master
-          clientId: admin-cli
   image:
     productVersion: "0.57.0"
   servers:
