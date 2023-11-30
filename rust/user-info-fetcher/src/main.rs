@@ -31,7 +31,7 @@ pub struct Args {
     common: stackable_operator::cli::ProductOperatorRun,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct AppState {
     config: Arc<crd::Config>,
     http: reqwest::Client,
@@ -39,6 +39,7 @@ struct AppState {
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
 }
 
+#[derive(Debug)]
 struct Credentials {
     // TODO: Find a better way of sharing behavior between different backends
     username: String,
@@ -163,20 +164,20 @@ async fn main() -> Result<(), StartupError> {
         .context(RunServerSnafu)
 }
 
-#[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase", untagged)]
 enum UserInfoRequest {
     UserInfoRequestById(UserInfoRequestById),
     UserInfoRequestByName(UserInfoRequestByName),
 }
 
-#[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequestById {
     id: String,
 }
 
-#[derive(Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequestByName {
     username: String,
@@ -211,8 +212,10 @@ enum GetUserInfoError {
     #[snafu(display("failed to get user information from Keycloak"))]
     Keycloak { source: backend::keycloak::Error },
 }
+
 impl http_error::Error for GetUserInfoError {
     fn status_code(&self) -> hyper::StatusCode {
+        tracing::warn!(error = ?self, "Error while processing request");
         match self {
             Self::Keycloak { source } => source.status_code(),
         }
