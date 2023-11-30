@@ -1,5 +1,53 @@
 = User info fetcher
 
+You can enable User info fetcher as follows:
+
+[source,yaml]
+----
+apiVersion: opa.stackable.tech/v1alpha1
+kind: OpaCluster
+metadata:
+  name: opa
+spec:
+  image:
+    productVersion: 0.57.0
+  clusterConfig:
+    userInfo:
+      backend:
+        keycloak:
+          hostname: keycloak.my-namespace.svc.cluster.local
+          port: 8443
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls
+          clientCredentialsSecret: user-info-fetcher-client-credentials
+          adminRealm: master
+          userRealm: master
+          cache: # optional, enabled by default
+            entryTimeToLive: 60s # optional, defaults to 60s
+  servers:
+    roleGroups:
+      default: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-info-fetcher-client-credentials
+stringData:
+  clientId: user-info-fetcher
+  clientSecret: user-info-fetcher-client-secret
+----
+
+Currently the following backends are supported:
+
+* <<keycloak>>
+
+== Keycloak
+
+Fetch groups and extra credentials, but not roles.
+
 User info fetcher request:
 
 [source,json]
@@ -31,3 +79,5 @@ User info fetcher response:
   "customAttributes": {}
 }
 ----
+
+// TODO: Document how to use it in OPA regorules, e.g. to authorize based on group membership
