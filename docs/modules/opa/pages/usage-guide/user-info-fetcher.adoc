@@ -1,6 +1,9 @@
 = User info fetcher
 
-You can enable User info fetcher as follows:
+The _User info fetcher_ allows for additional information to be obtained from the configured backend (for example, Keycloak).
+You can then write Rego rules for OpenPolicyAgent which make an HTTP request to the User info fetcher and make use of the additional information returned for the username or user id.
+
+You can enable the User info fetcher sidecar as follows:
 
 [source,yaml]
 ----
@@ -12,7 +15,7 @@ spec:
   image:
     productVersion: 0.57.0
   clusterConfig:
-    userInfo:
+    userInfo: # <1>
       backend:
         keycloak:
           hostname: keycloak.my-namespace.svc.cluster.local
@@ -21,10 +24,10 @@ spec:
             verification:
               server:
                 caCert:
-                  secretClass: tls
-          clientCredentialsSecret: user-info-fetcher-client-credentials
-          adminRealm: master
-          userRealm: master
+                  secretClass: tls # <2>
+          clientCredentialsSecret: user-info-fetcher-client-credentials # <3>
+          adminRealm: master # <4>
+          userRealm: master # <4>
           cache: # optional, enabled by default
             entryTimeToLive: 60s # optional, defaults to 60s
   servers:
@@ -36,9 +39,14 @@ kind: Secret
 metadata:
   name: user-info-fetcher-client-credentials
 stringData:
-  clientId: user-info-fetcher
-  clientSecret: user-info-fetcher-client-secret
+  clientId: user-info-fetcher # <3>
+  clientSecret: user-info-fetcher-client-secret # <3>
 ----
+
+<1> Enable the `user-info-fetcher` sidecar
+<2> Enable TLS verification using the CA from the `tls` secretClass.
+<3> Obtain Keycloak API credentials from the specified secret. The Secret must have `clientId` and `clientSecret` entries.
+<4> Refer to the applicable realm in your Keycloak server.
 
 Currently the following backends are supported:
 
@@ -46,9 +54,57 @@ Currently the following backends are supported:
 
 == Keycloak
 
+// todo: maybe this section should be under a Tutorial?
 Fetch groups and extra credentials, but not roles.
 
-User info fetcher request:
+// TODO: Document how to use it in OPA regorules, e.g. to authorize based on group membership
+== Example rego rule
+
+.About unencrypted HTTP
+[NOTE]
+===============================
+*NOTE* The User info fetcher serves endpoints over clear-text HTTP. 
+
+It is intended to only be accessed from the OPA Server via _localhost_ and to not be exposed outside of the Pod.
+===============================
+
+[source,python]
+----
+package test # <1>
+
+# Define a function to lookup by username
+userInfoByUsername(username) := http.send({
+  "method": "POST", 
+  "url": "http://127.0.0.1:9476/user", 
+  "body": {"username": username}, <2>
+  "headers": {"Content-Type": "application/json"}, 
+  "raise_error": true
+}).body
+
+# Define a function to lookup by a stable identifier
+userInfoById(id) := http.send({
+  "method": "POST", 
+  "url": "http://127.0.0.1:9476/user", 
+  "body": {"id": id}, <3>
+  "headers": {"Content-Type": "application/json"}, 
+  "raise_error": true
+}).body
+
+currentUserInfoByUsername := userInfoByUsername(input.username)
+currentUserInfoById := userInfoById(input.id)
+----
+
+<1> The package name is important in the OPA URL used by the product.
+<2> Lookup by username
+<3> Lookup by id
+
+For more information on the request and reponse payloads, see <<_user_info_fetcher_api>>
+
+== User info fetcher API
+
+HTTP Post Requests must be sent to the `/user` endpoint with the following header set: `Content-Type: application/json`.
+
+You can either lookup the user info by stable identifier:
 
 [source,json]
 ----
@@ -57,7 +113,7 @@ User info fetcher request:
 }
 ----
 
-or
+or by the username:
 
 [source,json]
 ----
@@ -66,7 +122,7 @@ or
 }
 ----
 
-User info fetcher response:
+If the user is found, the following response structure will be returned:
 
 [source,json]
 ----
@@ -79,5 +135,3 @@ User info fetcher response:
   "customAttributes": {}
 }
 ----
-
-// TODO: Document how to use it in OPA regorules, e.g. to authorize based on group membership
