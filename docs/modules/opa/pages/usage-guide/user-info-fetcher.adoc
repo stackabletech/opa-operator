@@ -42,7 +42,7 @@ stringData:
 
 Currently the following backends are supported:
 
-* <<keycloak>>
+* <<_keycloak>>
 
 == Keycloak
 
