@@ -22,7 +22,7 @@ watch_file('result')
 if os.path.exists('result'):
    k8s_yaml('result/crds.yaml')
 
-k8s_kind('Deployment', image_json_path='{.spec.template.metadata.annotations.image}')
+k8s_kind('Deployment', image_json_path='{.spec.template.metadata.annotations.internal\\.stackable\\.tech/image}')
 
 # Exclude stale CRDs from Helm chart, and apply the rest
 helm_crds, helm_non_crds = filter_yaml(

@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       annotations:
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        internal.stackable.tech/image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         {{- with .Values.podAnnotations }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- toYaml . | nindent 8 }}
@@ -48,7 +48,7 @@ spec:
               # Tilt can use recognize annotations as image paths, but not env variables
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['image']
+                  fieldPath: metadata.annotations['internal.stackable.tech/image']
       volumes:
         - name: config-spec
           configMap:
