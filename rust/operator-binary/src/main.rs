@@ -58,7 +58,7 @@ async fn main() -> Result<(), error::Error> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => {
-            OpaCluster::print_yaml_schema()?;
+            OpaCluster::print_yaml_schema(built_info::CARGO_PKG_VERSION)?;
         }
         Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
