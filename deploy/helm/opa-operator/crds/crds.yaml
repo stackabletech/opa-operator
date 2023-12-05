@@ -66,7 +66,7 @@ spec:
                               properties:
                                 adminRealm:
                                   description: |-
-                                    The Keycloak realm that OPA's Keycloak account (as specified by `credentials_secret_name` exists in).
+                                    The Keycloak realm that OPA's Keycloak account (as specified by `credentialsSecretName` exists in).
 
                                     Typically `master`.
                                   type: string

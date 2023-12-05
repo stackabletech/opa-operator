@@ -12,6 +12,7 @@ pub struct Config {
     /// The backend directory service to use.
     #[serde(default)]
     pub backend: Backend,
+
     /// Caching configuration.
     #[serde(default)]
     pub cache: Cache,
@@ -22,6 +23,7 @@ pub struct Config {
 pub enum Backend {
     /// Dummy backend that adds no extra user information.
     None {},
+
     /// Backend that fetches user information from Keycloak.
     Keycloak(KeycloakBackend),
 }
@@ -38,9 +40,7 @@ pub struct KeycloakBackend {
     /// Hostname of the identity provider, e.g. `my.keycloak.corp`.
     pub hostname: String,
 
-    // FIXME (Techassi): This should be based on the scheme. How do we pass in the scheme?
-    /// Port of the identity provider. If TLS is used defaults to `443`,
-    /// otherwise to `80`.
+    /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
     pub port: Option<u16>,
 
     /// Root HTTP path of the identity provider. Defaults to `/`.
@@ -56,7 +56,7 @@ pub struct KeycloakBackend {
     /// Must contain the fields `clientId` and `clientSecret`.
     pub client_credentials_secret: String,
 
-    /// The Keycloak realm that OPA's Keycloak account (as specified by `credentials_secret_name` exists in).
+    /// The Keycloak realm that OPA's Keycloak account (as specified by `credentialsSecretName` exists in).
     ///
     /// Typically `master`.
     pub admin_realm: String,
