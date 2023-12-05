@@ -9,11 +9,3 @@ spec:
   servers:
     roleGroups:
       default: {}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: opa-keycloak
-stringData:
-  username: admin
-  password: admin
