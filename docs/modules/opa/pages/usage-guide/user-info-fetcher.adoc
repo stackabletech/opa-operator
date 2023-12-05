@@ -68,7 +68,7 @@ Fetch groups and extra credentials, but not roles.
 It is intended to only be accessed from the OPA Server via _localhost_ and to not be exposed outside of the Pod.
 ===============================
 
-[source,python]
+[source,rego]
 ----
 package test # <1>
 
