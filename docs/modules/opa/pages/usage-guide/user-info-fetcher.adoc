@@ -98,7 +98,7 @@ currentUserInfoById := userInfoById(input.id)
 <2> Lookup by username
 <3> Lookup by id
 
-For more information on the request and reponse payloads, see <<_user_info_fetcher_api>>
+For more information on the request and response payloads, see <<_user_info_fetcher_api>>
 
 == User info fetcher API
 
