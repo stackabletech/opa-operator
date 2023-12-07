@@ -10,7 +10,7 @@ users_and_groups = {
 }
 
 
-def assertions(username, response, opa_attribute, expected_groups, expected_attributes = {}):
+def assertions(username, response, opa_attribute, expected_groups, expected_attributes={}):
     assert "result" in response
     assert opa_attribute in response["result"]
 
@@ -30,6 +30,7 @@ def assertions(username, response, opa_attribute, expected_groups, expected_attr
     print(f"Testing for {username} with customAttributes {expected_attributes}")
     custom_attributes = response["result"][opa_attribute]["customAttributes"]
     assert custom_attributes == expected_attributes, f"got {custom_attributes}, expected: {expected_attributes}"
+
 
 if __name__ == "__main__":
     all_args = argparse.ArgumentParser()
