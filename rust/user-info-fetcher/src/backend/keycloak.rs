@@ -97,12 +97,13 @@ pub(crate) async fn get_user_info(
     } = config;
 
     // We re-use existent functionality from operator-rs, besides it being a bit of miss-use.
+    // Some attributes (such as principal_claim) are irrelevant, and will not be read by the code-flow we trigger.
     let wrapping_auth_provider = oidc::AuthenticationProvider::new(
         hostname.clone(),
         *port,
         root_path.clone(),
         tls.clone(),
-        String::new(), // todo: fix this
+        String::new(),
         Vec::new(),
         None,
     );
