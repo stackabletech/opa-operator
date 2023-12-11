@@ -108,7 +108,7 @@ async fn main() -> Result<(), StartupError> {
         serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?,
     );
     let credentials = Arc::new(match &config.backend {
-        // FIXME: factor this out into each backend
+        // TODO: factor this out into each backend (e.g. when we add LDAP support)
         crd::Backend::None {} => Credentials {
             username: "".to_string(),
             password: "".to_string(),
@@ -121,7 +121,8 @@ async fn main() -> Result<(), StartupError> {
 
     let mut client_builder = ClientBuilder::new();
 
-    // todo: I'm not so sure we should be doing all this keycloak specific stuff here
+    // TODO: I'm not so sure we should be doing all this keycloak specific stuff here.
+    // We could factor it out in the provider specific implementation (e.g. when we add LDAP support).
     // I know it is for setting up the client, but an idea: make a trait for implementing backends
     // The trait can do all this for a genric client using an implementation on the trait (eg: get_http_client() which will call self.uses_tls())
     if let crd::Backend::Keycloak(keycloak) = &config.backend {
