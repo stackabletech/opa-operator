@@ -46,9 +46,6 @@ struct OpaRun {
     #[clap(long, env)]
     opa_bundle_builder_clusterrole: String,
 
-    #[clap(long, env)]
-    operator_image: String,
-
     #[clap(flatten)]
     common: ProductOperatorRun,
 }
@@ -62,7 +59,6 @@ async fn main() -> Result<(), error::Error> {
         }
         Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
-            operator_image,
             common:
                 ProductOperatorRun {
                     product_config,
@@ -95,7 +91,6 @@ async fn main() -> Result<(), error::Error> {
                 product_config,
                 watch_namespace,
                 opa_builder_clusterrole,
-                operator_image,
             )
             .await?;
         }
@@ -112,7 +107,6 @@ async fn create_controller(
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
     opa_bundle_builder_clusterrole: String,
-    user_info_fetcher_image: String,
 ) -> OperatorResult<()> {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
@@ -132,7 +126,6 @@ async fn create_controller(
                 client: client.clone(),
                 product_config,
                 opa_bundle_builder_clusterrole,
-                user_info_fetcher_image,
             }),
         )
         .map(|res| {
