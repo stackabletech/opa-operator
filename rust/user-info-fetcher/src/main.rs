@@ -187,18 +187,6 @@ struct UserInfoRequestByName {
     username: String,
 }
 
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-struct GroupRef {
-    name: String,
-}
-
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-struct RoleRef {
-    name: String,
-}
-
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
