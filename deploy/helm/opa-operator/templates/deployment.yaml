@@ -42,6 +42,11 @@ spec:
             - mountPath: /etc/stackable/{{ include "operator.appname" . }}/config-spec
               name: config-spec
           env:
+            - name: OPERATOR_IMAGE
+              # Tilt can use annotations as image paths, but not env variables
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['internal.stackable.tech/image']
             - name: OPA_BUNDLE_BUILDER_CLUSTERROLE
               value: {{ include "operator.fullname" . }}-opa-bundle-builder-clusterrole
             - name: OPERATOR_IMAGE
