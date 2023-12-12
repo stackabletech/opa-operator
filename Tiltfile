@@ -22,8 +22,6 @@ watch_file('result')
 if os.path.exists('result'):
    k8s_yaml('result/crds.yaml')
 
-k8s_kind('Deployment', image_json_path='{.spec.template.metadata.annotations.internal\\.stackable\\.tech/image}')
-
 # Exclude stale CRDs from Helm chart, and apply the rest
 helm_crds, helm_non_crds = filter_yaml(
    helm(
@@ -38,6 +36,3 @@ helm_crds, helm_non_crds = filter_yaml(
    kind = "^CustomResourceDefinition$",
 )
 k8s_yaml(helm_non_crds)
-
-# k8s_yaml('docs/modules/opa/examples/getting_started/opa.yaml')
-# k8s_resource(new_name='simple-opa', objects=['simple-opa:OpaCluster'], extra_pod_selectors=[{'app.kubernetes.io/name': 'opa'}], port_forwards=['8081:8081', '9476:9476'])
