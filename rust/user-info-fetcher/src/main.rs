@@ -237,7 +237,7 @@ async fn get_user_info(
                             }
                             _ => None,
                         };
-                        let user_name = match &req {
+                        let username = match &req {
                             UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
                                 username,
                             }) => Some(username.clone()),
@@ -245,7 +245,7 @@ async fn get_user_info(
                         };
                         Ok(UserInfo {
                             id: user_id,
-                            username: user_name,
+                            username: username,
                             groups: vec![],
                             custom_attributes: HashMap::new(),
                         })

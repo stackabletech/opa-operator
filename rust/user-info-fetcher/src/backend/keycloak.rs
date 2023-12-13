@@ -22,8 +22,8 @@ pub enum Error {
         user_id: String,
     },
 
-    #[snafu(display("user with username {user_name:?} was not found"))]
-    UserNotFoundByName { user_name: String },
+    #[snafu(display("user with username {username:?} was not found"))]
+    UserNotFoundByName { username: String },
 
     #[snafu(display("unable to request groups for user"))]
     RequestUserGroups { source: reqwest::Error },
@@ -144,9 +144,9 @@ pub(crate) async fn get_user_info(
             .context(UserNotFoundByIdSnafu { user_id })?
         }
         UserInfoRequest::UserInfoRequestByName(req) => {
-            let user_name = &req.username;
+            let username = &req.username;
             let users_url = users_base_url
-                .join(&format!("?username={user_name}&exact=true"))
+                .join(&format!("?username={username}&exact=true"))
                 .context(ConstructOidcEndpointPathSnafu)?;
 
             send_json_request::<Vec<UserMetadata>>(
@@ -156,7 +156,7 @@ pub(crate) async fn get_user_info(
             .context(SearchForUserSnafu)?
             .first() // FIXME: we should probably fail if there are more than one record
             .cloned()
-            .context(UserNotFoundByNameSnafu { user_name })?
+            .context(UserNotFoundByNameSnafu { username })?
         }
     };
 
