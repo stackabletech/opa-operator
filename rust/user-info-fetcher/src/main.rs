@@ -245,7 +245,7 @@ async fn get_user_info(
                         };
                         Ok(UserInfo {
                             id: user_id,
-                            username: username,
+                            username,
                             groups: vec![],
                             custom_attributes: HashMap::new(),
                         })
