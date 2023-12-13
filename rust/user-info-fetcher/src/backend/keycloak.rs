@@ -119,7 +119,7 @@ pub(crate) async fn get_user_info(
                 ))
                 .context(ConstructOidcEndpointPathSnafu)?,
         )
-        .basic_auth(&credentials.username, Some(&credentials.password))
+        .basic_auth(&credentials.client_id, Some(&credentials.client_secret))
         .form(&[("grant_type", "client_credentials")]),
     )
     .await

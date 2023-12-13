@@ -42,8 +42,8 @@ struct AppState {
 #[derive(Debug)]
 struct Credentials {
     // TODO: Find a better way of sharing behavior between different backends
-    username: String,
-    password: String,
+    client_id: String,
+    client_secret: String,
 }
 
 #[derive(Snafu, Debug)]
@@ -110,12 +110,12 @@ async fn main() -> Result<(), StartupError> {
     let credentials = Arc::new(match &config.backend {
         // TODO: factor this out into each backend (e.g. when we add LDAP support)
         crd::Backend::None {} => Credentials {
-            username: "".to_string(),
-            password: "".to_string(),
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
         },
         crd::Backend::Keycloak(_) => Credentials {
-            username: read_config_file(&args.credentials_dir.join("clientId")).await?,
-            password: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
+            client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
+            client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },
     });
 
