@@ -31,7 +31,7 @@ pub struct Args {
     common: stackable_operator::cli::ProductOperatorRun,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct AppState {
     config: Arc<crd::Config>,
     http: reqwest::Client,
@@ -39,7 +39,6 @@ struct AppState {
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
 }
 
-#[derive(Debug)]
 struct Credentials {
     // TODO: Find a better way of sharing behavior between different backends
     client_id: String,
