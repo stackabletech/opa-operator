@@ -238,14 +238,14 @@ async fn get_user_info(
                     crd::Backend::None {} => {
                         let user_id = match &req {
                             UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
-                                Some(id.clone())
+                                Some(id)
                             }
                             _ => None,
                         };
                         let username = match &req {
                             UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
                                 username,
-                            }) => Some(username.clone()),
+                            }) => Some(username),
                             _ => None,
                         };
                         Ok(UserInfo {
