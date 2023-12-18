@@ -25,6 +25,9 @@ pub enum Error {
     #[snafu(display("user with username {username:?} was not found"))]
     UserNotFoundByName { username: String },
 
+    #[snafu(display("more than one user was returned when there should be one or none"))]
+    TooManyUsersReturned,
+
     #[snafu(display("unable to request groups for user"))]
     RequestUserGroups { source: reqwest::Error },
 
@@ -45,6 +48,7 @@ impl http_error::Error for Error {
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
             Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
+            Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
             Self::RequestUserRoles { .. } => StatusCode::BAD_GATEWAY,
             Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -149,14 +153,20 @@ pub(crate) async fn get_user_info(
                 .join(&format!("?username={username}&exact=true"))
                 .context(ConstructOidcEndpointPathSnafu)?;
 
-            send_json_request::<Vec<UserMetadata>>(
+            let users = send_json_request::<Vec<UserMetadata>>(
                 http.get(users_url).bearer_auth(&authn.access_token),
             )
             .await
-            .context(SearchForUserSnafu)?
-            .first() // FIXME: we should probably fail if there are more than one record
-            .cloned()
-            .context(UserNotFoundByNameSnafu { username })?
+            .context(SearchForUserSnafu)?;
+
+            if users.len() > 1 {
+                return TooManyUsersReturnedSnafu.fail();
+            }
+
+            users
+                .first()
+                .cloned()
+                .context(UserNotFoundByNameSnafu { username })?
         }
     };
 
