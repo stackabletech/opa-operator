@@ -249,8 +249,8 @@ async fn get_user_info(
                             _ => None,
                         };
                         Ok(UserInfo {
-                            id: user_id,
-                            username,
+                            id: user_id.cloned(),
+                            username: username.cloned(),
                             groups: vec![],
                             custom_attributes: HashMap::new(),
                         })
