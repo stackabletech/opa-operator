@@ -68,6 +68,9 @@ enum StartupError {
     #[snafu(display("failed to construct http client"))]
     ConstructHttpClient { source: reqwest::Error },
 
+    #[snafu(display("failed to open ca certificate"))]
+    OpenCaCert { source: std::io::Error },
+
     #[snafu(display("failed to read ca certificate"))]
     ReadCaCert { source: std::io::Error },
 
@@ -132,10 +135,10 @@ async fn main() -> Result<(), StartupError> {
             let mut buf = Vec::new();
             File::open(tls_ca_cert_mount_path)
                 .await
-                .context(ReadCaCertSnafu)?
+                .context(OpenCaCertSnafu)?
                 .read_to_end(&mut buf)
                 .await
-                .unwrap();
+                .context(ReadCaCertSnafu)?;
             let ca_cert = reqwest::Certificate::from_pem(&buf).context(ParseCaCertSnafu)?;
 
             client_builder = client_builder
