@@ -211,7 +211,10 @@ impl http_error::Error for GetUserInfoError {
     fn status_code(&self) -> hyper::StatusCode {
         // todo: the warn here loses context about the scope in which the error occurred, eg: stackable_opa_user_info_fetcher::backend::keycloak
         // Also, we should make the log level (warn vs error) more dynamic in the backend's impl `http_error::Error for Error`
-        tracing::warn!(error = ?self, "Error while processing request");
+        tracing::warn!(
+            error = self as &dyn std::error::Error,
+            "Error while processing request"
+        );
         match self {
             Self::Keycloak { source } => source.status_code(),
         }
