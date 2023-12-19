@@ -252,7 +252,9 @@ pub enum Error {
     #[snafu(display("failed to build object meta data"))]
     ObjectMeta { source: ObjectMetaBuilderError },
 
-    #[snafu(display("failed to build volume or volume mount spec"))]
+    #[snafu(display(
+        "failed to build volume or volume mount spec for the Keycloak backend TLS config"
+    ))]
     VolumeAndMounts { source: TlsClientDetailsError },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
