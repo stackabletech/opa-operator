@@ -46,6 +46,7 @@ struct OpaRun {
     #[clap(long, env)]
     opa_bundle_builder_clusterrole: String,
 
+    /// The full image tag of the operator, used to deploy the user_info_fetcher.
     #[clap(long, env)]
     operator_image: String,
 
