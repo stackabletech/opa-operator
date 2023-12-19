@@ -122,6 +122,7 @@ pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
     pub opa_bundle_builder_clusterrole: String,
+    pub user_info_fetcher_image: String,
 }
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -366,6 +367,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
+            &ctx.user_info_fetcher_image,
             &rbac_sa.name_any(),
         )?;
 
@@ -611,6 +613,7 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
+    user_info_fetcher_image: &str,
     sa_name: &str,
 ) -> Result<DaemonSet> {
     let role = opa.role(opa_role);
@@ -804,6 +807,7 @@ fn build_server_rolegroup_daemonset(
 
         cb_user_info_fetcher
             .image_from_product_image(resolved_product_image)
+            .image(user_info_fetcher_image)
             .command(vec!["user-info-fetcher".to_string()])
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
