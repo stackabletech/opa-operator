@@ -611,9 +611,6 @@ fn build_server_rolegroup_daemonset(
     let mut cb_opa =
         ContainerBuilder::new(&opa_container_name).context(IllegalContainerNameSnafu)?;
 
-    let mut cb_user_info_fetcher =
-        ContainerBuilder::new("user-info-fetcher").context(IllegalContainerNameSnafu)?;
-
     cb_prepare
         .image_from_product_image(resolved_product_image)
         .command(vec![
@@ -767,6 +764,9 @@ fn build_server_rolegroup_daemonset(
     );
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
+        let mut cb_user_info_fetcher =
+            ContainerBuilder::new("user-info-fetcher").context(IllegalContainerNameSnafu)?;
+
         cb_user_info_fetcher
             .image_from_product_image(resolved_product_image)
             .command(vec!["user-info-fetcher".to_string()])
