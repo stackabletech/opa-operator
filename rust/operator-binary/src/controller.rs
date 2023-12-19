@@ -19,7 +19,10 @@ use stackable_operator::{
         PodSecurityContextBuilder, VolumeBuilder,
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
-    commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
+    commons::{
+        authentication::tls::TlsClientDetailsError, product_image_selection::ResolvedProductImage,
+        rbac::build_rbac_resources,
+    },
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
@@ -248,6 +251,9 @@ pub enum Error {
 
     #[snafu(display("failed to build object meta data"))]
     ObjectMeta { source: ObjectMetaBuilderError },
+
+    #[snafu(display("failed to build volume or volume mount spec"))]
+    VolumeAndMounts { source: TlsClientDetailsError },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -826,7 +832,8 @@ fn build_server_rolegroup_daemonset(
                 );
                 keycloak
                     .tls
-                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher]);
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(VolumeAndMountsSnafu)?;
             }
         }
 
