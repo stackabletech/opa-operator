@@ -24,6 +24,7 @@ metadata:
 spec:
   image:
     productVersion: "{{ test_scenario['values']['opa'] }}"
+    pullPolicy: IfNotPresent
   clusterConfig:
     vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
   servers:
