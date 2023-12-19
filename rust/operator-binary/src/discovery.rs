@@ -3,7 +3,7 @@ use crate::controller::{build_recommended_labels, APP_PORT};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, OpaRole};
 use stackable_operator::{
-    builder::{ConfigMapBuilder, ObjectMetaBuilder},
+    builder::{ConfigMapBuilder, ObjectMetaBuilder, ObjectMetaBuilderError},
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{ConfigMap, Service},
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
@@ -16,14 +16,20 @@ pub enum Error {
         source: stackable_operator::error::Error,
         opa: ObjectRef<OpaCluster>,
     },
+
     #[snafu(display("object has no name associated"))]
     NoName,
+
     #[snafu(display("object has no namespace associated"))]
     NoNamespace,
+
     #[snafu(display("failed to build ConfigMap"))]
     BuildConfigMap {
         source: stackable_operator::error::Error,
     },
+
+    #[snafu(display("failed to build object meta data"))]
+    ObjectMeta { source: ObjectMetaBuilderError },
 }
 
 /// Builds discovery [`ConfigMap`]s for connecting to a [`OpaCluster`] for all expected scenarios
@@ -60,23 +66,25 @@ fn build_discovery_configmap(
             .context(NoNamespaceSnafu)?,
         APP_PORT
     );
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(name)
+        .ownerreference_from_resource(owner, None, Some(true))
+        .with_context(|_| ObjectMissingMetadataForOwnerRefSnafu {
+            opa: ObjectRef::from_obj(opa),
+        })?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &OpaRole::Server.to_string(),
+            "discovery",
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
     ConfigMapBuilder::new()
-        .metadata(
-            ObjectMetaBuilder::new()
-                .name_and_namespace(opa)
-                .name(name)
-                .ownerreference_from_resource(owner, None, Some(true))
-                .with_context(|_| ObjectMissingMetadataForOwnerRefSnafu {
-                    opa: ObjectRef::from_obj(opa),
-                })?
-                .with_recommended_labels(build_recommended_labels(
-                    opa,
-                    &resolved_product_image.app_version_label,
-                    &OpaRole::Server.to_string(),
-                    "discovery",
-                ))
-                .build(),
-        )
+        .metadata(metadata)
         .add_data("OPA", url)
         .build()
         .context(BuildConfigMapSnafu)

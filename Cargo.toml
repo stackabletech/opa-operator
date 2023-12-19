@@ -1,5 +1,6 @@
 [workspace]
 members = ["rust/crd", "rust/operator-binary", "rust/user-info-fetcher"]
+resolver = "2"
 
 [workspace.package]
 version = "0.0.0-dev"
@@ -31,5 +32,6 @@ tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
 url = "2.4"
 
-# [patch."https://github.com/stackabletech/operator-rs.git"]
-# stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "main" }
+# Comment this out again, KVP changes should be released in the near future.
+[patch."https://github.com/stackabletech/operator-rs.git"]
+stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "main" }

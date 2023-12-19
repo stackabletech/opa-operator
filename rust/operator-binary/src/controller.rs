@@ -15,7 +15,8 @@ use stackable_opa_crd::{
 use stackable_operator::{
     builder::{
         resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
-        FieldPathEnvVar, ObjectMetaBuilder, PodBuilder, PodSecurityContextBuilder, VolumeBuilder,
+        FieldPathEnvVar, ObjectMetaBuilder, ObjectMetaBuilderError, PodBuilder,
+        PodSecurityContextBuilder, VolumeBuilder,
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
@@ -34,7 +35,7 @@ use stackable_operator::{
         runtime::{controller::Action, reflector::ObjectRef},
         Resource as KubeResource, ResourceExt,
     },
-    labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
+    kvp::{Label, LabelError, Labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
@@ -241,6 +242,12 @@ pub enum Error {
 
     #[snafu(display("failed to serialize user info fetcher configuration"))]
     SerializeUserInfoFetcherConfig { source: serde_json::Error },
+
+    #[snafu(display("failed to build label"))]
+    BuildLabel { source: LabelError },
+
+    #[snafu(display("failed to build object meta data"))]
+    ObjectMeta { source: ObjectMetaBuilderError },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -307,12 +314,12 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(
-        opa.as_ref(),
-        APP_NAME,
-        cluster_resources.get_required_labels(),
-    )
-    .context(BuildRbacResourcesSnafu)?;
+    let required_labels = cluster_resources
+        .get_required_labels()
+        .context(BuildLabelSnafu)?;
+
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), APP_NAME, required_labels)
+        .context(BuildRbacResourcesSnafu)?;
 
     let rbac_sa = cluster_resources
         .add(client, rbac_sa)
@@ -444,31 +451,40 @@ pub fn build_server_role_service(
     let role_svc_name = opa
         .server_role_service_name()
         .context(RoleServiceNameNotFoundSnafu)?;
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&role_svc_name)
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &role_name,
+            "global",
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
+    let service_selector_labels =
+        Labels::role_selector(opa, APP_NAME, &role_name).context(BuildLabelSnafu)?;
+
+    let service_spec = ServiceSpec {
+        type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
+        ports: Some(vec![ServicePort {
+            name: Some(APP_PORT_NAME.to_string()),
+            port: APP_PORT.into(),
+            protocol: Some("TCP".to_string()),
+            ..ServicePort::default()
+        }]),
+        selector: Some(service_selector_labels.into()),
+        internal_traffic_policy: Some("Local".to_string()),
+        ..ServiceSpec::default()
+    };
+
     Ok(Service {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&role_svc_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        spec: Some(ServiceSpec {
-            type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-            ports: Some(vec![ServicePort {
-                name: Some(APP_PORT_NAME.to_string()),
-                port: APP_PORT.into(),
-                protocol: Some("TCP".to_string()),
-                ..ServicePort::default()
-            }]),
-            selector: Some(role_selector_labels(opa, APP_NAME, &role_name)),
-            internal_traffic_policy: Some("Local".to_string()),
-            ..ServiceSpec::default()
-        }),
+        metadata,
+        spec: Some(service_spec),
         status: None,
     })
 }
@@ -481,34 +497,41 @@ fn build_rolegroup_service(
     resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<OpaCluster>,
 ) -> Result<Service> {
+    let prometheus_label =
+        Label::try_from(("prometheus.io/scrape", "true")).context(BuildLabelSnafu)?;
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&rolegroup.object_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup.role,
+            &rolegroup.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .with_label(prometheus_label)
+        .build();
+
+    let service_selector_labels =
+        Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
+            .context(BuildLabelSnafu)?;
+
+    let service_spec = ServiceSpec {
+        // Internal communication does not need to be exposed
+        type_: Some("ClusterIP".to_string()),
+        cluster_ip: Some("None".to_string()),
+        ports: Some(service_ports()),
+        selector: Some(service_selector_labels.into()),
+        publish_not_ready_addresses: Some(true),
+        ..ServiceSpec::default()
+    };
+
     Ok(Service {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&rolegroup.object_name())
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &rolegroup.role,
-                &rolegroup.role_group,
-            ))
-            .with_label("prometheus.io/scrape", "true")
-            .build(),
-        spec: Some(ServiceSpec {
-            // Internal communication does not need to be exposed
-            type_: Some("ClusterIP".to_string()),
-            cluster_ip: Some("None".to_string()),
-            ports: Some(service_ports()),
-            selector: Some(role_group_selector_labels(
-                opa,
-                APP_NAME,
-                &rolegroup.role,
-                &rolegroup.role_group,
-            )),
-            publish_not_ready_addresses: Some(true),
-            ..ServiceSpec::default()
-        }),
+        metadata,
+        spec: Some(service_spec),
         status: None,
     })
 }
@@ -523,21 +546,22 @@ fn build_server_rolegroup_config_map(
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(rolegroup.object_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup.role,
+            &rolegroup.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
     cm_builder
-        .metadata(
-            ObjectMetaBuilder::new()
-                .name_and_namespace(opa)
-                .name(rolegroup.object_name())
-                .ownerreference_from_resource(opa, None, Some(true))
-                .context(ObjectMissingMetadataForOwnerRefSnafu)?
-                .with_recommended_labels(build_recommended_labels(
-                    opa,
-                    &resolved_product_image.app_version_label,
-                    &rolegroup.role,
-                    &rolegroup.role_group,
-                ))
-                .build(),
-        )
+        .metadata(metadata)
         .add_data(CONFIG_FILE, build_config_file());
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
@@ -717,51 +741,54 @@ fn build_server_rolegroup_daemonset(
             ..Probe::default()
         });
 
-    pb.metadata_builder(|m| {
-        m.with_recommended_labels(build_recommended_labels(
+    let pb_metadata = ObjectMetaBuilder::new()
+        .with_recommended_labels(build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label,
             &rolegroup_ref.role,
             &rolegroup_ref.role_group,
         ))
-    })
-    .add_init_container(cb_prepare.build())
-    .add_container(cb_opa.build())
-    .add_container(cb_bundle_builder.build())
-    .image_pull_secrets_from_product_image(resolved_product_image)
-    .node_selector_opt(opa.node_selector(&rolegroup_ref.role_group))
-    .add_volume(
-        VolumeBuilder::new(CONFIG_VOLUME_NAME)
-            .with_config_map(rolegroup_ref.object_name())
-            .build(),
-    )
-    .add_volume(
-        VolumeBuilder::new(BUNDLES_VOLUME_NAME)
-            .with_empty_dir(None::<String>, None)
-            .build(),
-    )
-    .add_volume(
-        VolumeBuilder::new(LOG_VOLUME_NAME)
-            .empty_dir(EmptyDirVolumeSource {
-                medium: None,
-                size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
-                    &[
-                        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
-                        MAX_OPA_LOG_FILE_SIZE,
-                        MAX_PREPARE_LOG_FILE_SIZE,
-                    ],
-                )),
-            })
-            .build(),
-    )
-    .service_account_name(sa_name)
-    .security_context(
-        PodSecurityContextBuilder::new()
-            .run_as_user(1000)
-            .run_as_group(0)
-            .fs_group(1000)
-            .build(),
-    );
+        .context(ObjectMetaSnafu)?
+        .build();
+
+    pb.metadata(pb_metadata)
+        .add_init_container(cb_prepare.build())
+        .add_container(cb_opa.build())
+        .add_container(cb_bundle_builder.build())
+        .image_pull_secrets_from_product_image(resolved_product_image)
+        .node_selector_opt(opa.node_selector(&rolegroup_ref.role_group))
+        .add_volume(
+            VolumeBuilder::new(CONFIG_VOLUME_NAME)
+                .with_config_map(rolegroup_ref.object_name())
+                .build(),
+        )
+        .add_volume(
+            VolumeBuilder::new(BUNDLES_VOLUME_NAME)
+                .with_empty_dir(None::<String>, None)
+                .build(),
+        )
+        .add_volume(
+            VolumeBuilder::new(LOG_VOLUME_NAME)
+                .empty_dir(EmptyDirVolumeSource {
+                    medium: None,
+                    size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
+                        &[
+                            MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
+                            MAX_OPA_LOG_FILE_SIZE,
+                            MAX_PREPARE_LOG_FILE_SIZE,
+                        ],
+                    )),
+                })
+                .build(),
+        )
+        .service_account_name(sa_name)
+        .security_context(
+            PodSecurityContextBuilder::new()
+                .run_as_user(1000)
+                .run_as_group(0)
+                .fs_group(1000)
+                .build(),
+        );
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         let mut cb_user_info_fetcher =
@@ -827,32 +854,40 @@ fn build_server_rolegroup_daemonset(
     pod_template.merge_from(role.config.pod_overrides.clone());
     pod_template.merge_from(role_group.config.pod_overrides.clone());
 
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&rolegroup_ref.object_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup_ref.role,
+            &rolegroup_ref.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
+    let daemonset_match_labels = Labels::role_group_selector(
+        opa,
+        APP_NAME,
+        &rolegroup_ref.role,
+        &rolegroup_ref.role_group,
+    )
+    .context(BuildLabelSnafu)?;
+
+    let daemonset_spec = DaemonSetSpec {
+        selector: LabelSelector {
+            match_labels: Some(daemonset_match_labels.into()),
+            ..LabelSelector::default()
+        },
+        template: pod_template,
+        ..DaemonSetSpec::default()
+    };
+
     Ok(DaemonSet {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&rolegroup_ref.object_name())
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &rolegroup_ref.role,
-                &rolegroup_ref.role_group,
-            ))
-            .build(),
-        spec: Some(DaemonSetSpec {
-            selector: LabelSelector {
-                match_labels: Some(role_group_selector_labels(
-                    opa,
-                    APP_NAME,
-                    &rolegroup_ref.role,
-                    &rolegroup_ref.role_group,
-                )),
-                ..LabelSelector::default()
-            },
-            template: pod_template,
-            ..DaemonSetSpec::default()
-        }),
+        metadata,
+        spec: Some(daemonset_spec),
         status: None,
     })
 }
