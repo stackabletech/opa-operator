@@ -10,29 +10,32 @@ use crate::{http_error, util::send_json_request, Credentials, UserInfo, UserInfo
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("unable to log in (expired credentials?)"))]
-    LogIn { source: reqwest::Error },
+    #[snafu(display("failed to get access_token"))]
+    AccessToken { source: reqwest::Error },
 
-    #[snafu(display("unable to search for user"))]
+    #[snafu(display("failed to search for user"))]
     SearchForUser { source: reqwest::Error },
 
-    #[snafu(display("user with id {user_id:?} was not found"))]
+    #[snafu(display("unable to find user with id {user_id:?}"))]
     UserNotFoundById {
         source: reqwest::Error,
         user_id: String,
     },
 
-    #[snafu(display("user with username {username:?} was not found"))]
+    #[snafu(display("unable to find user with username {username:?}"))]
     UserNotFoundByName { username: String },
 
     #[snafu(display("more than one user was returned when there should be one or none"))]
     TooManyUsersReturned,
 
-    #[snafu(display("unable to request groups for user"))]
-    RequestUserGroups { source: reqwest::Error },
-
-    #[snafu(display("unable to request roles for user"))]
-    RequestUserRoles { source: reqwest::Error },
+    #[snafu(display(
+        "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
+    ))]
+    RequestUserGroups {
+        username: String,
+        user_id: String,
+        source: reqwest::Error,
+    },
 
     #[snafu(display("failed to parse OIDC endpoint url"))]
     ParseOidcEndpointUrl { source: oidc::Error },
@@ -44,13 +47,12 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::LogIn { .. } => StatusCode::BAD_GATEWAY,
+            Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
             Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
             Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
-            Self::RequestUserRoles { .. } => StatusCode::BAD_GATEWAY,
             Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -127,7 +129,7 @@ pub(crate) async fn get_user_info(
         .form(&[("grant_type", "client_credentials")]),
     )
     .await
-    .context(LogInSnafu)?;
+    .context(AccessTokenSnafu)?;
 
     let users_base_url = keycloak_url
         .join(&format!("admin/realms/{user_realm}/users/"))
@@ -179,7 +181,10 @@ pub(crate) async fn get_user_info(
         .bearer_auth(&authn.access_token),
     )
     .await
-    .context(RequestUserGroupsSnafu)?;
+    .context(RequestUserGroupsSnafu {
+        username: user_info.username.clone(),
+        user_id: user_info.id.clone(),
+    })?;
 
     Ok(UserInfo {
         id: Some(user_info.id),

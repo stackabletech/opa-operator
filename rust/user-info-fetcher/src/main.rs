@@ -53,7 +53,7 @@ enum StartupError {
         path: PathBuf,
     },
 
-    #[snafu(display("unable to parse config file"))]
+    #[snafu(display("failed to parse config file"))]
     ParseConfig { source: serde_json::Error },
 
     #[snafu(display("failed to parse listen address"))]
