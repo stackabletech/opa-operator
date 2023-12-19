@@ -725,36 +725,6 @@ fn build_server_rolegroup_daemonset(
             ..Probe::default()
         });
 
-    if let Some(user_info) = &opa.spec.cluster_config.user_info {
-        cb_user_info_fetcher
-            .image_from_product_image(resolved_product_image)
-            .command(vec!["user-info-fetcher".to_string()])
-            .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
-            .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
-            .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
-            .resources(
-                ResourceRequirementsBuilder::new()
-                    .with_cpu_request("100m")
-                    .with_cpu_limit("200m")
-                    .with_memory_request("128Mi")
-                    .with_memory_limit("128Mi")
-                    .build(),
-            );
-
-        match &user_info.backend {
-            user_info_fetcher::Backend::None {} => {}
-            user_info_fetcher::Backend::Keycloak(keycloak) => {
-                cb_user_info_fetcher.add_volume_mount(
-                    USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-                    USER_INFO_FETCHER_CREDENTIALS_DIR,
-                );
-                keycloak
-                    .tls
-                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher]);
-            }
-        }
-    }
-
     pb.metadata_builder(|m| {
         m.with_recommended_labels(build_recommended_labels(
             opa,
@@ -802,7 +772,21 @@ fn build_server_rolegroup_daemonset(
     );
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
-        pb.add_container(cb_user_info_fetcher.build());
+        cb_user_info_fetcher
+            .image_from_product_image(resolved_product_image)
+            .command(vec!["user-info-fetcher".to_string()])
+            .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
+            .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
+            .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+            .resources(
+                ResourceRequirementsBuilder::new()
+                    .with_cpu_request("100m")
+                    .with_cpu_limit("200m")
+                    .with_memory_request("128Mi")
+                    .with_memory_limit("128Mi")
+                    .build(),
+            );
+
         match &user_info.backend {
             user_info_fetcher::Backend::None {} => {}
             user_info_fetcher::Backend::Keycloak(keycloak) => {
@@ -814,8 +798,17 @@ fn build_server_rolegroup_daemonset(
                         })
                         .build(),
                 );
+                cb_user_info_fetcher.add_volume_mount(
+                    USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                    USER_INFO_FETCHER_CREDENTIALS_DIR,
+                );
+                keycloak
+                    .tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher]);
             }
         }
+
+        pb.add_container(cb_user_info_fetcher.build());
     }
 
     if merged_config.logging.enable_vector_agent {
