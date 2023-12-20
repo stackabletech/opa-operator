@@ -34,4 +34,5 @@ url = "2.4"
 
 # Comment this out again, KVP changes should be released in the near future.
 [patch."https://github.com/stackabletech/operator-rs.git"]
-stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "main" }
+# PR #443 uses some new features from operator-rs that are not yet released, but should be in 0.59.0
+stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", ref = "38cb237796d10f8f3ba8d9db1e78f444e0306dd1" }
