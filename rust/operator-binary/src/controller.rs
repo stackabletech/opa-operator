@@ -767,7 +767,7 @@ fn build_server_rolegroup_daemonset(
         .add_container(cb_opa.build())
         .add_container(cb_bundle_builder.build())
         .image_pull_secrets_from_product_image(resolved_product_image)
-        .node_selector_opt(opa.node_selector(&rolegroup_ref.role_group))
+        .affinity(&merged_config.affinity)
         .add_volume(
             VolumeBuilder::new(CONFIG_VOLUME_NAME)
                 .with_config_map(rolegroup_ref.object_name())
