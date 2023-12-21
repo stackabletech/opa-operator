@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- [BREAKING]: Remove legacy `nodeSelector` on rolegroups. Use the field `affinity.nodeAffinity` instead ([#443]).
+- [BREAKING]: Remove legacy `nodeSelector` on rolegroups. Use the field `affinity.nodeAffinity` instead ([#433]).
 
 [#433]: https://github.com/stackabletech/opa-operator/pull/433
 
