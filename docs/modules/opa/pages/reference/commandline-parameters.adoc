@@ -1,5 +1,8 @@
+= Command line parameters
 
-=== product-config
+This operator accepts the following command line parameters:
+
+== product-config
 
 *Default value*: `/etc/stackable/opa-operator/config-spec/properties.yaml`
 
@@ -12,7 +15,7 @@
 stackable-opa-operator run --product-config /foo/bar/properties.yaml
 ----
 
-=== watch-namespace
+== watch-namespace
 
 *Default value*: All namespaces
 
@@ -27,7 +30,7 @@ The operator will **only** watch for resources in the provided namespace `test`:
 stackable-opa-operator run --watch-namespace test
 ----
 
-=== opa-bundle-builder-clusterrole
+== opa-bundle-builder-clusterrole
 
 *Default value*: `None`. A value is generated automatically by Helm.
 
