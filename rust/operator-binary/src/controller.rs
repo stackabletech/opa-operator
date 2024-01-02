@@ -808,7 +808,7 @@ fn build_server_rolegroup_daemonset(
         cb_user_info_fetcher
             .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
             .image(user_info_fetcher_image) // ...override the image
-            .command(vec!["user-info-fetcher".to_string()])
+            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
