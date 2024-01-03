@@ -28,6 +28,7 @@ commands:
       spec:
         image:
           productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+          pullPolicy: IfNotPresent
         clusterConfig:
           userInfo:
             backend:
