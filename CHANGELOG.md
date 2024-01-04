@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Add user-info-fetcher to fetch user metadata from directory services ([#443]).
+- Add user-info-fetcher to fetch user metadata from directory services ([#433]).
 
 ### Changed
 
