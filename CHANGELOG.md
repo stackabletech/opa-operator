@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add user-info-fetcher to fetch user metadata from directory services ([#433]).
+
+### Changed
+
+- [BREAKING]: Remove legacy `nodeSelector` on rolegroups. Use the field `affinity.nodeAffinity` instead ([#433]).
+
+[#433]: https://github.com/stackabletech/opa-operator/pull/433
+
 ## [23.11.0] - 2023-11-24
 
 ### Added

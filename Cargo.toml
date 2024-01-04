@@ -1,5 +1,6 @@
 [workspace]
-members = ["rust/crd", "rust/operator-binary"]
+members = ["rust/crd", "rust/operator-binary", "rust/user-info-fetcher"]
+resolver = "2"
 
 [workspace.package]
 version = "0.0.0-dev"
@@ -9,21 +10,27 @@ edition = "2021"
 repository = "https://github.com/stackabletech/opa-operator"
 
 [workspace.dependencies]
+axum = "0.6"
 built = { version = "0.6", features = ["chrono", "git2"] }
 clap = "4.3"
+derivative = "2.2"
 fnv = "1.0"
 futures = { version = "0.3", features = ["compat"] }
+hyper = "0.14"
 indoc = "2.0"
+moka = { version = "0.12", features = ["future"] }
 pin-project = "1.1"
 product-config = { git = "https://github.com/stackabletech/product-config.git", tag = "0.6.0" }
+reqwest = { version = "0.11", features = ["json"] }
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 snafu = "0.7"
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "0.56.1" }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "0.59.0" }
 strum = { version = "0.25", features = ["derive"] }
 tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1"
+url = "2.4"
 
 # [patch."https://github.com/stackabletech/operator-rs.git"]
 # stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "main" }

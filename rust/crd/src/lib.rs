@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
+        affinity::StackableAffinity,
         cluster_operation::ClusterOperation,
         product_image_selection::ProductImage,
         resources::{
@@ -23,6 +24,8 @@ use stackable_operator::{
     time::Duration,
 };
 use strum::{Display, EnumIter, EnumString};
+
+pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";
@@ -99,6 +102,10 @@ pub struct OpaClusterConfig {
     /// will be used to expose the service, and ListenerClass names will stay the same, allowing for a non-breaking change.
     #[serde(default)]
     pub listener_class: CurrentlySupportedListenerClasses,
+    /// Configures how to fetch additional metadata about users (such as group memberships)
+    /// from an external directory service.
+    #[serde(default)]
+    pub user_info: Option<user_info_fetcher::Config>,
 }
 
 // TODO: Temporary solution until listener-operator is finished
@@ -180,10 +187,13 @@ pub enum Container {
 )]
 pub struct OpaConfig {
     #[fragment_attrs(serde(default))]
+    pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
+
+    #[fragment_attrs(serde(default))]
     pub logging: Logging<Container>,
 
     #[fragment_attrs(serde(default))]
-    pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
+    pub affinity: StackableAffinity,
 
     /// Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.
     #[fragment_attrs(serde(default))]
@@ -205,6 +215,9 @@ impl OpaConfig {
                 },
                 storage: OpaStorageConfigFragment {},
             },
+            // There is no point in having a default affinity, as exactly one OPA Pods should run on every node.
+            // We only have the affinity configurable to let users limit the nodes the OPA Pods run on.
+            affinity: Default::default(),
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
     }
@@ -295,15 +308,6 @@ impl OpaCluster {
             self.server_role_service_name()?,
             self.metadata.namespace.as_ref()?
         ))
-    }
-
-    pub fn node_selector(&self, role_group: &str) -> Option<BTreeMap<String, String>> {
-        self.spec
-            .servers
-            .role_groups
-            .get(role_group)
-            .and_then(|rg| rg.selector.as_ref())
-            .and_then(|selector| selector.match_labels.clone())
     }
 
     /// Retrieve and merge resource configs for role and role groups

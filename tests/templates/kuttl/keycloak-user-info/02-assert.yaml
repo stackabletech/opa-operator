@@ -4,9 +4,9 @@ kind: TestAssert
 timeout: 300
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: test-regorule
+  name: keycloak
 status:
   readyReplicas: 1
   replicas: 1
