@@ -1,8 +1,6 @@
 use reqwest::RequestBuilder;
 use serde::de::DeserializeOwned;
-use snafu::Snafu;
-
-// TODO write an error type in here
+use snafu::{ResultExt, Snafu};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -19,10 +17,14 @@ pub enum Error {
     Something { text: String },
 }
 
-pub async fn send_json_request<T: DeserializeOwned>(
-    req: RequestBuilder,
-) -> Result<T, reqwest::Error> {
+pub async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Result<T, Error> {
+    let response = req.send().await.context(HttpRequestSnafu)?;
     // TODO check for differen error sources and send informative errors from here
-    let response =  req.send().await?;
-    response.error_for_status()?.json().await
+    let x = response
+        .error_for_status()
+        .context(HttpErrorResponseSnafu)?;
+    let y = x.json().await.context(ParseJsonSnafu)?;
+    Ok(y)
 }
+
+// TODO fix all callsites for this function
