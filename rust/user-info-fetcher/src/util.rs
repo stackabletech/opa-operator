@@ -44,16 +44,15 @@ async fn error_for_status(response: Response) -> Result<Response, Error> {
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
         let url = response.url().to_owned();
-        match response.text().await {
-            Ok(text) => HttpErrorResponseSnafu { status, url, text }.fail()?,
+        return match response.text().await {
+            Ok(text) => HttpErrorResponseSnafu { status, url, text }.fail(),
             Err(encoding_error) => HttpErrorResponseUndecodableTextSnafu {
                 status,
                 url,
                 encoding_error,
             }
-            .fail()?,
-        }
-    } else {
-        Ok(response)
+            .fail(),
+        };
     }
+    Ok(response)
 }
