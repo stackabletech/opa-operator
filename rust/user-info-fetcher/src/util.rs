@@ -36,9 +36,10 @@ pub async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Resu
     Ok(result)
 }
 
-/// takes a Response and checks whether it is an error. If so, parse the reqwest Error
-/// and create our own error type with more context added. We do this because the plain
-/// reqwest error does not give any response body context.
+/// Wraps a Response into a Result. If there is an HTTP Client or Server error,
+/// extract the HTTP body (if possible) to be used as context in the returned Err.
+/// This is done this because the `Response::error_for_status()` method Err variant
+/// does not contain this information.
 async fn error_for_status(response: Response) -> Result<Response, Error> {
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
