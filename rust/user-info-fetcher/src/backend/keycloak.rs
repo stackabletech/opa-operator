@@ -11,14 +11,14 @@ use crate::{http_error, util::send_json_request, Credentials, UserInfo, UserInfo
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to get access_token"))]
-    AccessToken { source: reqwest::Error },
+    AccessToken { source: crate::util::Error },
 
     #[snafu(display("failed to search for user"))]
-    SearchForUser { source: reqwest::Error },
+    SearchForUser { source: crate::util::Error },
 
     #[snafu(display("unable to find user with id {user_id:?}"))]
     UserNotFoundById {
-        source: reqwest::Error,
+        source: crate::util::Error,
         user_id: String,
     },
 
@@ -32,9 +32,9 @@ pub enum Error {
         "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
     ))]
     RequestUserGroups {
+        source: crate::util::Error,
         username: String,
         user_id: String,
-        source: reqwest::Error,
     },
 
     #[snafu(display("failed to parse OIDC endpoint url"))]
