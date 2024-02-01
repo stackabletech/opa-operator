@@ -14,8 +14,8 @@ pub enum Error {
     #[snafu(display("response was an HTTP error: {text}"))]
     HttpErrorResponse { status: StatusCode, text: String },
 
-    #[snafu(display("response was an HTTP error with unparsable text"))]
-    HttpErrorResponseWithEncodingError {
+    #[snafu(display("response was an HTTP error with undecodable text"))]
+    HttpErrorResponseUndecodableText {
         status: StatusCode,
         encoding_error: reqwest::Error,
     },
@@ -44,7 +44,7 @@ async fn get_non_error_response(response: Response) -> Result<Response, Error> {
     else {
         match response.text().await {
             Ok(text) => HttpErrorResponseSnafu { status, text }.fail(),
-            Err(encoding_error) => HttpErrorResponseWithEncodingSnafu {
+            Err(encoding_error) => HttpErrorResponseUndecodableTextSnafu {
                 status,
                 encoding_error,
             }
