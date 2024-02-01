@@ -52,5 +52,3 @@ async fn get_non_error_response(response: Response) -> Result<Response, Error> {
         }
     }
 }
-
-// TODO fix all callsites for this function
