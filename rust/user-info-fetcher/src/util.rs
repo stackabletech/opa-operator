@@ -15,7 +15,7 @@ pub enum Error {
     HttpErrorResponse {
         status: StatusCode,
         url: Url,
-        text: String
+        text: String,
     },
 
     #[snafu(display("response was an HTTP error with undecodable text"))]
@@ -41,21 +41,18 @@ pub async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Resu
 /// reqwest error does not give any response body context.
 async fn error_for_status(response: Response) -> Result<Response, Error> {
     let status = response.status();
-    // good response
-    if status.is_success() || status.is_informational() || status.is_redirection() {
-        Ok(response)
-    }
-    // error response branch -> get the text and raise an error
-    else {
+    if status.is_client_error() || status.is_server_error() {
         let url = response.url().to_owned();
         match response.text().await {
-            Ok(text) => HttpErrorResponseSnafu { status, url, text }.fail(),
+            Ok(text) => HttpErrorResponseSnafu { status, url, text }.fail()?,
             Err(encoding_error) => HttpErrorResponseUndecodableTextSnafu {
                 status,
                 url,
                 encoding_error,
             }
-            .fail(),
+            .fail()?,
         }
+    } else {
+        Ok(response)
     }
 }
