@@ -1,5 +1,5 @@
 use hyper::StatusCode;
-use reqwest::{RequestBuilder, Response, Url};
+use reqwest::{RequestBuilder, Response};
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 
@@ -11,17 +11,17 @@ pub enum Error {
     #[snafu(display("failed to parse json response"))]
     ParseJson { source: reqwest::Error },
 
-    #[snafu(display("response was an HTTP error: {text}"))]
+    #[snafu(display("http response {status:?} for {url:?} with response body {text:?}"))]
     HttpErrorResponse {
         status: StatusCode,
-        url: Url,
+        url: String,
         text: String,
     },
 
-    #[snafu(display("response was an HTTP error with undecodable text"))]
+    #[snafu(display("http response {status:?} for {url:?} with an undecodable response body"))]
     HttpErrorResponseUndecodableText {
         status: StatusCode,
-        url: Url,
+        url: String,
         encoding_error: reqwest::Error,
     },
 }
@@ -43,9 +43,14 @@ pub async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Resu
 async fn error_for_status(response: Response) -> Result<Response, Error> {
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
-        let url = response.url().to_owned();
+        let url = response.url().to_string();
         return match response.text().await {
-            Ok(text) => HttpErrorResponseSnafu { status, url, text }.fail(),
+            Ok(text) => HttpErrorResponseSnafu {
+                status,
+                url,
+                text: text.trim(),
+            }
+            .fail(),
             Err(encoding_error) => HttpErrorResponseUndecodableTextSnafu {
                 status,
                 url,
