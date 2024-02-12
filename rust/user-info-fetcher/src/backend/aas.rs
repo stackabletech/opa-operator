@@ -1,10 +1,15 @@
-//! XFSC AAS backend.
-//!
+//! Cross Federation Service Components (XFSC) Authentication and Authorization Service (AAS) backend.
+//! The AAS provides context information for authorization decisions in the from of claims.
+//! The endpoint is the CIP - ClaimsInformationPoint.
+//! Claims are requested for a subject and scope, and are returned as a semi-structured object.
 //!
 //! Endpoint definition:
 //! `<https://gitlab.eclipse.org/eclipse/xfsc/authenticationauthorization/-/blob/main/service/src/main/java/eu/xfsc/aas/controller/CipController.java>`
 //!
 //! Look at the endpoint definition for the API path, required parameters and the type of the returned object.
+//!
+//! This backend is currently in a minimal PoC state, it does not support TLS or authenticating at the endpoint.
+//! This is because the AAS is also still in an early development stage and is likely to change.
 use std::collections::HashMap;
 
 use hyper::StatusCode;

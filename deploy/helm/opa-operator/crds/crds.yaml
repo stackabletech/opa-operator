@@ -67,11 +67,11 @@ spec:
                               description: Backend that fetches user information from the XFSC Authentication & Authorization Service.
                               properties:
                                 hostname:
-                                  description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
+                                  description: Hostname of the identity provider, e.g. `my.aas.corp`.
                                   type: string
                                 port:
                                   default: 5000
-                                  description: Port of the identity provider. Defaults to port 5000
+                                  description: Port of the identity provider. Defaults to port 5000.
                                   format: uint16
                                   minimum: 0.0
                                   type: integer

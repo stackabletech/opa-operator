@@ -75,10 +75,10 @@ fn default_root_path() -> String {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AasBackend {
-    /// Hostname of the identity provider, e.g. `my.keycloak.corp`.
+    /// Hostname of the identity provider, e.g. `my.aas.corp`.
     pub hostname: String,
 
-    /// Port of the identity provider. Defaults to port 5000
+    /// Port of the identity provider. Defaults to port 5000.
     #[serde(default = "aas_default_port")]
     pub port: u16,
 }
