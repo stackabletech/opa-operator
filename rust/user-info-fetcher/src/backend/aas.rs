@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use hyper::StatusCode;
-use snafu::{ResultExt, Snafu};
+use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use url::Url;
 
@@ -27,6 +27,12 @@ pub enum Error {
 
     #[snafu(display("request failed"))]
     Request { source: crate::util::Error },
+
+    #[snafu(display("The 'sub' claim is missing from the response from the claims endpoint."))]
+    SubClaimMissing {},
+
+    #[snafu(display("The 'sub' claim value is not a string."))]
+    SubClaimValueNotAString {},
 }
 
 impl http_error::Error for Error {
@@ -34,27 +40,37 @@ impl http_error::Error for Error {
         match self {
             Self::ParseAasEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Request { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::SubClaimMissing { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::SubClaimValueNotAString { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
 type UserClaims = HashMap<String, serde_json::Value>;
 
-impl From<UserClaims> for UserInfo {
-    fn from(value: UserClaims) -> Self {
-        // TODO fix unwraps. What if the sub isn't there? Is it always there?
-        println!("value: {:?}", value);
-        let sub = value.get("sub").unwrap().as_str().unwrap().to_owned();
+impl TryFrom<UserClaims> for UserInfo {
+    type Error = Error;
+
+    fn try_from(value: UserClaims) -> Result<Self, Error> {
+        // extract the sub key
+        let sub = value
+            .get("sub")
+            .context(SubClaimMissingSnafu)?
+            .as_str()
+            .context(SubClaimValueNotAStringSnafu)?
+            .to_owned();
+        // the attributes can contain arbitrary objects, we convert them into the structure that keycloak provides for now.
         let attributes = value
             .into_iter()
             .map(|(k, v)| (k, vec![v.to_string()]))
             .collect();
-        UserInfo {
+        // assemble UserInfo object
+        Ok(UserInfo {
             id: Some(sub.clone()),
             username: Some(sub),
             groups: vec![],
             custom_attributes: attributes,
-        }
+        })
     }
 }
 
@@ -95,5 +111,5 @@ pub(crate) async fn get_user_info(
         .await
         .context(RequestSnafu)?;
 
-    Ok(user_claims.into())
+    user_claims.try_into()
 }
