@@ -8,13 +8,19 @@ All notable changes to this project will be documented in this file.
 
 - Add user-info-fetcher to fetch user metadata from directory services ([#433]).
 - Helm: support labels in values.yaml ([#507]).
+- Added support for OPA 0.61.0 ([#518]).
 
 ### Changed
 
 - [BREAKING]: Remove legacy `nodeSelector` on rolegroups. Use the field `affinity.nodeAffinity` instead ([#433]).
 
+### Removed
+
+- Removed support for OPA 0.51.0 ([#518]).
+
 [#433]: https://github.com/stackabletech/opa-operator/pull/433
 [#507]: https://github.com/stackabletech/opa-operator/pull/507
+[#518]: https://github.com/stackabletech/opa-operator/pull/518
 
 ## [23.11.0] - 2023-11-24
 
