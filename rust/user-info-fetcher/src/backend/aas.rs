@@ -4,7 +4,7 @@
 //! Endpoint definition:
 //! `<https://gitlab.eclipse.org/eclipse/xfsc/authenticationauthorization/-/blob/main/service/src/main/java/eu/xfsc/aas/controller/CipController.java>`
 //!
-//! Look at the endpoint defintion for the API path, required parameters and the type of the returned object.
+//! Look at the endpoint definition for the API path, required parameters and the type of the returned object.
 use std::collections::HashMap;
 
 use hyper::StatusCode;
