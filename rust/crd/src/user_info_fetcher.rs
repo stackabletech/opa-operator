@@ -26,6 +26,9 @@ pub enum Backend {
 
     /// Backend that fetches user information from Keycloak.
     Keycloak(KeycloakBackend),
+
+    /// Backend that fetches user information from the XFSC Authentication & Authorization Service.
+    Aas(AasBackend)
 }
 
 impl Default for Backend {
@@ -67,6 +70,16 @@ pub struct KeycloakBackend {
 
 fn default_root_path() -> String {
     "/".to_string()
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AasBackend {
+    /// Hostname of the identity provider, e.g. `my.keycloak.corp`.
+    pub hostname: String,
+
+    /// Port of the identity provider. Defaults to port 5000
+    pub port: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]
