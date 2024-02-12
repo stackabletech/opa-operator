@@ -1,6 +1,12 @@
+//! XFSC AAS backend.
+//!
+//!
+//! Endpoint definition:
+//! https://gitlab.eclipse.org/eclipse/xfsc/authenticationauthorization/-/blob/main/service/src/main/java/eu/xfsc/aas/controller/CipController.java
+//!
+//! Look at the endpoint defintion for the API path, required parameters and the type of the returned object.
 use std::collections::HashMap;
 
-use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use stackable_operator::commons::authentication::oidc;
@@ -43,16 +49,31 @@ pub enum Error {
     ConstructOidcEndpointPath { source: url::ParseError },
 }
 
+type UserClaims = HashMap<String, serde_json::Value>;
+
+impl From<UserClaims> for UserInfo {
+    fn from(value: UserClaims) -> Self {
+        // TODO fix unwraps
+        let sub = value.get("sub").unwrap().as_str().unwrap().to_owned();
+        let attributes = value
+            .into_iter()
+            .map(|(k, v)| (k, vec![v.to_string()]))
+            .collect();
+        UserInfo {
+            id: Some(sub.clone()),
+            username: Some(sub),
+            groups: vec![],
+            custom_attributes: attributes,
+        }
+    }
+}
 
 pub(crate) async fn get_user_info(
     req: &UserInfoRequest,
     http: &reqwest::Client,
     config: &crd::AasBackend,
 ) -> Result<UserInfo, Error> {
-    let crd::AasBackend {
-        hostname,
-        port
-    } = config;
+    let crd::AasBackend { hostname, port } = config;
 
     let port = port.unwrap_or(5000);
 
@@ -64,15 +85,14 @@ pub(crate) async fn get_user_info(
     let sub = match req {
         UserInfoRequest::UserInfoRequestById(r) => &r.id,
         UserInfoRequest::UserInfoRequestByName(r) => &r.username,
-    }.as_ref();
+    }
+    .as_ref();
 
-    let params = [
-        ("sub", sub),
-        ("scope", "openid")
-    ];
+    let params = [("sub", sub), ("scope", "openid")];
 
     let x = http.get(url).form(&params).send().await.unwrap();
 
-    Ok(todo!())
+    let user_claims: UserClaims = x.json().await.unwrap();
 
+    Ok(user_claims.into())
 }

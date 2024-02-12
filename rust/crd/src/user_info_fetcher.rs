@@ -28,7 +28,7 @@ pub enum Backend {
     Keycloak(KeycloakBackend),
 
     /// Backend that fetches user information from the XFSC Authentication & Authorization Service.
-    Aas(AasBackend)
+    Aas(AasBackend),
 }
 
 impl Default for Backend {

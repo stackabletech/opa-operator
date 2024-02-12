@@ -122,7 +122,7 @@ async fn main() -> Result<(), StartupError> {
         crd::Backend::Aas(_) => Credentials {
             client_id: "".to_string(),
             client_secret: "".to_string(),
-        }
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -210,7 +210,9 @@ enum GetUserInfoError {
     #[snafu(display("failed to get user information from Keycloak"))]
     Keycloak { source: backend::keycloak::Error },
 
-    #[snafu(display("failed to get user information from the Authentication & Authorization Service"))]
+    #[snafu(display(
+        "failed to get user information from the Authentication & Authorization Service"
+    ))]
     Aas { source: backend::aas::Error },
 }
 
@@ -268,11 +270,9 @@ async fn get_user_info(
                             .await
                             .context(get_user_info_error::KeycloakSnafu)
                     }
-                    crd::Backend::Aas(aas) => {
-                        backend::aas::get_user_info(&req, &http, aas)
-                            .await
-                            .context(get_user_info_error::AasSnafu)
-                    }
+                    crd::Backend::Aas(aas) => backend::aas::get_user_info(&req, &http, aas)
+                        .await
+                        .context(get_user_info_error::AasSnafu),
                 }
             })
             .await?,
