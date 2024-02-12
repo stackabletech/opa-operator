@@ -3,13 +3,6 @@ import requests
 import argparse
 import json
 
-# todo: make the test more comprehensive to check customAttributes
-users_and_groups = {
-    "alice": [],
-    "bob": [],
-}
-
-
 def assertions(username, response, opa_attribute, expected_groups, expected_attributes={}):
     assert "result" in response
     assert opa_attribute in response["result"]
@@ -41,19 +34,19 @@ if __name__ == "__main__":
     def make_request(payload):
         return requests.post(args['url'], data=json.dumps(payload), params=params).json()
 
-    for username, groups in users_and_groups.items():
+    for username in ["alice", "bob"]:
         try:
             # todo: try this out locally until it works
             # url = 'http://test-opa-svc:8081/v1/data'
             payload = {'input': {'username': username}}
             response = make_request(payload)
-            assertions(username, response, "currentUserInfoByUsername", groups, {})
+            assertions(username, response, "currentUserInfoByUsername", [], {"sub": [f'"{username}"'], "e-mail": [f'"{username}@example.com"'], "company": ['"openid"']})
 
             # do the reverse lookup
             user_id = response["result"]["currentUserInfoByUsername"]["id"]
             payload = {'input': {'id': user_id}}
             response = make_request(payload)
-            assertions(username, response, "currentUserInfoById", groups, {})
+            assertions(username, response, "currentUserInfoById", [], {"sub": [f'"{username}"'], "e-mail": [f'"{username}@example.com"'], "company": ['"openid"']})
         except Exception as e:
             if response is not None:
                 print(f"something went wrong. last response: {response}")
