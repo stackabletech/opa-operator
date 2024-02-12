@@ -3,6 +3,7 @@ import requests
 import argparse
 import json
 
+
 def assertions(username, response, opa_attribute, expected_groups, expected_attributes={}):
     assert "result" in response
     assert opa_attribute in response["result"]
