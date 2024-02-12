@@ -8,9 +8,8 @@
 use std::collections::HashMap;
 
 use hyper::StatusCode;
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use stackable_operator::{commons::authentication::oidc, k8s_openapi::apimachinery::pkg::util};
 use url::Url;
 
 use crate::{http_error, util::send_json_request, UserInfo, UserInfoRequest};
@@ -19,21 +18,6 @@ static API_PATH: &str = "/cip/claims";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("failed to get access_token"))]
-    AccessToken { source: crate::util::Error },
-
-    #[snafu(display("failed to search for user"))]
-    SearchForUser { source: crate::util::Error },
-
-    #[snafu(display("unable to find user with id {user_id:?}"))]
-    UserNotFoundById {
-        source: crate::util::Error,
-        user_id: String,
-    },
-
-    #[snafu(display("unable to find user with username {username:?}"))]
-    UserNotFoundByName { username: String },
-
     #[snafu(display("failed to parse AAS endpoint url"))]
     ParseAasEndpointUrl {
         source: url::ParseError,
@@ -48,10 +32,6 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
-            Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
-            Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
-            Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
             Self::ParseAasEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Request { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
