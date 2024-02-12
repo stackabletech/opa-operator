@@ -70,10 +70,10 @@ spec:
                                   description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
                                   type: string
                                 port:
+                                  default: 5000
                                   description: Port of the identity provider. Defaults to port 5000
                                   format: uint16
                                   minimum: 0.0
-                                  nullable: true
                                   type: integer
                               required:
                                 - hostname
