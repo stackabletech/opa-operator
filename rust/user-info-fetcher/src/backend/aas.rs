@@ -10,9 +10,12 @@ use std::collections::HashMap;
 use hyper::StatusCode;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use stackable_operator::commons::authentication::oidc;
+use stackable_operator::{commons::authentication::oidc, k8s_openapi::apimachinery::pkg::util};
+use url::Url;
 
-use crate::{http_error, UserInfo, UserInfoRequest};
+use crate::{http_error, util::send_json_request, UserInfo, UserInfoRequest};
+
+static API_PATH: &str = "/cip/claims";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -31,23 +34,15 @@ pub enum Error {
     #[snafu(display("unable to find user with username {username:?}"))]
     UserNotFoundByName { username: String },
 
-    #[snafu(display("more than one user was returned when there should be one or none"))]
-    TooManyUsersReturned,
-
-    #[snafu(display(
-        "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
-    ))]
-    RequestUserGroups {
-        source: crate::util::Error,
-        username: String,
-        user_id: String,
+    #[snafu(display("failed to parse AAS endpoint url"))]
+    ParseAasEndpointUrl {
+        source: url::ParseError,
+        hostname: String,
+        port: u16,
     },
 
-    #[snafu(display("failed to parse OIDC endpoint url"))]
-    ParseOidcEndpointUrl { source: oidc::Error },
-
-    #[snafu(display("failed to construct OIDC endpoint path"))]
-    ConstructOidcEndpointPath { source: url::ParseError },
+    #[snafu(display("request failed"))]
+    Request { source: crate::util::Error },
 }
 
 impl http_error::Error for Error {
@@ -57,10 +52,8 @@ impl http_error::Error for Error {
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
             Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
-            Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
-            Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ParseAasEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Request { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -69,7 +62,7 @@ type UserClaims = HashMap<String, serde_json::Value>;
 
 impl From<UserClaims> for UserInfo {
     fn from(value: UserClaims) -> Self {
-        // TODO fix unwraps
+        // TODO fix unwraps. What if the sub isn't there? Is it always there?
         println!("value: {:?}", value);
         let sub = value.get("sub").unwrap().as_str().unwrap().to_owned();
         let attributes = value
@@ -85,19 +78,14 @@ impl From<UserClaims> for UserInfo {
     }
 }
 
-pub(crate) async fn get_user_info(
-    req: &UserInfoRequest,
-    http: &reqwest::Client,
-    config: &crd::AasBackend,
-) -> Result<UserInfo, Error> {
-    let crd::AasBackend { hostname, port } = config;
+fn get_request_url(hostname: &str, port: &u16) -> Result<Url, Error> {
+    Url::parse(&format!("http://{hostname}:{port}{API_PATH}")).context(ParseAasEndpointUrlSnafu {
+        hostname,
+        port: port.to_owned(),
+    })
+}
 
-    let port = port.unwrap_or(5000);
-
-    let endpoint = "/cip/claims";
-
-    let url = format!("http://{hostname}:{port}{endpoint}");
-
+fn get_request_query(req: &UserInfoRequest) -> Result<HashMap<&str, &str>, Error> {
     // the AAS has no id/username distinction, we treat them both the same.
     let sub = match req {
         UserInfoRequest::UserInfoRequestById(r) => &r.id,
@@ -105,11 +93,27 @@ pub(crate) async fn get_user_info(
     }
     .as_ref();
 
-    let params = [("sub", sub), ("scope", "openid")];
+    let mut query = HashMap::new();
+    query.insert("sub", sub);
+    query.insert("scope", "openid"); // always request the openid scope
 
-    let x = http.get(url).query(&params).send().await.unwrap();
+    Ok(query)
+}
 
-    let user_claims: UserClaims = x.json().await.unwrap();
+pub(crate) async fn get_user_info(
+    req: &UserInfoRequest,
+    http: &reqwest::Client,
+    config: &crd::AasBackend,
+) -> Result<UserInfo, Error> {
+    let crd::AasBackend { hostname, port } = config;
+
+    let url = get_request_url(hostname, port)?;
+
+    let args = get_request_query(req)?;
+
+    let user_claims: UserClaims = send_json_request(http.get(url).query(&args))
+        .await
+        .context(RequestSnafu)?;
 
     Ok(user_claims.into())
 }
