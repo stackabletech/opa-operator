@@ -60,7 +60,24 @@ spec:
                                 - none
                             - required:
                                 - keycloak
+                            - required:
+                                - aas
                           properties:
+                            aas:
+                              description: Backend that fetches user information from the XFSC Authentication & Authorization Service.
+                              properties:
+                                hostname:
+                                  description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
+                                  type: string
+                                port:
+                                  description: Port of the identity provider. Defaults to port 5000
+                                  format: uint16
+                                  minimum: 0.0
+                                  nullable: true
+                                  type: integer
+                              required:
+                                - hostname
+                              type: object
                             keycloak:
                               description: Backend that fetches user information from Keycloak.
                               properties:

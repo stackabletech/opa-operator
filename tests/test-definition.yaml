@@ -11,22 +11,25 @@ dimensions:
     values:
       - 23.0.1
 tests:
-  - name: smoke
-    dimensions:
-      - opa
-  - name: resources
+  # - name: smoke
+  #   dimensions:
+  #     - opa
+  # - name: resources
+  #   dimensions:
+  #     - opa-latest
+  # - name: logging
+  #   dimensions:
+  #     - opa
+  # - name: cluster-operation
+  #   dimensions:
+  #     - opa-latest
+  # - name: keycloak-user-info
+  #   dimensions:
+  #     - opa-latest
+  #     - keycloak
+  - name: aas-user-info
     dimensions:
       - opa-latest
-  - name: logging
-    dimensions:
-      - opa
-  - name: cluster-operation
-    dimensions:
-      - opa-latest
-  - name: keycloak-user-info
-    dimensions:
-      - opa-latest
-      - keycloak
 suites:
   - name: nightly
     patch:

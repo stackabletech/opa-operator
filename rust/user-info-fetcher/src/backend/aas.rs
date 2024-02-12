@@ -7,11 +7,12 @@
 //! Look at the endpoint defintion for the API path, required parameters and the type of the returned object.
 use std::collections::HashMap;
 
+use hyper::StatusCode;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use stackable_operator::commons::authentication::oidc;
 
-use crate::{UserInfo, UserInfoRequest};
+use crate::{http_error, UserInfo, UserInfoRequest};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -49,11 +50,27 @@ pub enum Error {
     ConstructOidcEndpointPath { source: url::ParseError },
 }
 
+impl http_error::Error for Error {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
+            Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
+            Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
+            Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
+            Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
+            Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
 type UserClaims = HashMap<String, serde_json::Value>;
 
 impl From<UserClaims> for UserInfo {
     fn from(value: UserClaims) -> Self {
         // TODO fix unwraps
+        println!("value: {:?}", value);
         let sub = value.get("sub").unwrap().as_str().unwrap().to_owned();
         let attributes = value
             .into_iter()
@@ -90,7 +107,7 @@ pub(crate) async fn get_user_info(
 
     let params = [("sub", sub), ("scope", "openid")];
 
-    let x = http.get(url).form(&params).send().await.unwrap();
+    let x = http.get(url).query(&params).send().await.unwrap();
 
     let user_claims: UserClaims = x.json().await.unwrap();
 

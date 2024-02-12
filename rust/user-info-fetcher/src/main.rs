@@ -226,7 +226,7 @@ impl http_error::Error for GetUserInfoError {
         );
         match self {
             Self::Keycloak { source } => source.status_code(),
-            Self::Aas { source } => todo!(),
+            Self::Aas { source } => source.status_code(),
         }
     }
 }
