@@ -70,6 +70,7 @@ commands:
             labels:
               app: aas
           spec:
+            serviceAccountName: test-sa
             containers:
             - name: python
               image: python:3.9

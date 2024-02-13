@@ -10,6 +10,10 @@ dimensions:
   - name: keycloak
     values:
       - 23.0.1
+  - name: openshift
+    values:
+      - "true"
+      - "false"
 tests:
   - name: smoke
     dimensions:
@@ -30,6 +34,7 @@ tests:
   - name: aas-user-info
     dimensions:
       - opa-latest
+      - openshift
 suites:
   - name: nightly
     patch:
