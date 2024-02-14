@@ -273,7 +273,7 @@ async fn get_user_info(
                     crd::Backend::ExperimentalXfscAas(aas) => {
                         backend::xfsc_aas::get_user_info(&req, &http, aas)
                             .await
-                            .context(get_user_info_error::XfscAasSnafu)
+                            .context(get_user_info_error::ExperimentalXfscAasSnafu)
                     }
                 }
             })
