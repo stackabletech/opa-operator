@@ -213,7 +213,7 @@ enum GetUserInfoError {
     #[snafu(display(
         "failed to get user information from the XFSC Authentication & Authorization Service"
     ))]
-    XfscAas { source: backend::xfsc_aas::Error },
+    ExperimentalXfscAas { source: backend::xfsc_aas::Error },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -226,7 +226,7 @@ impl http_error::Error for GetUserInfoError {
         );
         match self {
             Self::Keycloak { source } => source.status_code(),
-            Self::XfscAas { source } => source.status_code(),
+            Self::ExperimentalXfscAas { source } => source.status_code(),
         }
     }
 }
