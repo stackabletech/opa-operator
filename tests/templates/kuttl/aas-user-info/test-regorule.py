@@ -35,19 +35,13 @@ if __name__ == "__main__":
     def make_request(payload):
         return requests.post(args['url'], data=json.dumps(payload), params=params).json()
 
-    for username in ["alice", "bob"]:
+    for subject_id in ["alice", "bob"]:
         try:
             # todo: try this out locally until it works
             # url = 'http://test-opa-svc:8081/v1/data'
-            payload = {'input': {'username': username}}
+            payload = {'input': {'id': subject_id}}
             response = make_request(payload)
-            assertions(username, response, "currentUserInfoByUsername", [], {"sub": [f'"{username}"'], "e-mail": [f'"{username}@example.com"'], "company": ['"openid"']})
-
-            # do the reverse lookup
-            user_id = response["result"]["currentUserInfoByUsername"]["id"]
-            payload = {'input': {'id': user_id}}
-            response = make_request(payload)
-            assertions(username, response, "currentUserInfoById", [], {"sub": [f'"{username}"'], "e-mail": [f'"{username}@example.com"'], "company": ['"openid"']})
+            assertions(subject_id, response, "currentUserInfoById", [], {"sub": f"{subject_id}", "e-mail": f"{subject_id}@example.com", "company": "openid"})
         except Exception as e:
             if response is not None:
                 print(f"something went wrong. last response: {response}")

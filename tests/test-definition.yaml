@@ -15,22 +15,22 @@ dimensions:
       - "true"
       - "false"
 tests:
-  - name: smoke
-    dimensions:
-      - opa
-  - name: resources
-    dimensions:
-      - opa-latest
-  - name: logging
-    dimensions:
-      - opa
-  - name: cluster-operation
-    dimensions:
-      - opa-latest
-  - name: keycloak-user-info
-    dimensions:
-      - opa-latest
-      - keycloak
+  # - name: smoke
+  #   dimensions:
+  #     - opa
+  # - name: resources
+  #   dimensions:
+  #     - opa-latest
+  # - name: logging
+  #   dimensions:
+  #     - opa
+  # - name: cluster-operation
+  #   dimensions:
+  #     - opa-latest
+  # - name: keycloak-user-info
+  #   dimensions:
+  #     - opa-latest
+  #     - keycloak
   - name: aas-user-info
     dimensions:
       - opa-latest

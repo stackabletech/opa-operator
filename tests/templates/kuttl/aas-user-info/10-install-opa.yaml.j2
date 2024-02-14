@@ -32,7 +32,7 @@ commands:
         clusterConfig:
           userInfo:
             backend:
-              aas:
+              experimentalXfscAas:
                 hostname: aas.$NAMESPACE.svc.cluster.local
                 port: 5000
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
