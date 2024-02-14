@@ -86,6 +86,8 @@ fn get_request_url(hostname: &str, port: &u16) -> Result<Url, Error> {
     })
 }
 
+/// Build the API request query arguments from the UserInfoRequest.
+/// `sub` and `scope` are required. The `scope` is always `openid`.
 fn get_request_query(req: &UserInfoRequest) -> Result<HashMap<&str, &str>, Error> {
     // the AAS has no id/username distinction, we treat them both the same.
     let sub = match req {
