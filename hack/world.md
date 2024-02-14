@@ -13,6 +13,7 @@ Two of the data science teams are outlined below:
 This team sits under the wider Compliance and Regulation team,and is tasked with making use of the banks customer, credit, securities data and produce internal and regulatory reports to aid in regulatory compliance.
 
 Members of the team:
+
 - William Lewis (Team Lead)
 - Sophia Clarke
 - Daniel King
@@ -20,6 +21,7 @@ Members of the team:
 ### Customer Analytics
 
 This team falls under the Customer Service division and is tasked with making use of the banks data for things like:
+
 - Understanding customer call frequency and wait times
 - Trends with the usage of physical branches, internet banking and the banking app
 
