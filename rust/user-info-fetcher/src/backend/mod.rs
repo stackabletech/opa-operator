@@ -1,2 +1,2 @@
-pub mod aas;
 pub mod keycloak;
+pub mod xfsc_aas;

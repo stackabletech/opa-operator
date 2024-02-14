@@ -213,7 +213,7 @@ enum GetUserInfoError {
     #[snafu(display(
         "failed to get user information from the XFSC Authentication & Authorization Service"
     ))]
-    XfscAas { source: backend::aas::Error },
+    XfscAas { source: backend::xfsc_aas::Error },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -271,7 +271,7 @@ async fn get_user_info(
                             .context(get_user_info_error::KeycloakSnafu)
                     }
                     crd::Backend::ExperimentalXfscAas(aas) => {
-                        backend::aas::get_user_info(&req, &http, aas)
+                        backend::xfsc_aas::get_user_info(&req, &http, aas)
                             .await
                             .context(get_user_info_error::XfscAasSnafu)
                     }
