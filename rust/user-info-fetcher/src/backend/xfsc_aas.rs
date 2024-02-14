@@ -20,6 +20,9 @@ use url::Url;
 use crate::{http_error, util::send_json_request, UserInfo, UserInfoRequest};
 
 static API_PATH: &str = "/cip/claims";
+static SUB_CLAIM: &str = "sub";
+static SCOPE_CLAIM: &str = "scope";
+static OPENID_SCOPE: &str = "openid";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -61,25 +64,18 @@ type UserClaims = HashMap<String, serde_json::Value>;
 impl TryFrom<UserClaims> for UserInfo {
     type Error = Error;
 
-    fn try_from(value: UserClaims) -> Result<Self, Error> {
-        // extract the sub key
-        let sub = value
-            .get("sub")
+    fn try_from(claims: UserClaims) -> Result<Self, Error> {
+        let subject_id = claims
+            .get(SUB_CLAIM)
             .context(SubClaimMissingSnafu)?
             .as_str()
             .context(SubClaimValueNotAStringSnafu)?
             .to_owned();
-        // the attributes can contain arbitrary objects, we convert them into the structure that keycloak provides for now.
-        let attributes = value
-            .into_iter()
-            .map(|(k, v)| (k, vec![v.to_string()]))
-            .collect();
-        // assemble UserInfo object
         Ok(UserInfo {
-            id: Some(sub.clone()),
-            username: Some(sub),
+            id: Some(subject_id),
+            username: None,
             groups: vec![],
-            custom_attributes: attributes,
+            custom_attributes: claims,
         })
     }
 }
@@ -98,7 +94,7 @@ pub(crate) async fn get_user_info(
 ) -> Result<UserInfo, Error> {
     let crd::AasBackend { hostname, port } = config;
 
-    let endpoint_url = Url::parse(&format!("http://{hostname}:{port}{API_PATH}")).context(
+    let cip_endpoint = Url::parse(&format!("http://{hostname}:{port}{API_PATH}")).context(
         ParseAasEndpointUrlSnafu {
             hostname,
             port: port.to_owned(),
@@ -112,13 +108,13 @@ pub(crate) async fn get_user_info(
     .as_ref();
 
     let query_parameters: HashMap<&str, &str> = [
-        ("sub", subject_id),
-        ("scope", "openid"), // we only request the openid scope because that is the only scope that the AAS supports
+        (SUB_CLAIM, subject_id),
+        (SCOPE_CLAIM, OPENID_SCOPE), // we only request the openid scope because that is the only scope that the AAS supports
     ]
     .into();
 
     let user_claims: UserClaims =
-        send_json_request(http.get(endpoint_url).query(&query_parameters))
+        send_json_request(http.get(cip_endpoint).query(&query_parameters))
             .await
             .context(RequestSnafu)?;
 

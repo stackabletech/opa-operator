@@ -201,7 +201,7 @@ struct UserInfo {
     /// This might be null in case the username is not known (e.g. the backend does not have this info).
     username: Option<String>,
     groups: Vec<String>,
-    custom_attributes: HashMap<String, Vec<String>>,
+    custom_attributes: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Snafu, Debug)]
