@@ -1,5 +1,5 @@
 //! Cross Federation Service Components (XFSC) Authentication and Authorization Service (AAS) backend.
-//! The AAS provides context information for authorization decisions in the from of claims.
+//! The AAS provides context information for authorization decisions in the form of claims.
 //! The endpoint is the CIP - ClaimsInformationPoint.
 //! Claims are requested for a subject and scope, and are returned as a semi-structured object.
 //!
@@ -38,6 +38,9 @@ pub enum Error {
 
     #[snafu(display("The 'sub' claim value is not a string."))]
     SubClaimValueNotAString {},
+
+    #[snafu(display("The XFSC AAS does not support querying by username, only by user ID."))]
+    UserInfoByUsernameNotSupported {},
 }
 
 impl http_error::Error for Error {
@@ -47,10 +50,12 @@ impl http_error::Error for Error {
             Self::Request { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::SubClaimMissing { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::SubClaimValueNotAString { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::UserInfoByUsernameNotSupported { .. } => StatusCode::NOT_IMPLEMENTED,
         }
     }
 }
 
+/// The return type of the CIP API endpoint.
 type UserClaims = HashMap<String, serde_json::Value>;
 
 impl TryFrom<UserClaims> for UserInfo {
@@ -79,26 +84,13 @@ impl TryFrom<UserClaims> for UserInfo {
     }
 }
 
-fn get_request_url(hostname: &str, port: &u16) -> Result<Url, Error> {
-    Url::parse(&format!("http://{hostname}:{port}{API_PATH}")).context(ParseAasEndpointUrlSnafu {
-        hostname,
-        port: port.to_owned(),
-    })
-}
-
-/// Build the API request query arguments from the UserInfoRequest.
-/// `sub` and `scope` are required. The `scope` is always `openid`.
-fn get_request_query(req: &UserInfoRequest) -> Result<HashMap<&str, &str>, Error> {
-    // the AAS has no id/username distinction, we treat them both the same.
-    let sub = match req {
-        UserInfoRequest::UserInfoRequestById(r) => &r.id,
-        UserInfoRequest::UserInfoRequestByName(r) => &r.username,
-    }
-    .as_ref();
-
-    Ok([("sub", sub), ("scope", "openid")].into())
-}
-
+/// Request user info from the AAS REST API by querying the
+/// ClaimsInformationPoint (CIP) of the AAS.
+///
+/// Endpoint definition:
+/// `<https://gitlab.eclipse.org/eclipse/xfsc/authenticationauthorization/-/blob/main/service/src/main/java/eu/xfsc/aas/controller/CipController.java>`
+///
+/// Only `UserInfoRequestById` is supported because the enpoint has no username concept.
 pub(crate) async fn get_user_info(
     req: &UserInfoRequest,
     http: &reqwest::Client,
@@ -106,13 +98,29 @@ pub(crate) async fn get_user_info(
 ) -> Result<UserInfo, Error> {
     let crd::AasBackend { hostname, port } = config;
 
-    let url = get_request_url(hostname, port)?;
+    let endpoint_url = Url::parse(&format!("http://{hostname}:{port}{API_PATH}")).context(
+        ParseAasEndpointUrlSnafu {
+            hostname,
+            port: port.to_owned(),
+        },
+    )?;
 
-    let args = get_request_query(req)?;
+    let subject_id = match req {
+        UserInfoRequest::UserInfoRequestById(r) => &r.id,
+        UserInfoRequest::UserInfoRequestByName(_) => UserInfoByUsernameNotSupportedSnafu.fail()?,
+    }
+    .as_ref();
 
-    let user_claims: UserClaims = send_json_request(http.get(url).query(&args))
-        .await
-        .context(RequestSnafu)?;
+    let query_parameters: HashMap<&str, &str> = [
+        ("sub", subject_id),
+        ("scope", "openid"), // we only request the openid scope because that is the only scope that the AAS supports
+    ]
+    .into();
+
+    let user_claims: UserClaims =
+        send_json_request(http.get(endpoint_url).query(&query_parameters))
+            .await
+            .context(RequestSnafu)?;
 
     user_claims.try_into()
 }
