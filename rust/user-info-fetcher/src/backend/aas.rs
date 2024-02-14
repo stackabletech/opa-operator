@@ -94,11 +94,7 @@ fn get_request_query(req: &UserInfoRequest) -> Result<HashMap<&str, &str>, Error
     }
     .as_ref();
 
-    let mut query = HashMap::new();
-    query.insert("sub", sub);
-    query.insert("scope", "openid"); // always request the openid scope
-
-    Ok(query)
+    Ok([("sub", sub), ("scope", "openid")].into())
 }
 
 pub(crate) async fn get_user_info(
