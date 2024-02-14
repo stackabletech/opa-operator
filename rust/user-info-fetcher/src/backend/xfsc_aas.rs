@@ -26,11 +26,10 @@ static OPENID_SCOPE: &str = "openid";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("failed to parse AAS endpoint url"))]
+    #[snafu(display("failed to parse AAS endpoint: \"{url}\" is not a valid URL."))]
     ParseAasEndpointUrl {
         source: url::ParseError,
-        hostname: String,
-        port: u16,
+        url: String,
     },
 
     #[snafu(display("request failed"))]
@@ -94,12 +93,10 @@ pub(crate) async fn get_user_info(
 ) -> Result<UserInfo, Error> {
     let crd::AasBackend { hostname, port } = config;
 
-    let cip_endpoint = Url::parse(&format!("http://{hostname}:{port}{API_PATH}")).context(
-        ParseAasEndpointUrlSnafu {
-            hostname,
-            port: port.to_owned(),
-        },
-    )?;
+    let cip_endpoint_raw = format!("http://{hostname}:{port}{API_PATH}");
+    let cip_endpoint = Url::parse(&cip_endpoint_raw).context(ParseAasEndpointUrlSnafu {
+        url: cip_endpoint_raw,
+    })?;
 
     let subject_id = match req {
         UserInfoRequest::UserInfoRequestById(r) => &r.id,
