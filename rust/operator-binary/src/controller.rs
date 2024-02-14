@@ -823,7 +823,7 @@ fn build_server_rolegroup_daemonset(
 
         match &user_info.backend {
             user_info_fetcher::Backend::None {} => {}
-            user_info_fetcher::Backend::Aas(_) => {}
+            user_info_fetcher::Backend::ExperimentalXfscAas(_) => {}
             user_info_fetcher::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)

@@ -119,7 +119,7 @@ async fn main() -> Result<(), StartupError> {
             client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
             client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },
-        crd::Backend::Aas(_) => Credentials {
+        crd::Backend::ExperimentalXfscAas(_) => Credentials {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
@@ -270,9 +270,11 @@ async fn get_user_info(
                             .await
                             .context(get_user_info_error::KeycloakSnafu)
                     }
-                    crd::Backend::Aas(aas) => backend::aas::get_user_info(&req, &http, aas)
-                        .await
-                        .context(get_user_info_error::AasSnafu),
+                    crd::Backend::ExperimentalXfscAas(aas) => {
+                        backend::aas::get_user_info(&req, &http, aas)
+                            .await
+                            .context(get_user_info_error::AasSnafu)
+                    }
                 }
             })
             .await?,

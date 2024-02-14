@@ -61,10 +61,10 @@ spec:
                             - required:
                                 - keycloak
                             - required:
-                                - aas
+                                - experimentalXfscAas
                           properties:
-                            aas:
-                              description: Backend that fetches user information from the XFSC Authentication & Authorization Service.
+                            experimentalXfscAas:
+                              description: Backend that fetches user information from the Gaia-X Cross Federation Services Components (XFSC) Authentication & Authorization Service.
                               properties:
                                 hostname:
                                   description: Hostname of the identity provider, e.g. `my.aas.corp`.
