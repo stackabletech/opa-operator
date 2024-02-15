@@ -14,9 +14,9 @@ This team sits under the wider Compliance and Regulation team,and is tasked with
 
 Members of the team:
 
-- William Lewis (Team Lead)
-- Sophia Clarke
-- Daniel King
+- William A. Lewis (Team Lead)
+- Sophia B. Clarke
+- Daniel C. King
 
 ### Customer Analytics
 
@@ -29,9 +29,9 @@ They produce monthly and quarterly reports, but also build dashboards to show li
 
 Members of the team:
 
-- Pamela Scott (Team Lead)
-- Justin Martin
-- Isla Williams (contractor with specific user based permissions)
+- Pamela D. Scott (Team Lead)
+- Justin E. Martin
+- Isla F. Williams (contractor with specific user based permissions)
 
 ## Marketing
 
@@ -39,7 +39,7 @@ They need access
 
 Relevant members of the team:
 
-- Mark Ketting (needs read access to customer analytics dashboards)
+- Mark G. Ketting (needs read access to customer alytics dashboards)
 
 ---
 
