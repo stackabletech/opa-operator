@@ -41,7 +41,7 @@ pub enum Error {
     #[snafu(display("The 'sub' claim value is not a string."))]
     SubClaimValueNotAString {},
 
-    #[snafu(display("The XFSC AAS does not support querying by username, only by user ID."))]
+    #[snafu(display("the XFSC AAS does not support querying by username, only by user ID"))]
     UserInfoByUsernameNotSupported {},
 }
 
