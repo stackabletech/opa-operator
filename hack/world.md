@@ -39,7 +39,7 @@ They need access
 
 Relevant members of the team:
 
-- Mark Ketting (needs read access to customer alytics dashboards)
+- Mark Ketting (needs read access to customer analytics dashboards)
 
 ---
 
