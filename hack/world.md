@@ -35,7 +35,7 @@ Members of the team:
 
 ## Marketing
 
-They need access
+The Marketing department has access to various dashboards that are maintained by other teams. In this scenario, one of the marketing users has read access to the Customer Analytics dashboard(s) and charts.
 
 Relevant members of the team:
 
