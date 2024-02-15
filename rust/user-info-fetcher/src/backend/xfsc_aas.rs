@@ -35,7 +35,7 @@ pub enum Error {
     #[snafu(display("request failed"))]
     Request { source: crate::util::Error },
 
-    #[snafu(display("The 'sub' claim is missing from the response from the claims endpoint."))]
+    #[snafu(display("claims response has no 'sub' claim"))]
     SubClaimMissing {},
 
     #[snafu(display("The 'sub' claim value is not a string."))]
