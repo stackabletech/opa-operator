@@ -33,6 +33,13 @@ Members of the team:
 - Justin E. Martin
 - Isla F. Williams (contractor with specific user based permissions)
 
+#### Tasks
+
+- **Isla**: Some of the telephony data is not available through APIs until an upgrade is complete. In the meantime, Isla has been brought in as a contractor to help bridge the gap between the data in the aging telephone system and the analytics processes.
+  1. Isla manually exports production telephony data from the telephone system web UI. 
+  2. Isla runs the data through scripts (dropping PII data) which produce Parquet formatted file (call duration, time between call center staff calls, direct calls vs hunt-group calls).
+  3. Isla then loads the files into the **Nonprod** HDFS under a specific path (`hdfs://customer-analytics/telephony/contact-center/*`) that she has access to. _This process will later be automated in production once the telephone system is upgraded._
+
 ## Marketing
 
 The Marketing department has access to various dashboards that are maintained by other teams. In this scenario, one of the marketing users has read access to the Customer Analytics dashboard(s) and charts.
@@ -40,6 +47,8 @@ The Marketing department has access to various dashboards that are maintained by
 Relevant members of the team:
 
 - Mark G. Ketting (needs read access to customer alytics dashboards)
+
+
 
 ---
 
