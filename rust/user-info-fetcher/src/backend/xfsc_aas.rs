@@ -38,8 +38,8 @@ pub enum Error {
     #[snafu(display("claims response has no 'sub' claim"))]
     SubClaimMissing {},
 
-    #[snafu(display("The 'sub' claim value is not a string."))]
-    SubClaimValueNotAString {},
+    #[snafu(display("The 'sub' claim value is not a string: {sub:?}"))]
+    SubClaimValueNotAString { sub: serde_json::Value },
 
     #[snafu(display("the XFSC AAS does not support querying by username, only by user ID"))]
     UserInfoByUsernameNotSupported {},
