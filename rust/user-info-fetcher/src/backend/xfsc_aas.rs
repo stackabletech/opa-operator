@@ -58,7 +58,12 @@ impl http_error::Error for Error {
 }
 
 /// The return type of the CIP API endpoint.
-type UserClaims = HashMap<String, serde_json::Value>;
+#[derive(Deserialize)]
+struct UserClaims {
+    sub: String,
+    #[serde(flatten)]
+    other: HashMap<String, serde_json::Value>,
+}
 
 impl TryFrom<UserClaims> for UserInfo {
     type Error = Error;
