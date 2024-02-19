@@ -26,7 +26,7 @@ static OPENID_SCOPE: &str = "openid";
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("failed to parse AAS endpoint: \"{url}\" is not a valid URL."))]
+    #[snafu(display("failed to parse AAS endpoint: {url:?} as URL"))]
     ParseAasEndpointUrl {
         source: url::ParseError,
         url: String,
