@@ -41,7 +41,7 @@ if __name__ == "__main__":
             # url = 'http://test-opa-svc:8081/v1/data'
             payload = {'input': {'id': subject_id}}
             response = make_request(payload)
-            assertions(subject_id, response, "currentUserInfoById", [], {"sub": f"{subject_id}", "e-mail": f"{subject_id}@example.com", "company": "openid"})
+            assertions(subject_id, response, "currentUserInfoById", [], {"e-mail": f"{subject_id}@example.com", "company": "openid"})
         except Exception as e:
             if response is not None:
                 print(f"something went wrong. last response: {response}")
