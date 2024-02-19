@@ -13,7 +13,8 @@
 use std::collections::HashMap;
 
 use hyper::StatusCode;
-use snafu::{OptionExt, ResultExt, Snafu};
+use serde::Deserialize;
+use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use url::Url;
 
@@ -35,12 +36,6 @@ pub enum Error {
     #[snafu(display("request failed"))]
     Request { source: crate::util::Error },
 
-    #[snafu(display("claims response has no 'sub' claim"))]
-    SubClaimMissing {},
-
-    #[snafu(display("The 'sub' claim value is not a string: {sub:?}"))]
-    SubClaimValueNotAString { sub: serde_json::Value },
-
     #[snafu(display("the XFSC AAS does not support querying by username, only by user ID"))]
     UserInfoByUsernameNotSupported {},
 }
@@ -50,8 +45,6 @@ impl http_error::Error for Error {
         match self {
             Self::ParseAasEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Request { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::SubClaimMissing { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::SubClaimValueNotAString { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UserInfoByUsernameNotSupported { .. } => StatusCode::NOT_IMPLEMENTED,
         }
     }
@@ -69,17 +62,11 @@ impl TryFrom<UserClaims> for UserInfo {
     type Error = Error;
 
     fn try_from(claims: UserClaims) -> Result<Self, Error> {
-        let subject_id = claims
-            .get(SUB_CLAIM)
-            .context(SubClaimMissingSnafu)?
-            .as_str()
-            .context(SubClaimValueNotAStringSnafu)?
-            .to_owned();
         Ok(UserInfo {
-            id: Some(subject_id),
+            id: Some(claims.sub),
             username: None,
             groups: vec![],
-            custom_attributes: claims,
+            custom_attributes: claims.other,
         })
     }
 }
