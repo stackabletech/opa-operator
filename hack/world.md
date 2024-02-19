@@ -18,6 +18,16 @@ Members of the team:
 - Sophia B. Clarke
 - Daniel C. King
 
+#### Tasks
+
+> [!NOTE]
+> I think we might need an additional persona outside of the analytics team, eg: the stakeholders for _Compliance and Regulation_. They would be the end-users of the Liquidity dashboard.
+
+- **William**, **Sophia**, and **Daniel** maintain the Liquidity dashboard (and charts) in Superset. So they have _read-write_ access.
+- **William** often does data discovery using the _trino-cli_ to run SQL queries.
+- **Sophia** ... (SQL Lab access to Superset, and SQL Client access to Trino)
+- **Daniel** ...
+
 ### Customer Analytics
 
 This team falls under the Customer Service division and is tasked with making use of the banks data for things like:
@@ -35,6 +45,7 @@ Members of the team:
 
 #### Tasks
 
+- **Pamela** and **Justin** both ... in nonprod, and ... in prod. (superset, trino)
 - **Isla**: Some of the telephony data is not available through APIs until an upgrade is complete. In the meantime, Isla has been brought in as a contractor to help bridge the gap between the data in the aging telephone system and the analytics processes.
   1. Isla manually exports production telephony data from the telephone system web UI. 
   2. Isla runs the data through scripts (dropping PII data) which produce Parquet formatted file (call duration, time between call center staff calls, direct calls vs hunt-group calls).
@@ -48,7 +59,10 @@ Relevant members of the team:
 
 - Mark G. Ketting (needs read access to customer alytics dashboards)
 
+### Tasks
 
+> [!NOTE]
+> todo
 
 ---
 
