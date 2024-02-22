@@ -1,0 +1,5 @@
+{
+  "product-config 0.6.0 (git+https://github.com/stackabletech/product-config.git?tag=0.6.0#ad2c3ea6a291e415d978eb4271fb309e75861ef0)": "1ixc2x7540sxdmc92hqdcwm24rj8i1ivjsvwk2d57pdsq03j2x41",
+  "stackable-operator 0.59.0 (git+https://github.com/stackabletech/operator-rs.git?tag=0.59.0#52a420d2caf250b76730699f8f076bb8d3d0907d)": "0fdg281f8ncai9dj9ind0f3v5rnfiasdlx6zbkbaqs4mank2n4ww",
+  "stackable-operator-derive 0.59.0 (git+https://github.com/stackabletech/operator-rs.git?tag=0.59.0#52a420d2caf250b76730699f8f076bb8d3d0907d)": "0fdg281f8ncai9dj9ind0f3v5rnfiasdlx6zbkbaqs4mank2n4ww"
+}
