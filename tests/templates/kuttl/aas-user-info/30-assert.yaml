@@ -1,0 +1,7 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+metadata:
+  name: test-regorule
+commands:
+  - script: kubectl exec -n $NAMESPACE test-regorule-0 -- python /tmp/test-regorule.py -u 'http://test-opa-server-default:8081/v1/data/test'

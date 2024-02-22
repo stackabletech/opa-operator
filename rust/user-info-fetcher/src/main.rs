@@ -119,6 +119,10 @@ async fn main() -> Result<(), StartupError> {
             client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
             client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },
+        crd::Backend::ExperimentalXfscAas(_) => Credentials {
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -197,7 +201,7 @@ struct UserInfo {
     /// This might be null in case the username is not known (e.g. the backend does not have this info).
     username: Option<String>,
     groups: Vec<String>,
-    custom_attributes: HashMap<String, Vec<String>>,
+    custom_attributes: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Snafu, Debug)]
@@ -205,6 +209,11 @@ struct UserInfo {
 enum GetUserInfoError {
     #[snafu(display("failed to get user information from Keycloak"))]
     Keycloak { source: backend::keycloak::Error },
+
+    #[snafu(display(
+        "failed to get user information from the XFSC Authentication & Authorization Service"
+    ))]
+    ExperimentalXfscAas { source: backend::xfsc_aas::Error },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -217,6 +226,7 @@ impl http_error::Error for GetUserInfoError {
         );
         match self {
             Self::Keycloak { source } => source.status_code(),
+            Self::ExperimentalXfscAas { source } => source.status_code(),
         }
     }
 }
@@ -259,6 +269,11 @@ async fn get_user_info(
                         backend::keycloak::get_user_info(&req, &http, &credentials, keycloak)
                             .await
                             .context(get_user_info_error::KeycloakSnafu)
+                    }
+                    crd::Backend::ExperimentalXfscAas(aas) => {
+                        backend::xfsc_aas::get_user_info(&req, &http, aas)
+                            .await
+                            .context(get_user_info_error::ExperimentalXfscAasSnafu)
                     }
                 }
             })

@@ -1,0 +1,30 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-regorule
+  labels:
+    app: test-regorule
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-regorule
+  template:
+    metadata:
+      labels:
+        app: test-regorule
+    spec:
+      serviceAccountName: test-sa
+      containers:
+      - name: test-regorule
+        image: docker.stackable.tech/stackable/testing-tools:0.2.0-stackable0.0.0-dev
+        stdin: true
+        tty: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "512m"
+          limits:
+            memory: "128Mi"
+            cpu: "1"
