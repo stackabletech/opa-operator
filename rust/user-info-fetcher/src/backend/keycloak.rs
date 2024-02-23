@@ -77,7 +77,7 @@ struct UserMetadata {
     id: String,
     username: String,
     #[serde(default)]
-    attributes: HashMap<String, Vec<String>>,
+    attributes: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize)]

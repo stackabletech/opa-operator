@@ -1,0 +1,46 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      kubectl apply -n $NAMESPACE -f - <<EOF
+      ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: test
+        labels:
+          opa.stackable.tech/bundle: "true"
+      data:
+        test.rego: |
+          package test
+
+          userInfoByUsername(username) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"username": username}, "headers": {"Content-Type": "application/json"}, "raise_error": true}).body
+          userInfoById(id) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"id": id}, "headers": {"Content-Type": "application/json"}, "raise_error": true}).body
+
+          currentUserInfoByUsername := userInfoByUsername(input.username)
+          currentUserInfoById := userInfoById(input.id)
+      ---
+      apiVersion: opa.stackable.tech/v1alpha1
+      kind: OpaCluster
+      metadata:
+        name: test-opa
+      spec:
+        image:
+          productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+          pullPolicy: IfNotPresent
+        clusterConfig:
+          userInfo:
+            backend:
+              experimentalXfscAas:
+                hostname: aas.$NAMESPACE.svc.cluster.local
+                port: 5000
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+          vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+        servers:
+          config:
+            logging:
+              enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+          roleGroups:
+            default: {}
