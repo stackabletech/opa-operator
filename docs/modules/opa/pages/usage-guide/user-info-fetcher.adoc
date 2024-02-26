@@ -57,6 +57,10 @@ Currently the following backends are supported:
 // todo: maybe this section should be under a Tutorial?
 Fetch groups and extra credentials, but not roles.
 
+[NOTE]
+===============================
+*NOTE* The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
+
 // TODO: Document how to use it in OPA regorules, e.g. to authorize based on group membership
 == Example rego rule
 
