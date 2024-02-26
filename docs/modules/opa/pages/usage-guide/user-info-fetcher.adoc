@@ -57,20 +57,18 @@ Currently the following backends are supported:
 // todo: maybe this section should be under a Tutorial?
 Fetch groups and extra credentials, but not roles.
 
-[NOTE]
-===============================
-*NOTE* The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
+NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
 
 // TODO: Document how to use it in OPA regorules, e.g. to authorize based on group membership
 == Example rego rule
 
-.About unencrypted HTTP
 [NOTE]
-===============================
-*NOTE* The User info fetcher serves endpoints over clear-text HTTP. 
+.About unencrypted HTTP
+====
+The User info fetcher serves endpoints over clear-text HTTP. 
 
 It is intended to only be accessed from the OPA Server via _localhost_ and to not be exposed outside of the Pod.
-===============================
+====
 
 [source,rego]
 ----
