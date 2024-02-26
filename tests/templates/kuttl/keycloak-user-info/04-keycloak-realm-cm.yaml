@@ -10,7 +10,7 @@ stringData:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: my-dataspace-configmap
+  name: keycloak-my-dataspace-realm
 data:
   realm.json: |
     {
