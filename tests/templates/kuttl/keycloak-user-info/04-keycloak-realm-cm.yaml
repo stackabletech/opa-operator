@@ -22,10 +22,8 @@ data:
         "path" : "/superset-admin"
       } ],
       "users" : [ {
-        "createdTimestamp" : 1708938225435,
         "username" : "alice",
         "enabled" : true,
-        "totp" : false,
         "emailVerified" : true,
         "firstName" : "Alice",
         "lastName" : "Adams",
@@ -33,20 +31,14 @@ data:
         "credentials" : [ {
           "type" : "password",
           "userLabel" : "My password",
-          "createdDate" : 1708939618520,
           "secretData" : "{\"value\":\"hogrQRLTAPBws9RgxZF/d3+EvPvUc7AN1egnmMnuWBQ=\",\"salt\":\"DYkgbXwZ2uhvJ+k94Xr7lg==\",\"additionalParameters\":{}}",
           "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
         } ],
-        "disableableCredentialTypes" : [ ],
-        "requiredActions" : [ ],
         "realmRoles" : [ "default-roles-my-dataspace" ],
-        "notBefore" : 0,
         "groups" : [ "/superset-admin" ]
       }, {
-        "createdTimestamp" : 1708939657909,
         "username" : "bob",
         "enabled" : true,
-        "totp" : false,
         "emailVerified" : true,
         "firstName" : "Bob",
         "lastName" : "Bush",
@@ -54,17 +46,12 @@ data:
         "credentials" : [ {
           "type" : "password",
           "userLabel" : "My password",
-          "createdDate" : 1708939667392,
           "secretData" : "{\"value\":\"FC3TRP//H5izxRRQsYnBDucCI65OVxMy4GgG3qyl/Ek=\",\"salt\":\"kcwgkKFSJ83xlwDtOACoZQ==\",\"additionalParameters\":{}}",
           "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
         } ],
-        "disableableCredentialTypes" : [ ],
-        "requiredActions" : [ ],
         "realmRoles" : [ "default-roles-my-dataspace" ],
-        "notBefore" : 0,
         "groups" : [ ]
       }, {
-        "createdTimestamp" : 1708939843213,
         "username" : "service-account-user-info-fetcher",
         "enabled" : true,
         "totp" : false,
