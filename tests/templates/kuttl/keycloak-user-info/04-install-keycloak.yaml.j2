@@ -42,6 +42,7 @@ commands:
                   - --hostname-strict=false
                   - --https-key-store-file=/tls/keystore.p12
                   - --https-key-store-password=changeit
+                  - --import-realm
                 env:
                   - name: KEYCLOAK_ADMIN
                     value: admin
@@ -50,6 +51,16 @@ commands:
                       secretKeyRef:
                         name: keycloak-admin-credentials
                         key: admin
+                  - name: USER_INFO_FETCHER_CLIENT_ID
+                    valueFrom:
+                      secretKeyRef:
+                        name: user-info-fetcher-client-credentials
+                        key: clientId
+                  - name: USER_INFO_FETCHER_CLIENT_SECRET
+                    valueFrom:
+                      secretKeyRef:
+                        name: user-info-fetcher-client-credentials
+                        key: clientSecret
                 ports:
                   - name: https
                     containerPort: 8443
@@ -70,6 +81,8 @@ commands:
                     mountPath: /opt/keycloak/data/
                   - name: tls
                     mountPath: /tls/
+                  - name: realm-volume
+                    mountPath: /opt/keycloak/data/import
             securityContext:
               fsGroup: 1000
               runAsGroup: 1000
@@ -93,6 +106,9 @@ commands:
                       resources:
                         requests:
                           storage: "1"
+              - name: realm-volume
+                configMap:
+                  name: keycloak-my-dataspace-realm
       ---
       apiVersion: v1
       kind: Secret
