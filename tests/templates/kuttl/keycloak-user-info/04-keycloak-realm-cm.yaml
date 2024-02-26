@@ -15,16 +15,13 @@ metadata:
 data:
   realm.json: |
     {
-      "id" : "57e85187-ef73-4efe-88a2-2cd83dde2d58",
       "realm" : "my-dataspace",
       "enabled" : true,
       "groups" : [ {
-        "id" : "c000a6d7-80cf-4099-8e9e-5a28b157acc9",
         "name" : "superset-admin",
         "path" : "/superset-admin"
       } ],
       "users" : [ {
-        "id" : "c52d9aaf-099e-4b3c-b1c8-ab2bb41c296e",
         "createdTimestamp" : 1708938225435,
         "username" : "alice",
         "enabled" : true,
@@ -34,7 +31,6 @@ data:
         "lastName" : "Adams",
         "email" : "alice@example.org",
         "credentials" : [ {
-          "id" : "f74e03a3-fed4-4ed6-a24e-c0dbdda2ce5a",
           "type" : "password",
           "userLabel" : "My password",
           "createdDate" : 1708939618520,
@@ -47,7 +43,6 @@ data:
         "notBefore" : 0,
         "groups" : [ "/superset-admin" ]
       }, {
-        "id" : "c53f3a81-8de4-48b9-8d8c-1423f80d9851",
         "createdTimestamp" : 1708939657909,
         "username" : "bob",
         "enabled" : true,
@@ -57,7 +52,6 @@ data:
         "lastName" : "Bush",
         "email" : "bob@example.org",
         "credentials" : [ {
-          "id" : "d2095d17-b243-4887-875a-27629893197f",
           "type" : "password",
           "userLabel" : "My password",
           "createdDate" : 1708939667392,
@@ -70,7 +64,6 @@ data:
         "notBefore" : 0,
         "groups" : [ ]
       }, {
-        "id" : "d8ca541a-cea0-484d-9e44-e0658e2eb844",
         "createdTimestamp" : 1708939843213,
         "username" : "service-account-user-info-fetcher",
         "enabled" : true,
@@ -90,13 +83,7 @@ data:
         "groups" : [ ]
       } ],
       "clients" : [ {
-        "id" : "95cdb717-683d-4e42-8c90-435db87cf830",
         "clientId" : "${USER_INFO_FETCHER_CLIENT_ID}",
-        "name" : "",
-        "description" : "",
-        "rootUrl" : "",
-        "adminUrl" : "",
-        "baseUrl" : "",
         "surrogateAuthRequired" : false,
         "enabled" : true,
         "alwaysDisplayInConsole" : false,
