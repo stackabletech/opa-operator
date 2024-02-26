@@ -82,7 +82,9 @@ data:
         "requiredActions" : [ ],
         "realmRoles" : [ "default-roles-my-dataspace" ],
         "clientRoles" : {
-          "realm-management" : [ "query-users", "view-users", "query-groups", "view-groups" ]
+          "realm-management" : [
+            "view-users"
+          ]
         },
         "notBefore" : 0,
         "groups" : [ ]
