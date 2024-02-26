@@ -1,0 +1,103 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aas-config
+data:
+  aas.py: |
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import urlparse, parse_qs
+    import json
+
+    class MockServiceHandler(BaseHTTPRequestHandler):
+        def _set_headers(self, status_code=200):
+            self.send_response(status_code)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+        def do_GET(self):
+            print("received a get request: ", self.path)
+            parsed_path = urlparse(self.path)
+            path = parsed_path.path
+
+            if path == '/cip/claims':
+                query_components = parse_qs(parsed_path.query)
+                sub = query_components.get('sub', [''])[0]
+                scope = query_components.get('scope', [''])[0]
+
+                if not sub or not scope:
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({'error': 'Both "sub" and "scope" parameters are required.'}).encode('utf-8'))
+                    return
+
+                claims = {
+                    'sub': sub,
+                    'e-mail': f"{sub}@example.com",
+                    'company': scope
+                }
+
+                self._set_headers()
+                self.wfile.write(json.dumps(claims).encode('utf-8'))
+            else:
+                self._set_headers(404)
+                self.wfile.write(json.dumps({'error': 'Endpoint not found'}).encode('utf-8'))
+
+    def run(server_class=HTTPServer, handler_class=MockServiceHandler, port=5000):
+        server_address = ('', port)
+        httpd = server_class(server_address, handler_class)
+        print(f"Starting mock server on port {port}...")
+        httpd.serve_forever()
+
+    if __name__ == "__main__":
+        run()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aas
+  template:
+    metadata:
+      labels:
+        app: aas
+    spec:
+      serviceAccountName: test-sa
+      containers:
+      - name: python
+        image: python:3.9
+        command: ["python", "/aas.py"]
+        ports:
+        - containerPort: 5000
+        resources:
+          limits:
+            cpu: 1
+            memory: 512Mi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: app-volume
+          mountPath: /aas.py
+          subPath: aas.py
+      volumes:
+      - name: app-volume
+        configMap:
+          name: aas-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aas
+spec:
+  selector:
+    app: aas
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+

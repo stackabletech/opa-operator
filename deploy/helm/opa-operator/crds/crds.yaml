@@ -60,7 +60,24 @@ spec:
                                 - none
                             - required:
                                 - keycloak
+                            - required:
+                                - experimentalXfscAas
                           properties:
+                            experimentalXfscAas:
+                              description: Backend that fetches user information from the Gaia-X Cross Federation Services Components (XFSC) Authentication & Authorization Service.
+                              properties:
+                                hostname:
+                                  description: Hostname of the identity provider, e.g. `my.aas.corp`.
+                                  type: string
+                                port:
+                                  default: 5000
+                                  description: Port of the identity provider. Defaults to port 5000.
+                                  format: uint16
+                                  minimum: 0.0
+                                  type: integer
+                              required:
+                                - hostname
+                              type: object
                             keycloak:
                               description: Backend that fetches user information from Keycloak.
                               properties:
