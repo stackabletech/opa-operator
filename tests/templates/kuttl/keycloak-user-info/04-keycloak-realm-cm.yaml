@@ -106,10 +106,6 @@ data:
         "webOrigins" : [ "/*" ],
         "notBefore" : 0,
         "bearerOnly" : false,
-        "consentRequired" : false,
-        "standardFlowEnabled" : false,
-        "implicitFlowEnabled" : false,
-        "directAccessGrantsEnabled" : false,
         "serviceAccountsEnabled" : true,
         "publicClient" : false,
         "frontchannelLogout" : true,
@@ -119,52 +115,6 @@ data:
           "oauth2.device.authorization.grant.enabled" : "false"
         },
         "authenticationFlowBindingOverrides" : { },
-        "fullScopeAllowed" : true,
-        "nodeReRegistrationTimeout" : -1,
-        "protocolMappers" : [ {
-          "id" : "1cee7b4d-c5cc-436c-bf95-9fa8105ddb59",
-          "name" : "Client ID",
-          "protocol" : "openid-connect",
-          "protocolMapper" : "oidc-usersessionmodel-note-mapper",
-          "consentRequired" : false,
-          "config" : {
-            "user.session.note" : "client_id",
-            "introspection.token.claim" : "true",
-            "id.token.claim" : "true",
-            "access.token.claim" : "true",
-            "claim.name" : "client_id",
-            "jsonType.label" : "String"
-          }
-        }, {
-          "id" : "f94cf2f7-173c-4053-9d9f-e94286ce6bfb",
-          "name" : "Client IP Address",
-          "protocol" : "openid-connect",
-          "protocolMapper" : "oidc-usersessionmodel-note-mapper",
-          "consentRequired" : false,
-          "config" : {
-            "user.session.note" : "clientAddress",
-            "introspection.token.claim" : "true",
-            "id.token.claim" : "true",
-            "access.token.claim" : "true",
-            "claim.name" : "clientAddress",
-            "jsonType.label" : "String"
-          }
-        }, {
-          "id" : "6839cb53-abdd-43dc-bb8b-66b3db4844e1",
-          "name" : "Client Host",
-          "protocol" : "openid-connect",
-          "protocolMapper" : "oidc-usersessionmodel-note-mapper",
-          "consentRequired" : false,
-          "config" : {
-            "user.session.note" : "clientHost",
-            "introspection.token.claim" : "true",
-            "id.token.claim" : "true",
-            "access.token.claim" : "true",
-            "claim.name" : "clientHost",
-            "jsonType.label" : "String"
-          }
-        } ],
-        "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
-        "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
+        "fullScopeAllowed" : true
       } ]
     }
