@@ -41,8 +41,8 @@ commands:
                       caCert:
                         secretClass: keycloak-tls-$NAMESPACE
                 clientCredentialsSecret: user-info-fetcher-client-credentials
-                adminRealm: master
-                userRealm: master
+                adminRealm: my-dataspace
+                userRealm: my-dataspace
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
           vectorAggregatorConfigMapName: vector-aggregator-discovery
 {% endif %}

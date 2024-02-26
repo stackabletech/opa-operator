@@ -1,0 +1,168 @@
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-info-fetcher-client-credentials
+stringData:
+  clientId: user-info-fetcher
+  clientSecret: user-info-fetcher-client-secret
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-dataspace-configmap
+data:
+  realm.json: |
+    {
+      "id" : "57e85187-ef73-4efe-88a2-2cd83dde2d58",
+      "realm" : "my-dataspace",
+      "enabled" : true,
+      "groups" : [ {
+        "id" : "c000a6d7-80cf-4099-8e9e-5a28b157acc9",
+        "name" : "superset-admin",
+        "path" : "/superset-admin"
+      } ],
+      "users" : [ {
+        "id" : "c52d9aaf-099e-4b3c-b1c8-ab2bb41c296e",
+        "createdTimestamp" : 1708938225435,
+        "username" : "alice",
+        "enabled" : true,
+        "totp" : false,
+        "emailVerified" : true,
+        "firstName" : "Alice",
+        "lastName" : "Adams",
+        "email" : "alice@example.org",
+        "credentials" : [ {
+          "id" : "f74e03a3-fed4-4ed6-a24e-c0dbdda2ce5a",
+          "type" : "password",
+          "userLabel" : "My password",
+          "createdDate" : 1708939618520,
+          "secretData" : "{\"value\":\"hogrQRLTAPBws9RgxZF/d3+EvPvUc7AN1egnmMnuWBQ=\",\"salt\":\"DYkgbXwZ2uhvJ+k94Xr7lg==\",\"additionalParameters\":{}}",
+          "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+        } ],
+        "disableableCredentialTypes" : [ ],
+        "requiredActions" : [ ],
+        "realmRoles" : [ "default-roles-my-dataspace" ],
+        "notBefore" : 0,
+        "groups" : [ "/superset-admin" ]
+      }, {
+        "id" : "c53f3a81-8de4-48b9-8d8c-1423f80d9851",
+        "createdTimestamp" : 1708939657909,
+        "username" : "bob",
+        "enabled" : true,
+        "totp" : false,
+        "emailVerified" : true,
+        "firstName" : "Bob",
+        "lastName" : "Bush",
+        "email" : "bob@example.org",
+        "credentials" : [ {
+          "id" : "d2095d17-b243-4887-875a-27629893197f",
+          "type" : "password",
+          "userLabel" : "My password",
+          "createdDate" : 1708939667392,
+          "secretData" : "{\"value\":\"FC3TRP//H5izxRRQsYnBDucCI65OVxMy4GgG3qyl/Ek=\",\"salt\":\"kcwgkKFSJ83xlwDtOACoZQ==\",\"additionalParameters\":{}}",
+          "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+        } ],
+        "disableableCredentialTypes" : [ ],
+        "requiredActions" : [ ],
+        "realmRoles" : [ "default-roles-my-dataspace" ],
+        "notBefore" : 0,
+        "groups" : [ ]
+      }, {
+        "id" : "d8ca541a-cea0-484d-9e44-e0658e2eb844",
+        "createdTimestamp" : 1708939843213,
+        "username" : "service-account-user-info-fetcher",
+        "enabled" : true,
+        "totp" : false,
+        "emailVerified" : false,
+        "serviceAccountClientId" : "user-info-fetcher",
+        "credentials" : [ ],
+        "disableableCredentialTypes" : [ ],
+        "requiredActions" : [ ],
+        "realmRoles" : [ "default-roles-my-dataspace" ],
+        "clientRoles" : {
+          "realm-management" : [ "query-users", "view-users", "query-groups", "view-groups" ]
+        },
+        "notBefore" : 0,
+        "groups" : [ ]
+      } ],
+      "clients" : [ {
+        "id" : "95cdb717-683d-4e42-8c90-435db87cf830",
+        "clientId" : "${USER_INFO_FETCHER_CLIENT_ID}",
+        "name" : "",
+        "description" : "",
+        "rootUrl" : "",
+        "adminUrl" : "",
+        "baseUrl" : "",
+        "surrogateAuthRequired" : false,
+        "enabled" : true,
+        "alwaysDisplayInConsole" : false,
+        "clientAuthenticatorType" : "client-secret",
+        "secret" : "${USER_INFO_FETCHER_CLIENT_SECRET}",
+        "redirectUris" : [ "/*" ],
+        "webOrigins" : [ "/*" ],
+        "notBefore" : 0,
+        "bearerOnly" : false,
+        "consentRequired" : false,
+        "standardFlowEnabled" : false,
+        "implicitFlowEnabled" : false,
+        "directAccessGrantsEnabled" : false,
+        "serviceAccountsEnabled" : true,
+        "publicClient" : false,
+        "frontchannelLogout" : true,
+        "protocol" : "openid-connect",
+        "attributes" : {
+          "oidc.ciba.grant.enabled" : "true",
+          "oauth2.device.authorization.grant.enabled" : "false"
+        },
+        "authenticationFlowBindingOverrides" : { },
+        "fullScopeAllowed" : true,
+        "nodeReRegistrationTimeout" : -1,
+        "protocolMappers" : [ {
+          "id" : "1cee7b4d-c5cc-436c-bf95-9fa8105ddb59",
+          "name" : "Client ID",
+          "protocol" : "openid-connect",
+          "protocolMapper" : "oidc-usersessionmodel-note-mapper",
+          "consentRequired" : false,
+          "config" : {
+            "user.session.note" : "client_id",
+            "introspection.token.claim" : "true",
+            "id.token.claim" : "true",
+            "access.token.claim" : "true",
+            "claim.name" : "client_id",
+            "jsonType.label" : "String"
+          }
+        }, {
+          "id" : "f94cf2f7-173c-4053-9d9f-e94286ce6bfb",
+          "name" : "Client IP Address",
+          "protocol" : "openid-connect",
+          "protocolMapper" : "oidc-usersessionmodel-note-mapper",
+          "consentRequired" : false,
+          "config" : {
+            "user.session.note" : "clientAddress",
+            "introspection.token.claim" : "true",
+            "id.token.claim" : "true",
+            "access.token.claim" : "true",
+            "claim.name" : "clientAddress",
+            "jsonType.label" : "String"
+          }
+        }, {
+          "id" : "6839cb53-abdd-43dc-bb8b-66b3db4844e1",
+          "name" : "Client Host",
+          "protocol" : "openid-connect",
+          "protocolMapper" : "oidc-usersessionmodel-note-mapper",
+          "consentRequired" : false,
+          "config" : {
+            "user.session.note" : "clientHost",
+            "introspection.token.claim" : "true",
+            "id.token.claim" : "true",
+            "access.token.claim" : "true",
+            "claim.name" : "clientHost",
+            "jsonType.label" : "String"
+          }
+        } ],
+        "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
+        "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
+      } ]
+    }
