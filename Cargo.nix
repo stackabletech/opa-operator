@@ -1589,6 +1589,33 @@ rec {
         ];
 
       };
+      "delegate" = rec {
+        crateName = "delegate";
+        version = "0.12.0";
+        edition = "2018";
+        sha256 = "16zpkc6v2ss5qivwx7p7vb1bjnb6s0p7kkifaqkgyl7bpv68y0af";
+        procMacro = true;
+        authors = [
+          "Godfrey Chan <godfreykfc@gmail.com>"
+          "Jakub Beránek <berykubik@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "proc-macro2";
+            packageId = "proc-macro2";
+          }
+          {
+            name = "quote";
+            packageId = "quote";
+          }
+          {
+            name = "syn";
+            packageId = "syn 2.0.39";
+            features = [ "full" "visit-mut" ];
+          }
+        ];
+
+      };
       "derivative" = rec {
         crateName = "derivative";
         version = "2.2.0";
@@ -7395,13 +7422,13 @@ rec {
       };
       "stackable-operator" = rec {
         crateName = "stackable-operator";
-        version = "0.59.0";
+        version = "0.64.0";
         edition = "2021";
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "52a420d2caf250b76730699f8f076bb8d3d0907d";
-          sha256 = "0fdg281f8ncai9dj9ind0f3v5rnfiasdlx6zbkbaqs4mank2n4ww";
+          rev = "d988822e7af3d363d52fb35643f0c6ed933f340a";
+          sha256 = "05a4aqb2lv3rkc049zsq5vxxbx4km8l1j6mbn984wjag5fsmrpfp";
         };
         authors = [
           "Stackable GmbH <info@stackable.de>"
@@ -7420,6 +7447,10 @@ rec {
           {
             name = "const_format";
             packageId = "const_format";
+          }
+          {
+            name = "delegate";
+            packageId = "delegate";
           }
           {
             name = "derivative";
@@ -7550,13 +7581,13 @@ rec {
       };
       "stackable-operator-derive" = rec {
         crateName = "stackable-operator-derive";
-        version = "0.59.0";
+        version = "0.64.0";
         edition = "2021";
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "52a420d2caf250b76730699f8f076bb8d3d0907d";
-          sha256 = "0fdg281f8ncai9dj9ind0f3v5rnfiasdlx6zbkbaqs4mank2n4ww";
+          rev = "d988822e7af3d363d52fb35643f0c6ed933f340a";
+          sha256 = "05a4aqb2lv3rkc049zsq5vxxbx4km8l1j6mbn984wjag5fsmrpfp";
         };
         procMacro = true;
         authors = [
