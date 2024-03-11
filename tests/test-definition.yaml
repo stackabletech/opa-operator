@@ -12,7 +12,6 @@ dimensions:
       - 23.0.1
   - name: openshift
     values:
-      - "true"
       - "false"
 tests:
   - name: smoke
