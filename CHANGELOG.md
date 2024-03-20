@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [24.3.0] - 2024-03-20
+
 ### Added
 
 - Add user-info-fetcher to fetch user metadata from directory services ([#433]).
