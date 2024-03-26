@@ -1,6 +1,6 @@
 = Stackable Operator for OPA (OpenPolicyAgent)
 :description: The Stackable Operator for OPA is a Kubernetes operator that manages OPA instances. Learn about its features, resources, dependencies and demos, and see the list of supported OPA versions.
-:keywords: Stackable Operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, engineer, policy, authorization, ACL
+:keywords: Stackable Operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, policy, authorization, ACL
 
 :rego: https://www.openpolicyagent.org/docs/latest/policy-language/
 
@@ -44,6 +44,8 @@ Currently the following products on the Stackable Data Platform support policy d
 
 == Supported versions
 
-The Stackable Operator for OPA currently supports the following versions of OPA:
+The Stackable Operator for OPA currently supports the OPA versions listed below.
+To use a specific OPA version in your OpaCluster, you have to specify an image - this is explained in the xref:concepts:product-image-selection.adoc[] documentation.
+The operator also supports running images from a custom registry or running entirely customized images; both of these cases are explained under xref:concepts:product-image-selection.adoc[] as well.
 
 include::partial$supported-versions.adoc[]
