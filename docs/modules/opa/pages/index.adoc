@@ -16,7 +16,7 @@ setting up OPA. You will also create your first Rego rule and query the OPA for 
 == Operator model
 
 The _OpaCluster_ custom resource is used to declare OPA instances, only one
-xref:home:concepts:roles-and-role-groups.adoc[role] is defined: `server`. OPA is deployed as a DaemonSet because policy
+xref:concepts:roles-and-role-groups.adoc[role] is defined: `server`. OPA is deployed as a DaemonSet because policy
 decisions must be fast and efficient. Therefore, an OPA agent must be available on every Node to reduce latency and
 network calls. A DaemonSet with its own ConfigMap is created for every role group. The DaemonSet will then deploy a Pod
 on every node. Every role group also gets its own Service definition.
