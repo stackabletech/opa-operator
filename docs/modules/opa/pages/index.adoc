@@ -1,38 +1,48 @@
 = Stackable Operator for OPA (OpenPolicyAgent)
-:description: The Stackable Operator for OPA is a Kubernetes operator that manages OPA instances. Learn about its features, resources, dependencies and demos, and see the list of supported OPA versions.
-:keywords: Stackable Operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, policy, authorization, ACL
-
+:description: The Stackable operator for OPA is a Kubernetes operator that manages OPA instances. Learn about its features, resources, dependencies and demos, and see the list of supported OPA versions.
+:keywords: Stackable operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, policy, authorization, ACL
+:opa: https://www.openpolicyagent.org/
+:github: https://github.com/stackabletech/opa-operator/
+:crd: {crd-docs-base-url}/opa-operator/{crd-docs-version}/
+:crd-opacluster: {crd-docs}/opa.stackable.tech/opacluster/v1alpha1/
+:feature-tracker: https://features.stackable.tech/unified
 :rego: https://www.openpolicyagent.org/docs/latest/policy-language/
 
-The Stackable Operator for the https://www.openpolicyagent.org/[OpenPolicyAgent] (OPA) manages OPA instances. OPA is an
-open-source policy engine that allows you to define, manage and enforce policies across a number of software systems.
+[.link-bar]
+* {github}[GitHub {external-link-icon}^]
+* {feature-tracker}[Feature Tracker {external-link-icon}^]
+* {crd}[CRD documentation {external-link-icon}^]
+
+The Stackable operator for the {opa}[OpenPolicyAgent] (OPA) manages OPA instances.
+OPA is an open-source policy engine that allows you to define, manage and enforce policies across a number of software systems.
 OPA promotes "policy-as-code"; policies are defined in the declarative {rego}[Rego] language.
 
 == Getting started
 
-The xref:getting_started/index.adoc[Getting started guide] will guide you through the installation of the Operator and
-setting up OPA. You will also create your first Rego rule and query the OPA for a policy decision.
+The xref:getting_started/index.adoc[Getting started guide] will guide you through the installation of the operator and setting up OPA.
+You will also create your first Rego rule and query the OPA for a policy decision.
 
 == Operator model
 
-The _OpaCluster_ custom resource is used to declare OPA instances, only one
-xref:concepts:roles-and-role-groups.adoc[role] is defined: `server`. OPA is deployed as a DaemonSet because policy
-decisions must be fast and efficient. Therefore, an OPA agent must be available on every Node to reduce latency and
-network calls. A DaemonSet with its own ConfigMap is created for every role group. The DaemonSet will then deploy a Pod
-on every node. Every role group also gets its own Service definition.
+The _OpaCluster_ custom resource is used to declare OPA instances, only one xref:concepts:roles-and-role-groups.adoc[role] is defined: `server`.
+OPA is deployed as a DaemonSet because policy decisions must be fast and efficient.
+Therefore, an OPA agent must be available on every Node to reduce latency and network calls.
+A DaemonSet with its own ConfigMap is created for every role group.
+The DaemonSet will then deploy a Pod on every node.
+Every role group also gets its own Service definition.
 
-image::opa_overview.drawio.svg[A diagram depicting the Kubernetes resources created by the Stackable Operator for OPA]
+image::opa_overview.drawio.svg[A diagram depicting the Kubernetes resources created by the Stackable operator for OPA]
 
-Rego rules are defined in ConfigMaps, which are labeled with the `opa.stackable.tech/bundle: "true"` label. Every OPA
-Pod has a sidecar `bundle-builder` container that collects these ConfigMaps and builds them into a policy bundle. This
-ensures that policies can be updated on-the-fly.
+Rego rules are defined in ConfigMaps, which are labeled with the `opa.stackable.tech/bundle: "true"` label.
+Every OPA Pod has a sidecar `bundle-builder` container that collects these ConfigMaps and builds them into a policy bundle.
+This ensures that policies can be updated on-the-fly.
 
-The Operator also creates a xref:concepts:service_discovery.adoc[service discovery ConfigMap] for the OPA instance. The
-discovery ConfigMap contains the URL of the OPA API.
+The operator also creates a xref:concepts:service_discovery.adoc[service discovery ConfigMap] for the OPA instance.
+The discovery ConfigMap contains the URL of the OPA API.
 
 == Dependencies
 
-OPA and the Stackable Operator for OPA do not have any dependencies.
+OPA and the Stackable operator for OPA do not have any dependencies.
 
 == Supported products
 
@@ -44,8 +54,14 @@ Currently the following products on the Stackable Data Platform support policy d
 
 == Supported versions
 
-The Stackable Operator for OPA currently supports the OPA versions listed below.
+The Stackable operator for OPA currently supports the OPA versions listed below.
 To use a specific OPA version in your OpaCluster, you have to specify an image - this is explained in the xref:concepts:product-image-selection.adoc[] documentation.
 The operator also supports running images from a custom registry or running entirely customized images; both of these cases are explained under xref:concepts:product-image-selection.adoc[] as well.
 
 include::partial$supported-versions.adoc[]
+
+== Useful links
+
+* The {github}[opa-operator {external-link-icon}^] GitHub repository
+* The operator feature overview in the {feature-tracker}[feature tracker {external-link-icon}^]
+* The {crd-opacluster}[OpaCluster {external-link-icon}^] CRD documentation
