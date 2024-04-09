@@ -3,7 +3,8 @@
 :keywords: Stackable operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, policy, authorization, ACL
 :opa: https://www.openpolicyagent.org/
 :github: https://github.com/stackabletech/opa-operator/
-:crd: {crd-docs}/opa.stackable.tech/opacluster/v1alpha1/
+:crd: {crd-docs-base-url}/airflow-operator/{crd-docs-version}/
+:crd-opacluster: {crd-docs}/opa.stackable.tech/opacluster/v1alpha1/
 :feature-tracker: https://features.stackable.tech/unified
 :rego: https://www.openpolicyagent.org/docs/latest/policy-language/
 
@@ -63,4 +64,4 @@ include::partial$supported-versions.adoc[]
 
 * The {github}[opa-operator {external-link-icon}^] GitHub repository
 * The operator feature overview in the {feature-tracker}[feature tracker {external-link-icon}^]
-* The {crd}[OpaCluster {external-link-icon}^] CRD documentation
+* The {crd-opacluster}[OpaCluster {external-link-icon}^] CRD documentation
