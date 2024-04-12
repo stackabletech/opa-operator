@@ -17,15 +17,19 @@ tests:
   - name: smoke
     dimensions:
       - opa
+      - openshift
   - name: resources
     dimensions:
       - opa-latest
+      - openshift
   - name: logging
     dimensions:
       - opa
+      - openshift
   - name: cluster-operation
     dimensions:
       - opa-latest
+      - openshift
   - name: keycloak-user-info
     dimensions:
       - opa-latest
