@@ -25,38 +25,32 @@ spec:
   image:
     productVersion: "{{ test_scenario['values']['opa'] }}"
     pullPolicy: IfNotPresent
-  clusterConfig:
-    vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
   servers:
     roleGroups:
-      automatic-log-config:
-        config:
-          logging:
-            enableVectorAgent: true
-            containers:
-              opa:
-                console:
-                  level: INFO
-                file:
-                  level: INFO
-              bundle-builder:
-                console:
-                  level: NONE
-                file:
-                  level: INFO
-              vector:
-                console:
-                  level: INFO
-                file:
-                  level: INFO
-                loggers:
-                  ROOT:
-                    level: INFO
-              prepare:
-                console:
-                  level: INFO
-                file:
-                  level: INFO
-                loggers:
-                  ROOT:
-                    level: INFO
+      automatic-log-config: {}
+    podOverrides:
+      spec:
+        containers:
+          - name: opa
+            args:
+              - >-
+                /stackable/opa/opa run
+                --server
+                --addr 0.0.0.0:8081
+                --config-file /stackable/config/config.yaml
+                --log-level info
+                --shutdown-grace-period 120
+                --disable-telemetry
+                2>&1
+                | logger
+                --udp
+                --server ${SYSLOG_SINK%:*}
+                --port ${SYSLOG_SINK#*:}
+                --priority authpriv.info
+                --rfc5424
+            env:
+              - name: SYSLOG_SINK
+                valueFrom:
+                  configMapKeyRef:
+                    name: opa-vector-aggregator-discovery
+                    key: ADDRESS

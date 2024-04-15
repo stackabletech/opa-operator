@@ -7,51 +7,23 @@ service:
     protocol: TCP
     targetPort: 8686
   - name: vector
-    port: 6123
-    protocol: TCP
-    targetPort: 6000
+    port: 9123
+    protocol: UDP
+    targetPort: 9000
 customConfig:
   api:
     address: 0.0.0.0:8686
     enabled: true
   sources:
-    vector:
-      address: 0.0.0.0:6000
-      type: vector
-      version: "2"
+    syslog:
+      type: syslog
+      address: 0.0.0.0:9000
+      mode: udp
   transforms:
     filteredAutomaticLogConfigServerOpa:
       type: filter
-      inputs: [vector]
-      condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
-        .container == "opa"
-    filteredAutomaticLogConfigServerBundleBuilder:
-      type: filter
-      inputs: [vector]
-      condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
-        .container == "bundle-builder"
-    filteredAutomaticLogConfigServerVector:
-      type: filter
-      inputs: [vector]
-      condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
-        .container == "vector"
-    filteredAutomaticLogConfigServerPrepare:
-      type: filter
-      inputs: [vector]
-      condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
-        .container == "prepare"
-    filteredInvalidEvents:
-      type: filter
-      inputs: [vector]
-      condition: |-
-        .timestamp == from_unix_timestamp!(0) ||
-        is_null(.level) ||
-        is_null(.logger) ||
-        is_null(.message)
+      inputs: [syslog]
+      condition: .facility == "authpriv"
   sinks:
     out:
       inputs: [filtered*]
@@ -63,5 +35,7 @@ customConfig:
         # not fail if the aggregator is not available.
         when_full: drop_newest
 {% else %}
-      type: blackhole
+      type: console
+      encoding:
+        codec: json
 {% endif %}
