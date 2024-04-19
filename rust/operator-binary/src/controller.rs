@@ -71,7 +71,7 @@ use crate::{
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 
-pub const CONFIG_FILE: &str = "config.yaml";
+pub const CONFIG_FILE: &str = "config.json";
 pub const APP_PORT: u16 = 8081;
 pub const APP_PORT_NAME: &str = "http";
 pub const METRICS_PORT_NAME: &str = "metrics";
@@ -572,7 +572,7 @@ fn build_server_rolegroup_config_map(
 
     cm_builder
         .metadata(metadata)
-        .add_data(CONFIG_FILE, build_config_file());
+        .add_data(CONFIG_FILE, build_config_file(merged_config));
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         cm_builder.add_data(
@@ -910,28 +910,28 @@ pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Ac
     Action::requeue(*Duration::from_secs(5))
 }
 
-fn build_config_file() -> &'static str {
-    // We currently do not activate decision logging like
-    // decision_logs:
-    //     console: true
-    // This will log decisions to the console, but also sends an extra `decision_id` field in the
-    // API JSON response. This currently leads to our Java authorizers (Druid, Trino) failing to
-    // deserialize the JSON object since they only expect to have a `result` field returned.
-    // see https://github.com/stackabletech/opa-operator/issues/422
-    "
-services:
-  - name: stackable
-    url: http://localhost:3030/opa/v1
-
-bundles:
-  stackable:
-    service: stackable
-    resource: opa/bundle.tar.gz
-    persist: true
-    polling:
-      min_delay_seconds: 10
-      max_delay_seconds: 20
-"
+fn build_config_file(config: &OpaConfig) -> String {
+    serde_json::to_string_pretty(&json!({
+        "services": [{
+            "name": "stackable",
+            "url": "http://localhost:3030/opa/v1",
+        },],
+        "bundles": {
+            "stackable": {
+                "service": "stackable",
+                "resource": "opa/bundle.tar.gz",
+                "persist": true,
+                "polling": {
+                    "min_delay_seconds": 10,
+                    "max_delay_seconds": 20,
+                },
+            }
+        },
+        "decision_logs": {
+            "console": config.decision_logging.console,
+        }
+    }))
+    .unwrap()
 }
 
 fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
@@ -965,7 +965,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
-        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry{logging_redirects} &
+        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry{logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",

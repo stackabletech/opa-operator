@@ -716,6 +716,16 @@ spec:
                                   type: array
                               type: object
                           type: object
+                        decisionLogging:
+                          default:
+                            console: null
+                          description: Decision Logging configuration.
+                          properties:
+                            console:
+                              description: Wether or not to print decision logging to the console.
+                              nullable: true
+                              type: boolean
+                          type: object
                         gracefulShutdownTimeout:
                           description: Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.
                           nullable: true
@@ -4141,6 +4151,16 @@ spec:
                                           type: object
                                         type: array
                                     type: object
+                                type: object
+                              decisionLogging:
+                                default:
+                                  console: null
+                                description: Decision Logging configuration.
+                                properties:
+                                  console:
+                                    description: Wether or not to print decision logging to the console.
+                                    nullable: true
+                                    type: boolean
                                 type: object
                               gracefulShutdownTimeout:
                                 description: Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.

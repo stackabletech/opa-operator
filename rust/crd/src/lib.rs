@@ -30,7 +30,7 @@ pub mod user_info_fetcher;
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";
 
-pub const CONFIG_FILE: &str = "config.yaml";
+pub const CONFIG_FILE: &str = "config.json";
 
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
 /// Safety puffer to guarantee the graceful shutdown works every time.
@@ -183,6 +183,27 @@ pub enum Container {
         PartialEq,
         Serialize
     ),
+    serde(rename_all = "camelCase"),
+    schemars(description = "Decision Logging configuration.")
+)]
+pub struct DecisionLogging {
+    /// Wether or not to print decision logging to the console.
+    #[serde(default)]
+    pub console: bool,
+}
+
+#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
+#[fragment_attrs(
+    derive(
+        Clone,
+        Debug,
+        Default,
+        Deserialize,
+        Merge,
+        JsonSchema,
+        PartialEq,
+        Serialize
+    ),
     serde(rename_all = "camelCase")
 )]
 pub struct OpaConfig {
@@ -191,6 +212,9 @@ pub struct OpaConfig {
 
     #[fragment_attrs(serde(default))]
     pub logging: Logging<Container>,
+
+    #[fragment_attrs(serde(default))]
+    pub decision_logging: DecisionLogging,
 
     #[fragment_attrs(serde(default))]
     pub affinity: StackableAffinity,
@@ -204,6 +228,9 @@ impl OpaConfig {
     fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
+            decision_logging: DecisionLoggingFragment {
+                console: Some(false),
+            },
             resources: ResourcesFragment {
                 cpu: CpuLimitsFragment {
                     min: Some(Quantity("250m".to_owned())),
