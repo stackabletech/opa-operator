@@ -187,7 +187,7 @@ pub enum Container {
     schemars(description = "Decision Logging configuration.")
 )]
 pub struct DecisionLogging {
-    /// Wether or not to print decision logging to the console.
+    /// Whether or not to print decision logging to the console.
     #[serde(default)]
     pub console: bool,
 }

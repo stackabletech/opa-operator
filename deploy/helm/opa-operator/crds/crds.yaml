@@ -722,7 +722,7 @@ spec:
                           description: Decision Logging configuration.
                           properties:
                             console:
-                              description: Wether or not to print decision logging to the console.
+                              description: Whether or not to print decision logging to the console.
                               nullable: true
                               type: boolean
                           type: object
@@ -4158,7 +4158,7 @@ spec:
                                 description: Decision Logging configuration.
                                 properties:
                                   console:
-                                    description: Wether or not to print decision logging to the console.
+                                    description: Whether or not to print decision logging to the console.
                                     nullable: true
                                     type: boolean
                                 type: object
