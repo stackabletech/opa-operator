@@ -20,12 +20,20 @@ customConfig:
       type: vector
       version: "2"
   transforms:
+    filteredAutomaticLogConfigServerOpaDecision:
+      type: filter
+      inputs: [vector]
+      condition: >-
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
+        .container == "opa" &&
+        .logger == "decision"
     filteredAutomaticLogConfigServerOpa:
       type: filter
       inputs: [vector]
       condition: >-
         starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
-        .container == "opa"
+        .container == "opa" &&
+        .logger != "decision"
     filteredAutomaticLogConfigServerBundleBuilder:
       type: filter
       inputs: [vector]

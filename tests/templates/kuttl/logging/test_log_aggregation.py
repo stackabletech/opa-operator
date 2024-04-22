@@ -1,6 +1,46 @@
 #!/usr/bin/env python3
 import requests
 
+def send_opa_decision_request():
+    response = requests.post(
+        'http://test-opa:8081/v1/data/test/world'
+    )
+
+    assert response.status_code == 200, \
+        'Cannot access the API of the opa cluster.'
+    
+def check_decision_events():
+    response = requests.post(
+        'http://opa-vector-aggregator:8686/graphql',
+        json={
+            'query': """
+                {
+                    transforms(filter: {componentId: {equals: \"filteredAutomaticLogConfigServerOpaDecision\"}}) {
+                        nodes {
+                            componentId
+                            metrics {
+                                sentEventsTotal {
+                                    sentEventsTotal
+                                }
+                            }
+                        }
+                    }
+                }
+            """
+        }
+    )
+
+    assert response.status_code == 200, \
+        'Cannot access the API of the vector aggregator.'
+
+    result = response.json()
+
+    sentEvents = result['data']['transforms']['nodes'][0]['metrics']['sentEventsTotal']
+    componentId = result['data']['transforms']['nodes'][0]['componentId']
+
+    assert sentEvents is not None and \
+        sentEvents['sentEventsTotal'] > 0, \
+        f'No events were sent in "{componentId}".'
 
 def check_sent_events():
     response = requests.post(
@@ -44,5 +84,7 @@ def check_sent_events():
 
 
 if __name__ == '__main__':
+    send_opa_decision_request()
+    check_decision_events()
     check_sent_events()
     print('Test successful!')

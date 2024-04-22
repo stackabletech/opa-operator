@@ -28,6 +28,9 @@ spec:
   clusterConfig:
     vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
   servers:
+    config:
+      decisionLogging:
+        console: true
     roleGroups:
       automatic-log-config:
         config:
