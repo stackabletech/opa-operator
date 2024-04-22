@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # vim: filetype=python syntax=python tabstop=4 expandtab
 
 import argparse
