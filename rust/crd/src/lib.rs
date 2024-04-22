@@ -187,8 +187,10 @@ pub enum Container {
     schemars(description = "Decision Logging configuration.")
 )]
 pub struct DecisionLogging {
+    /// Whether or not to print decision logging to files collected by Vector agent.
+    pub file: bool,
+
     /// Whether or not to print decision logging to the console.
-    #[serde(default)]
     pub console: bool,
 }
 
@@ -229,6 +231,7 @@ impl OpaConfig {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             decision_logging: DecisionLoggingFragment {
+                file: Some(true),
                 console: Some(false),
             },
             resources: ResourcesFragment {

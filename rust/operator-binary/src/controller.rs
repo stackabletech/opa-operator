@@ -927,8 +927,11 @@ fn build_config_file(config: &OpaConfig) -> String {
                 },
             }
         },
+        // FIXME: We should only write this whole struct when we want decision logs
         "decision_logs": {
-            "console": config.decision_logging.console,
+            // Either one can enable the decision logs, the entrypoint takes care of filtering which target get decision
+            // logs
+            "console": config.decision_logging.console || config.decision_logging.file,
         }
     }))
     .unwrap()
@@ -936,7 +939,7 @@ fn build_config_file(config: &OpaConfig) -> String {
 
 fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
     let mut opa_log_level = OpaLogLevel::Info;
-    let mut console_logging_off = false;
+    let mut console_logging_enabled = true;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -956,9 +959,34 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
             level: Some(log_level),
         }) = log_config.console
         {
-            console_logging_off = log_level == LogLevel::NONE
+            console_logging_enabled = log_level != LogLevel::NONE
         }
     }
+
+    let decision_logs_to_stdout = merged_config.decision_logging.console;
+    let decision_logs_to_file = merged_config.decision_logging.file;
+
+    // Redirects matter!
+    // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
+    // and not some utility (e.g. multilog or tee) process.
+    // See https://stackoverflow.com/a/8048493
+
+    // *Technically*, we would also need to calculate `file_logging_enabled` and take that into account. However, this
+    // is a very nice edge-case and would make things more complicated and error-prone.
+    let logging_redirects = if console_logging_enabled {
+        match (decision_logs_to_file, decision_logs_to_stdout) {
+            (true, true) => format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))"),
+            (true, false) => format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}) | grep -v '\"decision_id\":\"')"),
+            (false, true) => format!(" &> >(tee >(grep -v '\"decision_id\":\"' &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})))"),
+            // Normally in this case OPA should *not* be instructed to even write decision logs, so we *should* be able
+            // to just forward them. However, we still filter them just to be safe.
+            (false, false) => format!(" &> >(grep -v '\"decision_id\":\"' | tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))"),
+        }
+    } else if decision_logs_to_file {
+        format!(" &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+    } else {
+        format!(" &> >(grep -v '\"decision_id\":\"' &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
+    };
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
     formatdoc! {"
@@ -974,15 +1002,6 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
-        // Redirects matter!
-        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
-        // and not some utility (e.g. multilog or tee) process.
-        // See https://stackoverflow.com/a/8048493
-        logging_redirects = if console_logging_off {
-            format!(" &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
-        } else {
-            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-        },
     }
 }
 
