@@ -15,6 +15,7 @@ VERSION := $(shell cargo metadata --format-version 1 | jq -r '.packages[] | sele
 ARCH := $(shell arch | sed -e 's#x86_64#amd64#' | sed -e 's#aarch64#arm64#')
 
 DOCKER_REPO := docker.stackable.tech
+# TODO: Change to stackable after testing
 ORGANIZATION := stackable-experimental
 OCI_REGISTRY_HOSTNAME := oci.stackable.tech
 OCI_REGISTRY_PROJECT_IMAGES := sdp
