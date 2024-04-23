@@ -57,7 +57,7 @@ docker-publish:
 	# Merge the SBOM with the metadata for the operator\
 	jq -s '{"metadata":{"component":{"description":"'"$$IMAGE_NAME. $$IMAGE_DESCRIPTION"'","supplier":{"name":"Stackable GmbH","url":["https://stackable.tech/"]},"author":"Stackable GmbH","purl":"'"$$PURL"'","publisher":"Stackable GmbH"}}} * .[0]' sbom.json > sbom.merged.json;\
 	# Attest the SBOM to the image\
-	cosign attest -y --predicate sbom.merged.json --type cyclonedx "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}-${ARCH}@$$REPO_DIGEST_OF_IMAGE"
+	cosign attest -y --predicate sbom.merged.json --type cyclonedx "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}@$$REPO_DIGEST_OF_IMAGE"
 
 	# # Push to Harbor
 	# # We need to use "value" here to prevent the variable from being recursively expanded by make (username contains a dollar sign, since it's a Harbor bot)
