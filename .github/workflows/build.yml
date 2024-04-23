@@ -16,6 +16,8 @@ on:
       - '[0-9][0-9].[0-9]+.[0-9]+'
   pull_request:
   merge_group:
+  # TODO: Remove after testing
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
