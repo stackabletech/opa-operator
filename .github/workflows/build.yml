@@ -305,7 +305,10 @@ jobs:
     needs:
       - tests_passed
       - select_helm_repo
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        runner: ["ubuntu-latest", "buildjet-2vcpu-ubuntu-2204-arm"]
+    runs-on: ${{ matrix.runner }}
     permissions:
       id-token: write
     env:
@@ -361,6 +364,29 @@ jobs:
         name: Output image name and tag
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: echo "IMAGE_TAG=$(make -e print-docker-tag)" >> $GITHUB_OUTPUT
+
+  create_manifest_list:
+    name: Build and publish manifest list
+    needs:
+      - package_and_publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    env:
+      NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      OCI_REGISTRY_SDP_PASSWORD: ${{ secrets.HARBOR_ROBOT_SDP_GITHUB_ACTION_BUILD_SECRET }}
+      OCI_REGISTRY_SDP_USERNAME: "robot$sdp+github-action-build"
+      OCI_REGISTRY_SDP_CHARTS_PASSWORD: ${{ secrets.HARBOR_ROBOT_SDP_CHARTS_GITHUB_ACTION_BUILD_SECRET }}
+      OCI_REGISTRY_SDP_CHARTS_USERNAME: "robot$sdp-charts+github-action-build"
+    steps: 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@9614fae9e5c5eddabb09f90a270fcb487c9f7149 # tag=v3.3.0
+      - name: Build manifest list
+        run: |
+          # Creating manifest list
+          make -e docker-manifest-list-build
+          # Pushing and signing manifest list
+          make -e docker-manifest-list-publish
 
   openshift_preflight:
     name: Run the OpenShift Preflight check on the published images
