@@ -361,7 +361,16 @@ jobs:
       - name: Install syft
         uses: anchore/sbom-action/download-syft@24b0d5238516480139aa8bc6f92eeb7b54a9eb0a # tag=v0.15.5
       - name: Build Docker image and Helm chart
-        run: make -e build
+        run: |
+          # Installing helm on BuildJet only
+          if [$(arch)=="aarch64"]; then
+            curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+            sudo apt-get -y install apt-transport-https --yes
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+            sudo apt-get -y update
+            sudo apt-get -y install helm
+          fi
+          make -e build
       - name: Publish Docker image and Helm chart
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: make -e publish
