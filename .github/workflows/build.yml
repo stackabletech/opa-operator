@@ -399,9 +399,9 @@ jobs:
       - name: Build manifest list
         run: |
           # Creating manifest list
-          make -e docker-manifest-list-build 
+          make -e manifestbuild
           # Pushing and signing manifest list
-          make -e docker-manifest-list-publish
+          make -e manifestpush
 
   openshift_preflight:
     name: Run the OpenShift Preflight check on the published images

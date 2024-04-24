@@ -85,14 +85,14 @@ docker-publish:
 	# cosign attest -y --predicate sbom.merged.json --type cyclonedx "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}@$$REPO_DIGEST_OF_IMAGE"
 
 # This assumes "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-amd64 and "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-arm64 being build and pushed
-docker-manifest-list-build:
+manifestbuild:
 	MANIFEST_NAME_NEXUS = $$(echo $(${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}))
 	MANIFEST_NAME_HARBOR := $$(echo $(${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}))
 
 	docker manifest create "$MANIFEST_NAME_NEXUS" --amend "$MANIFEST_NAME_NEXUS-amd64" --amend "$MANIFEST_NAME_NEXUS-arm64"
 	docker manifest create "$MANIFEST_NAME_HARBOR" --amend "$MANIFEST_NAME_HARBOR-amd64" --amend "$MANIFEST_NAME_HARBOR-arm64" 
 
-docker-manifest-list-publish:
+manifestpublish:
 	# Push to Nexus
 	# `docker manifest push` directly returns the digest of the manifest list
 	# As it is an experimental feature, this might change in the future
