@@ -347,9 +347,7 @@ jobs:
           bin: cargo-set-version
       - name: Update version if PR
         if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          cargo clean
-          cargo set-version --offline --workspace 0.0.0-pr${{ github.event.pull_request.number }}
+        run: cargo set-version --offline --workspace 0.0.0-pr${{ github.event.pull_request.number }}
 
         # Recreate charts and publish charts and docker image. The "-e" is needed as we want to override the
         # default value in the makefile if called from this action, but not otherwise (i.e. when called locally).
