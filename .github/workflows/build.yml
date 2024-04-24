@@ -399,7 +399,7 @@ jobs:
       - name: Build manifest list
         run: |
           # Creating manifest list
-          make -e docker-manifest-list-build
+          make -e docker-manifest-list-build 
           # Pushing and signing manifest list
           make -e docker-manifest-list-publish
 
