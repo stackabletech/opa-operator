@@ -398,6 +398,7 @@ jobs:
         uses: sigstore/cosign-installer@9614fae9e5c5eddabb09f90a270fcb487c9f7149 # tag=v3.3.0
       - name: Build manifest list
         run: |
+          cat Makefile
           # Creating manifest list
           make -e manifestbuild
           # Pushing and signing manifest list
