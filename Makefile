@@ -85,25 +85,23 @@ docker-publish:
 	# cosign attest -y --predicate sbom.merged.json --type cyclonedx "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}@$$REPO_DIGEST_OF_IMAGE"
 
 # This assumes "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-amd64 and "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-arm64 being build and pushed
-manifestbuild:
-	# MANIFEST_NAME_NEXUS = $$(echo $(${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}))
-	# MANIFEST_NAME_HARBOR := $$(echo $(${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}))
+docker-manifest-list-build:
+	MANIFEST_NAME_NEXUS := $$(echo $(${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}))
+	MANIFEST_NAME_HARBOR := $$(echo $(${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}))
 
-	# docker manifest create "$MANIFEST_NAME_NEXUS" --amend "$MANIFEST_NAME_NEXUS-amd64" --amend "$MANIFEST_NAME_NEXUS-arm64"
-	# docker manifest create "$MANIFEST_NAME_HARBOR" --amend "$MANIFEST_NAME_HARBOR-amd64" --amend "$MANIFEST_NAME_HARBOR-arm64" 
+	docker manifest create "$$MANIFEST_NAME_NEXUS" --amend "$$MANIFEST_NAME_NEXUS-amd64" --amend "$$MANIFEST_NAME_NEXUS-arm64"
+	docker manifest create "$$MANIFEST_NAME_HARBOR" --amend "$$MANIFEST_NAME_HARBOR-amd64" --amend "$$MANIFEST_NAME_HARBOR-arm64" 
 
-	docker manifest create "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}" --amend "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-amd64" --amend "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-arm64"
-
-manifestpublish:
+docker-manifet-list-publish:
 	# Push to Nexus
 	# `docker manifest push` directly returns the digest of the manifest list
 	# As it is an experimental feature, this might change in the future
 	# Further reading: https://docs.docker.com/reference/cli/docker/manifest/push/
-	DIGEST_NEXUS=$$(docker manifest push "$MANIFEST_NAME_NEXUS")
+	DIGEST_NEXUS=$$(docker manifest push "$$MANIFEST_NAME_NEXUS")
 	# Refer to image via its digest (oci.stackable.tech/sdp/airflow@sha256:0a1b2c...)
 	# This generates a signature and publishes it to the registry, next to the image
 	# Uses the keyless signing flow with Github Actions as identity provider
-	cosign sign -y "$MANIFEST_NAME_NEXUS@$DIGEST_NEXUS"
+	cosign sign -y "$$MANIFEST_NAME_NEXUS@$$DIGEST_NEXUS"
 
 	# # Push to Harbor
 	# # We need to use "value" here to prevent the variable from being recursively expanded by make (username contains a dollar sign, since it's a Harbor bot)

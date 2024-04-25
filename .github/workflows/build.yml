@@ -404,9 +404,9 @@ jobs:
         run: |
           cat Makefile
           # Creating manifest list
-          make -e manifestbuild
+          make -e docker-manifest-list-build
           # Pushing and signing manifest list
-          make -e manifestpublish
+          make -e docker-manifet-list-publish
 
   openshift_preflight:
     name: Run the OpenShift Preflight check on the published images
