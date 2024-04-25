@@ -402,7 +402,7 @@ jobs:
           # Creating manifest list
           make -e manifestbuild
           # Pushing and signing manifest list
-          make -e manifestpush
+          make -e manifestpublish
 
   openshift_preflight:
     name: Run the OpenShift Preflight check on the published images
