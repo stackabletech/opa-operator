@@ -94,6 +94,7 @@ docker-manifest-list-build:
 
 docker-manifet-list-publish:
 	# Push to Nexus
+	echo "${NEXUS_PASSWORD}" | docker login --username github --password-stdin "${DOCKER_REPO}"
 	# `docker manifest push` directly returns the digest of the manifest list
 	# As it is an experimental feature, this might change in the future
 	# Further reading: https://docs.docker.com/reference/cli/docker/manifest/push/
