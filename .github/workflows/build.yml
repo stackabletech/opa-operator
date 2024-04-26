@@ -400,12 +400,15 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           submodules: recursive
+      - uses: actions-rs/install@v0.1
+        with:
+          crate: cargo-edit
+          version: latest
       - name: Update version if PR
         if: ${{ github.event_name == 'pull_request' }}
         run: cargo set-version --offline --workspace 0.0.0-pr${{ github.event.pull_request.number }}
       - name: Build manifest list
         run: |
-          cat Makefile
           # Creating manifest list
           make -e docker-manifest-list-build
           # Pushing and signing manifest list
