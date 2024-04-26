@@ -86,10 +86,10 @@ docker-publish:
 
 # This assumes "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-amd64 and "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-arm64 being build and pushed
 docker-manifest-list-build:
-	# MANIFEST_NAME_NEXUS := "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}"
-	# MANIFEST_NAME_HARBOR := "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}"
-
+	# MANIFEST_NAME_NEXUS="${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}";\
 	docker manifest create "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}" --amend "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-amd64" --amend "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-arm64"
+	
+	# MANIFEST_NAME_HARBOR="${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}";\
 	# docker manifest create "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}" --amend "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}-amd64" --amend "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}-arm64" 
 
 docker-manifet-list-publish:
@@ -98,7 +98,7 @@ docker-manifet-list-publish:
 	# `docker manifest push` directly returns the digest of the manifest list
 	# As it is an experimental feature, this might change in the future
 	# Further reading: https://docs.docker.com/reference/cli/docker/manifest/push/
-	DIGEST_NEXUS=$$(docker manifest push "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}")
+	DIGEST_NEXUS=$$(docker manifest push "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}");\
 	# Refer to image via its digest (oci.stackable.tech/sdp/airflow@sha256:0a1b2c...)
 	# This generates a signature and publishes it to the registry, next to the image
 	# Uses the keyless signing flow with Github Actions as identity provider
