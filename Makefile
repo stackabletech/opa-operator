@@ -99,15 +99,15 @@ docker-manifet-list-publish:
 	# As it is an experimental feature, this might change in the future
 	# Further reading: https://docs.docker.com/reference/cli/docker/manifest/push/
 	DIGEST_NEXUS=$$(docker manifest push "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}");\
-	# Refer to image via its digest (oci.stackable.tech/sdp/airflow@sha256:0a1b2c...)
-	# This generates a signature and publishes it to the registry, next to the image
-	# Uses the keyless signing flow with Github Actions as identity provider
+	# Refer to image via its digest (oci.stackable.tech/sdp/airflow@sha256:0a1b2c...)\
+	# This generates a signature and publishes it to the registry, next to the image\
+	# Uses the keyless signing flow with Github Actions as identity provider\
 	cosign sign -y "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}@$$DIGEST_NEXUS"
 
 	# # Push to Harbor
 	# # We need to use "value" here to prevent the variable from being recursively expanded by make (username contains a dollar sign, since it's a Harbor bot)
 	# docker login --username '${value OCI_REGISTRY_SDP_USERNAME}' --password '${OCI_REGISTRY_SDP_PASSWORD}' '${OCI_REGISTRY_HOSTNAME}'
-	# DIGEST_HARBOR=$$(docker manifest push "$$MANIFEST_NAME_HARBOR")
+	# DIGEST_HARBOR=$$(docker manifest push "$$MANIFEST_NAME_HARBOR");\
 	# # Refer to image via its digest (oci.stackable.tech/sdp/airflow@sha256:0a1b2c...)
 	# # This generates a signature and publishes it to the registry, next to the image
 	# # Uses the keyless signing flow with Github Actions as identity provider
