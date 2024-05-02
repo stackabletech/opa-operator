@@ -65,7 +65,7 @@ use crate::{
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
     product_logging::{
-        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel
+        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
     },
 };
 
@@ -271,14 +271,15 @@ pub struct OpaClusterConfigFile {
     services: Vec<OpaClusterConfigService>,
     bundles: OpaClusterBundle,
     #[serde(skip_serializing_if = "Option::is_none")]
-    decision_logs: Option<OpaClusterConfigDecisionLog>   
+    decision_logs: Option<OpaClusterConfigDecisionLog>,
 }
 
 impl OpaClusterConfigFile {
     pub fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
         Self {
-            services: vec![OpaClusterConfigService { 
-                name: String::from("stackable"), url: String::from("http://localhost:3030/opa/v1")
+            services: vec![OpaClusterConfigService {
+                name: String::from("stackable"),
+                url: String::from("http://localhost:3030/opa/v1"),
             }],
             bundles: OpaClusterBundle {
                 stackable: OpaClusterBundleConfig {
@@ -287,9 +288,10 @@ impl OpaClusterConfigFile {
                     persist: true,
                     polling: OpaClusterBundleConfigPolling {
                         min_delay_seconds: 10,
-                        max_delay_seconds: 20
-                    }
-            }},
+                        max_delay_seconds: 20,
+                    },
+                },
+            },
             decision_logs: decision_logging,
         }
     }
@@ -977,8 +979,7 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
     }) = merged_config.logging.containers.get(&Container::Opa)
     {
         // Retrieve the file log level for OPA and convert to OPA log levels
-        if let Some(config) = log_config.loggers.get("decision")
-        {
+        if let Some(config) = log_config.loggers.get("decision") {
             decision_logging_enabled = config.level != LogLevel::NONE;
         }
     }
@@ -986,7 +987,7 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
     let decision_logging;
 
     if decision_logging_enabled {
-        decision_logging = Some(OpaClusterConfigDecisionLog {console: true});
+        decision_logging = Some(OpaClusterConfigDecisionLog { console: true });
     } else {
         decision_logging = None;
     }
