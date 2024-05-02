@@ -6,6 +6,7 @@ use std::{
 
 use indoc::formatdoc;
 use product_config::{types::PropertyNameKind, ProductConfigManager};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
@@ -64,8 +65,7 @@ use crate::{
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
     product_logging::{
-        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
-        OpaLogLevel,
+        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel
     },
 };
 
@@ -264,6 +264,65 @@ impl ReconcilerError for Error {
     fn category(&self) -> &'static str {
         ErrorDiscriminants::from(self).into()
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OpaClusterConfigFile {
+    services: Vec<OpaClusterConfigService>,
+    bundles: OpaClusterBundle,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    decision_logs: Option<OpaClusterConfigDecisionLog>   
+}
+
+impl OpaClusterConfigFile {
+    pub fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
+        Self {
+            services: vec![OpaClusterConfigService { 
+                name: String::from("stackable"), url: String::from("http://localhost:3030/opa/v1")
+            }],
+            bundles: OpaClusterBundle {
+                stackable: OpaClusterBundleConfig {
+                    service: String::from("stackable"),
+                    resource: String::from("opa/bundle.tar.gz"),
+                    persist: true,
+                    polling: OpaClusterBundleConfigPolling {
+                        min_delay_seconds: 10,
+                        max_delay_seconds: 20
+                    }
+            }},
+            decision_logs: decision_logging,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterConfigService {
+    name: String,
+    url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterBundle {
+    stackable: OpaClusterBundleConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterBundleConfig {
+    service: String,
+    resource: String,
+    persist: bool,
+    polling: OpaClusterBundleConfigPolling,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterBundleConfigPolling {
+    min_delay_seconds: i32,
+    max_delay_seconds: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OpaClusterConfigDecisionLog {
+    console: bool,
 }
 
 pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
@@ -910,90 +969,90 @@ pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Ac
     Action::requeue(*Duration::from_secs(5))
 }
 
-fn build_config_file(config: &OpaConfig) -> String {
-    serde_json::to_string_pretty(&json!({
-        "services": [{
-            "name": "stackable",
-            "url": "http://localhost:3030/opa/v1",
-        },],
-        "bundles": {
-            "stackable": {
-                "service": "stackable",
-                "resource": "opa/bundle.tar.gz",
-                "persist": true,
-                "polling": {
-                    "min_delay_seconds": 10,
-                    "max_delay_seconds": 20,
-                },
-            }
-        },
-        // FIXME: We should only write this whole struct when we want decision logs
-        "decision_logs": {
-            // Either one can enable the decision logs, the entrypoint takes care of filtering which target get decision
-            // logs
-            "console": config.decision_logging.console || config.decision_logging.file,
-        }
-    }))
-    .unwrap()
-}
-
-fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
-    let mut opa_log_level = OpaLogLevel::Info;
-    let mut console_logging_enabled = true;
+fn build_config_file(merged_config: &OpaConfig) -> String {
+    let mut decision_logging_enabled = false;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(&Container::Opa)
     {
         // Retrieve the file log level for OPA and convert to OPA log levels
+        if let Some(config) = log_config.loggers.get("decision")
+        {
+            decision_logging_enabled = config.level != LogLevel::NONE;
+        }
+    }
+
+    let decision_logging;
+
+    if decision_logging_enabled {
+        decision_logging = Some(OpaClusterConfigDecisionLog {console: true});
+    } else {
+        decision_logging = None;
+    }
+
+    let config = OpaClusterConfigFile::new(decision_logging);
+
+    serde_json::to_string_pretty(&json!(config)).unwrap()
+}
+
+fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
+    let mut file_log_level = LogLevel::INFO;
+    let mut console_log_level = LogLevel::INFO;
+    let mut server_log_level = LogLevel::INFO;
+    let mut decision_log_level = LogLevel::NONE;
+
+    if let Some(ContainerLogConfig {
+        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
+    }) = merged_config.logging.containers.get(&Container::Opa)
+    {
+        // Retrieve the file log level for OPA
         if let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.file
         {
-            opa_log_level = OpaLogLevel::from(log_level);
+            file_log_level = log_level;
         }
 
-        // We need to check if the console logging is deactivated (NONE)
-        // This will result in not using `tee` later on in the start command
+        // Retrieve the console log level for OPA
         if let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.console
         {
-            console_logging_enabled = log_level != LogLevel::NONE
+            console_log_level = log_level;
+        }
+
+        // Retrieve the decision log level for OPA. If not set, keep the defined default above of LogLevel::NONE
+        if let Some(config) = log_config.loggers.get("decision") {
+            decision_log_level = config.level
+        }
+
+        // Retrieve the server log level for OPA. If not set, set it to the ROOT log level
+        match log_config.loggers.get("server") {
+            Some(config) => server_log_level = config.level,
+            None => server_log_level = log_config.root_log_level(),
         }
     }
-
-    let decision_logs_to_stdout = merged_config.decision_logging.console;
-    let decision_logs_to_file = merged_config.decision_logging.file;
 
     // Redirects matter!
     // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
     // and not some utility (e.g. multilog or tee) process.
     // See https://stackoverflow.com/a/8048493
 
-    // *Technically*, we would also need to calculate `file_logging_enabled` and take that into account. However, this
-    // is a very nice edge-case and would make things more complicated and error-prone.
-    let logging_redirects = if console_logging_enabled {
-        match (decision_logs_to_file, decision_logs_to_stdout) {
-            (true, true) => format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))"),
-            (true, false) => format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}) | grep -v '\"decision_id\":\"')"),
-            (false, true) => format!(" &> >(tee >(grep -v '\"decision_id\":\"' &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})))"),
-            // Normally in this case OPA should *not* be instructed to even write decision logs, so we *should* be able
-            // to just forward them. However, we still filter them just to be safe.
-            (false, false) => format!(" &> >(grep -v '\"decision_id\":\"' | tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))"),
-        }
-    } else if decision_logs_to_file {
-        format!(" &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
-    } else {
-        format!(" &> >(grep -v '\"decision_id\":\"' &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-    };
+    let logging_redirects = format!(
+        "&> >(process-logs --file-log-level {file} --console-log-level {console} --decision-log-level {decision} --server-log-level {server} --opa-rolling-log-file-size-bytes {OPA_ROLLING_LOG_FILE_SIZE_BYTES} --opa-rolling-log-files {OPA_ROLLING_LOG_FILES} --stackable-log-dir {STACKABLE_LOG_DIR} --container-name {container_name})",
+        file = file_log_level.to_vector_literal(),
+        console = console_log_level.to_vector_literal(),
+        decision = decision_log_level.to_vector_literal(),
+        server = server_log_level.to_vector_literal()
+    );
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
-        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry{logging_redirects} &
+        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",
@@ -1002,6 +1061,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
+        opa_log_level = file_log_level.to_vector_literal()
     }
 }
 

@@ -183,29 +183,6 @@ pub enum Container {
         PartialEq,
         Serialize
     ),
-    serde(rename_all = "camelCase"),
-    schemars(description = "Decision Logging configuration.")
-)]
-pub struct DecisionLogging {
-    /// Whether or not to print decision logging to files collected by Vector agent.
-    pub file: bool,
-
-    /// Whether or not to print decision logging to the console.
-    pub console: bool,
-}
-
-#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
-#[fragment_attrs(
-    derive(
-        Clone,
-        Debug,
-        Default,
-        Deserialize,
-        Merge,
-        JsonSchema,
-        PartialEq,
-        Serialize
-    ),
     serde(rename_all = "camelCase")
 )]
 pub struct OpaConfig {
@@ -214,9 +191,6 @@ pub struct OpaConfig {
 
     #[fragment_attrs(serde(default))]
     pub logging: Logging<Container>,
-
-    #[fragment_attrs(serde(default))]
-    pub decision_logging: DecisionLogging,
 
     #[fragment_attrs(serde(default))]
     pub affinity: StackableAffinity,
@@ -230,10 +204,6 @@ impl OpaConfig {
     fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
-            decision_logging: DecisionLoggingFragment {
-                file: Some(true),
-                console: Some(false),
-            },
             resources: ResourcesFragment {
                 cpu: CpuLimitsFragment {
                     min: Some(Quantity("250m".to_owned())),
