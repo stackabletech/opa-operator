@@ -978,7 +978,6 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(&Container::Opa)
     {
-        // Retrieve the file log level for OPA and convert to OPA log levels
         if let Some(config) = log_config.loggers.get("decision") {
             decision_logging_enabled = config.level != LogLevel::NONE;
         }
@@ -1007,7 +1006,6 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(&Container::Opa)
     {
-        // Retrieve the file log level for OPA
         if let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.file
@@ -1015,7 +1013,6 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
             file_log_level = log_level;
         }
 
-        // Retrieve the console log level for OPA
         if let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.console
@@ -1023,7 +1020,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
             console_log_level = log_level;
         }
 
-        // Retrieve the decision log level for OPA. If not set, keep the defined default above of LogLevel::NONE
+        // Retrieve the decision log level for OPA. If not set, keep the defined default of LogLevel::NONE
         if let Some(config) = log_config.loggers.get("decision") {
             decision_log_level = config.level
         }
