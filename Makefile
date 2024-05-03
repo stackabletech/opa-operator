@@ -89,7 +89,7 @@ docker-manifest-list-build:
 	docker manifest create "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}" --amend "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-amd64" --amend "${DOCKER_REPO}/${ORGANIZATION}/${OPERATOR_NAME}:${VERSION}-arm64"
 	docker manifest create "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}" --amend "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}-amd64" --amend "${OCI_REGISTRY_HOSTNAME}/${OCI_REGISTRY_PROJECT_IMAGES}/${OPERATOR_NAME}:${VERSION}-arm64" 
 
-docker-manifet-list-publish:
+docker-manifest-list-publish:
 	# Push to Nexus
 	echo "${NEXUS_PASSWORD}" | docker login --username github --password-stdin "${DOCKER_REPO}"
 	# `docker manifest push` directly returns the digest of the manifest list
