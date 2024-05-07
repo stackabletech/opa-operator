@@ -10,7 +10,7 @@ edition = "2021"
 repository = "https://github.com/stackabletech/opa-operator"
 
 [workspace.dependencies]
-axum = "0.6"
+axum = "0.7"
 built = { version = "0.6", features = ["chrono", "git2"] }
 clap = "4.3"
 derivative = "2.2"
