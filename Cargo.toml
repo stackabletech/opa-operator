@@ -16,7 +16,7 @@ clap = "4.3"
 derivative = "2.2"
 fnv = "1.0"
 futures = { version = "0.3", features = ["compat"] }
-hyper = "0.14"
+hyper = "1.0"
 indoc = "2.0"
 moka = { version = "0.12", features = ["future"] }
 pin-project = "1.1"
