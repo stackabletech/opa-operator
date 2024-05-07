@@ -23,7 +23,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: '0'
   CARGO_PROFILE_DEV_DEBUG: '0'
-  RUST_TOOLCHAIN_VERSION: "1.77.0"
+  RUST_TOOLCHAIN_VERSION: "1.77.2"
   RUSTFLAGS: "-D warnings"
   RUSTDOCFLAGS: "-D warnings"
   RUST_LOG: "info"
@@ -425,9 +425,11 @@ jobs:
     steps:
       - name: Install preflight
         run: |
-          wget https://github.com/redhat-openshift-ecosystem/openshift-preflight/releases/download/1.7.2/preflight-linux-amd64
+          wget https://github.com/redhat-openshift-ecosystem/openshift-preflight/releases/download/1.9.1/preflight-linux-amd64
           chmod +x preflight-linux-amd64
       - name: Check container
-        run: ./preflight-linux-amd64 check container "$IMAGE_TAG" > preflight.out
+        run: |
+          ARCH_FOR_PREFLIGHT="$(arch | sed -e 's#x86_64#amd64#' | sed -e 's#aarch64#arm64#')"
+          ./preflight-linux-amd64 check container "$IMAGE_TAG" --platform "${ARCH_FOR_PREFLIGHT}" > preflight.out
       - name: "Passed?"
-        run: '[ "$(./preflight-linux-amd64 check container "$IMAGE_TAG" | jq -r .passed)" == true ]'
+        run: '[ "$(./preflight-linux-amd64 check container "$IMAGE_TAG" --platform "${ARCH_FOR_PREFLIGHT}" | jq -r .passed)" == true ]'
