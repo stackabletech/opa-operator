@@ -3,11 +3,11 @@ use std::sync::Arc;
 use clap::{crate_description, crate_version, Parser};
 use futures::StreamExt;
 use product_config::ProductConfigManager;
+use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
     client::{self, Client},
-    error::{self, OperatorResult},
     k8s_openapi::api::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
@@ -34,6 +34,24 @@ pub mod built_info {
     pub const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 }
 
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("failed to load config"))]
+    LoadConfig {
+        source: stackable_operator::cli::Error,
+    },
+
+    #[snafu(display("failed to create client"))]
+    CreateClient {
+        source: stackable_operator::client::Error,
+    },
+
+    #[snafu(display("failed to print yaml"))]
+    PrintYaml {
+        source: stackable_operator::crd::Error,
+    },
+}
+
 #[derive(Parser)]
 #[clap(about, author)]
 struct Opts {
@@ -55,11 +73,11 @@ struct OpaRun {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), error::Error> {
+async fn main() -> Result<(), Error> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => {
-            OpaCluster::print_yaml_schema(built_info::CARGO_PKG_VERSION)?;
+            OpaCluster::print_yaml_schema(built_info::CARGO_PKG_VERSION).context(PrintYamlSnafu)?;
         }
         Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
@@ -85,12 +103,16 @@ async fn main() -> Result<(), error::Error> {
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
-            let product_config = product_config.load(&[
-                "deploy/config-spec/properties.yaml",
-                "/etc/stackable/opa-operator/config-spec/properties.yaml",
-            ])?;
+            let product_config = product_config
+                .load(&[
+                    "deploy/config-spec/properties.yaml",
+                    "/etc/stackable/opa-operator/config-spec/properties.yaml",
+                ])
+                .context(LoadConfigSnafu)?;
 
-            let client = client::create_client(Some(OPERATOR_NAME.to_string())).await?;
+            let client = client::create_client(Some(OPERATOR_NAME.to_string()))
+                .await
+                .context(CreateClientSnafu)?;
             create_controller(
                 client,
                 product_config,
@@ -98,7 +120,7 @@ async fn main() -> Result<(), error::Error> {
                 opa_builder_clusterrole,
                 operator_image,
             )
-            .await?;
+            .await;
         }
     };
 
@@ -114,7 +136,7 @@ async fn create_controller(
     watch_namespace: WatchNamespace,
     opa_bundle_builder_clusterrole: String,
     user_info_fetcher_image: String,
-) -> OperatorResult<()> {
+) {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
     let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
@@ -145,6 +167,4 @@ async fn create_controller(
         })
         .collect::<()>()
         .await;
-
-    Ok(())
 }
