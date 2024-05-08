@@ -72,4 +72,3 @@ The name of the cluster role to use for the OPA pods.
 export OPA_BUNDLE_BUILDER_CLUSTERROLE=test
 stackable-opa-operator run
 ----
-
