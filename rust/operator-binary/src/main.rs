@@ -82,14 +82,12 @@ async fn main() -> anyhow::Result<()> {
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
-            let product_config = product_config
-                .load(&[
-                    "deploy/config-spec/properties.yaml",
-                    "/etc/stackable/opa-operator/config-spec/properties.yaml",
-                ])?;
+            let product_config = product_config.load(&[
+                "deploy/config-spec/properties.yaml",
+                "/etc/stackable/opa-operator/config-spec/properties.yaml",
+            ])?;
 
-            let client = client::create_client(Some(OPERATOR_NAME.to_string()))
-                .await?;
+            let client = client::create_client(Some(OPERATOR_NAME.to_string())).await?;
             create_controller(
                 client,
                 product_config,
