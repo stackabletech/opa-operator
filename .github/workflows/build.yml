@@ -16,6 +16,8 @@ on:
       - '[0-9][0-9].[0-9]+.[0-9]+'
   pull_request:
   merge_group:
+  # TODO: Remove after testing
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -305,7 +307,10 @@ jobs:
     needs:
       - tests_passed
       - select_helm_repo
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        runner: ["ubuntu-latest", "buildjet-2vcpu-ubuntu-2204-arm"]
+    runs-on: ${{ matrix.runner }}
     permissions:
       id-token: write
     env:
@@ -352,7 +357,16 @@ jobs:
       - name: Install syft
         uses: anchore/sbom-action/download-syft@7ccf588e3cf3cc2611714c2eeae48550fbc17552 # v0.15.11
       - name: Build Docker image and Helm chart
-        run: make -e build
+        run: |
+          # Installing helm on BuildJet only
+          if [ "$(arch)" = "aarch64" ]; then
+            curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+            sudo apt-get -y install apt-transport-https --yes
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+            sudo apt-get -y update
+            sudo apt-get -y install helm
+          fi
+          make -e build
       - name: Publish Docker image and Helm chart
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: make -e publish
@@ -361,6 +375,47 @@ jobs:
         name: Output image name and tag
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: echo "IMAGE_TAG=$(make -e print-docker-tag)" >> $GITHUB_OUTPUT
+
+  create_manifest_list:
+    name: Build and publish manifest list
+    needs:
+      - package_and_publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    env:
+      NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      OCI_REGISTRY_SDP_PASSWORD: ${{ secrets.HARBOR_ROBOT_SDP_GITHUB_ACTION_BUILD_SECRET }}
+      OCI_REGISTRY_SDP_USERNAME: "robot$sdp+github-action-build"
+      OCI_REGISTRY_SDP_CHARTS_PASSWORD: ${{ secrets.HARBOR_ROBOT_SDP_CHARTS_GITHUB_ACTION_BUILD_SECRET }}
+      OCI_REGISTRY_SDP_CHARTS_USERNAME: "robot$sdp-charts+github-action-build"
+    steps: 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # tag=v3.5.0
+      - name: Checkout
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4 
+        with:
+          submodules: recursive
+      # - uses: actions-rs/install@v0.1
+        # with:
+          # crate: cargo-edit
+          # version: latest
+        # This step checks if the current run was triggered by a push to a pr (or a pr being created).
+        # If this is the case it changes the version of this project in all Cargo.toml files to include the suffix
+        # "-pr<prnumber>" so that the published artifacts can be linked to this PR.
+      - uses: stackabletech/cargo-install-action@main
+        with:
+          crate: cargo-edit
+          bin: cargo-set-version
+      - name: Update version if PR
+        if: ${{ github.event_name == 'pull_request' }}
+        run: cargo set-version --offline --workspace 0.0.0-pr${{ github.event.pull_request.number }}
+      - name: Build manifest list
+        run: |
+          # Creating manifest list
+          make -e docker-manifest-list-build
+          # Pushing and signing manifest list
+          make -e docker-manifest-list-publish
 
   openshift_preflight:
     name: Run the OpenShift Preflight check on the published images
@@ -380,4 +435,4 @@ jobs:
           ARCH_FOR_PREFLIGHT="$(arch | sed -e 's#x86_64#amd64#' | sed -e 's#aarch64#arm64#')"
           ./preflight-linux-amd64 check container "$IMAGE_TAG" --platform "${ARCH_FOR_PREFLIGHT}" > preflight.out
       - name: "Passed?"
-        run: '[ "$(./preflight-linux-amd64 check container "$IMAGE_TAG" --platform "${ARCH_FOR_PREFLIGHT}" | jq -r .passed)" == true ]'
+        run: '[ "$(cat preflight.out | jq -r .passed)" == true ]'
