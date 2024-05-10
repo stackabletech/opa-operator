@@ -4,18 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Changed
-
-- `operator-rs` `0.64` -> `0.67` ([#571]).
-- `axum` `0.6` -> `0.7` ([#571]).
-- `built` `0.6` -> `0.7` ([#571]).
-- `hyper` `0.14` -> `1.3` ([#571]).
-- `reqwest` `0.11` -> `0.12` ([#571]).
-- `snafu` `0.7` -> `0.8` ([#571]).
-- `strum` `0.25` -> `0.26` ([#571]).
-
-[#465]: https://github.com/stackabletech/opa-operator/pull/571
-
 ## [24.3.0] - 2024-03-20
 
 ### Added
