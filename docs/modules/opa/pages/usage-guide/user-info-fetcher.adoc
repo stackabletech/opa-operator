@@ -65,7 +65,7 @@ NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Acco
 [NOTE]
 .About unencrypted HTTP
 ====
-The User info fetcher serves endpoints over clear-text HTTP. 
+The User info fetcher serves endpoints over clear-text HTTP.
 
 It is intended to only be accessed from the OPA Server via _localhost_ and to not be exposed outside of the Pod.
 ====
@@ -76,19 +76,19 @@ package test # <1>
 
 # Define a function to lookup by username
 userInfoByUsername(username) := http.send({
-  "method": "POST", 
-  "url": "http://127.0.0.1:9476/user", 
+  "method": "POST",
+  "url": "http://127.0.0.1:9476/user",
   "body": {"username": username}, <2>
-  "headers": {"Content-Type": "application/json"}, 
+  "headers": {"Content-Type": "application/json"},
   "raise_error": true
 }).body
 
 # Define a function to lookup by a stable identifier
 userInfoById(id) := http.send({
-  "method": "POST", 
-  "url": "http://127.0.0.1:9476/user", 
+  "method": "POST",
+  "url": "http://127.0.0.1:9476/user",
   "body": {"id": id}, <3>
-  "headers": {"Content-Type": "application/json"}, 
+  "headers": {"Content-Type": "application/json"},
   "raise_error": true
 }).body
 
