@@ -3,7 +3,7 @@ use crate::controller::{build_recommended_labels, APP_PORT};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, OpaRole};
 use stackable_operator::{
-    builder::{ConfigMapBuilder, ObjectMetaBuilder, ObjectMetaBuilderError},
+    builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{ConfigMap, Service},
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
@@ -13,7 +13,7 @@ use stackable_operator::{
 pub enum Error {
     #[snafu(display("object {} is missing metadata to build owner reference", opa))]
     ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::meta::Error,
         opa: ObjectRef<OpaCluster>,
     },
 
@@ -25,11 +25,13 @@ pub enum Error {
 
     #[snafu(display("failed to build ConfigMap"))]
     BuildConfigMap {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::configmap::Error,
     },
 
     #[snafu(display("failed to build object meta data"))]
-    ObjectMeta { source: ObjectMetaBuilderError },
+    ObjectMeta {
+        source: stackable_operator::builder::meta::Error,
+    },
 }
 
 /// Builds discovery [`ConfigMap`]s for connecting to a [`OpaCluster`] for all expected scenarios

@@ -14,9 +14,15 @@ use stackable_opa_crd::{
 };
 use stackable_operator::{
     builder::{
-        resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
-        FieldPathEnvVar, ObjectMetaBuilder, ObjectMetaBuilderError, PodBuilder,
-        PodSecurityContextBuilder, VolumeBuilder,
+        configmap::ConfigMapBuilder,
+        meta::ObjectMetaBuilder,
+        pod::{
+            container::{ContainerBuilder, FieldPathEnvVar},
+            resources::ResourceRequirementsBuilder,
+            security::PodSecurityContextBuilder,
+            volume::VolumeBuilder,
+            PodBuilder,
+        },
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
@@ -140,56 +146,62 @@ pub enum Error {
 
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
 
     #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
 
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::configmap::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
 
     #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
 
     #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
+        rolegroup: RoleGroupRef<OpaCluster>,
+    },
+
+    #[snafu(display("failed to apply patch for DaemonSet for [{rolegroup}]"))]
+    ApplyPatchRoleGroupDaemonSet {
+        source: stackable_operator::client::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
 
     #[snafu(display("failed to patch service account"))]
     ApplyServiceAccount {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
 
     #[snafu(display("failed to patch role binding"))]
     ApplyRoleBinding {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
 
     #[snafu(display("failed to update status"))]
     ApplyStatus {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::client::Error,
     },
 
     #[snafu(display("invalid product config"))]
     InvalidProductConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::product_config_utils::Error,
     },
 
     #[snafu(display("object is missing metadata to build owner reference"))]
     ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::meta::Error,
     },
 
     #[snafu(display("failed to build discovery ConfigMap"))]
@@ -197,12 +209,12 @@ pub enum Error {
 
     #[snafu(display("failed to apply discovery ConfigMap"))]
     ApplyDiscoveryConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
 
     #[snafu(display("failed to transform configs"))]
     ProductConfigTransform {
-        source: stackable_operator::product_config_utils::ConfigError,
+        source: stackable_operator::product_config_utils::Error,
     },
 
     #[snafu(display("failed to resolve and merge config for role and role group"))]
@@ -210,7 +222,7 @@ pub enum Error {
 
     #[snafu(display("illegal container name"))]
     IllegalContainerName {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::pod::container::Error,
     },
 
     #[snafu(display("failed to resolve the Vector aggregator address"))]
@@ -226,17 +238,17 @@ pub enum Error {
 
     #[snafu(display("failed to create cluster resources"))]
     FailedToCreateClusterResources {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
 
     #[snafu(display("failed to delete orphaned resources"))]
     DeleteOrphans {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
 
     #[snafu(display("failed to build RBAC resources"))]
     BuildRbacResources {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::commons::rbac::Error,
     },
 
     #[snafu(display("failed to configure graceful shutdown"))]
@@ -251,7 +263,9 @@ pub enum Error {
     BuildLabel { source: LabelError },
 
     #[snafu(display("failed to build object meta data"))]
-    ObjectMeta { source: ObjectMetaBuilderError },
+    ObjectMeta {
+        source: stackable_operator::builder::meta::Error,
+    },
 
     #[snafu(display(
         "failed to build volume or volume mount spec for the Keycloak backend TLS config"
@@ -273,7 +287,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let resolved_product_image = opa
         .spec
         .image
-        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::CARGO_PKG_VERSION);
+        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION);
     let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
@@ -411,7 +425,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
                 json!({"apiVersion": "apps/v1", "kind": "DaemonSet"}),
             )
             .await
-            .context(ApplyRoleGroupDaemonSetSnafu { rolegroup })?;
+            .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
     for discovery_cm in build_discovery_configmaps(

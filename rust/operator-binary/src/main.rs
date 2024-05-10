@@ -7,7 +7,6 @@ use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
     client::{self, Client},
-    error::{self, OperatorResult},
     k8s_openapi::api::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
@@ -30,8 +29,6 @@ mod product_logging;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
-    pub const TARGET_PLATFORM: Option<&str> = option_env!("TARGET");
-    pub const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 }
 
 #[derive(Parser)]
@@ -55,11 +52,11 @@ struct OpaRun {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), error::Error> {
+async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => {
-            OpaCluster::print_yaml_schema(built_info::CARGO_PKG_VERSION)?;
+            OpaCluster::print_yaml_schema(built_info::PKG_VERSION)?;
         }
         Command::Run(OpaRun {
             opa_bundle_builder_clusterrole: opa_builder_clusterrole,
@@ -81,7 +78,7 @@ async fn main() -> Result<(), error::Error> {
                 crate_description!(),
                 crate_version!(),
                 built_info::GIT_VERSION,
-                built_info::TARGET_PLATFORM.unwrap_or("unknown target"),
+                built_info::TARGET,
                 built_info::BUILT_TIME_UTC,
                 built_info::RUSTC_VERSION,
             );
@@ -98,7 +95,7 @@ async fn main() -> Result<(), error::Error> {
                 opa_builder_clusterrole,
                 operator_image,
             )
-            .await?;
+            .await;
         }
     };
 
@@ -114,7 +111,7 @@ async fn create_controller(
     watch_namespace: WatchNamespace,
     opa_bundle_builder_clusterrole: String,
     user_info_fetcher_image: String,
-) -> OperatorResult<()> {
+) {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
     let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
@@ -145,6 +142,4 @@ async fn create_controller(
         })
         .collect::<()>()
         .await;
-
-    Ok(())
 }

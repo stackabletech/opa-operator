@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # or http://<host>:8081/v1/data/test/hello
     # --> {'hello': True}
 
-    #url = 'http://test-opa-svc:8081/v1/data/test'
+    # url = 'http://test-opa-svc:8081/v1/data/test'
     response = requests.post(args['url']).json()
 
     if "result" in response and "hello" in response["result"] and response["result"]["hello"]:
