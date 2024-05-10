@@ -177,9 +177,15 @@ build: regenerate-charts regenerate-nix helm-package docker-build
 
 publish: docker-publish helm-publish
 
-run-dev:
+check-nix:
+	@which nix || (echo "Error: 'nix' is not installed. Please install it to proceed."; exit 1)
+
+check-kubernetes:
+	@kubectl cluster-info > /dev/null 2>&1 || (echo "Error: Kubernetes is not running or kubectl is not properly configured."; exit 1)
+
+run-dev: check-nix check-kubernetes
 	kubectl apply -f deploy/stackable-operators-ns.yaml
 	nix run --extra-experimental-features nix-command --extra-experimental-features flakes -f. tilt -- up --port 5430 --namespace stackable-operators
 
-stop-dev:
-	nix run --extra-experimental-features nix-command --extra-experimental-features flakes -f. tilt -- down
+stop-dev: check-nix check-kubernetes
+	nix run -f. tilt -- down
