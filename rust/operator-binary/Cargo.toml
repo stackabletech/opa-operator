@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 stackable-opa-crd = { path = "../crd" }
 
+anyhow.workspace = true
 clap.workspace = true
 fnv.workspace = true
 futures.workspace = true

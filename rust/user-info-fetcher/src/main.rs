@@ -13,7 +13,7 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use tokio::{fs::File, io::AsyncReadExt};
+use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
 
 mod backend;
 mod http_error;
@@ -62,8 +62,11 @@ enum StartupError {
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
 
+    #[snafu(display("failed to create listener"))]
+    CreateListener { source: std::io::Error },
+
     #[snafu(display("failed to run server"))]
-    RunServer { source: hyper::Error },
+    RunServer { source: std::io::Error },
 
     #[snafu(display("failed to construct http client"))]
     ConstructHttpClient { source: reqwest::Error },
@@ -167,8 +170,11 @@ async fn main() -> Result<(), StartupError> {
             credentials,
             user_info_cache,
         });
-    axum::Server::bind(&"127.0.0.1:9476".parse().context(ParseListenAddrSnafu)?)
-        .serve(app.into_make_service())
+    let listener = TcpListener::bind("127.0.0.1:9476")
+        .await
+        .context(CreateListenerSnafu)?;
+
+    axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_requested)
         .await
         .context(RunServerSnafu)
