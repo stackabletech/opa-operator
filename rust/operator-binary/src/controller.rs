@@ -14,9 +14,15 @@ use stackable_opa_crd::{
 };
 use stackable_operator::{
     builder::{
-        configmap::ConfigMapBuilder, meta::ObjectMetaBuilder, pod::container::ContainerBuilder,
-        pod::container::FieldPathEnvVar, pod::resources::ResourceRequirementsBuilder,
-        pod::security::PodSecurityContextBuilder, pod::volume::VolumeBuilder, pod::PodBuilder,
+        configmap::ConfigMapBuilder,
+        meta::ObjectMetaBuilder,
+        pod::{
+            container::{ContainerBuilder, FieldPathEnvVar},
+            resources::ResourceRequirementsBuilder,
+            security::PodSecurityContextBuilder,
+            volume::VolumeBuilder,
+            PodBuilder,
+        },
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
@@ -281,7 +287,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let resolved_product_image = opa
         .spec
         .image
-        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::CARGO_PKG_VERSION);
+        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION);
     let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
