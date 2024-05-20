@@ -4,14 +4,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use axum::{extract::State, response::IntoResponse, routing::get, Router};
+use axum::{extract::State, http, response::IntoResponse, routing::get, Router};
 use clap::Parser;
 use flate2::write::GzEncoder;
 use futures::{
     future::{self, BoxFuture},
     pin_mut, FutureExt, StreamExt,
 };
-use snafu::{futures::TryFutureExt as _, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     k8s_openapi::api::core::v1::ConfigMap,
     kube::{
@@ -22,6 +22,7 @@ use stackable_operator::{
         },
     },
 };
+use tokio::net::TcpListener;
 use tracing::{error, info};
 
 const OPERATOR_NAME: &str = "opa.stackable.tech";
@@ -49,8 +50,10 @@ enum StartupError {
     ParseListenAddr { source: AddrParseError },
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
+    #[snafu(display("failed to bind listener"))]
+    BindListener { source: std::io::Error },
     #[snafu(display("failed to run server"))]
-    RunServer { source: hyper::Error },
+    RunServer { source: std::io::Error },
 }
 
 #[tokio::main]
@@ -119,12 +122,16 @@ async fn main() -> Result<(), StartupError> {
         .with_state(AppState {
             bundle: bundle.clone(),
         });
-    let server = std::pin::pin!(axum::Server::bind(
-        &"127.0.0.1:9477".parse().context(ParseListenAddrSnafu)?
-    )
-    .serve(app.into_make_service())
-    .with_graceful_shutdown(shutdown_requested)
-    .context(RunServerSnafu));
+    let listener = TcpListener::bind("127.0.0.1:9477")
+        .await
+        .context(BindListenerSnafu)?;
+
+    let server = std::pin::pin!(async {
+        axum::serve(listener, app.into_make_service())
+            .with_graceful_shutdown(shutdown_requested)
+            .await
+            .context(RunServerSnafu)
+    });
 
     future::select(reflector, server).await.factor_first().0
 }
