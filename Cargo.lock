@@ -323,22 +323,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
-name = "bundle-builder"
-version = "0.0.0-dev"
-dependencies = [
- "axum",
- "clap",
- "flate2",
- "futures",
- "hyper",
- "snafu 0.8.2",
- "stackable-operator",
- "tar",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2400,6 +2384,22 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+
+[[package]]
+name = "stackable-opa-bundle-builder"
+version = "0.0.0-dev"
+dependencies = [
+ "axum",
+ "clap",
+ "flate2",
+ "futures",
+ "hyper",
+ "snafu 0.8.2",
+ "stackable-operator",
+ "tar",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "stackable-opa-crd"

@@ -128,6 +128,7 @@ pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
     pub opa_bundle_builder_clusterrole: String,
+    pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
 }
 
@@ -381,6 +382,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
+            &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
             &rbac_sa.name_any(),
         )?;
@@ -627,6 +629,7 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
+    opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     sa_name: &str,
 ) -> Result<DaemonSet> {
@@ -679,7 +682,8 @@ fn build_server_rolegroup_daemonset(
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
-        .image_from_product_image(resolved_product_image)
+        .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
+        .image(opa_bundle_builder_image) // ...override the image
         .command(vec![
             "/bin/bash".to_string(),
             "-x".to_string(),
@@ -1023,18 +1027,20 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         prepare_signal_handlers
-        /stackable/opa-bundle-builder{logging_redirects} &
+        stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
         // Redirects matter!
         // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
         // and not some utility (e.g. multilog or tee) process.
         // See https://stackoverflow.com/a/8048493
-        logging_redirects = if console_logging_off {
-            format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
-        } else {
-            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-        },
+        // TODO: do we need multilog?
+        logging_redirects = "",
+        // logging_redirects = if console_logging_off {
+        //     format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+        // } else {
+        //     format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
+        // },
     }
 }
 

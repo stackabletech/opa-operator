@@ -35,6 +35,16 @@ rec {
   # You can override the features with
   # workspaceMembers."${crateName}".build.override { features = [ "default" "feature1" ... ]; }.
   workspaceMembers = {
+    "stackable-opa-bundle-builder" = rec {
+      packageId = "stackable-opa-bundle-builder";
+      build = internal.buildRustCrateWithFeatures {
+        packageId = "stackable-opa-bundle-builder";
+      };
+
+      # Debug support which might change between releases.
+      # File a bug if you depend on any for non-debug work!
+      debug = internal.debugCrate { inherit packageId; };
+    };
     "stackable-opa-crd" = rec {
       packageId = "stackable-opa-crd";
       build = internal.buildRustCrateWithFeatures {
@@ -1456,6 +1466,26 @@ rec {
         ];
 
       };
+      "crc32fast" = rec {
+        crateName = "crc32fast";
+        version = "1.4.1";
+        edition = "2015";
+        sha256 = "1bgb0bj6mhqxs8v7ahmi6xk97f4yv5i3jg1cbmicg19ijvbgissq";
+        authors = [
+          "Sam Rijs <srijs@airpost.net>"
+          "Alex Crichton <alex@alexcrichton.com>"
+        ];
+        dependencies = [
+          {
+            name = "cfg-if";
+            packageId = "cfg-if";
+          }
+        ];
+        features = {
+          "default" = [ "std" ];
+        };
+        resolvedDefaultFeatures = [ "default" "std" ];
+      };
       "crossbeam-channel" = rec {
         crateName = "crossbeam-channel";
         version = "0.5.12";
@@ -2038,6 +2068,86 @@ rec {
         };
         resolvedDefaultFeatures = [ "alloc" "default" "std" ];
       };
+      "filetime" = rec {
+        crateName = "filetime";
+        version = "0.2.23";
+        edition = "2018";
+        sha256 = "1za0sbq7fqidk8aaq9v7m9ms0sv8mmi49g6p5cphpan819q4gr0y";
+        authors = [
+          "Alex Crichton <alex@alexcrichton.com>"
+        ];
+        dependencies = [
+          {
+            name = "cfg-if";
+            packageId = "cfg-if";
+          }
+          {
+            name = "libc";
+            packageId = "libc";
+            target = { target, features }: (target."unix" or false);
+          }
+          {
+            name = "redox_syscall";
+            packageId = "redox_syscall 0.4.1";
+            target = { target, features }: ("redox" == target."os" or null);
+          }
+          {
+            name = "windows-sys";
+            packageId = "windows-sys 0.52.0";
+            target = { target, features }: (target."windows" or false);
+            features = [ "Win32_Foundation" "Win32_Storage_FileSystem" ];
+          }
+        ];
+
+      };
+      "flate2" = rec {
+        crateName = "flate2";
+        version = "1.0.30";
+        edition = "2018";
+        sha256 = "1bjx56n0wq5w7vsjn7b5rbmqiw0vc3mfzz1rl7i2jy0wzmy44m2z";
+        authors = [
+          "Alex Crichton <alex@alexcrichton.com>"
+          "Josh Triplett <josh@joshtriplett.org>"
+        ];
+        dependencies = [
+          {
+            name = "crc32fast";
+            packageId = "crc32fast";
+          }
+          {
+            name = "miniz_oxide";
+            packageId = "miniz_oxide";
+            optional = true;
+            usesDefaultFeatures = false;
+            features = [ "with-alloc" ];
+          }
+          {
+            name = "miniz_oxide";
+            packageId = "miniz_oxide";
+            usesDefaultFeatures = false;
+            target = { target, features }: (("wasm32" == target."arch" or null) && (!("emscripten" == target."os" or null)));
+            features = [ "with-alloc" ];
+          }
+        ];
+        features = {
+          "any_zlib" = [ "any_impl" ];
+          "cloudflare-zlib-sys" = [ "dep:cloudflare-zlib-sys" ];
+          "cloudflare_zlib" = [ "any_zlib" "cloudflare-zlib-sys" ];
+          "default" = [ "rust_backend" ];
+          "libz-ng-sys" = [ "dep:libz-ng-sys" ];
+          "libz-rs-sys" = [ "dep:libz-rs-sys" ];
+          "libz-sys" = [ "dep:libz-sys" ];
+          "miniz-sys" = [ "rust_backend" ];
+          "miniz_oxide" = [ "dep:miniz_oxide" ];
+          "rust_backend" = [ "miniz_oxide" "any_impl" ];
+          "zlib" = [ "any_zlib" "libz-sys" ];
+          "zlib-default" = [ "any_zlib" "libz-sys/default" ];
+          "zlib-ng" = [ "any_zlib" "libz-ng-sys" ];
+          "zlib-ng-compat" = [ "zlib" "libz-sys/zlib-ng" ];
+          "zlib-rs" = [ "any_zlib" "libz-rs-sys" ];
+        };
+        resolvedDefaultFeatures = [ "any_impl" "default" "miniz_oxide" "rust_backend" ];
+      };
       "fnv" = rec {
         crateName = "fnv";
         version = "1.0.7";
@@ -2100,20 +2210,7 @@ rec {
         };
         resolvedDefaultFeatures = [ "alloc" "default" "std" ];
       };
-      "futures 0.1.31" = rec {
-        crateName = "futures";
-        version = "0.1.31";
-        edition = "2015";
-        sha256 = "0y46qbmhi37dqkch8dlfq5aninqpzqgrr98awkb3rn4fxww1lirs";
-        authors = [
-          "Alex Crichton <alex@alexcrichton.com>"
-        ];
-        features = {
-          "default" = [ "use_std" "with-deprecated" ];
-        };
-        resolvedDefaultFeatures = [ "default" "use_std" "with-deprecated" ];
-      };
-      "futures 0.3.30" = rec {
+      "futures" = rec {
         crateName = "futures";
         version = "0.3.30";
         edition = "2018";
@@ -2172,7 +2269,7 @@ rec {
           "unstable" = [ "futures-core/unstable" "futures-task/unstable" "futures-channel/unstable" "futures-io/unstable" "futures-util/unstable" ];
           "write-all-vectored" = [ "futures-util/write-all-vectored" ];
         };
-        resolvedDefaultFeatures = [ "alloc" "async-await" "compat" "default" "executor" "futures-executor" "std" ];
+        resolvedDefaultFeatures = [ "alloc" "async-await" "default" "executor" "futures-executor" "std" ];
       };
       "futures-channel" = rec {
         crateName = "futures-channel";
@@ -2305,12 +2402,6 @@ rec {
         sha256 = "0j0xqhcir1zf2dcbpd421kgw6wvsk0rpxflylcysn1rlp3g02r1x";
         dependencies = [
           {
-            name = "futures";
-            packageId = "futures 0.1.31";
-            rename = "futures_01";
-            optional = true;
-          }
-          {
             name = "futures-channel";
             packageId = "futures-channel";
             optional = true;
@@ -2387,7 +2478,7 @@ rec {
           "unstable" = [ "futures-core/unstable" "futures-task/unstable" ];
           "write-all-vectored" = [ "io" ];
         };
-        resolvedDefaultFeatures = [ "alloc" "async-await" "async-await-macro" "channel" "compat" "default" "futures-channel" "futures-io" "futures-macro" "futures-sink" "futures_01" "io" "memchr" "sink" "slab" "std" ];
+        resolvedDefaultFeatures = [ "alloc" "async-await" "async-await-macro" "channel" "default" "futures-channel" "futures-io" "futures-macro" "futures-sink" "io" "memchr" "sink" "slab" "std" ];
       };
       "generic-array" = rec {
         crateName = "generic-array";
@@ -3707,7 +3798,7 @@ rec {
           }
           {
             name = "futures";
-            packageId = "futures 0.3.30";
+            packageId = "futures";
             optional = true;
             usesDefaultFeatures = false;
             features = [ "std" ];
@@ -3842,7 +3933,7 @@ rec {
         devDependencies = [
           {
             name = "futures";
-            packageId = "futures 0.3.30";
+            packageId = "futures";
             usesDefaultFeatures = false;
             features = [ "async-await" ];
           }
@@ -4050,7 +4141,7 @@ rec {
           }
           {
             name = "futures";
-            packageId = "futures 0.3.30";
+            packageId = "futures";
             usesDefaultFeatures = false;
           }
           {
@@ -4259,7 +4350,7 @@ rec {
           "default" = [ "std" "general" "errno" ];
           "rustc-dep-of-std" = [ "core" "compiler_builtins" "no_std" ];
         };
-        resolvedDefaultFeatures = [ "elf" "errno" "general" "ioctl" "no_std" ];
+        resolvedDefaultFeatures = [ "elf" "errno" "general" "ioctl" "no_std" "std" ];
       };
       "lock_api" = rec {
         crateName = "lock_api";
@@ -4395,6 +4486,7 @@ rec {
           "simd" = [ "simd-adler32" ];
           "simd-adler32" = [ "dep:simd-adler32" ];
         };
+        resolvedDefaultFeatures = [ "with-alloc" ];
       };
       "mio" = rec {
         crateName = "mio";
@@ -5227,7 +5319,7 @@ rec {
           }
           {
             name = "redox_syscall";
-            packageId = "redox_syscall";
+            packageId = "redox_syscall 0.5.1";
             target = { target, features }: ("redox" == target."os" or null);
           }
           {
@@ -5774,7 +5866,27 @@ rec {
           "termimad" = [ "dep:termimad" ];
         };
       };
-      "redox_syscall" = rec {
+      "redox_syscall 0.4.1" = rec {
+        crateName = "redox_syscall";
+        version = "0.4.1";
+        edition = "2018";
+        sha256 = "1aiifyz5dnybfvkk4cdab9p2kmphag1yad6iknc7aszlxxldf8j7";
+        libName = "syscall";
+        authors = [
+          "Jeremy Soller <jackpot51@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "bitflags";
+            packageId = "bitflags 1.3.2";
+          }
+        ];
+        features = {
+          "core" = [ "dep:core" ];
+          "rustc-dep-of-std" = [ "core" "bitflags/rustc-dep-of-std" ];
+        };
+      };
+      "redox_syscall 0.5.1" = rec {
         crateName = "redox_syscall";
         version = "0.5.1";
         edition = "2018";
@@ -7471,6 +7583,70 @@ rec {
         };
         resolvedDefaultFeatures = [ "once" ];
       };
+      "stackable-opa-bundle-builder" = rec {
+        crateName = "stackable-opa-bundle-builder";
+        version = "0.0.0-dev";
+        edition = "2021";
+        crateBin = [
+          {
+            name = "stackable-opa-bundle-builder";
+            path = "src/main.rs";
+            requiredFeatures = [ ];
+          }
+        ];
+        # We can't filter paths with references in Nix 2.4
+        # See https://github.com/NixOS/nix/issues/5410
+        src = if ((lib.versionOlder builtins.nixVersion "2.4pre20211007") || (lib.versionOlder "2.5" builtins.nixVersion ))
+          then lib.cleanSourceWith { filter = sourceFilter;  src = ./rust/bundle-builder; }
+          else ./rust/bundle-builder;
+        authors = [
+          "Stackable GmbH <info@stackable.tech>"
+        ];
+        dependencies = [
+          {
+            name = "axum";
+            packageId = "axum";
+          }
+          {
+            name = "clap";
+            packageId = "clap";
+          }
+          {
+            name = "flate2";
+            packageId = "flate2";
+          }
+          {
+            name = "futures";
+            packageId = "futures";
+          }
+          {
+            name = "hyper";
+            packageId = "hyper";
+          }
+          {
+            name = "snafu";
+            packageId = "snafu 0.8.2";
+          }
+          {
+            name = "stackable-operator";
+            packageId = "stackable-operator";
+          }
+          {
+            name = "tar";
+            packageId = "tar";
+          }
+          {
+            name = "tokio";
+            packageId = "tokio";
+            features = [ "full" ];
+          }
+          {
+            name = "tracing";
+            packageId = "tracing";
+          }
+        ];
+
+      };
       "stackable-opa-crd" = rec {
         crateName = "stackable-opa-crd";
         version = "0.0.0-dev";
@@ -7555,8 +7731,7 @@ rec {
           }
           {
             name = "futures";
-            packageId = "futures 0.3.30";
-            features = [ "compat" ];
+            packageId = "futures";
           }
           {
             name = "indoc";
@@ -7649,8 +7824,7 @@ rec {
           }
           {
             name = "futures";
-            packageId = "futures 0.3.30";
-            features = [ "compat" ];
+            packageId = "futures";
           }
           {
             name = "hyper";
@@ -7757,7 +7931,7 @@ rec {
           }
           {
             name = "futures";
-            packageId = "futures 0.3.30";
+            packageId = "futures";
           }
           {
             name = "json-patch";
@@ -8137,6 +8311,37 @@ rec {
           "Oliver Giersch"
         ];
 
+      };
+      "tar" = rec {
+        crateName = "tar";
+        version = "0.4.40";
+        edition = "2018";
+        sha256 = "1nrd3v2kfhb2zh0a44ag0s2348xjcdxiqx8cl14ir2923zmgqsmi";
+        authors = [
+          "Alex Crichton <alex@alexcrichton.com>"
+        ];
+        dependencies = [
+          {
+            name = "filetime";
+            packageId = "filetime";
+          }
+          {
+            name = "libc";
+            packageId = "libc";
+            target = { target, features }: (target."unix" or false);
+          }
+          {
+            name = "xattr";
+            packageId = "xattr";
+            optional = true;
+            target = { target, features }: (target."unix" or false);
+          }
+        ];
+        features = {
+          "default" = [ "xattr" ];
+          "xattr" = [ "dep:xattr" ];
+        };
+        resolvedDefaultFeatures = [ "default" "xattr" ];
       };
       "tempfile" = rec {
         crateName = "tempfile";
@@ -11079,6 +11284,47 @@ rec {
           "serde" = [ "dep:serde" ];
           "serialization-serde" = [ "transactions" "serde" ];
         };
+      };
+      "xattr" = rec {
+        crateName = "xattr";
+        version = "1.3.1";
+        edition = "2021";
+        sha256 = "0kqxm36w89vc6qcpn6pizlhgjgzq138sx4hdhbv2g6wk4ld4za4d";
+        authors = [
+          "Steven Allen <steven@stebalien.com>"
+        ];
+        dependencies = [
+          {
+            name = "libc";
+            packageId = "libc";
+            target = { target, features }: (("freebsd" == target."os" or null) || ("netbsd" == target."os" or null));
+          }
+          {
+            name = "linux-raw-sys";
+            packageId = "linux-raw-sys";
+            usesDefaultFeatures = false;
+            target = { target, features }: ("linux" == target."os" or null);
+            features = [ "std" ];
+          }
+          {
+            name = "rustix";
+            packageId = "rustix";
+            usesDefaultFeatures = false;
+            features = [ "fs" "std" ];
+          }
+        ];
+        devDependencies = [
+          {
+            name = "rustix";
+            packageId = "rustix";
+            usesDefaultFeatures = false;
+            features = [ "net" ];
+          }
+        ];
+        features = {
+          "default" = [ "unsupported" ];
+        };
+        resolvedDefaultFeatures = [ "default" "unsupported" ];
       };
       "xml-rs" = rec {
         crateName = "xml-rs";

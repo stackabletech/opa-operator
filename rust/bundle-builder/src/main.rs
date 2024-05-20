@@ -119,10 +119,13 @@ async fn main() -> Result<(), StartupError> {
 
     let app = Router::new()
         .route("/opa/v1/opa/bundle.tar.gz", get(get_bundle))
+        .route("/status", get(get_status))
         .with_state(AppState {
             bundle: bundle.clone(),
         });
-    let listener = TcpListener::bind("127.0.0.1:9477")
+    // FIXME: can we restrict access to localhost?
+    // kubelet probes run from outside the container netns
+    let listener = TcpListener::bind("0.0.0.0:3030")
         .await
         .context(BindListenerSnafu)?;
 
@@ -163,6 +166,12 @@ async fn build_bundle(store: Store<ConfigMap>) -> Vec<u8> {
     let tar = tar.into_inner().unwrap().finish().unwrap();
     info!("finished building bundle");
     tar
+}
+
+async fn get_status(State(state): State<AppState>) -> impl IntoResponse {
+    let bundle = future::Shared::clone(&*state.bundle.lock().unwrap());
+    bundle.await;
+    "ready"
 }
 
 async fn get_bundle(State(state): State<AppState>) -> impl IntoResponse {

@@ -1,5 +1,5 @@
 [package]
-name = "bundle-builder"
+name = "stackable-opa-bundle-builder"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
