@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       annotations:
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        internal.stackable.tech/image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         {{- with .Values.podAnnotations }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- toYaml . | nindent 8 }}
@@ -23,7 +23,7 @@ spec:
       labels:
         {{- include "operator.selectorLabels" . | nindent 8 }}
     spec:
-      {{- with .Values.imagePullSecrets }}
+      {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -42,13 +42,13 @@ spec:
             - mountPath: /etc/stackable/{{ include "operator.appname" . }}/config-spec
               name: config-spec
           env:
-            - name: OPA_BUNDLE_BUILDER_CLUSTERROLE
-              value: {{ include "operator.fullname" . }}-opa-bundle-builder-clusterrole
             - name: OPERATOR_IMAGE
-              # Tilt can use recognize annotations as image paths, but not env variables
+              # Tilt can use annotations as image paths, but not env variables
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.annotations['image']
+                  fieldPath: metadata.annotations['internal.stackable.tech/image']
+            - name: OPA_BUNDLE_BUILDER_CLUSTERROLE
+              value: {{ include "operator.fullname" . }}-opa-bundle-builder-clusterrole
       volumes:
         - name: config-spec
           configMap:

@@ -4,30 +4,57 @@ use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_operator::commons::authentication::oidc;
 
 use crate::{http_error, util::send_json_request, Credentials, UserInfo, UserInfoRequest};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("unable to log in (expired credentials?)"))]
-    LogIn { source: reqwest::Error },
-    #[snafu(display("unable to search for user"))]
-    SearchForUser { source: reqwest::Error },
-    #[snafu(display("user {username:?} was not found"))]
-    UserNotFound { username: String },
-    #[snafu(display("unable to request groups for user"))]
-    RequestUserGroups { source: reqwest::Error },
-    #[snafu(display("unable to request roles for user"))]
-    RequestUserRoles { source: reqwest::Error },
+    #[snafu(display("failed to get access_token"))]
+    AccessToken { source: crate::util::Error },
+
+    #[snafu(display("failed to search for user"))]
+    SearchForUser { source: crate::util::Error },
+
+    #[snafu(display("unable to find user with id {user_id:?}"))]
+    UserNotFoundById {
+        source: crate::util::Error,
+        user_id: String,
+    },
+
+    #[snafu(display("unable to find user with username {username:?}"))]
+    UserNotFoundByName { username: String },
+
+    #[snafu(display("more than one user was returned when there should be one or none"))]
+    TooManyUsersReturned,
+
+    #[snafu(display(
+        "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
+    ))]
+    RequestUserGroups {
+        source: crate::util::Error,
+        username: String,
+        user_id: String,
+    },
+
+    #[snafu(display("failed to parse OIDC endpoint url"))]
+    ParseOidcEndpointUrl { source: oidc::Error },
+
+    #[snafu(display("failed to construct OIDC endpoint path"))]
+    ConstructOidcEndpointPath { source: url::ParseError },
 }
+
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::LogIn { .. } => StatusCode::BAD_GATEWAY,
+            Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
-            Self::UserNotFound { .. } => StatusCode::NOT_FOUND,
+            Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
+            Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
+            Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
-            Self::RequestUserRoles { .. } => StatusCode::BAD_GATEWAY,
+            Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -37,24 +64,26 @@ struct OAuthResponse {
     access_token: String,
 }
 
-#[derive(Deserialize)]
+/// The minimal structure of [UserRepresentation] that is returned by [`/users`][users] and [`/users/{id}`][user-by-id].
+/// <div class="warning">Some fields, such as `groups` are never present. See [keycloak/keycloak#20292][issue-20292]</div>
+///
+/// [users]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#_get_adminrealmsrealmusers
+/// [user-by-id]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#_get_adminrealmsrealmusersid
+/// [UserRepresentation]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#UserRepresentation
+/// [issue-20292]: https://github.com/keycloak/keycloak/issues/20294
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
     id: String,
+    username: String,
     #[serde(default)]
-    attributes: HashMap<String, Vec<String>>,
+    attributes: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
     path: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RoleMembership {
-    name: String,
 }
 
 pub(crate) async fn get_user_info(
@@ -64,60 +93,103 @@ pub(crate) async fn get_user_info(
     config: &crd::KeycloakBackend,
 ) -> Result<UserInfo, Error> {
     let crd::KeycloakBackend {
-        url: keycloak_url,
+        client_credentials_secret: _,
         admin_realm,
         user_realm,
-        credentials_secret_name: _,
-        client_id,
+        hostname,
+        port,
+        root_path,
+        tls,
     } = config;
-    let user_realm_url = format!("{keycloak_url}/admin/realms/{user_realm}");
+
+    // We re-use existent functionality from operator-rs, besides it being a bit of miss-use.
+    // Some attributes (such as principal_claim) are irrelevant, and will not be read by the code-flow we trigger.
+    let wrapping_auth_provider = oidc::AuthenticationProvider::new(
+        hostname.clone(),
+        *port,
+        root_path.clone(),
+        tls.clone(),
+        String::new(),
+        Vec::new(),
+        None,
+    );
+    let keycloak_url = wrapping_auth_provider
+        .endpoint_url()
+        .context(ParseOidcEndpointUrlSnafu)?;
+
     let authn = send_json_request::<OAuthResponse>(
-        http.post(format!(
-            "{keycloak_url}/realms/{admin_realm}/protocol/openid-connect/token"
-        ))
-        .form(&[
-            ("grant_type", "password"),
-            ("client_id", client_id),
-            ("username", &credentials.username),
-            ("password", &credentials.password),
-        ]),
+        http.post(
+            keycloak_url
+                .join(&format!(
+                    "realms/{admin_realm}/protocol/openid-connect/token"
+                ))
+                .context(ConstructOidcEndpointPathSnafu)?,
+        )
+        .basic_auth(&credentials.client_id, Some(&credentials.client_secret))
+        .form(&[("grant_type", "client_credentials")]),
     )
     .await
-    .context(LogInSnafu)?;
-    let users = send_json_request::<Vec<UserMetadata>>(
-        http.get(format!("{user_realm_url}/users"))
-            .query(&[("exact", "true"), ("username", &req.username)])
-            .bearer_auth(&authn.access_token),
-    )
-    .await
-    .context(SearchForUserSnafu)?;
-    let user = users.into_iter().next().context(UserNotFoundSnafu {
-        username: &req.username,
-    })?;
-    let user_id = &user.id;
+    .context(AccessTokenSnafu)?;
+
+    let users_base_url = keycloak_url
+        .join(&format!("admin/realms/{user_realm}/users/"))
+        .context(ConstructOidcEndpointPathSnafu)?;
+
+    let user_info = match req {
+        UserInfoRequest::UserInfoRequestById(req) => {
+            let user_id = req.id.clone();
+            send_json_request::<UserMetadata>(
+                http.get(
+                    users_base_url
+                        .join(&req.id)
+                        .context(ConstructOidcEndpointPathSnafu)?,
+                )
+                .bearer_auth(&authn.access_token),
+            )
+            .await
+            .context(UserNotFoundByIdSnafu { user_id })?
+        }
+        UserInfoRequest::UserInfoRequestByName(req) => {
+            let username = &req.username;
+            let users_url = users_base_url
+                .join(&format!("?username={username}&exact=true"))
+                .context(ConstructOidcEndpointPathSnafu)?;
+
+            let users = send_json_request::<Vec<UserMetadata>>(
+                http.get(users_url).bearer_auth(&authn.access_token),
+            )
+            .await
+            .context(SearchForUserSnafu)?;
+
+            if users.len() > 1 {
+                return TooManyUsersReturnedSnafu.fail();
+            }
+
+            users
+                .first()
+                .cloned()
+                .context(UserNotFoundByNameSnafu { username })?
+        }
+    };
+
     let groups = send_json_request::<Vec<GroupMembership>>(
-        http.get(format!("{user_realm_url}/users/{user_id}/groups"))
-            .bearer_auth(&authn.access_token),
-    )
-    .await
-    .context(RequestUserGroupsSnafu)?;
-    let roles = send_json_request::<Vec<RoleMembership>>(
-        http.get(format!(
-            "{user_realm_url}/users/{user_id}/role-mappings/realm/composite"
-        ))
+        http.get(
+            users_base_url
+                .join(&format!("{}/groups", user_info.id))
+                .context(ConstructOidcEndpointPathSnafu)?,
+        )
         .bearer_auth(&authn.access_token),
     )
     .await
-    .context(RequestUserRolesSnafu)?;
+    .context(RequestUserGroupsSnafu {
+        username: user_info.username.clone(),
+        user_id: user_info.id.clone(),
+    })?;
+
     Ok(UserInfo {
-        groups: groups
-            .into_iter()
-            .map(|group| crate::GroupRef { name: group.path })
-            .collect(),
-        roles: roles
-            .into_iter()
-            .map(|role| crate::RoleRef { name: role.name })
-            .collect(),
-        custom_attributes: user.attributes,
+        id: Some(user_info.id),
+        username: Some(user_info.username),
+        groups: groups.into_iter().map(|g| g.path).collect(),
+        custom_attributes: user_info.attributes,
     })
 }

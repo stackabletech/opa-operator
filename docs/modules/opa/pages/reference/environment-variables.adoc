@@ -1,5 +1,8 @@
+= Environment variables
 
-=== PRODUCT_CONFIG
+This operator accepts the following environment variables:
+
+== PRODUCT_CONFIG
 
 *Default value*: `/etc/stackable/opa-operator/config-spec/properties.yaml`
 
@@ -25,7 +28,7 @@ docker run \
     docker.stackable.tech/stackable/opa-operator:latest
 ----
 
-=== WATCH_NAMESPACE
+== WATCH_NAMESPACE
 
 *Default value*: All namespaces
 
@@ -54,7 +57,7 @@ docker run \
 docker.stackable.tech/stackable/opa-operator:latest
 ----
 
-=== OPA_BUNDLE_BUILDER_CLUSTERROLE
+== OPA_BUNDLE_BUILDER_CLUSTERROLE
 
 *Default value*: None.
 
@@ -69,4 +72,3 @@ The name of the cluster role to use for the OPA pods.
 export OPA_BUNDLE_BUILDER_CLUSTERROLE=test
 stackable-opa-operator run
 ----
-

@@ -1,30 +1,40 @@
-//! Ensures that `Pod`s are configured and running for each [`OpaCluster`]
-
-use crate::discovery::{self, build_discovery_configmaps};
-use crate::product_logging::{
-    extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
-    OpaLogLevel,
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
 };
 
+use indoc::formatdoc;
+use product_config::{types::PropertyNameKind, ProductConfigManager};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
-    Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, OPERATOR_NAME,
+    user_info_fetcher, Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME,
+    DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
 };
-use stackable_operator::k8s_openapi::api::core::v1::SecretVolumeSource;
 use stackable_operator::{
     builder::{
-        resources::ResourceRequirementsBuilder, ConfigMapBuilder, ContainerBuilder,
-        FieldPathEnvVar, ObjectMetaBuilder, PodBuilder, PodSecurityContextBuilder, VolumeBuilder,
+        configmap::ConfigMapBuilder,
+        meta::ObjectMetaBuilder,
+        pod::{
+            container::{ContainerBuilder, FieldPathEnvVar},
+            resources::ResourceRequirementsBuilder,
+            security::PodSecurityContextBuilder,
+            volume::VolumeBuilder,
+            PodBuilder,
+        },
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
-    commons::{product_image_selection::ResolvedProductImage, rbac::build_rbac_resources},
+    commons::{
+        authentication::tls::TlsClientDetailsError, product_image_selection::ResolvedProductImage,
+        rbac::build_rbac_resources,
+    },
     k8s_openapi::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, Service,
-                ServicePort, ServiceSpec,
+                ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, SecretVolumeSource,
+                Service, ServicePort, ServiceSpec,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -34,13 +44,13 @@ use stackable_operator::{
         runtime::{controller::Action, reflector::ObjectRef},
         Resource as KubeResource, ResourceExt,
     },
-    labels::{role_group_selector_labels, role_selector_labels, ObjectLabels},
+    kvp::{Label, LabelError, Labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
-    product_config::{types::PropertyNameKind, ProductConfigManager},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
+        framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
         spec::{
             AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
             ContainerLogConfigChoice, LogLevel,
@@ -52,13 +62,18 @@ use stackable_operator::{
         operations::ClusterOperationsConditionBuilder,
     },
     time::Duration,
-};
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
+    utils::COMMON_BASH_TRAP_FUNCTIONS,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
+
+use crate::{
+    discovery::{self, build_discovery_configmaps},
+    operations::graceful_shutdown::add_graceful_shutdown_config,
+    product_logging::{
+        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
+        OpaLogLevel,
+    },
+};
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 
@@ -74,7 +89,7 @@ pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 const CONFIG_VOLUME_NAME: &str = "config";
 const CONFIG_DIR: &str = "/stackable/config";
 const LOG_VOLUME_NAME: &str = "log";
-const LOG_DIR: &str = "/stackable/log";
+const STACKABLE_LOG_DIR: &str = "/stackable/log";
 const BUNDLES_VOLUME_NAME: &str = "bundles";
 const BUNDLES_DIR: &str = "/bundles";
 const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
@@ -122,93 +137,140 @@ pub struct Ctx {
 pub enum Error {
     #[snafu(display("object does not define meta name"))]
     NoName,
+
     #[snafu(display("internal operator failure"))]
     InternalOperatorFailure { source: stackable_opa_crd::Error },
+
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
+
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
+
     #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::configmap::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
     #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
         rolegroup: RoleGroupRef<OpaCluster>,
     },
+
+    #[snafu(display("failed to apply patch for DaemonSet for [{rolegroup}]"))]
+    ApplyPatchRoleGroupDaemonSet {
+        source: stackable_operator::client::Error,
+        rolegroup: RoleGroupRef<OpaCluster>,
+    },
+
     #[snafu(display("failed to patch service account"))]
     ApplyServiceAccount {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
+
     #[snafu(display("failed to patch role binding"))]
     ApplyRoleBinding {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
+
     #[snafu(display("failed to update status"))]
     ApplyStatus {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::client::Error,
     },
+
     #[snafu(display("invalid product config"))]
     InvalidProductConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::product_config_utils::Error,
     },
+
     #[snafu(display("object is missing metadata to build owner reference"))]
     ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::meta::Error,
     },
+
     #[snafu(display("failed to build discovery ConfigMap"))]
     BuildDiscoveryConfig { source: discovery::Error },
+
     #[snafu(display("failed to apply discovery ConfigMap"))]
     ApplyDiscoveryConfig {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
+
     #[snafu(display("failed to transform configs"))]
     ProductConfigTransform {
-        source: stackable_operator::product_config_utils::ConfigError,
+        source: stackable_operator::product_config_utils::Error,
     },
+
     #[snafu(display("failed to resolve and merge config for role and role group"))]
     FailedToResolveConfig { source: stackable_opa_crd::Error },
+
     #[snafu(display("illegal container name"))]
     IllegalContainerName {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::builder::pod::container::Error,
     },
+
     #[snafu(display("failed to resolve the Vector aggregator address"))]
     ResolveVectorAggregatorAddress {
         source: crate::product_logging::Error,
     },
+
     #[snafu(display("failed to add the logging configuration to the ConfigMap [{cm_name}]"))]
     InvalidLoggingConfig {
         source: crate::product_logging::Error,
         cm_name: String,
     },
+
     #[snafu(display("failed to create cluster resources"))]
     FailedToCreateClusterResources {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
+
     #[snafu(display("failed to delete orphaned resources"))]
     DeleteOrphans {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::cluster_resources::Error,
     },
+
     #[snafu(display("failed to build RBAC resources"))]
     BuildRbacResources {
-        source: stackable_operator::error::Error,
+        source: stackable_operator::commons::rbac::Error,
     },
+
+    #[snafu(display("failed to configure graceful shutdown"))]
+    GracefulShutdown {
+        source: crate::operations::graceful_shutdown::Error,
+    },
+
     #[snafu(display("failed to serialize user info fetcher configuration"))]
     SerializeUserInfoFetcherConfig { source: serde_json::Error },
+
+    #[snafu(display("failed to build label"))]
+    BuildLabel { source: LabelError },
+
+    #[snafu(display("failed to build object meta data"))]
+    ObjectMeta {
+        source: stackable_operator::builder::meta::Error,
+    },
+
+    #[snafu(display(
+        "failed to build volume or volume mount spec for the Keycloak backend TLS config"
+    ))]
+    VolumeAndMounts { source: TlsClientDetailsError },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -225,7 +287,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let resolved_product_image = opa
         .spec
         .image
-        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::CARGO_PKG_VERSION);
+        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION);
     let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
@@ -275,12 +337,12 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .await
         .context(ApplyRoleServiceSnafu)?;
 
-    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(
-        opa.as_ref(),
-        APP_NAME,
-        cluster_resources.get_required_labels(),
-    )
-    .context(BuildRbacResourcesSnafu)?;
+    let required_labels = cluster_resources
+        .get_required_labels()
+        .context(BuildLabelSnafu)?;
+
+    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), APP_NAME, required_labels)
+        .context(BuildRbacResourcesSnafu)?;
 
     let rbac_sa = cluster_resources
         .add(client, rbac_sa)
@@ -363,7 +425,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
                 json!({"apiVersion": "apps/v1", "kind": "DaemonSet"}),
             )
             .await
-            .context(ApplyRoleGroupDaemonSetSnafu { rolegroup })?;
+            .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
     for discovery_cm in build_discovery_configmaps(
@@ -413,31 +475,40 @@ pub fn build_server_role_service(
     let role_svc_name = opa
         .server_role_service_name()
         .context(RoleServiceNameNotFoundSnafu)?;
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&role_svc_name)
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &role_name,
+            "global",
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
+    let service_selector_labels =
+        Labels::role_selector(opa, APP_NAME, &role_name).context(BuildLabelSnafu)?;
+
+    let service_spec = ServiceSpec {
+        type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
+        ports: Some(vec![ServicePort {
+            name: Some(APP_PORT_NAME.to_string()),
+            port: APP_PORT.into(),
+            protocol: Some("TCP".to_string()),
+            ..ServicePort::default()
+        }]),
+        selector: Some(service_selector_labels.into()),
+        internal_traffic_policy: Some("Local".to_string()),
+        ..ServiceSpec::default()
+    };
+
     Ok(Service {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&role_svc_name)
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &role_name,
-                "global",
-            ))
-            .build(),
-        spec: Some(ServiceSpec {
-            type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-            ports: Some(vec![ServicePort {
-                name: Some(APP_PORT_NAME.to_string()),
-                port: APP_PORT.into(),
-                protocol: Some("TCP".to_string()),
-                ..ServicePort::default()
-            }]),
-            selector: Some(role_selector_labels(opa, APP_NAME, &role_name)),
-            internal_traffic_policy: Some("Local".to_string()),
-            ..ServiceSpec::default()
-        }),
+        metadata,
+        spec: Some(service_spec),
         status: None,
     })
 }
@@ -450,34 +521,41 @@ fn build_rolegroup_service(
     resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<OpaCluster>,
 ) -> Result<Service> {
+    let prometheus_label =
+        Label::try_from(("prometheus.io/scrape", "true")).context(BuildLabelSnafu)?;
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&rolegroup.object_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup.role,
+            &rolegroup.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .with_label(prometheus_label)
+        .build();
+
+    let service_selector_labels =
+        Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
+            .context(BuildLabelSnafu)?;
+
+    let service_spec = ServiceSpec {
+        // Internal communication does not need to be exposed
+        type_: Some("ClusterIP".to_string()),
+        cluster_ip: Some("None".to_string()),
+        ports: Some(service_ports()),
+        selector: Some(service_selector_labels.into()),
+        publish_not_ready_addresses: Some(true),
+        ..ServiceSpec::default()
+    };
+
     Ok(Service {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&rolegroup.object_name())
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &rolegroup.role,
-                &rolegroup.role_group,
-            ))
-            .with_label("prometheus.io/scrape", "true")
-            .build(),
-        spec: Some(ServiceSpec {
-            // Internal communication does not need to be exposed
-            type_: Some("ClusterIP".to_string()),
-            cluster_ip: Some("None".to_string()),
-            ports: Some(service_ports()),
-            selector: Some(role_group_selector_labels(
-                opa,
-                APP_NAME,
-                &rolegroup.role,
-                &rolegroup.role_group,
-            )),
-            publish_not_ready_addresses: Some(true),
-            ..ServiceSpec::default()
-        }),
+        metadata,
+        spec: Some(service_spec),
         status: None,
     })
 }
@@ -492,27 +570,30 @@ fn build_server_rolegroup_config_map(
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(rolegroup.object_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup.role,
+            &rolegroup.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
     cm_builder
-        .metadata(
-            ObjectMetaBuilder::new()
-                .name_and_namespace(opa)
-                .name(rolegroup.object_name())
-                .ownerreference_from_resource(opa, None, Some(true))
-                .context(ObjectMissingMetadataForOwnerRefSnafu)?
-                .with_recommended_labels(build_recommended_labels(
-                    opa,
-                    &resolved_product_image.app_version_label,
-                    &rolegroup.role,
-                    &rolegroup.role_group,
-                ))
-                .build(),
-        )
-        .add_data(CONFIG_FILE, build_config_file())
-        .add_data(
+        .metadata(metadata)
+        .add_data(CONFIG_FILE, build_config_file());
+
+    if let Some(user_info) = &opa.spec.cluster_config.user_info {
+        cm_builder.add_data(
             "user-info-fetcher.json",
-            serde_json::to_string_pretty(&opa.spec.cluster_config.user_info_fetcher)
-                .context(SerializeUserInfoFetcherConfigSnafu)?,
+            serde_json::to_string_pretty(user_info).context(SerializeUserInfoFetcherConfigSnafu)?,
         );
+    }
 
     extend_role_group_config_map(
         rolegroup,
@@ -538,6 +619,7 @@ fn build_server_rolegroup_config_map(
 ///
 /// We run an OPA on each node, because we want to avoid requiring network roundtrips for services making
 /// policy queries (which are often chained in serial, and block other tasks in the products).
+#[allow(clippy::too_many_arguments)]
 fn build_server_rolegroup_daemonset(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
@@ -564,6 +646,8 @@ fn build_server_rolegroup_daemonset(
         })
         .collect::<Vec<_>>();
 
+    let mut pb = PodBuilder::new();
+
     let prepare_container_name = Container::Prepare.to_string();
     let mut cb_prepare =
         ContainerBuilder::new(&prepare_container_name).context(IllegalContainerNameSnafu)?;
@@ -576,13 +660,11 @@ fn build_server_rolegroup_daemonset(
     let mut cb_opa =
         ContainerBuilder::new(&opa_container_name).context(IllegalContainerNameSnafu)?;
 
-    let mut cb_user_info_fetcher =
-        ContainerBuilder::new("user-info-fetcher").context(IllegalContainerNameSnafu)?;
-
     cb_prepare
         .image_from_product_image(resolved_product_image)
         .command(vec![
-            "bash".to_string(),
+            "/bin/bash".to_string(),
+            "-x".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
@@ -593,13 +675,14 @@ fn build_server_rolegroup_daemonset(
         )
         .join(" && ")])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image)
         .command(vec![
-            "bash".to_string(),
+            "/bin/bash".to_string(),
+            "-x".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
@@ -614,7 +697,7 @@ fn build_server_rolegroup_daemonset(
             bundle_builder_log_level(merged_config).to_string(),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(
             ResourceRequirementsBuilder::new()
                 .with_cpu_request("100m")
@@ -648,7 +731,8 @@ fn build_server_rolegroup_daemonset(
     cb_opa
         .image_from_product_image(resolved_product_image)
         .command(vec![
-            "bash".to_string(),
+            "/bin/bash".to_string(),
+            "-x".to_string(),
             "-euo".to_string(),
             "pipefail".to_string(),
             "-c".to_string(),
@@ -660,7 +744,7 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
-        .add_volume_mount(LOG_VOLUME_NAME, LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(merged_config.resources.to_owned().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
@@ -682,92 +766,99 @@ fn build_server_rolegroup_daemonset(
             ..Probe::default()
         });
 
-    cb_user_info_fetcher
-        .image(user_info_fetcher_image)
-        .command(vec!["stackable-opa-user-info-fetcher".to_string()])
-        .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
-        .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
-        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
-        .resources(
-            ResourceRequirementsBuilder::new()
-                .with_cpu_request("100m")
-                .with_cpu_limit("200m")
-                .with_memory_request("128Mi")
-                .with_memory_limit("128Mi")
-                .build(),
-        );
-
-    match &opa.spec.cluster_config.user_info_fetcher.backend {
-        stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
-        stackable_opa_crd::user_info_fetcher::Backend::Keycloak(_) => {
-            cb_user_info_fetcher.add_volume_mount(
-                USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-                USER_INFO_FETCHER_CREDENTIALS_DIR,
-            );
-        }
-    }
-
-    let mut pb = PodBuilder::new();
-
-    pb.metadata_builder(|m| {
-        m.with_recommended_labels(build_recommended_labels(
+    let pb_metadata = ObjectMetaBuilder::new()
+        .with_recommended_labels(build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label,
             &rolegroup_ref.role,
             &rolegroup_ref.role_group,
         ))
-    })
-    .add_init_container(cb_prepare.build())
-    .add_container(cb_opa.build())
-    .add_container(cb_bundle_builder.build())
-    .add_container(cb_user_info_fetcher.build())
-    .image_pull_secrets_from_product_image(resolved_product_image)
-    .node_selector_opt(opa.node_selector(&rolegroup_ref.role_group))
-    .add_volume(
-        VolumeBuilder::new(CONFIG_VOLUME_NAME)
-            .with_config_map(rolegroup_ref.object_name())
-            .build(),
-    )
-    .add_volume(
-        VolumeBuilder::new(BUNDLES_VOLUME_NAME)
-            .with_empty_dir(None::<String>, None)
-            .build(),
-    )
-    .add_volume(
-        VolumeBuilder::new(LOG_VOLUME_NAME)
-            .empty_dir(EmptyDirVolumeSource {
-                medium: None,
-                size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
-                    &[
-                        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
-                        MAX_OPA_LOG_FILE_SIZE,
-                        MAX_PREPARE_LOG_FILE_SIZE,
-                    ],
-                )),
-            })
-            .build(),
-    )
-    .service_account_name(sa_name)
-    .security_context(
-        PodSecurityContextBuilder::new()
-            .run_as_user(1000)
-            .run_as_group(0)
-            .fs_group(1000)
-            .build(),
-    );
+        .context(ObjectMetaSnafu)?
+        .build();
 
-    match &opa.spec.cluster_config.user_info_fetcher.backend {
-        stackable_opa_crd::user_info_fetcher::Backend::None {} => {}
-        stackable_opa_crd::user_info_fetcher::Backend::Keycloak(keycloak) => {
-            pb.add_volume(
-                VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
-                    .secret(SecretVolumeSource {
-                        secret_name: Some(keycloak.credentials_secret_name.clone()),
-                        ..Default::default()
-                    })
+    pb.metadata(pb_metadata)
+        .add_init_container(cb_prepare.build())
+        .add_container(cb_opa.build())
+        .add_container(cb_bundle_builder.build())
+        .image_pull_secrets_from_product_image(resolved_product_image)
+        .affinity(&merged_config.affinity)
+        .add_volume(
+            VolumeBuilder::new(CONFIG_VOLUME_NAME)
+                .with_config_map(rolegroup_ref.object_name())
+                .build(),
+        )
+        .add_volume(
+            VolumeBuilder::new(BUNDLES_VOLUME_NAME)
+                .with_empty_dir(None::<String>, None)
+                .build(),
+        )
+        .add_volume(
+            VolumeBuilder::new(LOG_VOLUME_NAME)
+                .empty_dir(EmptyDirVolumeSource {
+                    medium: None,
+                    size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
+                        &[
+                            MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
+                            MAX_OPA_LOG_FILE_SIZE,
+                            MAX_PREPARE_LOG_FILE_SIZE,
+                        ],
+                    )),
+                })
+                .build(),
+        )
+        .service_account_name(sa_name)
+        .security_context(
+            PodSecurityContextBuilder::new()
+                .run_as_user(1000)
+                .run_as_group(0)
+                .fs_group(1000)
+                .build(),
+        );
+
+    if let Some(user_info) = &opa.spec.cluster_config.user_info {
+        let mut cb_user_info_fetcher =
+            ContainerBuilder::new("user-info-fetcher").context(IllegalContainerNameSnafu)?;
+
+        cb_user_info_fetcher
+            .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
+            .image(user_info_fetcher_image) // ...override the image
+            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
+            .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
+            .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
+            .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+            .resources(
+                ResourceRequirementsBuilder::new()
+                    .with_cpu_request("100m")
+                    .with_cpu_limit("200m")
+                    .with_memory_request("128Mi")
+                    .with_memory_limit("128Mi")
                     .build(),
             );
+
+        match &user_info.backend {
+            user_info_fetcher::Backend::None {} => {}
+            user_info_fetcher::Backend::ExperimentalXfscAas(_) => {}
+            user_info_fetcher::Backend::Keycloak(keycloak) => {
+                pb.add_volume(
+                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                        .secret(SecretVolumeSource {
+                            secret_name: Some(keycloak.client_credentials_secret.clone()),
+                            ..Default::default()
+                        })
+                        .build(),
+                );
+                cb_user_info_fetcher.add_volume_mount(
+                    USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                    USER_INFO_FETCHER_CREDENTIALS_DIR,
+                );
+                keycloak
+                    .tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(VolumeAndMountsSnafu)?;
+            }
         }
+
+        pb.add_container(cb_user_info_fetcher.build());
     }
 
     if merged_config.logging.enable_vector_agent {
@@ -785,36 +876,46 @@ fn build_server_rolegroup_daemonset(
         ));
     }
 
+    add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;
+
     let mut pod_template = pb.build_template();
     pod_template.merge_from(role.config.pod_overrides.clone());
     pod_template.merge_from(role_group.config.pod_overrides.clone());
 
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&rolegroup_ref.object_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup_ref.role,
+            &rolegroup_ref.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
+    let daemonset_match_labels = Labels::role_group_selector(
+        opa,
+        APP_NAME,
+        &rolegroup_ref.role,
+        &rolegroup_ref.role_group,
+    )
+    .context(BuildLabelSnafu)?;
+
+    let daemonset_spec = DaemonSetSpec {
+        selector: LabelSelector {
+            match_labels: Some(daemonset_match_labels.into()),
+            ..LabelSelector::default()
+        },
+        template: pod_template,
+        ..DaemonSetSpec::default()
+    };
+
     Ok(DaemonSet {
-        metadata: ObjectMetaBuilder::new()
-            .name_and_namespace(opa)
-            .name(&rolegroup_ref.object_name())
-            .ownerreference_from_resource(opa, None, Some(true))
-            .context(ObjectMissingMetadataForOwnerRefSnafu)?
-            .with_recommended_labels(build_recommended_labels(
-                opa,
-                &resolved_product_image.app_version_label,
-                &rolegroup_ref.role,
-                &rolegroup_ref.role_group,
-            ))
-            .build(),
-        spec: Some(DaemonSetSpec {
-            selector: LabelSelector {
-                match_labels: Some(role_group_selector_labels(
-                    opa,
-                    APP_NAME,
-                    &rolegroup_ref.role,
-                    &rolegroup_ref.role_group,
-                )),
-                ..LabelSelector::default()
-            },
-            template: pod_template,
-            ..DaemonSetSpec::default()
-        }),
+        metadata,
+        spec: Some(daemonset_spec),
         status: None,
     })
 }
@@ -873,15 +974,30 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         }
     }
 
-    let mut start_command = format!("/stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level}");
-
-    if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name}"));
-    } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {LOG_DIR}/{container_name})"));
+    // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
+    formatdoc! {"
+        {COMMON_BASH_TRAP_FUNCTIONS}
+        {remove_vector_shutdown_file_command}
+        prepare_signal_handlers
+        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry{logging_redirects} &
+        wait_for_termination $!
+        {create_vector_shutdown_file_command}
+        ",
+        remove_vector_shutdown_file_command =
+            remove_vector_shutdown_file_command(STACKABLE_LOG_DIR),
+        create_vector_shutdown_file_command =
+            create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
+        shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
+        // Redirects matter!
+        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
+        // and not some utility (e.g. multilog or tee) process.
+        // See https://stackoverflow.com/a/8048493
+        logging_redirects = if console_logging_off {
+            format!(" &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+        } else {
+            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
+        },
     }
-
-    start_command
 }
 
 fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
@@ -904,15 +1020,22 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
         }
     };
 
-    let mut start_command = "/stackable/opa-bundle-builder".to_string();
-
-    if console_logging_off {
-        start_command.push_str(&format!(" |& /stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name}"))
-    } else {
-        start_command.push_str(&format!(" |& tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {LOG_DIR}/{container_name})"));
+    formatdoc! {"
+        {COMMON_BASH_TRAP_FUNCTIONS}
+        prepare_signal_handlers
+        /stackable/opa-bundle-builder{logging_redirects} &
+        wait_for_termination $!
+        ",
+        // Redirects matter!
+        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
+        // and not some utility (e.g. multilog or tee) process.
+        // See https://stackoverflow.com/a/8048493
+        logging_redirects = if console_logging_off {
+            format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+        } else {
+            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
+        },
     }
-
-    start_command
 }
 
 fn bundle_builder_log_level(merged_config: &OpaConfig) -> BundleBuilderLogLevel {
@@ -941,7 +1064,7 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
     }) = merged_config.logging.containers.get(&Container::Prepare)
     {
         prepare_container_args.push(product_logging::framework::capture_shell_output(
-            LOG_DIR,
+            STACKABLE_LOG_DIR,
             container_name,
             log_config,
         ));

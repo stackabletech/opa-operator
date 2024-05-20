@@ -9,12 +9,12 @@ repository.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum.workspace = true
+axum = "0.6"
 clap.workspace = true
 flate2 = "1.0.28"
 futures.workspace = true
 http = "0.2.9"
-hyper.workspace = true
+hyper = "0.14"
 snafu.features = ["futures"]
 snafu.workspace = true
 stackable-operator.workspace = true

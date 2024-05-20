@@ -2,31 +2,43 @@
 dimensions:
   - name: opa
     values:
-      - 0.51.0
       - 0.57.0
+      - 0.61.0
   - name: opa-latest
     values:
-      - 0.57.0
+      - 0.61.0
   - name: keycloak
     values:
-      - 22.0.4
+      - 23.0.1
+  - name: openshift
+    values:
+      - "false"
 tests:
   - name: smoke
     dimensions:
       - opa
+      - openshift
   - name: resources
     dimensions:
       - opa-latest
+      - openshift
   - name: logging
     dimensions:
       - opa
+      - openshift
   - name: cluster-operation
     dimensions:
       - opa-latest
+      - openshift
   - name: keycloak-user-info
     dimensions:
       - opa-latest
       - keycloak
+      - openshift
+  - name: aas-user-info
+    dimensions:
+      - opa-latest
+      - openshift
 suites:
   - name: nightly
     patch:

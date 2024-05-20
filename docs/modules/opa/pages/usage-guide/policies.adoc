@@ -2,7 +2,7 @@
 
 Users can define policies by using Rego, OPAs https://www.openpolicyagent.org/docs/latest/policy-language/[policy language].
 
-Policy definitionas are deployed as `ConfigMap` resources as described in xref:implementation-notes.adoc[implementation notes].
+Policy definitions are deployed as `ConfigMap` resources as described in xref:implementation-notes.adoc[implementation notes].
 
 Here is an example:
 
