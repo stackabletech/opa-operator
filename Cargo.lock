@@ -329,7 +329,7 @@ dependencies = [
  "axum",
  "clap",
  "flate2",
- "futures 0.3.30",
+ "futures",
  "hyper",
  "snafu 0.8.2",
  "stackable-operator",
@@ -768,12 +768,6 @@ dependencies = [
 
 [[package]]
 name = "futures"
-version = "0.1.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a471a38ef8ed83cd6e40aa59c1ffe17db6855c18e3604d9c4ed8c08ebc28678"
-
-[[package]]
-name = "futures"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "645c6916888f6cb6350d2550b80fb63e734897a8498abe35cfb732b6487804b0"
@@ -849,7 +843,6 @@ version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d6401deb83407ab3da39eba7e33987a73c3df0c82b4bb5813ee871c19c41d48"
 dependencies = [
- "futures 0.1.31",
  "futures-channel",
  "futures-core",
  "futures-io",
@@ -1279,7 +1272,7 @@ dependencies = [
  "bytes",
  "chrono",
  "either",
- "futures 0.3.30",
+ "futures",
  "home",
  "http",
  "http-body",
@@ -1348,7 +1341,7 @@ dependencies = [
  "async-trait",
  "backoff",
  "derivative",
- "futures 0.3.30",
+ "futures",
  "hashbrown",
  "json-patch",
  "k8s-openapi",
@@ -2430,7 +2423,7 @@ dependencies = [
  "built",
  "clap",
  "fnv",
- "futures 0.3.30",
+ "futures",
  "indoc",
  "pin-project",
  "product-config",
@@ -2451,7 +2444,7 @@ version = "0.0.0-dev"
 dependencies = [
  "axum",
  "clap",
- "futures 0.3.30",
+ "futures",
  "hyper",
  "moka",
  "pin-project",
@@ -2479,7 +2472,7 @@ dependencies = [
  "derivative",
  "dockerfile-parser",
  "either",
- "futures 0.3.30",
+ "futures",
  "json-patch",
  "k8s-openapi",
  "kube",
