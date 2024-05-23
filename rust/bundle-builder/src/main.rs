@@ -34,9 +34,12 @@ pub struct Args {
     common: stackable_operator::cli::ProductOperatorRun,
 }
 
+type Bundle = Arc<[u8]>;
+type BundleFuture = future::Shared<BoxFuture<'static, Bundle>>;
+
 #[derive(Clone)]
 struct AppState {
-    bundle: Arc<Mutex<future::Shared<BoxFuture<'static, Vec<u8>>>>>,
+    bundle: Arc<Mutex<BundleFuture>>,
 }
 
 #[derive(Snafu, Debug)]
@@ -69,7 +72,8 @@ async fn main() -> Result<(), StartupError> {
     let kube = kube::Client::try_default().await.unwrap();
 
     let (store, store_w) = reflector::store();
-    let bundle = Arc::new(Mutex::new(build_bundle(store.clone()).boxed().shared()));
+    let rebuild_bundle = || build_bundle(store.clone()).map(Arc::from).boxed().shared();
+    let bundle = Arc::new(Mutex::new(rebuild_bundle()));
     let reflector = std::pin::pin!(reflector::reflector(
         store_w,
         watcher(
@@ -101,7 +105,7 @@ async fn main() -> Result<(), StartupError> {
                 )
             }
         }
-        *bundle.lock().unwrap() = build_bundle(store.clone()).boxed().shared();
+        *bundle.lock().unwrap() = rebuild_bundle();
     })
     .map(Ok));
 
@@ -183,6 +187,6 @@ async fn get_bundle(State(state): State<AppState>) -> impl IntoResponse {
             http::header::CONTENT_TYPE,
             http::HeaderValue::from_static("application/gzip"),
         )],
-        bundle.await,
+        bundle.await.to_vec(),
     )
 }
