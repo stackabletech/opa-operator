@@ -1027,6 +1027,7 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         prepare_signal_handlers
+        mkdir -p {STACKABLE_LOG_DIR}/{container_name}
         stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
@@ -1035,7 +1036,11 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
         // and not some utility (e.g. multilog or tee) process.
         // See https://stackoverflow.com/a/8048493
         // TODO: do we need multilog?
-        logging_redirects = "",
+        logging_redirects = if console_logging_off {
+            format!(" &> {STACKABLE_LOG_DIR}/{container_name}/current")
+        } else {
+            format!(" &> >(tee {STACKABLE_LOG_DIR}/{container_name}/current)")
+        },
         // logging_redirects = if console_logging_off {
         //     format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
         // } else {

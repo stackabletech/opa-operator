@@ -46,8 +46,8 @@ enum StartupError {
         source: std::io::Error,
         path: PathBuf,
     },
-    #[snafu(display("failed to parse listen address"))]
-    ParseListenAddr { source: AddrParseError },
+    #[snafu(display("failed to get listener address"))]
+    GetListenerAddr { source: std::io::Error },
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
     #[snafu(display("failed to bind listener"))]
@@ -61,7 +61,7 @@ async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
     stackable_operator::logging::initialize_logging(
-        "OPA_OPERATOR_LOG",
+        "OPA_BUNDLE_BUILDER_LOG",
         APP_NAME,
         args.common.tracing_target,
     );
@@ -128,6 +128,8 @@ async fn main() -> Result<(), StartupError> {
     let listener = TcpListener::bind("0.0.0.0:3030")
         .await
         .context(BindListenerSnafu)?;
+    let address = listener.local_addr().context(GetListenerAddrSnafu)?;
+    info!(%address, "listening");
 
     let server = std::pin::pin!(async {
         axum::serve(listener, app.into_make_service())
