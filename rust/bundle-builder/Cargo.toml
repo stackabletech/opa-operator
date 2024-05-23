@@ -13,11 +13,11 @@ publish = false
 [dependencies]
 axum.workspace = true
 clap.workspace = true
-flate2 = "1.0.28"
+flate2.workspace = true
 futures.workspace = true
 hyper.workspace = true
 snafu.workspace = true
 stackable-operator.workspace = true
-tar = "0.4.40"
+tar.workspace = true
 tokio.workspace = true
 tracing.workspace = true
