@@ -14,7 +14,6 @@ use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     k8s_openapi::api::core::v1::ConfigMap,
     kube::{
-        self,
         api::ObjectMeta,
         runtime::{
             reflector::{self, ObjectRef, Store},
@@ -45,7 +44,9 @@ struct AppState {
 #[derive(Snafu, Debug)]
 enum StartupError {
     #[snafu(display("failed to initialize Kubernetes client"))]
-    InitKube { source: kube::Error },
+    InitKube {
+        source: stackable_operator::client::Error,
+    },
     #[snafu(display("failed to get listener address"))]
     GetListenerAddr { source: std::io::Error },
     #[snafu(display("failed to register SIGTERM handler"))]
@@ -66,7 +67,9 @@ async fn main() -> Result<(), StartupError> {
         args.common.tracing_target,
     );
 
-    let kube = kube::Client::try_default().await.context(InitKubeSnafu)?;
+    let client = stackable_operator::client::create_client(None)
+        .await
+        .context(InitKubeSnafu)?;
 
     let (store, store_w) = reflector::store();
     let rebuild_bundle = || {
@@ -85,7 +88,7 @@ async fn main() -> Result<(), StartupError> {
     let reflector = std::pin::pin!(reflector::reflector(
         store_w,
         watcher(
-            kube::Api::<ConfigMap>::default_namespaced(kube),
+            args.common.watch_namespace.get_api::<ConfigMap>(&client),
             watcher::Config::default().labels(&format!("{OPERATOR_NAME}/bundle")),
         ),
     )
