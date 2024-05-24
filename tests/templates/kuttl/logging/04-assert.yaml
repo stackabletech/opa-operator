@@ -8,4 +8,3 @@ commands:
   - script: >-
       kubectl exec --namespace=$NAMESPACE opa-test-runner-0 --
       sh /tmp/test_log_aggregation.sh
-      

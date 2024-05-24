@@ -6,4 +6,3 @@ commands:
       kubectl cp ./test_log_aggregation.py $NAMESPACE/opa-test-runner-0:/tmp
   - script: |
       kubectl cp ./test_log_aggregation.sh $NAMESPACE/opa-test-runner-0:/tmp
-      
