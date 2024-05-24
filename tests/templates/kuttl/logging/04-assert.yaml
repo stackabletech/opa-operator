@@ -5,3 +5,6 @@ commands:
   - script: >-
       kubectl exec --namespace=$NAMESPACE opa-test-runner-0 --
       python /tmp/test_log_aggregation.py -n $NAMESPACE
+  - script: >-
+      kubectl exec --namespace=$NAMESPACE opa-test-runner-0 --
+      sh /tmp/test_log_aggregation.sh

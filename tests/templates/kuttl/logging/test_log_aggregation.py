@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import requests
+import time
+
 
 def send_opa_decision_request():
     response = requests.post(
@@ -52,5 +54,6 @@ def check_sent_events():
 
 if __name__ == '__main__':
     send_opa_decision_request()
+    time.sleep(10)
     check_sent_events()
     print('Test successful!')

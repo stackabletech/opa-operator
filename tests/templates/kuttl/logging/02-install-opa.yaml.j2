@@ -28,10 +28,6 @@ spec:
   clusterConfig:
     vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
   servers:
-    config:
-      decisionLogging:
-        console: false
-        file: true
     roleGroups:
       automatic-log-config:
         config:
@@ -40,8 +36,11 @@ spec:
             containers:
               opa:
                 console:
-                  level: INFO
+                  level: ERROR
                 file:
+                  level: INFO
+                loggers:
+                  decision:
                   level: INFO
               bundle-builder:
                 console:
