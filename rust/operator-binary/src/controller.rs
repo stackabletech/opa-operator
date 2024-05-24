@@ -97,6 +97,13 @@ const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
+// logging defaults
+const DECISION_LOGGING_ENABLED: bool = false;
+const FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
+
 // bundle builder: ~ 5 MB x 2
 // these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
@@ -277,6 +284,26 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 impl ReconcilerError for Error {
     fn category(&self) -> &'static str {
         ErrorDiscriminants::from(self).into()
+    }
+}
+
+trait OpaLogLevel {
+    fn to_opa_literal(&self) -> String;
+}
+
+impl OpaLogLevel for LogLevel {
+    // based on https://www.openpolicyagent.org/docs/latest/cli/#options-10 opa has only log levels {debug,info,error}
+    fn to_opa_literal(&self) -> String {
+        match self {
+            LogLevel::TRACE => "debug",
+            LogLevel::DEBUG => "debug",
+            LogLevel::INFO => "info",
+            LogLevel::WARN => "error",
+            LogLevel::ERROR => "error",
+            LogLevel::FATAL => "error",
+            LogLevel::NONE => "error",
+        }
+        .into()
     }
 }
 
@@ -986,7 +1013,7 @@ pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Ac
 }
 
 fn build_config_file(merged_config: &OpaConfig) -> String {
-    let mut decision_logging_enabled = false;
+    let mut decision_logging_enabled = DECISION_LOGGING_ENABLED;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -997,24 +1024,24 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
         }
     }
 
-    let decision_logging;
-
-    if decision_logging_enabled {
-        decision_logging = Some(OpaClusterConfigDecisionLog { console: true });
+    let decision_logging = if decision_logging_enabled {
+        Some(OpaClusterConfigDecisionLog { console: true })
     } else {
-        decision_logging = None;
-    }
+        None
+    };
 
     let config = OpaClusterConfigFile::new(decision_logging);
 
+    // The unwrap() shouldn't panic under any circumstances because Rusts type checker takes care of the OpaClusterConfigFile
+    // and serde + serde_json therefore serialize/deserialize a valid struct
     serde_json::to_string_pretty(&json!(config)).unwrap()
 }
 
 fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
-    let mut file_log_level = LogLevel::INFO;
-    let mut console_log_level = LogLevel::INFO;
-    let mut server_log_level = LogLevel::INFO;
-    let mut decision_log_level = LogLevel::NONE;
+    let mut file_log_level = FILE_LOG_LEVEL;
+    let mut console_log_level = CONSOLE_LOG_LEVEL;
+    let mut server_log_level = SERVER_LOG_LEVEL;
+    let mut decision_log_level = DECISION_LOG_LEVEL;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -1034,12 +1061,14 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
             console_log_level = log_level;
         }
 
-        // Retrieve the decision log level for OPA. If not set, keep the defined default of LogLevel::NONE
+        // Retrieve the decision log level for OPA. If not set, keep the defined default of LogLevel::NONE.
+        // This is because, if decision logs are not explicitly set to something different than LogLevel::NONE,
+        // the decision logs should remain disabled and not set to ROOT log level automatically.
         if let Some(config) = log_config.loggers.get("decision") {
             decision_log_level = config.level
         }
 
-        // Retrieve the server log level for OPA. If not set, set it to the ROOT log level
+        // Retrieve the server log level for OPA. If not set, set it to the ROOT log level.
         match log_config.loggers.get("server") {
             Some(config) => server_log_level = config.level,
             None => server_log_level = log_config.root_log_level(),
@@ -1053,10 +1082,10 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
 
     let logging_redirects = format!(
         "&> >(process-logs --file-log-level {file} --console-log-level {console} --decision-log-level {decision} --server-log-level {server} --opa-rolling-log-file-size-bytes {OPA_ROLLING_LOG_FILE_SIZE_BYTES} --opa-rolling-log-files {OPA_ROLLING_LOG_FILES} --stackable-log-dir {STACKABLE_LOG_DIR} --container-name {container_name})",
-        file = file_log_level.to_vector_literal(),
-        console = console_log_level.to_vector_literal(),
-        decision = decision_log_level.to_vector_literal(),
-        server = server_log_level.to_vector_literal()
+        file = file_log_level.to_opa_literal(),
+        console = console_log_level.to_opa_literal(),
+        decision = decision_log_level.to_opa_literal(),
+        server = server_log_level.to_opa_literal()
     );
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
@@ -1064,7 +1093,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
-        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {logging_redirects} &
+        opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",
@@ -1073,7 +1102,39 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
-        opa_log_level = file_log_level.to_vector_literal()
+        opa_log_level = get_most_expressive_log_level(&[console_log_level, file_log_level]).unwrap_or(LogLevel::INFO).to_opa_literal()
+    }
+}
+
+fn get_most_expressive_log_level(log_levels: &[LogLevel]) -> Option<LogLevel> {
+    let mut log_levels_mapped: Vec<u8> = Vec::new();
+
+    for log_level in log_levels.iter() {
+        match log_level {
+            LogLevel::TRACE => log_levels_mapped.push(6),
+            LogLevel::DEBUG => log_levels_mapped.push(5),
+            LogLevel::INFO => log_levels_mapped.push(4),
+            LogLevel::WARN => log_levels_mapped.push(3),
+            LogLevel::ERROR => log_levels_mapped.push(2),
+            LogLevel::FATAL => log_levels_mapped.push(1),
+            LogLevel::NONE => log_levels_mapped.push(0),
+        }
+    }
+
+    let max_value = log_levels_mapped.iter().max();
+
+    match max_value {
+        Some(max) => match max {
+            6 => Some(LogLevel::TRACE),
+            5 => Some(LogLevel::DEBUG),
+            4 => Some(LogLevel::INFO),
+            3 => Some(LogLevel::WARN),
+            2 => Some(LogLevel::ERROR),
+            1 => Some(LogLevel::FATAL),
+            0 => Some(LogLevel::NONE),
+            _ => None,
+        },
+        None => None,
     }
 }
 
@@ -1190,5 +1251,26 @@ pub fn build_recommended_labels<'a, T>(
         controller_name: OPA_CONTROLLER_NAME,
         role,
         role_group,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_most_expressive_log_level() {
+        let log_level = get_most_expressive_log_level(&[]);
+        assert!(log_level.is_none());
+
+        let log_level = get_most_expressive_log_level(&[LogLevel::ERROR]);
+        assert_eq!(log_level.unwrap(), LogLevel::ERROR);
+
+        let log_level = get_most_expressive_log_level(&[LogLevel::INFO, LogLevel::ERROR]);
+        assert_eq!(log_level.unwrap(), LogLevel::INFO);
+
+        let log_level =
+            get_most_expressive_log_level(&[LogLevel::INFO, LogLevel::INFO, LogLevel::NONE]);
+        assert_eq!(log_level.unwrap(), LogLevel::INFO);
     }
 }
