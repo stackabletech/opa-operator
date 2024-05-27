@@ -98,11 +98,11 @@ const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
 // logging defaults
-const DECISION_LOGGING_ENABLED: bool = false;
-const FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
-const CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
-const SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
-const DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
+const DEFAULT_DECISION_LOGGING_ENABLED: bool = false;
+const DEFAULT_FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DEFAULT_CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DEFAULT_SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DEFAULT_DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
 
 // bundle builder: ~ 5 MB x 2
 // these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
@@ -1013,7 +1013,7 @@ pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Ac
 }
 
 fn build_config_file(merged_config: &OpaConfig) -> String {
-    let mut decision_logging_enabled = DECISION_LOGGING_ENABLED;
+    let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -1038,10 +1038,10 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
 }
 
 fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
-    let mut file_log_level = FILE_LOG_LEVEL;
-    let mut console_log_level = CONSOLE_LOG_LEVEL;
-    let mut server_log_level = SERVER_LOG_LEVEL;
-    let mut decision_log_level = DECISION_LOG_LEVEL;
+    let mut file_log_level = DEFAULT_FILE_LOG_LEVEL;
+    let mut console_log_level = DEFAULT_CONSOLE_LOG_LEVEL;
+    let mut server_log_level = DEFAULT_SERVER_LOG_LEVEL;
+    let mut decision_log_level = DEFAULT_DECISION_LOG_LEVEL;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -1102,39 +1102,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
-        opa_log_level = get_most_expressive_log_level(&[console_log_level, file_log_level]).unwrap_or(LogLevel::INFO).to_opa_literal()
-    }
-}
-
-fn get_most_expressive_log_level(log_levels: &[LogLevel]) -> Option<LogLevel> {
-    let mut log_levels_mapped: Vec<u8> = Vec::new();
-
-    for log_level in log_levels.iter() {
-        match log_level {
-            LogLevel::TRACE => log_levels_mapped.push(6),
-            LogLevel::DEBUG => log_levels_mapped.push(5),
-            LogLevel::INFO => log_levels_mapped.push(4),
-            LogLevel::WARN => log_levels_mapped.push(3),
-            LogLevel::ERROR => log_levels_mapped.push(2),
-            LogLevel::FATAL => log_levels_mapped.push(1),
-            LogLevel::NONE => log_levels_mapped.push(0),
-        }
-    }
-
-    let max_value = log_levels_mapped.iter().max();
-
-    match max_value {
-        Some(max) => match max {
-            6 => Some(LogLevel::TRACE),
-            5 => Some(LogLevel::DEBUG),
-            4 => Some(LogLevel::INFO),
-            3 => Some(LogLevel::WARN),
-            2 => Some(LogLevel::ERROR),
-            1 => Some(LogLevel::FATAL),
-            0 => Some(LogLevel::NONE),
-            _ => None,
-        },
-        None => None,
+        opa_log_level = vec![console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal()
     }
 }
 
@@ -1254,23 +1222,3 @@ pub fn build_recommended_labels<'a, T>(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_get_most_expressive_log_level() {
-        let log_level = get_most_expressive_log_level(&[]);
-        assert!(log_level.is_none());
-
-        let log_level = get_most_expressive_log_level(&[LogLevel::ERROR]);
-        assert_eq!(log_level.unwrap(), LogLevel::ERROR);
-
-        let log_level = get_most_expressive_log_level(&[LogLevel::INFO, LogLevel::ERROR]);
-        assert_eq!(log_level.unwrap(), LogLevel::INFO);
-
-        let log_level =
-            get_most_expressive_log_level(&[LogLevel::INFO, LogLevel::INFO, LogLevel::NONE]);
-        assert_eq!(log_level.unwrap(), LogLevel::INFO);
-    }
-}
