@@ -1221,4 +1221,3 @@ pub fn build_recommended_labels<'a, T>(
         role_group,
     }
 }
-
