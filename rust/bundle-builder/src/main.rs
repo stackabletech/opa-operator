@@ -47,12 +47,16 @@ enum StartupError {
     InitKube {
         source: stackable_operator::client::Error,
     },
+
     #[snafu(display("failed to get listener address"))]
     GetListenerAddr { source: std::io::Error },
+
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
+
     #[snafu(display("failed to bind listener"))]
     BindListener { source: std::io::Error },
+
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
 }
