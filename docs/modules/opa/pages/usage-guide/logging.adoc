@@ -1,4 +1,6 @@
-= Log aggregation
+= Logging
+
+== Log aggregation
 
 The logs can be forwarded to a Vector log aggregator by providing a discovery
 ConfigMap for the aggregator and by enabling the log agent:
@@ -22,7 +24,34 @@ spec:
 
 The Stackable operator for OPA only supports automatic log configuration due to the lack of customization for the OPA logging.
 
-Furthermore, the only customization possible for console output for the `opa` and `bundle-builder` containers is `NONE`. This deactivates console logging. Other log levels for console logging in these containers will be overwritten by the file log level.
+Furthermore, the only customization possible for console output for the `bundle-builder` container is `NONE`. This deactivates console logging. Other log levels for console logging in this containers will be overwritten by the file log level.
+
+== Decision logging
+
+The decision logging for OPA can be enabled by setting the log level of the decision logger to any other level than `NONE`:
+
+[source,yaml]
+----
+spec:
+  clusterConfig:
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+  servers:
+    config:
+      logging:
+        enableVectorAgent: true
+        containers:
+          opa:
+            console:
+              level: NONE
+            file:
+              level: INFO
+            loggers:
+              decision:
+                level: INFO
+----
+
+Please note that the decision logs would still be filtered by the log level set for the console and file appenders. Therefore, the configuration above would result in decision logs being present on file but not on console.
+
 
 Further information on how to configure logging, can be found in
 xref:concepts:logging.adoc[].
