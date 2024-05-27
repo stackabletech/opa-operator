@@ -1102,7 +1102,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
-        opa_log_level = vec![console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal()
+        opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal()
     }
 }
 
