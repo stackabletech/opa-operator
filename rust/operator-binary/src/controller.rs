@@ -287,26 +287,6 @@ impl ReconcilerError for Error {
     }
 }
 
-trait OpaLogLevel {
-    fn to_opa_literal(&self) -> String;
-}
-
-impl OpaLogLevel for LogLevel {
-    // based on https://www.openpolicyagent.org/docs/latest/cli/#options-10 opa has only log levels {debug,info,error}
-    fn to_opa_literal(&self) -> String {
-        match self {
-            LogLevel::TRACE => "debug",
-            LogLevel::DEBUG => "debug",
-            LogLevel::INFO => "info",
-            LogLevel::WARN => "error",
-            LogLevel::ERROR => "error",
-            LogLevel::FATAL => "error",
-            LogLevel::NONE => "error",
-        }
-        .into()
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct OpaClusterConfigFile {
     services: Vec<OpaClusterConfigService>,

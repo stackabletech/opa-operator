@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Support enabling decision logs ([#555]).
+
+[#555]: https://github.com/stackabletech/opa-operator/pull/555
+
 ## [24.3.0] - 2024-03-20
 
 ### Added
