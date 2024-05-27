@@ -78,6 +78,10 @@ async fn main() -> Result<(), StartupError> {
 
     let (store, store_w) = reflector::store();
     let rebuild_bundle = || {
+        info!("bundle invalidated, will be rebuilt on next request");
+        // Even if build_bundle is completely synchronous (currently),
+        // storing a Future acts as a primitive laziness/debouncing mechanism,
+        // the bundle will only actually be built once it is requested.
         build_bundle(store.clone())
             .inspect_err(|error| {
                 error!(
