@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeMap, BTreeSet},
     num::TryFromIntError,
     sync::{Arc, Mutex},
 };
@@ -220,10 +221,13 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
 
     info!("building bundle");
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), flate2::Compression::default()));
+    let mut resource_versions = BTreeMap::<String, String>::new();
+    let mut bundle_file_paths = BTreeSet::<String>::new();
     for cm in store.state() {
         let ObjectMeta {
             name: Some(cm_ns),
             namespace: Some(cm_name),
+            resource_version: Some(cm_version),
             ..
         } = &cm.metadata
         else {
@@ -232,23 +236,22 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
         let cm_ref = ObjectRef::from_obj(&*cm);
         for (file_name, data) in cm.data.iter().flatten() {
             let mut header = file_header(&cm_ref, file_name, data.as_bytes())?;
-            tar.append_data(
-                &mut header,
-                format!("configmap/{cm_ns}/{cm_name}/{file_name}"),
-                data.as_bytes(),
-            )
-            .with_context(|_| AddFileToTarballSnafu {
-                config_map: cm_ref.clone(),
-                file_name,
-            })?;
+            let file_path = format!("configmap/{cm_ns}/{cm_name}/{file_name}");
+            tar.append_data(&mut header, &file_path, data.as_bytes())
+                .with_context(|_| AddFileToTarballSnafu {
+                    config_map: cm_ref.clone(),
+                    file_name,
+                })?;
+            bundle_file_paths.insert(file_path);
         }
+        resource_versions.insert(cm_ref.to_string(), cm_version.clone());
     }
     let tar = tar
         .into_inner()
         .context(BuildTarballSnafu)?
         .finish()
         .context(BuildTarballSnafu)?;
-    info!("finished building bundle");
+    info!(bundle.files = ?bundle_file_paths, bundle.versions = ?resource_versions, "finished building bundle");
     Ok(tar)
 }
 
