@@ -1061,7 +1061,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
     // See https://stackoverflow.com/a/8048493
 
     let logging_redirects = format!(
-        "&> >(process-logs --file-log-level {file} --console-log-level {console} --decision-log-level {decision} --server-log-level {server} --opa-rolling-log-file-size-bytes {OPA_ROLLING_LOG_FILE_SIZE_BYTES} --opa-rolling-log-files {OPA_ROLLING_LOG_FILES} --stackable-log-dir {STACKABLE_LOG_DIR} --container-name {container_name})",
+        "&> >(CONSOLE_LEVEL={console} FILE_LEVEL={file} DECISION_LEVEL={decision} SERVER_LEVEL={server} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)",
         file = file_log_level.to_opa_literal(),
         console = console_log_level.to_opa_literal(),
         decision = decision_log_level.to_opa_literal(),
