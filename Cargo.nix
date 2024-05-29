@@ -65,6 +65,16 @@ rec {
       # File a bug if you depend on any for non-debug work!
       debug = internal.debugCrate { inherit packageId; };
     };
+    "stackable-opa-regorule-library" = rec {
+      packageId = "stackable-opa-regorule-library";
+      build = internal.buildRustCrateWithFeatures {
+        packageId = "stackable-opa-regorule-library";
+      };
+
+      # Debug support which might change between releases.
+      # File a bug if you depend on any for non-debug work!
+      debug = internal.debugCrate { inherit packageId; };
+    };
     "stackable-opa-user-info-fetcher" = rec {
       packageId = "stackable-opa-user-info-fetcher";
       build = internal.buildRustCrateWithFeatures {
@@ -7628,6 +7638,10 @@ rec {
             packageId = "snafu 0.8.2";
           }
           {
+            name = "stackable-opa-regorule-library";
+            packageId = "stackable-opa-regorule-library";
+          }
+          {
             name = "stackable-operator";
             packageId = "stackable-operator";
           }
@@ -7791,6 +7805,20 @@ rec {
             packageId = "built";
             features = [ "chrono" "git2" ];
           }
+        ];
+
+      };
+      "stackable-opa-regorule-library" = rec {
+        crateName = "stackable-opa-regorule-library";
+        version = "0.0.0-dev";
+        edition = "2021";
+        # We can't filter paths with references in Nix 2.4
+        # See https://github.com/NixOS/nix/issues/5410
+        src = if ((lib.versionOlder builtins.nixVersion "2.4pre20211007") || (lib.versionOlder "2.5" builtins.nixVersion ))
+          then lib.cleanSourceWith { filter = sourceFilter;  src = ./rust/regorule-library; }
+          else ./rust/regorule-library;
+        authors = [
+          "Stackable GmbH <info@stackable.tech>"
         ];
 
       };

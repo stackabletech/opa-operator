@@ -171,12 +171,17 @@ enum BundleError {
     #[snafu(display("ConfigMap is missing required metadata"))]
     ConfigMapMetadataMissing,
 
-    #[snafu(display("file {file_name:?} in {config_map} is too large ({file_size} bytes)"))]
+    #[snafu(display("file {file_path:?} is too large ({file_size} bytes)"))]
     FileSizeOverflow {
         source: TryFromIntError,
-        config_map: ObjectRef<ConfigMap>,
-        file_name: String,
+        file_path: String,
         file_size: usize,
+    },
+
+    #[snafu(display("failed to add static file {file_path:?} to tarball"))]
+    AddStaticRuleToTarball {
+        source: std::io::Error,
+        file_path: String,
     },
 
     #[snafu(display("failed to add file {file_name:?} from {config_map} to tarball"))]
@@ -201,11 +206,7 @@ impl BundleError {
 
 async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
     use bundle_error::*;
-    fn file_header(
-        config_map: &ObjectRef<ConfigMap>,
-        file_name: &str,
-        data: &[u8],
-    ) -> Result<tar::Header, BundleError> {
+    fn file_header(file_path: &str, data: &[u8]) -> Result<tar::Header, BundleError> {
         let mut header = tar::Header::new_gnu();
         header.set_mode(0o644);
         let file_size = data.len();
@@ -213,8 +214,7 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
             file_size
                 .try_into()
                 .with_context(|_| FileSizeOverflowSnafu {
-                    config_map: config_map.clone(),
-                    file_name,
+                    file_path,
                     file_size,
                 })?,
         );
@@ -227,6 +227,16 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), flate2::Compression::default()));
     let mut resource_versions = BTreeMap::<String, String>::new();
     let mut bundle_file_paths = BTreeSet::<String>::new();
+
+    for (file_path, data) in stackable_opa_regorule_library::REGORULES {
+        let mut header = file_header(file_path, data.as_bytes())?;
+        tar.append_data(&mut header, file_path, data.as_bytes())
+            .context(AddStaticRuleToTarballSnafu {
+                file_path: *file_path,
+            })?;
+        bundle_file_paths.insert(file_path.to_string());
+    }
+
     for cm in store.state() {
         let ObjectMeta {
             name: Some(cm_ns),
@@ -239,8 +249,8 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
         };
         let cm_ref = ObjectRef::from_obj(&*cm);
         for (file_name, data) in cm.data.iter().flatten() {
-            let mut header = file_header(&cm_ref, file_name, data.as_bytes())?;
             let file_path = format!("configmap/{cm_ns}/{cm_name}/{file_name}");
+            let mut header = file_header(&file_path, data.as_bytes())?;
             tar.append_data(&mut header, &file_path, data.as_bytes())
                 .with_context(|_| AddFileToTarballSnafu {
                     config_map: cm_ref.clone(),
