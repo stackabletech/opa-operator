@@ -5,7 +5,9 @@ metadata:
   name: test-opa
 spec:
   image:
+    repo: docker.stackable.tech/sandbox
     productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+    stackableVersion: 0.0.0-dev
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
   clusterConfig:
     vectorAggregatorConfigMapName: vector-aggregator-discovery

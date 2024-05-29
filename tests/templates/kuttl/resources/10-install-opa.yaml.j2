@@ -5,7 +5,9 @@ metadata:
   name: opa
 spec:
   image:
+    repo: docker.stackable.tech/sandbox
     productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+    stackableVersion: 0.0.0-dev
     pullPolicy: IfNotPresent
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
   clusterConfig:
