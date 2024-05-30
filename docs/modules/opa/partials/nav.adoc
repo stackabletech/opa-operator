@@ -4,7 +4,7 @@
 * xref:opa:usage-guide/index.adoc[]
 ** xref:opa:usage-guide/listenerclass.adoc[]
 ** xref:opa:usage-guide/policies.adoc[]
-// ** xref:opa:usage-guide/user-info-fetcher.adoc[] Not yet ready for public consumption
+** xref:opa:usage-guide/user-info-fetcher.adoc[]
 ** xref:opa:usage-guide/resources.adoc[]
 ** xref:opa:usage-guide/logging.adoc[]
 ** xref:opa:usage-guide/monitoring.adoc[]
