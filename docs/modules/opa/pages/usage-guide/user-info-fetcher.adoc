@@ -59,72 +59,9 @@ Fetch groups and extra credentials, but not roles.
 
 NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
 
-// TODO: Document how to use it in OPA regorules, e.g. to authorize based on group membership
-== Example rego rule
-
-[NOTE]
-.About unencrypted HTTP
-====
-The User info fetcher serves endpoints over clear-text HTTP.
-
-It is intended to only be accessed from the OPA Server via _localhost_ and to not be exposed outside of the Pod.
-====
-
-[source,rego]
-----
-package test # <1>
-
-# Define a function to lookup by username
-userInfoByUsername(username) := http.send({
-  "method": "POST",
-  "url": "http://127.0.0.1:9476/user",
-  "body": {"username": username}, <2>
-  "headers": {"Content-Type": "application/json"},
-  "raise_error": true
-}).body
-
-# Define a function to lookup by a stable identifier
-userInfoById(id) := http.send({
-  "method": "POST",
-  "url": "http://127.0.0.1:9476/user",
-  "body": {"id": id}, <3>
-  "headers": {"Content-Type": "application/json"},
-  "raise_error": true
-}).body
-
-currentUserInfoByUsername := userInfoByUsername(input.username)
-currentUserInfoById := userInfoById(input.id)
-----
-
-<1> The package name is important in the OPA URL used by the product.
-<2> Lookup by username
-<3> Lookup by id
-
-For more information on the request and response payloads, see <<_user_info_fetcher_api>>
-
 == User info fetcher API
 
-HTTP Post Requests must be sent to the `/user` endpoint with the following header set: `Content-Type: application/json`.
-
-You can either lookup the user info by stable identifier:
-
-[source,json]
-----
-{
-  "id": "af07f12c-a2db-40a7-93e0-874537bdf3f5",
-}
-----
-
-or by the username:
-
-[source,json]
-----
-{
-  "username": "alice",
-}
-----
-
-If the user is found, the following response structure will be returned:
+User information can be retrieved from regorules using the functions `userInfoByUsername(username)` and `userInfoById(id)` in `data.stackable.opa.userinfo.v1`.
 
 [source,json]
 ----
@@ -135,5 +72,21 @@ If the user is found, the following response structure will be returned:
     "/superset-admin"
   ],
   "customAttributes": {}
+}
+----
+
+For example, the following rule will allow access for users in the `/admin` group:
+
+[source,rego]
+----
+package test
+
+import rego.v1
+
+default allow := false
+
+allow if {
+    user := data.stackable.opa.userinfo.v1.userInfoById(input.userId)
+    "/admin" in user.groups
 }
 ----
