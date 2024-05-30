@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added regorule library for accessing user-info-fetcher ([#580]).
+
+[#580]: https://github.com/stackabletech/opa-operator/pull/580
+
 ## [24.3.0] - 2024-03-20
 
 ### Added
