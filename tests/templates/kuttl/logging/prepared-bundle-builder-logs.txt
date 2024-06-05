@@ -1,0 +1,2 @@
+[2m2024-01-01T00:00:00.000000Z[0m [32m INFO[0m [2mbundle[0m[2m:[0m Valid log event
+Unparsable log event

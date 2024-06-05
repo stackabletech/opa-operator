@@ -1,0 +1,6 @@
+{"level":"info","msg":"Valid server log event","name":"stackable","plugin":"bundle","time":"2024-01-01T00:00:00Z","logger":"server"}
+{"bundles":{"stackable":{}},"decision_id":"5b887ec2-80a0-4b44-9009-2e0cae3507c2","labels":{"id":"992b9dd5-f29e-47a7-aa3a-4408218c3825","version":"0.61.0"},"level":"info","metrics":{"counter_server_query_cache_hit":0,"timer_rego_input_parse_ns":5500,"timer_rego_query_compile_ns":143369,"timer_rego_query_eval_ns":41107,"timer_rego_query_parse_ns":95750,"timer_server_handler_ns":422100},"msg":"Valid decision log event","path":"test","req_id":3,"requested_by":"10.244.0.138:33268","time":"2024-01-01T00:00:00Z","timestamp":"2024-01-01T00:00:00.000000000Z","type":"openpolicyagent.org/decision_logs","logger":"decision"}
+{"level":"info","msg":"Invalid log event without a timestamp","name":"stackable","plugin":"bundle","logger":"server"}
+{"msg":"Invalid log event without a level","name":"stackable","plugin":"bundle","time":"2024-01-01T00:00:00Z","logger":"server"}
+{"level":"info","name":"stackable","plugin":"bundle","time":"2024-01-01T00:00:00Z","logger":"server"}
+{"level":"info","msg":"Unparsable log event",...
