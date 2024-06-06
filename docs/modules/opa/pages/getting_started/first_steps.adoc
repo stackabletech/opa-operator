@@ -18,6 +18,7 @@ include::example$getting_started/getting_started.sh[tag=apply-opa-cluster]
 
 This will create an OPA cluster.
 The operator deploys a DaemonSet, so every node in your cluster will have an OPA instance.
+This reduces network traffic and improves latency for decision requests, since every other Pod making decision requests will only have to make its request to another port on the same node.
 
 == Deploy a policy rule
 
