@@ -1,6 +1,7 @@
 = Getting started
 
-This guide will get you started with the OpenPolicyAgent (OPA) using the Stackable Operator. It will guide you through the installation of the Operator, setting up your first OPA instance, creating a policy rule and querying it.
+This guide will get you started with the OpenPolicyAgent (OPA) using the Stackable operator.
+It will guide you through the installation of the operator, setting up your first OPA instance, creating a policy rule and querying it.
 
 == Prerequisites
 
@@ -20,5 +21,5 @@ Resource sizing depends on cluster type(s), usage and scope, but as a starting p
 
 The Guide is divided into two steps:
 
-* xref:getting_started/installation.adoc[Installing the Operator].
+* xref:getting_started/installation.adoc[Installing the operator].
 * xref:getting_started/first_steps.adoc[Setting up an OPA, a policy rule and querying it].

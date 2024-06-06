@@ -67,7 +67,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Operator-rs: `0.40.1` -> `0.44.0` ([#440], [#460]).
+- operator-rs: `0.40.1` -> `0.44.0` ([#440], [#460]).
 - Use 0.0.0-dev product images for testing ([#441]).
 - Use testing-tools 0.2.0 ([#441]).
 - Added kuttl test suites ([#455]).
