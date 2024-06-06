@@ -1,7 +1,7 @@
 = First steps
 :docs-policy-language: https://www.openpolicyagent.org/docs/latest/policy-language/
 
-After you went through the xref:getting_started/installation.adoc[], on this page you will deploy an OPA, deploy your first rule and query it from the command line.
+After you went through the xref:getting_started/installation.adoc[], on this page you will deploy OPA, deploy your first rule and query it from the command line.
 
 == Deploy OPA
 
