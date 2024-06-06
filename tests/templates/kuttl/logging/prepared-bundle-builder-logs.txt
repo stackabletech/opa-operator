@@ -1,2 +1,5 @@
 [2m2024-01-01T00:00:00.000000Z[0m [32m INFO[0m [2mbundle[0m[2m:[0m Valid log event
+[2m2024-01-01T00:00:00Z[0m [32m INFO[0m [2mbundle[0m[2m:[0m Invalid log event with an unparsable timestamp
+[2m2024-01-01T00:00:00.000000Z[0m [32m CRITICAL[0m [2mbundle[0m[2m:[0m Invalid log event with an unknown level
+[2m2024-01-01T00:00:00.000000Z[0m [32m INFO[0m [2mbundle[0m[2m:[0m
 Unparsable log event
