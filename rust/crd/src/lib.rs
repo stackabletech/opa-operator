@@ -87,7 +87,7 @@ pub struct OpaClusterConfig {
     /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vector_aggregator_config_map_name: Option<String>,
-    /// This field controls which type of Service the Operator creates for this OpaCluster:
+    /// This field controls which type of Service the operator creates for this OpaCluster:
     ///
     /// * cluster-internal: Use a ClusterIP service
     ///

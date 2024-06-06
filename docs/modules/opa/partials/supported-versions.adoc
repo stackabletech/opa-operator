@@ -1,6 +1,6 @@
-// The version ranges supported by OPA-Operator
+// The version ranges supported by the OPA operator
 // This is a separate file, since it is used by both the direct OPA documentation, and the overarching
 // Stackable Platform documentation.
 
-- 0.61.0
-- 0.57.0 (deprecated)
+* 0.61.0
+* 0.57.0 (deprecated)

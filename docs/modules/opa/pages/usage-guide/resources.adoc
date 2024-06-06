@@ -2,13 +2,14 @@
 
 include::concepts:stackable_resource_requests.adoc[]
 
-A minimal OPA setup consists of 1 Pod per Node (DaemonSet) and has the following https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/[resource requirements] per scheduled Pod:
+A minimal OPA setup consists of 1 Pod per node (DaemonSet) and has the following https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/[resource requirements] per scheduled Pod:
 
 * `600m` CPU request
 * `1200m` CPU limit
 * `512Mi` memory request and limit
 
-Of course, additional services, require additional resources. For Stackable components, see the corresponding documentation on further resource requirements.
+Of course, additional services, require additional resources.
+For Stackable components, see the corresponding documentation on further resource requirements.
 
 Corresponding to the values above, the operator uses the following resource defaults for the main app container:
 
@@ -26,4 +27,5 @@ servers:
             limit: 256Mi
 ----
 
-WARNING: The default values are _most likely_ not sufficient to run a proper cluster in production. Please adapt according to your requirements.
+WARNING: The default values are _most likely_ not sufficient to run a proper cluster in production.
+Please adapt according to your requirements.

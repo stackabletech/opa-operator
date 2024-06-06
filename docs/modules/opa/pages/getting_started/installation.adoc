@@ -1,22 +1,21 @@
 = Installation
 
-On this page you will install the Stackable OPA Operator.
+There are 2 ways to install Stackable operators on a Kubernetes cluster.
 
-== Stackable Operators
+* Using xref:management:stackablectl:index.adoc[] (recommended)
+* Using Helm
 
-There are 2 ways to run Stackable Operators
+[tabs]
+====
+stackablectl::
++
+--
+`stackablectl` is the command line tool to interact with Stackable operators and our recommended way to install operators.
+Follow the xref:management:stackablectl:installation.adoc[installation steps] for your platform.
 
-. Using xref:management:stackablectl:index.adoc[] (recommended)
-. Using Helm
+After you have installed `stackablectl` run the following command to install the OPA operator:
 
-=== stackablectl
-
-`stackablectl` is the command line tool to interact with Stackable operators and our recommended way to install
-Operators. Follow the xref:management:stackablectl:installation.adoc[installation steps] for your platform.
-
-After you have installed `stackablectl` run the following command to install the OPA Operator:
-
-[source,bash]
+[source,shell]
 ----
 include::example$getting_started/getting_started.sh[tag=stackablectl-install-operators]
 ----
@@ -29,23 +28,30 @@ The tool will show
 
 TIP: Consult the xref:management:stackablectl:quickstart.adoc[] to learn more about how to use `stackablectl`. For
 example, you can use the `--cluster kind` flag to create a Kubernetes cluster with link:https://kind.sigs.k8s.io/[kind].
+--
 
-=== Helm
+Helm::
++
+--
+You can also use Helm to install the operator.
+Add the Stackable Helm repository:
 
-You can also use Helm to install the Operator. Add the Stackable Helm repository:
-[source,bash]
+[source,shell]
 ----
 include::example$getting_started/getting_started.sh[tag=helm-add-repo]
 ----
 
-Then install the Stackable OPA Operator:
-[source,bash]
+Then install the Stackable OPA operator:
+
+[source,shell]
 ----
 include::example$getting_started/getting_started.sh[tag=helm-install-operators]
 ----
 
-Helm will deploy the Operator in a Kubernetes Deployment and apply the CRDs for the OPA service. You are now ready to
+Helm will deploy the operator in a Kubernetes Deployment and apply the CRDs for the OPA service. You are now ready to
 deploy OPA in Kubernetes.
+--
+====
 
 == What's next
 

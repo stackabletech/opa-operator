@@ -24,7 +24,9 @@ spec:
 
 The Stackable operator for OPA only supports automatic log configuration due to the lack of customization for the OPA logging.
 
-Furthermore, the only customization possible for console output for the `bundle-builder` container is `NONE`. This deactivates console logging. Other log levels for console logging in this container will be overwritten by the file log level.
+Furthermore, the only customization possible for console output for the `bundle-builder` container is `NONE`.
+This deactivates console logging.
+Other log levels for console logging in this container will be overwritten by the file log level.
 
 == Decision logging
 
@@ -46,12 +48,13 @@ spec:
             file:
               level: INFO
             loggers:
-              decision:
+              decision:  # <1>
                 level: INFO
 ----
+<1> The `decision` logger is configured here.
 
-Please note that the decision logs would still be filtered by the log level set for the console and file appenders. Therefore, the configuration above would result in decision logs being present on file but not on console.
-
+The decision logs are still filtered by the log level set for the console and file appenders.
+Therefore, the configuration above would result in decision logs being present on file but not on console.
 
 Further information on how to configure logging, can be found in
 xref:concepts:logging.adoc[].

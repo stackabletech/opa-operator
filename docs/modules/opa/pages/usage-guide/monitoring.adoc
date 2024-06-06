@@ -1,4 +1,4 @@
-
 = Monitoring
 
-The managed OPA instances are automatically configured to export Prometheus metrics. See xref:operators:monitoring.adoc[] for more details.
+The managed OPA instances are automatically configured to export Prometheus metrics.
+See xref:operators:monitoring.adoc[] for more details.

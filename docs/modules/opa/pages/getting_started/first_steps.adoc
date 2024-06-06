@@ -1,10 +1,12 @@
 = First steps
+:docs-policy-language: https://www.openpolicyagent.org/docs/latest/policy-language/
 
-After you went through the xref:getting_started/installation.adoc[], on this page you will deploy OPA, deploy your first rule and query it from the command line.
+After you went through the xref:getting_started/installation.adoc[], on this page you will deploy an OPA, deploy your first rule and query it from the command line.
 
 == Deploy OPA
 
-To deploy OPA, you just need to create an OpaCluster resource in Kubernetes and the Operator will create the OPA instances. Create a file called `opa.yaml` with the following contents:
+To deploy OPA, you create an OpaCluster resource in Kubernetes and the operator will create the OPA instance.
+Create a file called `opa.yaml` with the following contents:
 
 [source,yaml]
 include::example$getting_started/opa.yaml[]
@@ -14,11 +16,14 @@ and apply it:
 [source,bash]
 include::example$getting_started/getting_started.sh[tag=apply-opa-cluster]
 
-This will create an OPA cluster. The Operator deploys a DaemonSet, so every node in your cluster will have an OPA instance.
+This will create an OPA cluster.
+The operator deploys a DaemonSet, so every node in your cluster will have an OPA instance.
 
 == Deploy a policy rule
 
-Now deploy the first link:https://www.openpolicyagent.org/docs/latest/policy-language/[policy rule] to OPA. Rules are deployed in ConfigMaps. Create a file `simple-rule.yaml` with the following contents:
+Now deploy the first {docs-policy-language}[policy rule] to OPA.
+Rules are deployed in ConfigMaps.
+Create a file `simple-rule.yaml` with the following contents:
 
 [source,yaml]
 ----
@@ -30,11 +35,12 @@ and apply it:
 [source,bash]
 include::example$getting_started/getting_started.sh[tag=apply-rule-file]
 
-The Operator will read the rule file, bundle it and publish the bundle to all OPA instances.
+The operator will read the rule file, bundle it and publish the bundle to all OPA instances.
 
 == Make policy requests
 
-Now that you have deployed the rule, you can query OPA for it. First, port-forward the service so you can query it from outside the Kubernetes cluster:
+Now that you have deployed the rule, you can query OPA for it.
+First, port-forward the service so you can query it from outside the Kubernetes cluster:
 
 [source,bash]
 include::example$getting_started/getting_started.sh[tag=port-forwarding]
@@ -63,4 +69,4 @@ Great! You've set up OPA, deployed a rule and queried it!
 
 == What's next
 
-Have a look at the xref:usage-guide/index.adoc[] page for more configuration options of the Operator.
+Have a look at the xref:usage-guide/index.adoc[] page for more configuration options of the operator.

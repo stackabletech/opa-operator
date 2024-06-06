@@ -23,13 +23,13 @@ helm repo add stackable-dev https://repo.stackable.tech/repository/helm-dev/
 echo "Updating Helm repo"
 helm repo update
 
-echo "Installing Operators with Helm"
+echo "Installing operators with Helm"
 # tag::helm-install-operators[]
 helm install --wait opa-operator stackable-dev/opa-operator --version 0.0.0-dev
 # end::helm-install-operators[]
 ;;
 "stackablectl")
-echo "installing Operators with stackablectl"
+echo "installing operators with stackablectl"
 # tag::stackablectl-install-operators[]
 stackablectl operator install opa=0.0.0-dev
 # end::stackablectl-install-operators[]
