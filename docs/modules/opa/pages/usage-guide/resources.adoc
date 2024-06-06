@@ -2,7 +2,7 @@
 
 include::concepts:stackable_resource_requests.adoc[]
 
-A minimal OPA setup consists of 1 Pod per node (DaemonSet) and has the following https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/[resource requirements] per scheduled Pod:
+A minimal OPA setup consists of 1 Pod per Node (DaemonSet) and has the following https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/[resource requirements] per scheduled Pod:
 
 * `600m` CPU request
 * `1200m` CPU limit
