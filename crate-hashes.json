@@ -1,5 +1,5 @@
 {
-  "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.69.0#stackable-operator-derive@0.3.0": "033zxfdwf202h48lshnw9wznbrkl80px8rdcg4h0rcb0wc2pa37q",
-  "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.69.0#stackable-operator@0.69.0": "033zxfdwf202h48lshnw9wznbrkl80px8rdcg4h0rcb0wc2pa37q",
+  "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.69.2#stackable-operator-derive@0.3.0": "0db8i14l5961hbbnyjsi754vpxalpv95dy3q3vylrga6yh288a5b",
+  "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.69.2#stackable-operator@0.69.2": "0db8i14l5961hbbnyjsi754vpxalpv95dy3q3vylrga6yh288a5b",
   "git+https://github.com/stackabletech/product-config.git?tag=0.6.0#product-config@0.6.0": "1ixc2x7540sxdmc92hqdcwm24rj8i1ivjsvwk2d57pdsq03j2x41"
 }
