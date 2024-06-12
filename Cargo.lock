@@ -2397,8 +2397,8 @@ dependencies = [
 
 [[package]]
 name = "stackable-operator"
-version = "0.69.2"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=fix/vector-log-processing#0068ac7690be831f1c363608981166a1ea82ec9e"
+version = "0.69.3"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.69.3#cb5943f03587eb8c90048b67a810c396de42a579"
 dependencies = [
  "chrono",
  "clap",
@@ -2434,7 +2434,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator-derive"
 version = "0.3.0"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=fix/vector-log-processing#0068ac7690be831f1c363608981166a1ea82ec9e"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.69.3#cb5943f03587eb8c90048b67a810c396de42a579"
 dependencies = [
  "darling",
  "proc-macro2",
