@@ -8,7 +8,13 @@ All notable changes to this project will be documented in this file.
 
 - Support enabling decision logs ([#555]).
 
+### Fixed
+
+- Processing of corrupted log events fixed; If errors occur, the error
+  messages are added to the log event ([#583]).
+
 [#555]: https://github.com/stackabletech/opa-operator/pull/555
+[#583]: https://github.com/stackabletech/opa-operator/pull/583
 
 ## [24.3.0] - 2024-03-20
 
