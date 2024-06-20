@@ -359,12 +359,13 @@ jobs:
           # Installing helm on ubicloud-standard-8-arm only
           if [ "$(arch)" = "aarch64" ]; then
             curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
-            sudo apt-get -y install apt-transport-https --yes
+            sudo apt-get -y install apt-transport-https
             echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-            sudo add-apt-repository ppa:rmescandon/yq
+            # sudo add-apt-repository ppa:rmescandon/yq
             sudo apt-get -y update
             sudo apt-get -y install helm
-            sudo apt-get -y install yq
+            # sudo apt-get -y install yq
+            wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/bin/yq && chmod +x /usr/bin/yq
             yq --help
           fi
 
