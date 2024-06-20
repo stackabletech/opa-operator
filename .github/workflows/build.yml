@@ -365,6 +365,7 @@ jobs:
             sudo apt-get -y update
             sudo apt-get -y install helm
             sudo apt-get -y install yq
+            yq --help
           fi
 
           make -e build
