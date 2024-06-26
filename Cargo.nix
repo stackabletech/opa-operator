@@ -1680,6 +1680,33 @@ rec {
         ];
 
       };
+      "deranged" = rec {
+        crateName = "deranged";
+        version = "0.3.11";
+        edition = "2021";
+        sha256 = "1d1ibqqnr5qdrpw8rclwrf1myn3wf0dygl04idf4j2s49ah6yaxl";
+        authors = [
+          "Jacob Pratt <jacob@jhpratt.dev>"
+        ];
+        dependencies = [
+          {
+            name = "powerfmt";
+            packageId = "powerfmt";
+            optional = true;
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "default" = [ "std" ];
+          "num" = [ "dep:num-traits" ];
+          "powerfmt" = [ "dep:powerfmt" ];
+          "quickcheck" = [ "dep:quickcheck" "alloc" ];
+          "rand" = [ "dep:rand" ];
+          "serde" = [ "dep:serde" ];
+          "std" = [ "alloc" ];
+        };
+        resolvedDefaultFeatures = [ "alloc" "powerfmt" "std" ];
+      };
       "derivative" = rec {
         crateName = "derivative";
         version = "2.2.0";
@@ -4950,6 +4977,16 @@ rec {
           "serde" = [ "dep:serde" ];
         };
       };
+      "num-conv" = rec {
+        crateName = "num-conv";
+        version = "0.1.0";
+        edition = "2021";
+        sha256 = "1ndiyg82q73783jq18isi71a7mjh56wxrk52rlvyx0mi5z9ibmai";
+        authors = [
+          "Jacob Pratt <jacob@jhpratt.dev>"
+        ];
+
+      };
       "num-traits" = rec {
         crateName = "num-traits";
         version = "0.2.19";
@@ -5163,9 +5200,9 @@ rec {
       };
       "opentelemetry" = rec {
         crateName = "opentelemetry";
-        version = "0.23.0";
+        version = "0.22.0";
         edition = "2021";
-        sha256 = "0xia0flm8w561in05qd5axhaf7qgcfnrfibjdzh17rwk90fsjs8v";
+        sha256 = "1gv70rx8172g9n82v9f97ircax7v4ydzyprq1nvsxwp3gfc5f3ch";
         dependencies = [
           {
             name = "futures-core";
@@ -5194,6 +5231,10 @@ rec {
             packageId = "thiserror";
             usesDefaultFeatures = false;
           }
+          {
+            name = "urlencoding";
+            packageId = "urlencoding";
+          }
         ];
         features = {
           "default" = [ "trace" ];
@@ -5206,9 +5247,9 @@ rec {
       };
       "opentelemetry-jaeger" = rec {
         crateName = "opentelemetry-jaeger";
-        version = "0.22.0";
+        version = "0.21.0";
         edition = "2021";
-        sha256 = "17zivynwp600vqp94mm3xjid2lpr02zghaacgnhdjimpcwdlf6sh";
+        sha256 = "0xwjs7vnv92hghy9hsrx4aa5knysvjvknvrc73l6ls976kqmwzzv";
         dependencies = [
           {
             name = "async-trait";
@@ -5298,20 +5339,25 @@ rec {
       };
       "opentelemetry-semantic-conventions" = rec {
         crateName = "opentelemetry-semantic-conventions";
-        version = "0.15.0";
+        version = "0.14.0";
         edition = "2021";
-        sha256 = "1mx45kzf86fs5558c7h90w6h2k3vi899n374l6l5np5kp55zns8q";
+        sha256 = "04197racbkpj75fh9jnwkdznjzv6l2ljpbr8ryfk9f9gqkb5pazr";
 
       };
       "opentelemetry_sdk" = rec {
         crateName = "opentelemetry_sdk";
-        version = "0.23.0";
+        version = "0.22.1";
         edition = "2021";
-        sha256 = "1zflfbjvp7hrfkny550py6rk0lngfph8dz97wv9842m9x9c2scdf";
+        sha256 = "0zkbkl29qik7cfmwbhr2ncink8fp9vi5x2qgk8gf6jg67c8wg44y";
         dependencies = [
           {
             name = "async-trait";
             packageId = "async-trait";
+            optional = true;
+          }
+          {
+            name = "crossbeam-channel";
+            packageId = "crossbeam-channel";
             optional = true;
           }
           {
@@ -5332,10 +5378,6 @@ rec {
             name = "glob";
             packageId = "glob";
             optional = true;
-          }
-          {
-            name = "lazy_static";
-            packageId = "lazy_static";
           }
           {
             name = "once_cell";
@@ -5382,11 +5424,12 @@ rec {
         features = {
           "async-std" = [ "dep:async-std" ];
           "async-trait" = [ "dep:async-trait" ];
+          "crossbeam-channel" = [ "dep:crossbeam-channel" ];
           "default" = [ "trace" ];
           "glob" = [ "dep:glob" ];
           "http" = [ "dep:http" ];
           "jaeger_remote_sampler" = [ "trace" "opentelemetry-http" "http" "serde" "serde_json" "url" ];
-          "logs" = [ "opentelemetry/logs" "async-trait" "serde_json" ];
+          "logs" = [ "opentelemetry/logs" "crossbeam-channel" "async-trait" "serde_json" ];
           "logs_level_enabled" = [ "logs" "opentelemetry/logs_level_enabled" ];
           "metrics" = [ "opentelemetry/metrics" "glob" "async-trait" ];
           "opentelemetry-http" = [ "dep:opentelemetry-http" ];
@@ -5400,10 +5443,10 @@ rec {
           "testing" = [ "opentelemetry/testing" "trace" "metrics" "logs" "rt-async-std" "rt-tokio" "rt-tokio-current-thread" "tokio/macros" "tokio/rt-multi-thread" ];
           "tokio" = [ "dep:tokio" ];
           "tokio-stream" = [ "dep:tokio-stream" ];
-          "trace" = [ "opentelemetry/trace" "rand" "async-trait" "percent-encoding" ];
+          "trace" = [ "opentelemetry/trace" "crossbeam-channel" "rand" "async-trait" "percent-encoding" ];
           "url" = [ "dep:url" ];
         };
-        resolvedDefaultFeatures = [ "async-trait" "default" "glob" "metrics" "percent-encoding" "rand" "rt-tokio" "tokio" "tokio-stream" "trace" ];
+        resolvedDefaultFeatures = [ "async-trait" "crossbeam-channel" "default" "glob" "metrics" "percent-encoding" "rand" "rt-tokio" "tokio" "tokio-stream" "trace" ];
       };
       "ordered-float 2.10.1" = rec {
         crateName = "ordered-float";
@@ -5796,6 +5839,20 @@ rec {
           "Alex Crichton <alex@alexcrichton.com>"
         ];
 
+      };
+      "powerfmt" = rec {
+        crateName = "powerfmt";
+        version = "0.2.0";
+        edition = "2021";
+        sha256 = "14ckj2xdpkhv3h6l5sdmb9f1d57z8hbfpdldjc2vl5givq2y77j3";
+        authors = [
+          "Jacob Pratt <jacob@jhpratt.dev>"
+        ];
+        features = {
+          "default" = [ "std" "macros" ];
+          "macros" = [ "dep:powerfmt-macros" ];
+          "std" = [ "alloc" ];
+        };
       };
       "ppv-lite86" = rec {
         crateName = "ppv-lite86";
@@ -8152,8 +8209,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "4a29c04280879bc0a12132a8dc70a6b70f39207a";
-          sha256 = "15hg2jrwgkv9ndkqwi8b6kcaq7pgnm6ylxhg7yp9dxnmjj63ibfa";
+          rev = "5dd3760898d9d678946e2a5354c8095e418419fe";
+          sha256 = "1zvjkqp0d1rgaks26fdh366ba0splfhinf992dg666z6f8l7z70j";
         };
         authors = [
           "Stackable GmbH <info@stackable.de>"
@@ -8276,6 +8333,10 @@ rec {
             packageId = "tracing";
           }
           {
+            name = "tracing-appender";
+            packageId = "tracing-appender";
+          }
+          {
             name = "tracing-opentelemetry";
             packageId = "tracing-opentelemetry";
           }
@@ -8301,8 +8362,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "4a29c04280879bc0a12132a8dc70a6b70f39207a";
-          sha256 = "15hg2jrwgkv9ndkqwi8b6kcaq7pgnm6ylxhg7yp9dxnmjj63ibfa";
+          rev = "5dd3760898d9d678946e2a5354c8095e418419fe";
+          sha256 = "1zvjkqp0d1rgaks26fdh366ba0splfhinf992dg666z6f8l7z70j";
         };
         procMacro = true;
         authors = [
@@ -8749,6 +8810,121 @@ rec {
           "threadpool" = [ "dep:threadpool" ];
         };
         resolvedDefaultFeatures = [ "default" "log" "server" "threadpool" ];
+      };
+      "time" = rec {
+        crateName = "time";
+        version = "0.3.36";
+        edition = "2021";
+        sha256 = "11g8hdpahgrf1wwl2rpsg5nxq3aj7ri6xr672v4qcij6cgjqizax";
+        authors = [
+          "Jacob Pratt <open-source@jhpratt.dev>"
+          "Time contributors"
+        ];
+        dependencies = [
+          {
+            name = "deranged";
+            packageId = "deranged";
+            usesDefaultFeatures = false;
+            features = [ "powerfmt" ];
+          }
+          {
+            name = "itoa";
+            packageId = "itoa";
+            optional = true;
+          }
+          {
+            name = "num-conv";
+            packageId = "num-conv";
+          }
+          {
+            name = "powerfmt";
+            packageId = "powerfmt";
+            usesDefaultFeatures = false;
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            optional = true;
+            usesDefaultFeatures = false;
+          }
+          {
+            name = "time-core";
+            packageId = "time-core";
+          }
+          {
+            name = "time-macros";
+            packageId = "time-macros";
+            optional = true;
+          }
+        ];
+        devDependencies = [
+          {
+            name = "num-conv";
+            packageId = "num-conv";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            usesDefaultFeatures = false;
+            features = [ "derive" ];
+          }
+          {
+            name = "time-macros";
+            packageId = "time-macros";
+          }
+        ];
+        features = {
+          "alloc" = [ "serde?/alloc" ];
+          "default" = [ "std" ];
+          "formatting" = [ "dep:itoa" "std" "time-macros?/formatting" ];
+          "large-dates" = [ "time-macros?/large-dates" ];
+          "local-offset" = [ "std" "dep:libc" "dep:num_threads" ];
+          "macros" = [ "dep:time-macros" ];
+          "parsing" = [ "time-macros?/parsing" ];
+          "quickcheck" = [ "dep:quickcheck" "alloc" "deranged/quickcheck" ];
+          "rand" = [ "dep:rand" "deranged/rand" ];
+          "serde" = [ "dep:serde" "time-macros?/serde" "deranged/serde" ];
+          "serde-human-readable" = [ "serde" "formatting" "parsing" ];
+          "serde-well-known" = [ "serde" "formatting" "parsing" ];
+          "std" = [ "alloc" "deranged/std" ];
+          "wasm-bindgen" = [ "dep:js-sys" ];
+        };
+        resolvedDefaultFeatures = [ "alloc" "formatting" "parsing" "std" ];
+      };
+      "time-core" = rec {
+        crateName = "time-core";
+        version = "0.1.2";
+        edition = "2021";
+        sha256 = "1wx3qizcihw6z151hywfzzyd1y5dl804ydyxci6qm07vbakpr4pg";
+        authors = [
+          "Jacob Pratt <open-source@jhpratt.dev>"
+          "Time contributors"
+        ];
+
+      };
+      "time-macros" = rec {
+        crateName = "time-macros";
+        version = "0.2.18";
+        edition = "2021";
+        sha256 = "1kqwxvfh2jkpg38fy673d6danh1bhcmmbsmffww3mphgail2l99z";
+        procMacro = true;
+        authors = [
+          "Jacob Pratt <open-source@jhpratt.dev>"
+          "Time contributors"
+        ];
+        dependencies = [
+          {
+            name = "num-conv";
+            packageId = "num-conv";
+          }
+          {
+            name = "time-core";
+            packageId = "time-core";
+          }
+        ];
+        features = {
+        };
+        resolvedDefaultFeatures = [ "formatting" "parsing" ];
       };
       "tinyvec" = rec {
         crateName = "tinyvec";
@@ -9370,6 +9546,41 @@ rec {
         };
         resolvedDefaultFeatures = [ "attributes" "default" "log" "std" "tracing-attributes" ];
       };
+      "tracing-appender" = rec {
+        crateName = "tracing-appender";
+        version = "0.2.3";
+        edition = "2018";
+        sha256 = "1kq69qyjvb4dxch5c9zgii6cqhy9nkk81z0r4pj3y2nc537fhrim";
+        authors = [
+          "Zeki Sherif <zekshi@amazon.com>"
+          "Tokio Contributors <team@tokio.rs>"
+        ];
+        dependencies = [
+          {
+            name = "crossbeam-channel";
+            packageId = "crossbeam-channel";
+          }
+          {
+            name = "thiserror";
+            packageId = "thiserror";
+          }
+          {
+            name = "time";
+            packageId = "time";
+            usesDefaultFeatures = false;
+            features = [ "formatting" "parsing" ];
+          }
+          {
+            name = "tracing-subscriber";
+            packageId = "tracing-subscriber";
+            usesDefaultFeatures = false;
+            features = [ "fmt" "std" ];
+          }
+        ];
+        features = {
+          "parking_lot" = [ "dep:parking_lot" ];
+        };
+      };
       "tracing-attributes" = rec {
         crateName = "tracing-attributes";
         version = "0.1.27";
@@ -9463,9 +9674,13 @@ rec {
       };
       "tracing-opentelemetry" = rec {
         crateName = "tracing-opentelemetry";
-        version = "0.24.0";
-        edition = "2021";
-        sha256 = "1r74gddb72ax88ypr9vwmxmjbgcn201cgv6axh5b92pj5d4h727n";
+        version = "0.23.0";
+        edition = "2018";
+        sha256 = "1112kmckw0qwyckhbwarb230n4ldmfgzixr9jagbfjmy3fx19gm9";
+        authors = [
+          "Julian Tescher <julian@tescher.me>"
+          "Tokio Contributors <team@tokio.rs>"
+        ];
         dependencies = [
           {
             name = "js-sys";
@@ -9551,7 +9766,6 @@ rec {
           "default" = [ "tracing-log" "metrics" ];
           "futures-util" = [ "dep:futures-util" ];
           "metrics" = [ "opentelemetry/metrics" "opentelemetry_sdk/metrics" "smallvec" ];
-          "metrics_gauge_unstable" = [ "opentelemetry/otel_unstable" ];
           "smallvec" = [ "dep:smallvec" ];
           "thiserror" = [ "dep:thiserror" ];
           "tracing-log" = [ "dep:tracing-log" ];
@@ -9849,6 +10063,17 @@ rec {
           "serde" = [ "dep:serde" ];
         };
         resolvedDefaultFeatures = [ "default" "serde" ];
+      };
+      "urlencoding" = rec {
+        crateName = "urlencoding";
+        version = "2.1.3";
+        edition = "2021";
+        sha256 = "1nj99jp37k47n0hvaz5fvz7z6jd0sb4ppvfy3nphr1zbnyixpy6s";
+        authors = [
+          "Kornel <kornel@geekhood.net>"
+          "Bertram Truong <b@bertramtruong.com>"
+        ];
+
       };
       "utf8parse" = rec {
         crateName = "utf8parse";

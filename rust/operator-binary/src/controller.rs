@@ -700,6 +700,10 @@ fn build_server_rolegroup_daemonset(
             "OPA_BUNDLE_BUILDER_LOG",
             bundle_builder_log_level(merged_config).to_string(),
         )
+        .add_env_var(
+            "OPA_BUNDLE_BUILDER_LOG_DIRECTORY",
+            format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
+        )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .resources(
@@ -1031,21 +1035,11 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
         stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
-        // Redirects matter!
-        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
-        // and not some utility (e.g. multilog or tee) process.
-        // See https://stackoverflow.com/a/8048493
-        // TODO: do we need multilog?
         logging_redirects = if console_logging_off {
-            format!(" &> {STACKABLE_LOG_DIR}/{container_name}/current")
+            " > /dev/null"
         } else {
-            format!(" &> >(tee {STACKABLE_LOG_DIR}/{container_name}/current)")
-        },
-        // logging_redirects = if console_logging_off {
-        //     format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
-        // } else {
-        //     format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-        // },
+            ""
+        }
     }
 }
 
