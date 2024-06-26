@@ -8209,8 +8209,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "5dd3760898d9d678946e2a5354c8095e418419fe";
-          sha256 = "1zvjkqp0d1rgaks26fdh366ba0splfhinf992dg666z6f8l7z70j";
+          rev = "30df36f87478aa9ebe933e0313d15a0792682f62";
+          sha256 = "0i48yfbxhyqgpgh9gk62r4gl974x2yhmlbv4hzmip6ldsgxrnh45";
         };
         authors = [
           "Stackable GmbH <info@stackable.de>"
@@ -8343,7 +8343,7 @@ rec {
           {
             name = "tracing-subscriber";
             packageId = "tracing-subscriber";
-            features = [ "env-filter" ];
+            features = [ "env-filter" "json" ];
           }
           {
             name = "url";
@@ -8362,8 +8362,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "5dd3760898d9d678946e2a5354c8095e418419fe";
-          sha256 = "1zvjkqp0d1rgaks26fdh366ba0splfhinf992dg666z6f8l7z70j";
+          rev = "30df36f87478aa9ebe933e0313d15a0792682f62";
+          sha256 = "0i48yfbxhyqgpgh9gk62r4gl974x2yhmlbv4hzmip6ldsgxrnh45";
         };
         procMacro = true;
         authors = [
@@ -9772,6 +9772,30 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "metrics" "smallvec" "tracing-log" ];
       };
+      "tracing-serde" = rec {
+        crateName = "tracing-serde";
+        version = "0.1.3";
+        edition = "2018";
+        sha256 = "1qfr0va69djvxqvjrx4vqq7p6myy414lx4w1f6amcn0hfwqj2sxw";
+        authors = [
+          "Tokio Contributors <team@tokio.rs>"
+        ];
+        dependencies = [
+          {
+            name = "serde";
+            packageId = "serde";
+          }
+          {
+            name = "tracing-core";
+            packageId = "tracing-core";
+          }
+        ];
+        features = {
+          "valuable" = [ "valuable_crate" "valuable-serde" "tracing-core/valuable" ];
+          "valuable-serde" = [ "dep:valuable-serde" ];
+          "valuable_crate" = [ "dep:valuable_crate" ];
+        };
+      };
       "tracing-subscriber" = rec {
         crateName = "tracing-subscriber";
         version = "0.3.18";
@@ -9806,6 +9830,16 @@ rec {
             features = [ "std" "unicode-case" "unicode-perl" ];
           }
           {
+            name = "serde";
+            packageId = "serde";
+            optional = true;
+          }
+          {
+            name = "serde_json";
+            packageId = "serde_json";
+            optional = true;
+          }
+          {
             name = "sharded-slab";
             packageId = "sharded-slab";
             optional = true;
@@ -9837,6 +9871,11 @@ rec {
             optional = true;
             usesDefaultFeatures = false;
             features = [ "log-tracer" "std" ];
+          }
+          {
+            name = "tracing-serde";
+            packageId = "tracing-serde";
+            optional = true;
           }
         ];
         devDependencies = [
@@ -9883,7 +9922,7 @@ rec {
           "valuable-serde" = [ "dep:valuable-serde" ];
           "valuable_crate" = [ "dep:valuable_crate" ];
         };
-        resolvedDefaultFeatures = [ "alloc" "ansi" "default" "env-filter" "fmt" "matchers" "nu-ansi-term" "once_cell" "regex" "registry" "sharded-slab" "smallvec" "std" "thread_local" "tracing" "tracing-log" ];
+        resolvedDefaultFeatures = [ "alloc" "ansi" "default" "env-filter" "fmt" "json" "matchers" "nu-ansi-term" "once_cell" "regex" "registry" "serde" "serde_json" "sharded-slab" "smallvec" "std" "thread_local" "tracing" "tracing-log" "tracing-serde" ];
       };
       "triomphe" = rec {
         crateName = "triomphe";

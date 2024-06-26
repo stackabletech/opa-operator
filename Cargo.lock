@@ -2561,7 +2561,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator"
 version = "0.69.3"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=feature/file-logging#5dd3760898d9d678946e2a5354c8095e418419fe"
+source = "git+https://github.com/stackabletech//operator-rs.git?branch=feature/file-logging#30df36f87478aa9ebe933e0313d15a0792682f62"
 dependencies = [
  "chrono",
  "clap",
@@ -2598,7 +2598,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator-derive"
 version = "0.3.0"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=feature/file-logging#5dd3760898d9d678946e2a5354c8095e418419fe"
+source = "git+https://github.com/stackabletech//operator-rs.git?branch=feature/file-logging#30df36f87478aa9ebe933e0313d15a0792682f62"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -3021,6 +3021,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-serde"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc6b213177105856957181934e4920de57730fc69bf42c37ee5bb664d406d9e1"
+dependencies = [
+ "serde",
+ "tracing-core",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3030,12 +3040,15 @@ dependencies = [
  "nu-ansi-term",
  "once_cell",
  "regex",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
  "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]
