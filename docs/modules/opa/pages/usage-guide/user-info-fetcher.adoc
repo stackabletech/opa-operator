@@ -63,6 +63,8 @@ NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Acco
 
 User information can be retrieved from regorules using the functions `userInfoByUsername(username)` and `userInfoById(id)` in `data.stackable.opa.userinfo.v1`.
 
+An example of the returned structure:
+
 [source,json]
 ----
 {
