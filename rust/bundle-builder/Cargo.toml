@@ -17,6 +17,7 @@ flate2.workspace = true
 futures.workspace = true
 hyper.workspace = true
 snafu.workspace = true
+stackable-opa-regorule-library = { version = "0.0.0-dev", path = "../regorule-library" }
 stackable-operator.workspace = true
 tar.workspace = true
 tokio.workspace = true

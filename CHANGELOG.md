@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Support enabling decision logs ([#555]).
+- Added regorule library for accessing user-info-fetcher ([#580]).
 
 ### Changed
 
@@ -20,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 [#555]: https://github.com/stackabletech/opa-operator/pull/555
 [#578]: https://github.com/stackabletech/opa-operator/pull/578
+[#580]: https://github.com/stackabletech/opa-operator/pull/580
 [#583]: https://github.com/stackabletech/opa-operator/pull/583
 
 ## [24.3.0] - 2024-03-20
