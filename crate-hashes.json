@@ -1,5 +1,5 @@
 {
-  "git+https://github.com/stackabletech//operator-rs.git?branch=feature%2Ffile-logging#stackable-operator-derive@0.3.0": "0i48yfbxhyqgpgh9gk62r4gl974x2yhmlbv4hzmip6ldsgxrnh45",
-  "git+https://github.com/stackabletech//operator-rs.git?branch=feature%2Ffile-logging#stackable-operator@0.69.3": "0i48yfbxhyqgpgh9gk62r4gl974x2yhmlbv4hzmip6ldsgxrnh45",
+  "git+https://github.com/stackabletech//operator-rs.git?branch=feature%2Ffile-logging#stackable-operator-derive@0.3.0": "1y3f6j469r3vwipa606j3sncr8lpii0sclnyfjxdi4qmb4h9a9g9",
+  "git+https://github.com/stackabletech//operator-rs.git?branch=feature%2Ffile-logging#stackable-operator@0.69.3": "1y3f6j469r3vwipa606j3sncr8lpii0sclnyfjxdi4qmb4h9a9g9",
   "git+https://github.com/stackabletech/product-config.git?tag=0.6.0#product-config@0.6.0": "1ixc2x7540sxdmc92hqdcwm24rj8i1ivjsvwk2d57pdsq03j2x41"
 }
