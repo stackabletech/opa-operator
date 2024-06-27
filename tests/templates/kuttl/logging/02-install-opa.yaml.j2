@@ -36,9 +36,12 @@ spec:
             containers:
               opa:
                 console:
-                  level: INFO
+                  level: ERROR
                 file:
                   level: INFO
+                loggers:
+                  decision:
+                    level: INFO
               bundle-builder:
                 console:
                   level: NONE
