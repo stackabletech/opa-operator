@@ -8,12 +8,18 @@ All notable changes to this project will be documented in this file.
 
 - Support enabling decision logs ([#555]).
 
+### Changed
+
+- Rewrite of the OPA bundle builder ([#578]).
+
 ### Fixed
 
 - Processing of corrupted log events fixed; If errors occur, the error
   messages are added to the log event ([#583]).
+- Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
 
 [#555]: https://github.com/stackabletech/opa-operator/pull/555
+[#578]: https://github.com/stackabletech/opa-operator/pull/578
 [#583]: https://github.com/stackabletech/opa-operator/pull/583
 
 ## [24.3.0] - 2024-03-20
