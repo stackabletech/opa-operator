@@ -23,7 +23,6 @@ use stackable_operator::{
     },
 };
 use tokio::net::TcpListener;
-use tracing::{error, info};
 
 const OPERATOR_NAME: &str = "opa.stackable.tech";
 pub const APP_NAME: &str = "opa-bundle-builder";
@@ -78,13 +77,13 @@ async fn main() -> Result<(), StartupError> {
 
     let (store, store_w) = reflector::store();
     let rebuild_bundle = || {
-        info!("bundle invalidated, will be rebuilt on next request");
+        tracing::info!("bundle invalidated, will be rebuilt on next request");
         // Even if build_bundle is completely synchronous (currently),
         // storing a Future acts as a primitive laziness/debouncing mechanism,
         // the bundle will only actually be built once it is requested.
         build_bundle(store.clone())
             .inspect_err(|error| {
-                error!(
+                tracing::error!(
                     error = error as &dyn std::error::Error,
                     "failed to rebuild bundle"
                 )
@@ -102,30 +101,41 @@ async fn main() -> Result<(), StartupError> {
         ),
     )
     .for_each(|ev| async {
-        match ev {
-            Ok(watcher::Event::Applied(o)) => {
-                info!(object = %ObjectRef::from_obj(&o), "saw updated object")
+        let rebuild = match ev {
+            Ok(watcher::Event::Apply(o)) => {
+                tracing::info!(object = %ObjectRef::from_obj(&o), "saw updated object");
+                true
             }
-            Ok(watcher::Event::Deleted(o)) => {
-                info!(object = %ObjectRef::from_obj(&o), "saw deleted object")
+            Ok(watcher::Event::Delete(o)) => {
+                tracing::info!(object = %ObjectRef::from_obj(&o), "saw deleted object");
+                true
             }
-            Ok(watcher::Event::Restarted(os)) => {
-                let objects = os
-                    .iter()
-                    .map(ObjectRef::from_obj)
-                    .map(|o| o.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                info!(objects, "restarted reflector")
+            Ok(watcher::Event::Init) => {
+                tracing::info!("restart initiated");
+                false
+            }
+            Ok(watcher::Event::InitApply(o)) => {
+                tracing::info!(object = %ObjectRef::from_obj(&o), "saw updated object (waiting for restart to complete before rebuilding)");
+                false
+            }
+            Ok(watcher::Event::InitDone) => {
+                tracing::info!("restart done");
+                true
             }
             Err(error) => {
-                error!(
+                tracing::error!(
                     error = &error as &dyn std::error::Error,
                     "failed to update reflector"
-                )
+                );
+                false
             }
+        };
+        if rebuild {
+            tracing::info!("rebuilding bundle");
+            *bundle.lock().unwrap() = rebuild_bundle();
+        } else {
+            tracing::debug!("change should have no effect, not rebuilding bundle");
         }
-        *bundle.lock().unwrap() = rebuild_bundle();
     })
     .map(Ok));
 
@@ -153,7 +163,7 @@ async fn main() -> Result<(), StartupError> {
         .await
         .context(BindListenerSnafu)?;
     let address = listener.local_addr().context(GetListenerAddrSnafu)?;
-    info!(%address, "listening");
+    tracing::info!(%address, "listening");
 
     let server = std::pin::pin!(async {
         axum::serve(listener, app.into_make_service())
@@ -223,7 +233,7 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
         Ok(header)
     }
 
-    info!("building bundle");
+    tracing::info!("building bundle");
     let mut tar = tar::Builder::new(GzEncoder::new(Vec::new(), flate2::Compression::default()));
     let mut resource_versions = BTreeMap::<String, String>::new();
     let mut bundle_file_paths = BTreeSet::<String>::new();
@@ -265,7 +275,7 @@ async fn build_bundle(store: Store<ConfigMap>) -> Result<Vec<u8>, BundleError> {
         .context(BuildTarballSnafu)?
         .finish()
         .context(BuildTarballSnafu)?;
-    info!(bundle.files = ?bundle_file_paths, bundle.versions = ?resource_versions, "finished building bundle");
+    tracing::info!(bundle.files = ?bundle_file_paths, bundle.versions = ?resource_versions, "finished building bundle");
     Ok(tar)
 }
 

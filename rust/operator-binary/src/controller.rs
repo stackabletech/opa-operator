@@ -6,6 +6,7 @@ use std::{
 
 use indoc::formatdoc;
 use product_config::{types::PropertyNameKind, ProductConfigManager};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{
@@ -71,13 +72,12 @@ use crate::{
     operations::graceful_shutdown::add_graceful_shutdown_config,
     product_logging::{
         extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
-        OpaLogLevel,
     },
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 
-pub const CONFIG_FILE: &str = "config.yaml";
+pub const CONFIG_FILE: &str = "config.json";
 pub const APP_PORT: u16 = 8081;
 pub const APP_PORT_NAME: &str = "http";
 pub const METRICS_PORT_NAME: &str = "metrics";
@@ -96,6 +96,13 @@ const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
+
+// logging defaults
+const DEFAULT_DECISION_LOGGING_ENABLED: bool = false;
+const DEFAULT_FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DEFAULT_CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DEFAULT_SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
+const DEFAULT_DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
 
 // bundle builder: ~ 5 MB x 2
 // these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
@@ -279,6 +286,67 @@ impl ReconcilerError for Error {
     fn category(&self) -> &'static str {
         ErrorDiscriminants::from(self).into()
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OpaClusterConfigFile {
+    services: Vec<OpaClusterConfigService>,
+    bundles: OpaClusterBundle,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    decision_logs: Option<OpaClusterConfigDecisionLog>,
+}
+
+impl OpaClusterConfigFile {
+    pub fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
+        Self {
+            services: vec![OpaClusterConfigService {
+                name: String::from("stackable"),
+                url: String::from("http://localhost:3030/opa/v1"),
+            }],
+            bundles: OpaClusterBundle {
+                stackable: OpaClusterBundleConfig {
+                    service: String::from("stackable"),
+                    resource: String::from("opa/bundle.tar.gz"),
+                    persist: true,
+                    polling: OpaClusterBundleConfigPolling {
+                        min_delay_seconds: 10,
+                        max_delay_seconds: 20,
+                    },
+                },
+            },
+            decision_logs: decision_logging,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterConfigService {
+    name: String,
+    url: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterBundle {
+    stackable: OpaClusterBundleConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterBundleConfig {
+    service: String,
+    resource: String,
+    persist: bool,
+    polling: OpaClusterBundleConfigPolling,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterBundleConfigPolling {
+    min_delay_seconds: i32,
+    max_delay_seconds: i32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct OpaClusterConfigDecisionLog {
+    console: bool,
 }
 
 pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
@@ -588,7 +656,7 @@ fn build_server_rolegroup_config_map(
 
     cm_builder
         .metadata(metadata)
-        .add_data(CONFIG_FILE, build_config_file());
+        .add_data(CONFIG_FILE, build_config_file(merged_config));
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         cm_builder.add_data(
@@ -699,6 +767,10 @@ fn build_server_rolegroup_daemonset(
         .add_env_var(
             "OPA_BUNDLE_BUILDER_LOG",
             bundle_builder_log_level(merged_config).to_string(),
+        )
+        .add_env_var(
+            "OPA_BUNDLE_BUILDER_LOG_DIRECTORY",
+            format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -928,62 +1000,88 @@ pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Ac
     Action::requeue(*Duration::from_secs(5))
 }
 
-fn build_config_file() -> &'static str {
-    // We currently do not activate decision logging like
-    // decision_logs:
-    //     console: true
-    // This will log decisions to the console, but also sends an extra `decision_id` field in the
-    // API JSON response. This currently leads to our Java authorizers (Druid, Trino) failing to
-    // deserialize the JSON object since they only expect to have a `result` field returned.
-    // see https://github.com/stackabletech/opa-operator/issues/422
-    "
-services:
-  - name: stackable
-    url: http://localhost:3030/opa/v1
-
-bundles:
-  stackable:
-    service: stackable
-    resource: opa/bundle.tar.gz
-    persist: true
-    polling:
-      min_delay_seconds: 10
-      max_delay_seconds: 20
-"
-}
-
-fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
-    let mut opa_log_level = OpaLogLevel::Info;
-    let mut console_logging_off = false;
+fn build_config_file(merged_config: &OpaConfig) -> String {
+    let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(&Container::Opa)
     {
-        // Retrieve the file log level for OPA and convert to OPA log levels
+        if let Some(config) = log_config.loggers.get("decision") {
+            decision_logging_enabled = config.level != LogLevel::NONE;
+        }
+    }
+
+    let decision_logging = if decision_logging_enabled {
+        Some(OpaClusterConfigDecisionLog { console: true })
+    } else {
+        None
+    };
+
+    let config = OpaClusterConfigFile::new(decision_logging);
+
+    // The unwrap() shouldn't panic under any circumstances because Rusts type checker takes care of the OpaClusterConfigFile
+    // and serde + serde_json therefore serialize/deserialize a valid struct
+    serde_json::to_string_pretty(&json!(config)).unwrap()
+}
+
+fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
+    let mut file_log_level = DEFAULT_FILE_LOG_LEVEL;
+    let mut console_log_level = DEFAULT_CONSOLE_LOG_LEVEL;
+    let mut server_log_level = DEFAULT_SERVER_LOG_LEVEL;
+    let mut decision_log_level = DEFAULT_DECISION_LOG_LEVEL;
+
+    if let Some(ContainerLogConfig {
+        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
+    }) = merged_config.logging.containers.get(&Container::Opa)
+    {
         if let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.file
         {
-            opa_log_level = OpaLogLevel::from(log_level);
+            file_log_level = log_level;
         }
 
-        // We need to check if the console logging is deactivated (NONE)
-        // This will result in not using `tee` later on in the start command
         if let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.console
         {
-            console_logging_off = log_level == LogLevel::NONE
+            console_log_level = log_level;
+        }
+
+        // Retrieve the decision log level for OPA. If not set, keep the defined default of LogLevel::NONE.
+        // This is because, if decision logs are not explicitly set to something different than LogLevel::NONE,
+        // the decision logs should remain disabled and not set to ROOT log level automatically.
+        if let Some(config) = log_config.loggers.get("decision") {
+            decision_log_level = config.level
+        }
+
+        // Retrieve the server log level for OPA. If not set, set it to the ROOT log level.
+        match log_config.loggers.get("server") {
+            Some(config) => server_log_level = config.level,
+            None => server_log_level = log_config.root_log_level(),
         }
     }
+
+    // Redirects matter!
+    // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
+    // and not some utility (e.g. multilog or tee) process.
+    // See https://stackoverflow.com/a/8048493
+
+    let logging_redirects = format!(
+        "&> >(CONSOLE_LEVEL={console} FILE_LEVEL={file} DECISION_LEVEL={decision} SERVER_LEVEL={server} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)",
+        file = file_log_level,
+        console = console_log_level,
+        decision = decision_log_level,
+        server = server_log_level
+    );
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
-        /stackable/opa/opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/config.yaml -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry{logging_redirects} &
+        opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",
@@ -992,15 +1090,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
-        // Redirects matter!
-        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
-        // and not some utility (e.g. multilog or tee) process.
-        // See https://stackoverflow.com/a/8048493
-        logging_redirects = if console_logging_off {
-            format!(" &> >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
-        } else {
-            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-        },
+        opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal()
     }
 }
 
@@ -1031,21 +1121,11 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
         stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
-        // Redirects matter!
-        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
-        // and not some utility (e.g. multilog or tee) process.
-        // See https://stackoverflow.com/a/8048493
-        // TODO: do we need multilog?
         logging_redirects = if console_logging_off {
-            format!(" &> {STACKABLE_LOG_DIR}/{container_name}/current")
+            " > /dev/null"
         } else {
-            format!(" &> >(tee {STACKABLE_LOG_DIR}/{container_name}/current)")
-        },
-        // logging_redirects = if console_logging_off {
-        //     format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
-        // } else {
-        //     format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-        // },
+            ""
+        }
     }
 }
 

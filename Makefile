@@ -12,7 +12,7 @@
 TAG    := $(shell git rev-parse --short HEAD)
 OPERATOR_NAME := opa-operator
 VERSION := $(shell cargo metadata --format-version 1 | jq -r '.packages[] | select(.name=="stackable-${OPERATOR_NAME}") | .version')
-ARCH := $(shell arch | sed -e 's#x86_64#amd64#' | sed -e 's#aarch64#arm64#')
+ARCH := $(shell uname -m | sed -e 's#x86_64#amd64#' | sed -e 's#aarch64#arm64#')
 
 DOCKER_REPO := docker.stackable.tech
 ORGANIZATION := stackable
@@ -171,7 +171,7 @@ clean: chart-clean
 regenerate-charts: chart-clean compile-chart
 
 regenerate-nix:
-	nix run -f . regenerateNixLockfiles
+	nix run --extra-experimental-features "nix-command flakes" -f . regenerateNixLockfiles
 
 build: regenerate-charts regenerate-nix helm-package docker-build
 
@@ -190,7 +190,7 @@ check-kubernetes:
 
 run-dev: check-nix check-kubernetes
 	kubectl apply -f deploy/stackable-operators-ns.yaml
-	nix run -f. tilt -- up --port 5430 --namespace stackable-operators
+	nix run --extra-experimental-features "nix-command flakes" -f. tilt -- up --port 5430 --namespace stackable-operators
 
 stop-dev: check-nix check-kubernetes
-	nix run -f. tilt -- down
+	nix run --extra-experimental-features "nix-command flakes" -f. tilt -- down

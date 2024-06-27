@@ -30,8 +30,6 @@ pub mod user_info_fetcher;
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";
 
-pub const CONFIG_FILE: &str = "config.yaml";
-
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
 /// Safety puffer to guarantee the graceful shutdown works every time.
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
@@ -89,7 +87,7 @@ pub struct OpaClusterConfig {
     /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vector_aggregator_config_map_name: Option<String>,
-    /// This field controls which type of Service the Operator creates for this OpaCluster:
+    /// This field controls which type of Service the operator creates for this OpaCluster:
     ///
     /// * cluster-internal: Use a ClusterIP service
     ///

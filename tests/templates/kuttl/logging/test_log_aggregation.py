@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 import requests
+import time
 
+
+def send_opa_decision_request():
+    response = requests.post(
+        'http://test-opa:8081/v1/data/test/world'
+    )
+
+    assert response.status_code == 200, \
+        'Cannot access the API of the opa cluster.'
 
 def check_sent_events():
     response = requests.post(
@@ -44,5 +53,7 @@ def check_sent_events():
 
 
 if __name__ == '__main__':
+    send_opa_decision_request()
+    time.sleep(10)
     check_sent_events()
     print('Test successful!')

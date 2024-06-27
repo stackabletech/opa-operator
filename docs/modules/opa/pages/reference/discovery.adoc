@@ -1,14 +1,15 @@
+= Discovery
+:page-aliases: discovery.adoc
 :clusterName: simple-opa
 :namespace: stackable
 :packageName: opa-test
 :policyName: allow
-:page-aliases: discovery.adoc
 
-= Discovery
+The Stackable operator for OpenPolicyAgent (OPA) publishes a xref:concepts:service-discovery.adoc[discovery ConfigMap], which exposes a client configuration bundle that allows access to the OPA cluster.
 
-The Stackable Operator for OpenPolicyAgent (OPA) publishes a discovery https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmap-v1-core[ConfigMap], which exposes a client configuration bundle that allows access to the OPA cluster.
-
-The bundle includes a connection string to access the OPA cluster. This string may be used by other operators or tools to configure their products with access to OPA. This is limited to internal cluster access.
+The bundle includes a connection string to access the OPA cluster.
+This string may be used by other operators or tools to configure their products with access to OPA.
+This is limited to internal cluster access.
 
 == Example
 
@@ -35,12 +36,14 @@ The `{namespace}/{clusterName}` discovery ConfigMap contains the following field
 
 `OPA`::
 ====
-A connection string for cluster internal OPA requests. Provided the cluster example above, the connection string is created as follows:
+A connection string for cluster internal OPA requests.
+Provided the cluster example above, the connection string is created as follows:
 
 [subs="attributes"]
     http://{clusterName}.{namespace}.svc.cluster.local:8081/
 
-This connection string points to the base URL (and web UI) of the OPA cluster. In order to query policies you have to configure your product and its OPA url as follows, given the bundle package name `{packageName}` and the policy name `{policyName}`:
+This connection string points to the base URL (and web UI) of the OPA cluster.
+In order to query policies you have to configure your product and its OPA URL as follows, given the bundle package name `{packageName}` and the policy name `{policyName}`:
 
 [subs="attributes"]
     http://{clusterName}.{namespace}.svc.cluster.local:8081/v1/data/{packageName}/{policyName}

@@ -6,9 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Support enabling decision logs ([#555]).
 - Added regorule library for accessing user-info-fetcher ([#580]).
 
+### Fixed
+
+- Processing of corrupted log events fixed; If errors occur, the error
+  messages are added to the log event ([#583]).
+
+[#555]: https://github.com/stackabletech/opa-operator/pull/555
 [#580]: https://github.com/stackabletech/opa-operator/pull/580
+[#583]: https://github.com/stackabletech/opa-operator/pull/583
 
 ## [24.3.0] - 2024-03-20
 
@@ -67,7 +75,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Operator-rs: `0.40.1` -> `0.44.0` ([#440], [#460]).
+- operator-rs: `0.40.1` -> `0.44.0` ([#440], [#460]).
 - Use 0.0.0-dev product images for testing ([#441]).
 - Use testing-tools 0.2.0 ([#441]).
 - Added kuttl test suites ([#455]).
