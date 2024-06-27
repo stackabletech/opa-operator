@@ -93,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
                 product_config,
                 watch_namespace,
                 opa_builder_clusterrole,
+                operator_image.clone(),
                 operator_image,
             )
             .await;
@@ -110,6 +111,7 @@ async fn create_controller(
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
     opa_bundle_builder_clusterrole: String,
+    opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
 ) {
     let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
@@ -130,6 +132,7 @@ async fn create_controller(
                 client: client.clone(),
                 product_config,
                 opa_bundle_builder_clusterrole,
+                opa_bundle_builder_image,
                 user_info_fetcher_image,
             }),
         )

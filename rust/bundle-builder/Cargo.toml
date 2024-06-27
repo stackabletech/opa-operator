@@ -1,0 +1,23 @@
+[package]
+name = "stackable-opa-bundle-builder"
+description = "Builds OPA bundles from Kubernetes ConfigMaps"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum.workspace = true
+clap.workspace = true
+flate2.workspace = true
+futures.workspace = true
+hyper.workspace = true
+snafu.workspace = true
+stackable-operator.workspace = true
+tar.workspace = true
+tokio.workspace = true
+tracing.workspace = true
