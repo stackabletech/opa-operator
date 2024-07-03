@@ -2,7 +2,7 @@
 dimensions:
   - name: opa
     values:
-      #- 0.61.0
+      - 0.61.0
       - 0.66.0
   - name: opa-latest
     values:
