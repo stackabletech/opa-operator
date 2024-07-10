@@ -8,6 +8,11 @@ All notable changes to this project will be documented in this file.
 
 - Support enabling decision logs ([#555]).
 
+### Changed
+
+- Bump `product-config` from `0.6.0` to `0.7.0` ([#595]).
+- Bump `stackable-operator` from `0.69.3` to `0.70.0` ([#595]).
+
 ### Fixed
 
 - Processing of corrupted log events fixed; If errors occur, the error
@@ -15,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 [#555]: https://github.com/stackabletech/opa-operator/pull/555
 [#583]: https://github.com/stackabletech/opa-operator/pull/583
+[#595]: https://github.com/stackabletech/opa-operator/pull/595
 
 ## [24.3.0] - 2024-03-20
 
