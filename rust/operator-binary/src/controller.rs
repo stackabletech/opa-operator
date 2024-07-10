@@ -134,7 +134,6 @@ const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
-    pub opa_bundle_builder_clusterrole: String,
     pub user_info_fetcher_image: String,
 }
 
