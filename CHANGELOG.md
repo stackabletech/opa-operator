@@ -13,8 +13,13 @@ All notable changes to this project will be documented in this file.
 - Processing of corrupted log events fixed; If errors occur, the error
   messages are added to the log event ([#583]).
 
+## Removed
+
+- Dead code ([#596]).
+
 [#555]: https://github.com/stackabletech/opa-operator/pull/555
 [#583]: https://github.com/stackabletech/opa-operator/pull/583
+[#596]: https://github.com/stackabletech/opa-operator/pull/596
 
 ## [24.3.0] - 2024-03-20
 
