@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Bump `stackable-operator` to 0.70.0, `product-config` to 0.7.0, and other dependencies  ([#595]).
+- Bump `stackable-operator` to `0.70.0`, `product-config` to `0.7.0`, and other dependencies  ([#595]).
 
 ### Fixed
 
