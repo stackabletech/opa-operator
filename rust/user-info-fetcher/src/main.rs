@@ -56,9 +56,6 @@ enum StartupError {
     #[snafu(display("failed to parse config file"))]
     ParseConfig { source: serde_json::Error },
 
-    #[snafu(display("failed to parse listen address"))]
-    ParseListenAddr { source: AddrParseError },
-
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
 
