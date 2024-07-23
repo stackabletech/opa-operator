@@ -1,0 +1,9 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: >
+      kubectl create configmap prepared-logs
+      --from-file=prepared-opa-logs.json
+      --from-file=prepared-bundle-builder-logs.txt
+      --namespace=$NAMESPACE

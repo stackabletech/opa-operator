@@ -36,9 +36,12 @@ spec:
             containers:
               opa:
                 console:
-                  level: INFO
+                  level: ERROR
                 file:
                   level: INFO
+                loggers:
+                  decision:
+                    level: INFO
               bundle-builder:
                 console:
                   level: NONE
@@ -60,3 +63,18 @@ spec:
                 loggers:
                   ROOT:
                     level: INFO
+        podOverrides:
+          spec:
+            containers:
+              - name: vector
+                volumeMounts:
+                  - name: prepared-logs
+                    mountPath: /stackable/log/opa/test
+                    subPath: prepared-opa-logs.json
+                  - name: prepared-logs
+                    mountPath: /stackable/log/bundle-builder/test
+                    subPath: prepared-bundle-builder-logs.txt
+            volumes:
+              - name: prepared-logs
+                configMap:
+                  name: prepared-logs

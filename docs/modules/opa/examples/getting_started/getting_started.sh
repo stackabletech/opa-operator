@@ -1,6 +1,16 @@
 #! /usr/bin/env bash
 set -euo pipefail
 
+# DO NOT EDIT THE SCRIPT
+# Instead, update the j2 template, and regenerate it for dev:
+# cat <<EOF | jinja2 --format yaml getting_started.sh.j2 -o getting_started.sh
+# helm:
+#   repo_name: stackable-dev
+#   repo_url: https://repo.stackable.tech/repository/helm-dev/
+# versions:
+#   opa: 0.0.0-dev
+# EOF
+
 # This script contains all the code snippets from the guide, as well as some assert tests
 # to test if the instructions in the guide work. The user *could* use it, but it is intended
 # for testing only.
@@ -23,13 +33,13 @@ helm repo add stackable-dev https://repo.stackable.tech/repository/helm-dev/
 echo "Updating Helm repo"
 helm repo update
 
-echo "Installing Operators with Helm"
+echo "Installing operators with Helm"
 # tag::helm-install-operators[]
 helm install --wait opa-operator stackable-dev/opa-operator --version 0.0.0-dev
 # end::helm-install-operators[]
 ;;
 "stackablectl")
-echo "installing Operators with stackablectl"
+echo "installing operators with stackablectl"
 # tag::stackablectl-install-operators[]
 stackablectl operator install opa=0.0.0-dev
 # end::stackablectl-install-operators[]
@@ -65,6 +75,7 @@ echo "Starting port-forwarding of port 8081"
 kubectl port-forward svc/simple-opa 8081 > /dev/null 2>&1 &
 # end::port-forwarding[]
 PORT_FORWARD_PID=$!
+# shellcheck disable=SC2064
 trap "kill $PORT_FORWARD_PID" EXIT
 sleep 5
 

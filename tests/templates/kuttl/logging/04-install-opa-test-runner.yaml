@@ -1,0 +1,49 @@
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: logging-role
+rules:
+  - apiGroups: [""]
+    resources: ["services", "pods", "pods/log"]
+    verbs: ["get", "list"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: logging-sa
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: logging-rb
+subjects:
+  - kind: ServiceAccount
+    name: logging-sa
+roleRef:
+  kind: Role
+  name: logging-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opa-test-runner
+  labels:
+    app: opa-test-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opa-test-runner
+  template:
+    metadata:
+      labels:
+        app: opa-test-runner
+    spec:
+      serviceAccountName: logging-sa
+      containers:
+        - name: opa-test-runner
+          image: docker.stackable.tech/stackable/testing-tools:0.2.0-stackable0.0.0-dev
+          stdin: true
+          tty: true

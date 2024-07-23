@@ -15,7 +15,7 @@ use stackable_operator::{
     config::{fragment, fragment::Fragment, fragment::ValidationError, merge::Merge},
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
-    product_config_utils::{ConfigError, Configuration},
+    product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
     role_utils::Role,
     role_utils::{EmptyRoleConfig, RoleGroup, RoleGroupRef},
@@ -29,8 +29,6 @@ pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";
-
-pub const CONFIG_FILE: &str = "config.yaml";
 
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
 /// Safety puffer to guarantee the graceful shutdown works every time.
@@ -89,7 +87,7 @@ pub struct OpaClusterConfig {
     /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vector_aggregator_config_map_name: Option<String>,
-    /// This field controls which type of Service the Operator creates for this OpaCluster:
+    /// This field controls which type of Service the operator creates for this OpaCluster:
     ///
     /// * cluster-internal: Use a ClusterIP service
     ///
@@ -230,7 +228,8 @@ impl Configuration for OpaConfigFragment {
         &self,
         _resource: &Self::Configurable,
         _role_name: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
+    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
+    {
         Ok(BTreeMap::new())
     }
 
@@ -238,7 +237,8 @@ impl Configuration for OpaConfigFragment {
         &self,
         _resource: &Self::Configurable,
         _role_name: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
+    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
+    {
         Ok(BTreeMap::new())
     }
 
@@ -247,7 +247,8 @@ impl Configuration for OpaConfigFragment {
         _resource: &Self::Configurable,
         _role_name: &str,
         _file: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, ConfigError> {
+    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
+    {
         Ok(BTreeMap::new())
     }
 }

@@ -11,6 +11,7 @@ in pkgs.mkShell rec {
   packages = with pkgs; [
     ## cargo et-al
     rustup # this breaks pkg-config if it is in the nativeBuildInputs
+    cargo-udeps
 
     ## Extra dependencies for use in a pure env (nix-shell --pure)
     ## These are mosuly useful for maintainers of this shell.nix
@@ -21,7 +22,7 @@ in pkgs.mkShell rec {
 
   # derivation runtime dependencies
   buildInputs = pkgs.lib.concatMap (crate: crate.buildInputs) cargoDependencySet;
-  
+
   # build time dependencies
   nativeBuildInputs = pkgs.lib.concatMap (crate: crate.nativeBuildInputs) cargoDependencySet ++ (with pkgs; [
     beku

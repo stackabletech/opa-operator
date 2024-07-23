@@ -1,6 +1,6 @@
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::{OpaConfig, SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD};
-use stackable_operator::builder::PodBuilder;
+use stackable_operator::builder::pod::PodBuilder;
 
 #[derive(Debug, Snafu)]
 pub enum Error {
