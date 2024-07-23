@@ -65,11 +65,11 @@ NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Acco
 [NOTE]
 .User-facing API & API stability
 ====
-As of the SDP release 24.07 we document an example rego rule here making an HTTP call.
+Since the 24.07 SDP release we provide an example rego rule in our documentation using an HTTP request.
 However, our plan is that the user-facing API of the SPD is *not* the HTTP API of user-info-fetcher, but instead regorules that will automatically be shipped to the OPA server.
-This enables us e.g. to make breaking changes to the HTTP API while still keeping the rego rules API stable.
+This enables us to make underlying (for example breaking) changes to the HTTP API while keeping the rego rules API stable.
 
-The documentation will be updated to use the deployed rego rules instead of containing an http-call example.
+The documentation will be updated to use the deployed rego rules once available.
 ====
 
 [NOTE]
