@@ -4,13 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrite of the OPA bundle builder ([#578]).
+
+[#578]: https://github.com/stackabletech/opa-operator/pull/578
+
+## [24.7.0] - 2024-07-24
+
 ### Added
 
 - Support enabling decision logs ([#555]).
 
 ### Changed
 
-- Rewrite of the OPA bundle builder ([#578]).
+- Bump `stackable-operator` to `0.70.0`, `product-config` to `0.7.0`, and other dependencies  ([#595]).
 
 ### Fixed
 
@@ -18,9 +26,14 @@ All notable changes to this project will be documented in this file.
   messages are added to the log event ([#583]).
 - Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
 
+## Removed
+
+- Dead code ([#596]).
+
 [#555]: https://github.com/stackabletech/opa-operator/pull/555
-[#578]: https://github.com/stackabletech/opa-operator/pull/578
 [#583]: https://github.com/stackabletech/opa-operator/pull/583
+[#595]: https://github.com/stackabletech/opa-operator/pull/595
+[#596]: https://github.com/stackabletech/opa-operator/pull/596
 
 ## [24.3.0] - 2024-03-20
 

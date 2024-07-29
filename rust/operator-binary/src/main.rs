@@ -40,9 +40,6 @@ struct Opts {
 
 #[derive(clap::Parser)]
 struct OpaRun {
-    #[clap(long, env)]
-    opa_bundle_builder_clusterrole: String,
-
     /// The full image tag of the operator, used to deploy the user_info_fetcher.
     #[clap(long, env)]
     operator_image: String,
@@ -59,7 +56,6 @@ async fn main() -> anyhow::Result<()> {
             OpaCluster::print_yaml_schema(built_info::PKG_VERSION)?;
         }
         Command::Run(OpaRun {
-            opa_bundle_builder_clusterrole: opa_builder_clusterrole,
             operator_image,
             common:
                 ProductOperatorRun {
@@ -92,7 +88,6 @@ async fn main() -> anyhow::Result<()> {
                 client,
                 product_config,
                 watch_namespace,
-                opa_builder_clusterrole,
                 operator_image.clone(),
                 operator_image,
             )
@@ -110,7 +105,6 @@ async fn create_controller(
     client: Client,
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
-    opa_bundle_builder_clusterrole: String,
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
 ) {
@@ -131,7 +125,6 @@ async fn create_controller(
             Arc::new(controller::Ctx {
                 client: client.clone(),
                 product_config,
-                opa_bundle_builder_clusterrole,
                 opa_bundle_builder_image,
                 user_info_fetcher_image,
             }),
