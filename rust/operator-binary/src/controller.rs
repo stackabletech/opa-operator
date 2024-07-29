@@ -104,12 +104,10 @@ const DEFAULT_CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
 
-// bundle builder: ~ 5 MB x 2
-// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+// bundle builder: ~ 5 MB x 5
+// these sizes are needed both for the single file (for rotation, in bytes) as well as the total (for the EmptyDir)
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
-const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES: u32 =
-    OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * 1000000;
-const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 2;
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 5;
 const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
     value: (OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
         as f32,
