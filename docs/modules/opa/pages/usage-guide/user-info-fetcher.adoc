@@ -1,5 +1,7 @@
 = User info fetcher
 
+WARNING: This feature is experimental, and subject to change.
+
 The _User info fetcher_ allows for additional information to be obtained from the configured backend (for example, Keycloak).
 You can then write Rego rules for OpenPolicyAgent which make an HTTP request to the User info fetcher and make use of the additional information returned for the username or user id.
 
