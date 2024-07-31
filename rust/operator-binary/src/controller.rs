@@ -104,8 +104,11 @@ const DEFAULT_CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
 
-// bundle builder: ~ 5 MB x 5
-// these sizes are needed both for the single file (for rotation, in bytes) as well as the total (for the EmptyDir)
+// Bundle builder: ~ 5 MB x 5
+// These sizes are needed both for the single file (for rotation, in bytes) as well as the total (for the EmptyDir).
+//
+// Ideally, we would rotate the logs by size, but this is currently not supported due to upstream issues.
+// Please see https://github.com/stackabletech/opa-operator/issues/606 for more details.
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 5;
 const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
@@ -113,8 +116,8 @@ const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
         as f32,
     unit: BinaryMultiple::Mebi,
 };
-// opa logs: ~ 5 MB x 2
-// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+// OPA logs: ~ 5 MB x 2
+// These sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir).
 const OPA_ROLLING_LOG_FILE_SIZE_MB: u32 = 5;
 const OPA_ROLLING_LOG_FILE_SIZE_BYTES: u32 = OPA_ROLLING_LOG_FILE_SIZE_MB * 1000000;
 const OPA_ROLLING_LOG_FILES: u32 = 2;
