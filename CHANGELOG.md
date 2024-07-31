@@ -6,7 +6,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Support enabling decision logs ([#555]).
 - Added regorule library for accessing user-info-fetcher ([#580]).
 
 ### Changed
@@ -15,14 +14,34 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Processing of corrupted log events fixed; If errors occur, the error
-  messages are added to the log event ([#583]).
 - Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
 
-[#555]: https://github.com/stackabletech/opa-operator/pull/555
 [#578]: https://github.com/stackabletech/opa-operator/pull/578
 [#580]: https://github.com/stackabletech/opa-operator/pull/580
+
+## [24.7.0] - 2024-07-24
+
+### Added
+
+- Support enabling decision logs ([#555]).
+
+### Changed
+
+- Bump `stackable-operator` to `0.70.0`, `product-config` to `0.7.0`, and other dependencies  ([#595]).
+
+### Fixed
+
+- Processing of corrupted log events fixed; If errors occur, the error
+  messages are added to the log event ([#583]).
+
+## Removed
+
+- Dead code ([#596]).
+
+[#555]: https://github.com/stackabletech/opa-operator/pull/555
 [#583]: https://github.com/stackabletech/opa-operator/pull/583
+[#595]: https://github.com/stackabletech/opa-operator/pull/595
+[#596]: https://github.com/stackabletech/opa-operator/pull/596
 
 ## [24.3.0] - 2024-03-20
 
