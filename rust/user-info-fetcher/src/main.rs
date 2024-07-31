@@ -58,8 +58,8 @@ enum StartupError {
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
 
-    #[snafu(display("failed to create listener"))]
-    CreateListener { source: std::io::Error },
+    #[snafu(display("failed to bind listener"))]
+    BindListener { source: std::io::Error },
 
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
@@ -168,7 +168,7 @@ async fn main() -> Result<(), StartupError> {
         });
     let listener = TcpListener::bind("127.0.0.1:9476")
         .await
-        .context(CreateListenerSnafu)?;
+        .context(BindListenerSnafu)?;
 
     axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_requested)

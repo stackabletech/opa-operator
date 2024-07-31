@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrite of the OPA bundle builder ([#578]).
+
+### Fixed
+
+- Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
+
+[#578]: https://github.com/stackabletech/opa-operator/pull/578
+
 ## [24.7.0] - 2024-07-24
 
 ### Added
