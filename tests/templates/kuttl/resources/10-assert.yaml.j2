@@ -17,10 +17,10 @@ spec:
         - name: opa
           resources:
             requests:
-              cpu: 200m
+              cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 300m
+              cpu: 110m
               memory: 256Mi
         - name: bundle-builder
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
@@ -38,11 +38,11 @@ spec:
         - name: opa
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: 120m
+              memory: 384Mi
             limits:
-              cpu: 400m
-              memory: 512Mi
+              cpu: 130m
+              memory: 384Mi
         - name: bundle-builder
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
         - name: vector
@@ -59,10 +59,10 @@ spec:
         - name: opa
           resources:
             requests:
-              cpu: 210m
+              cpu: 140m
               memory: 256Mi
             limits:
-              cpu: 310m
+              cpu: 150m
               memory: 256Mi
         - name: bundle-builder
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}

@@ -15,8 +15,8 @@ spec:
     config:
       resources:
         cpu:
-          min: 200m
-          max: 300m
+          min: 100m
+          max: 110m
         memory:
           limit: 256Mi
       logging:
@@ -27,10 +27,10 @@ spec:
         config:
           resources:
             cpu:
-              min: 200m
-              max: 400m
+              min: 120m
+              max: 130m
             memory:
-              limit: 512Mi
+              limit: 384Mi
           logging:
             enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
       resources-from-pod-overrides:
@@ -40,6 +40,6 @@ spec:
               - name: opa
                 resources:
                   requests:
-                    cpu: 210m
+                    cpu: 140m
                   limits:
-                    cpu: 310m
+                    cpu: 150m
