@@ -68,7 +68,7 @@ data:
 == Monitoring
 
 The managed OPA instances are automatically configured to export Prometheus metrics. See
-xref:home:operators:monitoring.adoc[] for more details.
+xref:operators:monitoring.adoc[] for more details.
 
 == Log aggregation
 
@@ -97,7 +97,7 @@ The Stackable operator for OPA only supports automatic log configuration due to 
 Furthermore, the only customization possible for console output for the `opa` and `bundle-builder` containers is `NONE`. This deactivates console logging. Other log levels for console logging in these containers will be overwritten by the file log level.
 
 Further information on how to configure logging, can be found in
-xref:home:concepts:logging.adoc[].
+xref:concepts:logging.adoc[].
 
 == Configuration & Environment Overrides
 
@@ -146,7 +146,7 @@ The OPA Operator currently does not support using https://kubernetes.io/docs/con
 // The "nightly" version is needed because the "include" directive searches for
 // files in the "stable" version by default.
 // TODO: remove the "nightly" version after the next platform release (current: 22.09)
-include::home:concepts:stackable_resource_requests.adoc[]
+include::concepts:stackable_resource_requests.adoc[]
 
 If no resource requests are configured explicitly, the OPA operator uses the following defaults:
 
