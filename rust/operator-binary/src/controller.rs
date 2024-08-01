@@ -104,19 +104,20 @@ const DEFAULT_CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_DECISION_LOG_LEVEL: LogLevel = LogLevel::NONE;
 
-// bundle builder: ~ 5 MB x 2
-// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+// Bundle builder: ~ 5 MB x 5
+// These sizes are needed both for the single file (for rotation, in bytes) as well as the total (for the EmptyDir).
+//
+// Ideally, we would rotate the logs by size, but this is currently not supported due to upstream issues.
+// Please see https://github.com/stackabletech/opa-operator/issues/606 for more details.
 const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB: u32 = 5;
-const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES: u32 =
-    OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * 1000000;
-const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 2;
+const OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES: u32 = 5;
 const MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
     value: (OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_MB * OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES)
         as f32,
     unit: BinaryMultiple::Mebi,
 };
-// opa logs: ~ 5 MB x 2
-// these sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir)
+// OPA logs: ~ 5 MB x 2
+// These sizes are needed both for the single file (for multilog, in bytes) as well as the total (for the EmptyDir).
 const OPA_ROLLING_LOG_FILE_SIZE_MB: u32 = 5;
 const OPA_ROLLING_LOG_FILE_SIZE_BYTES: u32 = OPA_ROLLING_LOG_FILE_SIZE_MB * 1000000;
 const OPA_ROLLING_LOG_FILES: u32 = 2;
@@ -134,6 +135,7 @@ const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
+    pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
 }
 
@@ -448,6 +450,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             &rolegroup,
             rolegroup_config,
             &merged_config,
+            &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
             &rbac_sa.name_any(),
         )?;
@@ -694,6 +697,7 @@ fn build_server_rolegroup_daemonset(
     rolegroup_ref: &RoleGroupRef<OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
+    opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     sa_name: &str,
 ) -> Result<DaemonSet> {
@@ -746,7 +750,8 @@ fn build_server_rolegroup_daemonset(
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
-        .image_from_product_image(resolved_product_image)
+        .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
+        .image(opa_bundle_builder_image) // ...override the image
         .command(vec![
             "/bin/bash".to_string(),
             "-x".to_string(),
@@ -762,6 +767,10 @@ fn build_server_rolegroup_daemonset(
         .add_env_var(
             "OPA_BUNDLE_BUILDER_LOG",
             bundle_builder_log_level(merged_config).to_string(),
+        )
+        .add_env_var(
+            "OPA_BUNDLE_BUILDER_LOG_DIRECTORY",
+            format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -1108,18 +1117,15 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         prepare_signal_handlers
-        /stackable/opa-bundle-builder{logging_redirects} &
+        mkdir -p {STACKABLE_LOG_DIR}/{container_name}
+        stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
-        // Redirects matter!
-        // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
-        // and not some utility (e.g. multilog or tee) process.
-        // See https://stackoverflow.com/a/8048493
         logging_redirects = if console_logging_off {
-            format!(" &> >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name})")
+            " > /dev/null"
         } else {
-            format!(" &> >(tee >(/stackable/multilog s{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILE_SIZE_BYTES} n{OPA_ROLLING_BUNDLE_BUILDER_LOG_FILES} {STACKABLE_LOG_DIR}/{container_name}))")
-        },
+            ""
+        }
     }
 }
 
