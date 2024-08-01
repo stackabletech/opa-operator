@@ -73,7 +73,7 @@ An example of the returned structure:
   "id": "af07f12c-a2db-40a7-93e0-874537bdf3f5",
   "username": "alice",
   "groups": [
-    "/superset-admin"
+    "/admin"
   ],
   "customAttributes": {}
 }
