@@ -25,4 +25,4 @@ The Stackable operator for OPA only supports automatic log configuration due to 
 Furthermore, the only customization possible for console output for the `opa` and `bundle-builder` containers is `NONE`. This deactivates console logging. Other log levels for console logging in these containers will be overwritten by the file log level.
 
 Further information on how to configure logging, can be found in
-xref:home:concepts:logging.adoc[].
+xref:concepts:logging.adoc[].
