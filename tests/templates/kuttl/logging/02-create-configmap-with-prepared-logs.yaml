@@ -5,5 +5,5 @@ commands:
   - script: >
       kubectl create configmap prepared-logs
       --from-file=prepared-opa-logs.json
-      --from-file=prepared-bundle-builder-logs.txt
+      --from-file=prepared-bundle-builder-logs.tracing-rs.json
       --namespace=$NAMESPACE
