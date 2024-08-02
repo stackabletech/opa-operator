@@ -65,6 +65,32 @@ spec:
                     level: INFO
         podOverrides:
           spec:
+            initContainers:
+              - name: create-opa-log-dir
+                image: docker.stackable.tech/stackable/testing-tools:0.2.0-stackable0.0.0-dev
+                # Create the log directory for the opa container upfront
+                # to avoid a race condition between the opa and the
+                # vector container. If the vector container is
+                # initialized first then the prepared logs are mounted
+                # to /stackable/log/opa/test. If the directory
+                # /stackable/log/opa would not exist then it would be
+                # created with the following permissions:
+                # drwxr-sr-x root stackable
+                # The opa container would not be able to write its logs
+                # into this directory.
+                # Creating the directory in this init container results
+                # in the following permissions:
+                # drwxr-sr-x stackable stackable
+                # It is not necessary to create the log directory for
+                # the bundle builder upfront because the prepared logs
+                # are put into a separate directory.
+                command:
+                  - mkdir
+                  - --parents
+                  - /stackable/log/opa
+                volumeMounts:
+                  - name: log
+                    mountPath: /stackable/log
             containers:
               - name: vector
                 volumeMounts:
@@ -72,8 +98,8 @@ spec:
                     mountPath: /stackable/log/opa/test
                     subPath: prepared-opa-logs.json
                   - name: prepared-logs
-                    mountPath: /stackable/log/bundle-builder/test
-                    subPath: prepared-bundle-builder-logs.txt
+                    mountPath: /stackable/log/prepared-logs/prepared-bundle-builder-logs.tracing-rs.json
+                    subPath: prepared-bundle-builder-logs.tracing-rs.json
             volumes:
               - name: prepared-logs
                 configMap:

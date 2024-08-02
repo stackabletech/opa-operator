@@ -1,0 +1,11 @@
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","fields":{"message":"Valid log event","directory":"/stackable/log/prepared-logs"},"target":"TestLogger"}
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","fields":{"message":"Valid log event with only the message field"},"target":"TestLogger"}
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","fields":{"message":"Valid log event with a nested field","nested":{"array":[1,2,3]}},"target":"TestLogger"}
+{"level":"INFO","fields":{"message":"Invalid log event without a timestamp","directory":"/stackable/log/prepared-logs"},"target":"TestLogger"}
+{"timestamp":"unparsable timestamp","level":"INFO","fields":{"message":"Invalid log event with an unparsable timestamp","directory":"/stackable/log/prepared-logs"},"target":"TestLogger"}
+{"timestamp":"2024-01-01T00:00:00.000000Z","fields":{"message":"Invalid log event without a level","directory":"/stackable/log/prepared-logs"},"target":"TestLogger"}
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","fields":{"message":"Invalid log event without a logger","directory":"/stackable/log/prepared-logs"}}
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"CRITICAL","fields":{"message":"Invalid log event with an unknown level","directory":"/stackable/log/prepared-logs"},"target":"TestLogger"}
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","fields":{"directory":"/stackable/log/prepared-logs"},"target":"TestLogger"}
+{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","target":"TestLogger"}
+"true"
