@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added support for OPA 0.67.0 ([#616]).
+
 ### Changed
 
 - Rewrite of the OPA bundle builder ([#578]).
@@ -12,7 +16,12 @@ All notable changes to this project will be documented in this file.
 
 - Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
 
+### Removed
+
+- Remove support for OPA 0.61.0 ([#616]).
+
 [#578]: https://github.com/stackabletech/opa-operator/pull/578
+[#616]: https://github.com/stackabletech/opa-operator/pull/616
 
 ## [24.7.0] - 2024-07-24
 
