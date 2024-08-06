@@ -3,10 +3,10 @@ dimensions:
   - name: opa
     values:
       - 0.66.0
-      - 0.67.0
+      - 0.67.1
   - name: opa-latest
     values:
-      - 0.67.0
+      - 0.67.1
   - name: keycloak
     values:
       - 23.0.1

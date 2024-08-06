@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Added support for OPA 0.67.0 ([#616]).
+- Added support for OPA 0.67.1 ([#616]).
 
 ### Changed
 

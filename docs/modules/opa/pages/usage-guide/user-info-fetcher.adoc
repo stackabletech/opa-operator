@@ -15,7 +15,7 @@ metadata:
   name: opa
 spec:
   image:
-    productVersion: 0.67.0
+    productVersion: 0.67.1
   clusterConfig:
     userInfo: # <1>
       backend:
