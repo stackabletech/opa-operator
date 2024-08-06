@@ -17,7 +17,3 @@ userInfoById(id) := http.send({
   "headers": {"Content-Type": "application/json"},
   "raise_error": true
 }).body
-
-# Lookup by context
-currentUserInfoByUsername := userInfoByUsername(input.username)
-currentUserInfoById := userInfoById(input.id)
