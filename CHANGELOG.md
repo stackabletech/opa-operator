@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added regorule library for accessing user-info-fetcher ([#580]).
+
 ### Changed
 
 - Rewrite of the OPA bundle builder ([#578]).
@@ -13,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
 
 [#578]: https://github.com/stackabletech/opa-operator/pull/578
+[#580]: https://github.com/stackabletech/opa-operator/pull/580
 
 ## [24.7.0] - 2024-07-24
 

@@ -2450,6 +2450,7 @@ dependencies = [
  "futures",
  "hyper",
  "snafu 0.8.4",
+ "stackable-opa-regorule-library",
  "stackable-operator",
  "tar",
  "tokio",
@@ -2492,6 +2493,10 @@ dependencies = [
  "tokio",
  "tracing",
 ]
+
+[[package]]
+name = "stackable-opa-regorule-library"
+version = "0.0.0-dev"
 
 [[package]]
 name = "stackable-opa-user-info-fetcher"
