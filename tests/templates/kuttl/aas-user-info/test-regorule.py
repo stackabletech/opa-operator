@@ -43,8 +43,10 @@ if __name__ == "__main__":
             response = make_request(payload)
             assertions(subject_id, response, "currentUserInfoById", [], {"e-mail": f"{subject_id}@example.com", "company": "openid"})
         except Exception as e:
+            print(f"exception: {e}")
             if response is not None:
-                print(f"something went wrong. last response: {response}")
+                print(f"request  body: {payload}")
+                print(f"response body: {response}")
             raise e
 
     print("Test successful!")
