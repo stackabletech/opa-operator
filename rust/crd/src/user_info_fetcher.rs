@@ -30,6 +30,9 @@ pub enum Backend {
     /// Backend that fetches user information from the Gaia-X
     /// Cross Federation Services Components (XFSC) Authentication & Authorization Service.
     ExperimentalXfscAas(AasBackend),
+
+    #[serde(rename = "experimentalActiveDirectory")]
+    ActiveDirectory(ActiveDirectoryBackend),
 }
 
 impl Default for Backend {
@@ -86,6 +89,13 @@ pub struct AasBackend {
 
 fn aas_default_port() -> u16 {
     5000
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveDirectoryBackend {
+    /// Hostname of the identity provider, e.g. `my.aas.corp`.
+    pub ldap_server: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]

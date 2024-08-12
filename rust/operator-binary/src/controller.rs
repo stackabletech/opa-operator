@@ -596,7 +596,7 @@ fn build_rolegroup_service(
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
-        .name(&rolegroup.object_name())
+        .name(rolegroup.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
@@ -914,6 +914,7 @@ fn build_server_rolegroup_daemonset(
         match &user_info.backend {
             user_info_fetcher::Backend::None {} => {}
             user_info_fetcher::Backend::ExperimentalXfscAas(_) => {}
+            user_info_fetcher::Backend::ActiveDirectory(_) => {}
             user_info_fetcher::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
@@ -960,7 +961,7 @@ fn build_server_rolegroup_daemonset(
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
-        .name(&rolegroup_ref.object_name())
+        .name(rolegroup_ref.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(

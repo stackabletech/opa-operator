@@ -122,6 +122,10 @@ async fn main() -> Result<(), StartupError> {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
+        crd::Backend::ActiveDirectory(_) => Credentials {
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -216,6 +220,11 @@ enum GetUserInfoError {
         "failed to get user information from the XFSC Authentication & Authorization Service"
     ))]
     ExperimentalXfscAas { source: backend::xfsc_aas::Error },
+
+    #[snafu(display("failed to get user information from Active Directory"))]
+    ActiveDirectory {
+        source: backend::active_directory::Error,
+    },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -229,6 +238,7 @@ impl http_error::Error for GetUserInfoError {
         match self {
             Self::Keycloak { source } => source.status_code(),
             Self::ExperimentalXfscAas { source } => source.status_code(),
+            Self::ActiveDirectory { source } => source.status_code(),
         }
     }
 }
@@ -276,6 +286,11 @@ async fn get_user_info(
                         backend::xfsc_aas::get_user_info(&req, &http, aas)
                             .await
                             .context(get_user_info_error::ExperimentalXfscAasSnafu)
+                    }
+                    crd::Backend::ActiveDirectory(ad) => {
+                        backend::active_directory::get_user_info(&req, &ad.ldap_server)
+                            .await
+                            .context(get_user_info_error::ActiveDirectorySnafu)
                     }
                 }
             })

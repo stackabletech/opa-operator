@@ -26,3 +26,7 @@ stackable-operator.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
+ldap3 = "0.11.5"
+native-tls = "0.2.12"
+uuid = "1.10.0"
+base64 = "0.22.1"
