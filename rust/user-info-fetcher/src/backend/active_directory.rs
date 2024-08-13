@@ -88,6 +88,7 @@ const LDAP_FIELD_GROUP_MEMBER: &str = "member";
 pub(crate) async fn get_user_info(
     request: &UserInfoRequest,
     ldap_server: &str,
+    base_distinguished_name: &str,
     custom_attribute_mappings: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> where {
     let (ldap_conn, mut ldap) =
@@ -115,7 +116,6 @@ pub(crate) async fn get_user_info(
             format!("{LDAP_FIELD_USER_NAME}={}", ldap_escape(&username.username))
         }
     };
-    let base_dn = "DC=sble,DC=test";
     let requested_user_attrs = [
         LDAP_FIELD_OBJECT_SECURITY_ID,
         LDAP_FIELD_OBJECT_ID,
@@ -127,7 +127,7 @@ pub(crate) async fn get_user_info(
     .collect::<Vec<&str>>();
     let user = ldap
         .search(
-            base_dn,
+            base_distinguished_name,
             Scope::Subtree,
             &format!("(&(objectClass=user)({user_filter}))"),
             requested_user_attrs,
@@ -141,7 +141,13 @@ pub(crate) async fn get_user_info(
         .next()
         .context(UserNotFoundSnafu { request })?;
     let user = SearchEntry::construct(user);
-    user_attributes(&mut ldap, base_dn, &user, custom_attribute_mappings).await
+    user_attributes(
+        &mut ldap,
+        base_distinguished_name,
+        &user,
+        custom_attribute_mappings,
+    )
+    .await
 }
 
 #[tracing::instrument(skip(ldap, base_dn, user, custom_attribute_mappings), fields(user.dn))]

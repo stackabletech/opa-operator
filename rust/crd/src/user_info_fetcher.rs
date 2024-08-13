@@ -99,6 +99,9 @@ pub struct ActiveDirectoryBackend {
     /// Hostname of the identity provider, e.g. `my.aas.corp`.
     pub ldap_server: String,
 
+    /// The root Distinguished Name (DN) where users and groups are located.
+    pub base_distinguished_name: String,
+
     /// Custom attributes, and their LDAP attribute names.
     #[serde(default)]
     pub custom_attribute_mappings: BTreeMap<String, String>,
