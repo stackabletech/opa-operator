@@ -15,11 +15,10 @@ commands:
         test.rego: |
           package test
 
-          userInfoByUsername(username) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"username": username}, "headers": {"Content-Type": "application/json"}, "raise_error": true}).body
-          userInfoById(id) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"id": id}, "headers": {"Content-Type": "application/json"}, "raise_error": true}).body
+          import data.stackable.opa.userinfo.v1 as userinfo
 
-          currentUserInfoByUsername := userInfoByUsername(input.username)
-          currentUserInfoById := userInfoById(input.id)
+          currentUserInfoByUsername := userinfo.userInfoByUsername(input.username)
+          currentUserInfoById := userinfo.userInfoById(input.id)
       ---
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
