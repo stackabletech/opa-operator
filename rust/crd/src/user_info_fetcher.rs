@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
@@ -96,6 +98,10 @@ fn aas_default_port() -> u16 {
 pub struct ActiveDirectoryBackend {
     /// Hostname of the identity provider, e.g. `my.aas.corp`.
     pub ldap_server: String,
+
+    /// Custom attributes, and their LDAP attribute names.
+    #[serde(default)]
+    pub custom_attribute_mappings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]

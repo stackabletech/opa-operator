@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fmt::Display,
     io::{Cursor, Read},
     str::FromStr,
@@ -65,6 +65,7 @@ const LDAP_FIELD_GROUP_MEMBER: &str = "member";
 pub(crate) async fn get_user_info(
     request: &UserInfoRequest,
     ldap_server: &str,
+    custom_attribute_mappings: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> where {
     let (ldap_conn, mut ldap) =
         LdapConnAsync::with_settings(LdapConnSettings::new().set_no_tls_verify(true), ldap_server)
@@ -92,17 +93,21 @@ pub(crate) async fn get_user_info(
         }
     };
     let base_dn = "DC=sble,DC=test";
+    let requested_user_attrs = [
+        LDAP_FIELD_OBJECT_SECURITY_ID,
+        LDAP_FIELD_OBJECT_ID,
+        LDAP_FIELD_USER_NAME,
+        LDAP_FIELD_USER_PRIMARY_GROUP_RID,
+    ]
+    .into_iter()
+    .chain(custom_attribute_mappings.values().map(String::as_str))
+    .collect::<Vec<&str>>();
     let user = ldap
         .search(
             base_dn,
             Scope::Subtree,
             &format!("(&(objectClass=user)({user_filter}))"),
-            [
-                LDAP_FIELD_OBJECT_SECURITY_ID,
-                LDAP_FIELD_OBJECT_ID,
-                LDAP_FIELD_USER_NAME,
-                LDAP_FIELD_USER_PRIMARY_GROUP_RID,
-            ],
+            requested_user_attrs,
         )
         .await
         .context(RequestLdapSnafu)?
@@ -138,6 +143,22 @@ pub(crate) async fn get_user_info(
         .get(LDAP_FIELD_USER_NAME)
         .and_then(|values| values.first())
         .cloned();
+    let custom_attributes = custom_attribute_mappings
+        .iter()
+        .filter_map(|(uif_key, ldap_key)| {
+            Some((
+                uif_key.clone(),
+                serde_json::Value::Array(
+                    user.attrs
+                        .get(ldap_key)?
+                        .iter()
+                        .cloned()
+                        .map(serde_json::Value::String)
+                        .collect(),
+                ),
+            ))
+        })
+        .collect::<HashMap<_, _>>();
 
     // User group memberships are tricky, because users have exactly one *primary* and any number of *secondary* groups.
     // Additionally groups can be members of other groups.
@@ -191,7 +212,7 @@ pub(crate) async fn get_user_info(
         id: id.map(|id| id.to_string()),
         username,
         groups,
-        custom_attributes: HashMap::new(),
+        custom_attributes,
     })
 }
 

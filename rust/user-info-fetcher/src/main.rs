@@ -312,11 +312,13 @@ async fn get_user_info(
                             .await
                             .context(get_user_info_error::ExperimentalXfscAasSnafu)
                     }
-                    crd::Backend::ActiveDirectory(ad) => {
-                        backend::active_directory::get_user_info(&req, &ad.ldap_server)
-                            .await
-                            .context(get_user_info_error::ActiveDirectorySnafu)
-                    }
+                    crd::Backend::ActiveDirectory(ad) => backend::active_directory::get_user_info(
+                        &req,
+                        &ad.ldap_server,
+                        &ad.custom_attribute_mappings,
+                    )
+                    .await
+                    .context(get_user_info_error::ActiveDirectorySnafu),
                 }
             })
             .await?,
