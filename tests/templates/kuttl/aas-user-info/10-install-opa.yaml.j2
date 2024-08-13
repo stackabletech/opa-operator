@@ -5,6 +5,22 @@ commands:
   - script: |
       kubectl apply -n $NAMESPACE -f - <<EOF
       ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: test
+        labels:
+          opa.stackable.tech/bundle: "true"
+      data:
+        test.rego: |
+          package test
+
+          userInfoByUsername(username) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"username": username}, "headers": {"Content-Type": "application/json"}, "raise_error": true}).body
+          userInfoById(id) := http.send({"method": "POST", "url": "http://127.0.0.1:9476/user", "body": {"id": id}, "headers": {"Content-Type": "application/json"}, "raise_error": true}).body
+
+          currentUserInfoByUsername := userInfoByUsername(input.username)
+          currentUserInfoById := userInfoById(input.id)
+      ---
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
       metadata:
