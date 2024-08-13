@@ -7,7 +7,7 @@ use std::{
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use hyper::StatusCode;
-use ldap3::{ldap_escape, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry};
+use ldap3::{ldap_escape, Ldap, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry};
 use snafu::{OptionExt, ResultExt, Snafu};
 use uuid::Uuid;
 
@@ -119,7 +119,6 @@ pub(crate) async fn get_user_info(
         .context(UserNotFoundSnafu { request })?;
     let user = SearchEntry::construct(user);
 
-    // Basic user facts
     let user_sid = SecurityId::from_bytes(
         user.bin_attrs
             .get(LDAP_FIELD_OBJECT_SECURITY_ID)
@@ -172,7 +171,23 @@ pub(crate) async fn get_user_info(
             ))
         })
         .collect::<HashMap<_, _>>();
+    let groups = user_group_distinguished_names(&mut ldap, base_dn, &user, &user_sid).await;
 
+    Ok(UserInfo {
+        id: id.map(|id| id.to_string()),
+        username,
+        groups,
+        custom_attributes,
+    })
+}
+
+/// Gets the distinguished names of all of `user`'s groups, both primary and secondary.
+async fn user_group_distinguished_names(
+    ldap: &mut Ldap,
+    base_dn: &str,
+    user: &SearchEntry,
+    user_sid: &SecurityId,
+) -> Vec<String> {
     // User group memberships are tricky, because users have exactly one *primary* and any number of *secondary* groups.
     // Additionally groups can be members of other groups.
     // Secondary groups are easy to read, either from reading the user's "memberOf" field, or by matching the user against
@@ -205,28 +220,20 @@ pub(crate) async fn get_user_info(
     // Let's put it all together, and make it go...
     let groups_filter =
         format!("(|{primary_group_filter}{primary_group_parents_filter}{secondary_groups_filter})");
-    let groups = ldap
-        .search(
-            base_dn,
-            Scope::Subtree,
-            &format!("(&(objectClass=group){groups_filter})"),
-            [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME],
-        )
-        .await
-        .unwrap()
-        .success()
-        .unwrap()
-        .0
-        .into_iter()
-        .map(|group| SearchEntry::construct(group).dn)
-        .collect::<Vec<_>>();
-
-    Ok(UserInfo {
-        id: id.map(|id| id.to_string()),
-        username,
-        groups,
-        custom_attributes,
-    })
+    ldap.search(
+        base_dn,
+        Scope::Subtree,
+        &format!("(&(objectClass=group){groups_filter})"),
+        [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME],
+    )
+    .await
+    .unwrap()
+    .success()
+    .unwrap()
+    .0
+    .into_iter()
+    .map(|group| SearchEntry::construct(group).dn)
+    .collect::<Vec<_>>()
 }
 
 /// Escapes raw byte sequences for use in LDAP filter strings.
