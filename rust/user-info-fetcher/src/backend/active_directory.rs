@@ -148,14 +148,27 @@ pub(crate) async fn get_user_info(
         .filter_map(|(uif_key, ldap_key)| {
             Some((
                 uif_key.clone(),
-                serde_json::Value::Array(
-                    user.attrs
+                serde_json::Value::Array(match ldap_key.as_str() {
+                    // Some fields require special handling
+                    LDAP_FIELD_OBJECT_DISTINGUISHED_NAME => {
+                        vec![serde_json::Value::String(user.dn.clone())]
+                    }
+                    LDAP_FIELD_OBJECT_ID => {
+                        vec![serde_json::Value::String(id?.to_string())]
+                    }
+                    LDAP_FIELD_OBJECT_SECURITY_ID => {
+                        vec![serde_json::Value::String(user_sid.to_string())]
+                    }
+
+                    // Otherwise, try to read the string value(s)
+                    _ => user
+                        .attrs
                         .get(ldap_key)?
                         .iter()
                         .cloned()
                         .map(serde_json::Value::String)
                         .collect(),
-                ),
+                }),
             ))
         })
         .collect::<HashMap<_, _>>();
