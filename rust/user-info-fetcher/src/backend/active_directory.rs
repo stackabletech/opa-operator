@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
     io::{Cursor, Read},
+    num::ParseIntError,
     str::FromStr,
 };
 
@@ -27,6 +28,9 @@ pub enum Error {
     #[snafu(display("failed to search LDAP for users"))]
     FindUserLdap { source: LdapError },
 
+    #[snafu(display("failed to search LDAP for groups of user"))]
+    FindUserGroupsLdap { source: LdapError },
+
     #[snafu(display("invalid user ID sent by client"))]
     ParseIdByClient { source: uuid::Error },
 
@@ -35,6 +39,21 @@ pub enum Error {
 
     #[snafu(display("unable to find user {request}"))]
     UserNotFound { request: ErrorRenderUserInfoRequest },
+
+    #[snafu(display("unable to parse user {user_dn:?}'s primary group's RID"))]
+    InvalidPrimaryGroupRelativeId {
+        source: ParseIntError,
+        user_dn: String,
+    },
+
+    #[snafu(display("user {user_dn:?}'s SID has no subauthorities"))]
+    UserSidHasNoSubauthorities { user_dn: String },
+
+    #[snafu(display("failed to parse user {user_dn:?}'s SID"))]
+    ParseUserSid {
+        source: ParseSecurityIdError,
+        user_dn: String,
+    },
 }
 
 impl http_error::Error for Error {
@@ -44,9 +63,13 @@ impl http_error::Error for Error {
             Error::RequestLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::BindLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::FindUserLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            Error::FindUserGroupsLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::ParseIdByClient { .. } => StatusCode::BAD_REQUEST,
             Error::ParseIdByLdap { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UserNotFound { .. } => StatusCode::NOT_FOUND,
+            Error::InvalidPrimaryGroupRelativeId { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::UserSidHasNoSubauthorities { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::ParseUserSid { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -118,15 +141,24 @@ pub(crate) async fn get_user_info(
         .next()
         .context(UserNotFoundSnafu { request })?;
     let user = SearchEntry::construct(user);
+    user_attributes(&mut ldap, base_dn, &user, custom_attribute_mappings).await
+}
 
-    let user_sid = SecurityId::from_bytes(
-        user.bin_attrs
-            .get(LDAP_FIELD_OBJECT_SECURITY_ID)
-            .into_iter()
-            .flatten()
-            .next()
-            .unwrap(),
-    );
+#[tracing::instrument(skip(ldap, base_dn, user, custom_attribute_mappings), fields(user.dn))]
+async fn user_attributes(
+    ldap: &mut Ldap,
+    base_dn: &str,
+    user: &SearchEntry,
+    custom_attribute_mappings: &BTreeMap<String, String>,
+) -> Result<UserInfo, Error> {
+    let user_sid = user
+        .bin_attrs
+        .get(LDAP_FIELD_OBJECT_SECURITY_ID)
+        .into_iter()
+        .flatten()
+        .next()
+        .map(|sid| SecurityId::from_bytes(sid).context(ParseUserSidSnafu { user_dn: &user.dn }))
+        .transpose()?;
     let id = user
         .bin_attrs
         .get(LDAP_FIELD_OBJECT_ID)
@@ -156,7 +188,7 @@ pub(crate) async fn get_user_info(
                         vec![serde_json::Value::String(id?.to_string())]
                     }
                     LDAP_FIELD_OBJECT_SECURITY_ID => {
-                        vec![serde_json::Value::String(user_sid.to_string())]
+                        vec![serde_json::Value::String(user_sid.as_ref()?.to_string())]
                     }
 
                     // Otherwise, try to read the string value(s)
@@ -171,7 +203,12 @@ pub(crate) async fn get_user_info(
             ))
         })
         .collect::<HashMap<_, _>>();
-    let groups = user_group_distinguished_names(&mut ldap, base_dn, &user, &user_sid).await;
+    let groups = if let Some(user_sid) = &user_sid {
+        user_group_distinguished_names(ldap, base_dn, user, user_sid).await?
+    } else {
+        tracing::debug!(user.dn, "user has no SID, cannot fetch groups...");
+        Vec::new()
+    };
 
     Ok(UserInfo {
         id: id.map(|id| id.to_string()),
@@ -182,12 +219,13 @@ pub(crate) async fn get_user_info(
 }
 
 /// Gets the distinguished names of all of `user`'s groups, both primary and secondary.
+#[tracing::instrument(skip(ldap, base_dn, user, user_sid))]
 async fn user_group_distinguished_names(
     ldap: &mut Ldap,
     base_dn: &str,
     user: &SearchEntry,
     user_sid: &SecurityId,
-) -> Vec<String> {
+) -> Result<Vec<String>, Error> {
     // User group memberships are tricky, because users have exactly one *primary* and any number of *secondary* groups.
     // Additionally groups can be members of other groups.
     // Secondary groups are easy to read, either from reading the user's "memberOf" field, or by matching the user against
@@ -198,17 +236,27 @@ async fn user_group_distinguished_names(
 
     // The user's *primary* group is trickier.. It is only available as a "RID" (relative ID),
     // which is a sibling relative to the user's SID.
-    let primary_group_relative_id = user
+    let Some(primary_group_relative_id) = user
         .attrs
         .get(LDAP_FIELD_USER_PRIMARY_GROUP_RID)
         .into_iter()
         .flatten()
         .next()
-        .unwrap()
-        .parse::<u32>()
-        .unwrap();
+        .map(|rid| {
+            rid.parse::<u32>()
+                .context(InvalidPrimaryGroupRelativeIdSnafu { user_dn: &user.dn })
+        })
+        .transpose()?
+    else {
+        tracing::debug!("user has no primary group");
+        return Ok(Vec::new());
+    };
     let mut primary_group_sid = user_sid.clone();
-    *primary_group_sid.subauthorities.last_mut().unwrap() = primary_group_relative_id;
+    *primary_group_sid
+        .subauthorities
+        .last_mut()
+        .context(UserSidHasNoSubauthoritiesSnafu { user_dn: &user.dn })? =
+        primary_group_relative_id;
     let primary_group_filter = format!("({LDAP_FIELD_OBJECT_SECURITY_ID}={primary_group_sid})");
 
     // We can't trivially make the primary group query recursive... but since we know the primary group's SID,
@@ -220,20 +268,21 @@ async fn user_group_distinguished_names(
     // Let's put it all together, and make it go...
     let groups_filter =
         format!("(|{primary_group_filter}{primary_group_parents_filter}{secondary_groups_filter})");
-    ldap.search(
-        base_dn,
-        Scope::Subtree,
-        &format!("(&(objectClass=group){groups_filter})"),
-        [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME],
-    )
-    .await
-    .unwrap()
-    .success()
-    .unwrap()
-    .0
-    .into_iter()
-    .map(|group| SearchEntry::construct(group).dn)
-    .collect::<Vec<_>>()
+    Ok(ldap
+        .search(
+            base_dn,
+            Scope::Subtree,
+            &format!("(&(objectClass=group){groups_filter})"),
+            [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME],
+        )
+        .await
+        .context(RequestLdapSnafu)?
+        .success()
+        .context(FindUserGroupsLdapSnafu)?
+        .0
+        .into_iter()
+        .map(|group| SearchEntry::construct(group).dn)
+        .collect::<Vec<_>>())
 }
 
 /// Escapes raw byte sequences for use in LDAP filter strings.
@@ -247,6 +296,19 @@ fn ldap_escape_bytes(bytes: &[u8]) -> String {
     out
 }
 
+#[derive(Snafu, Debug)]
+#[snafu(module)]
+pub enum ParseSecurityIdError {
+    #[snafu(display("read failed"), context(false))]
+    Read { source: std::io::Error },
+
+    #[snafu(display("unknown SID format revision {revision}"))]
+    InvalidRevision { revision: u8 },
+
+    #[snafu(display("SID is longer than expected"))]
+    TooLong,
+}
+
 /// An ActiveDirectory SID (Security ID) identifier for a user or group.
 #[derive(Debug, Clone)]
 struct SecurityId {
@@ -257,25 +319,32 @@ struct SecurityId {
 
 impl SecurityId {
     /// Parses a SID from the binary SID--Packet representation.
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn from_bytes(bytes: &[u8]) -> Result<Self, ParseSecurityIdError> {
+        use parse_security_id_error::*;
         let mut cursor = Cursor::new(bytes);
 
         // Format documented in https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f992ad60-0fe4-4b87-9fed-beb478836861
-        let revision = cursor.read_u8().unwrap();
-        assert_eq!(revision, 1);
-        let subauthority_count = cursor.read_u8().unwrap();
-        // From experimentation, yes this is a mix of big- and little endian values. Just roll with it...
-        let identifier_authority = cursor.read_u48::<BigEndian>().unwrap();
-        let subauthorities = (0..subauthority_count)
-            .map(|_| cursor.read_u32::<LittleEndian>())
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert!(cursor.bytes().next().is_none());
+        let revision = cursor.read_u8()?;
+        match revision {
+            1 => {
+                assert_eq!(revision, 1);
+                let subauthority_count = cursor.read_u8()?;
+                // From experimentation, yes this is a mix of big- and little endian values. Just roll with it...
+                let identifier_authority = cursor.read_u48::<BigEndian>()?;
+                let subauthorities = (0..subauthority_count)
+                    .map(|_| cursor.read_u32::<LittleEndian>())
+                    .collect::<Result<Vec<_>, _>>()?;
+                if cursor.bytes().next().is_some() {
+                    return TooLongSnafu.fail();
+                }
 
-        Self {
-            revision,
-            identifier_authority,
-            subauthorities,
+                Ok(Self {
+                    revision,
+                    identifier_authority,
+                    subauthorities,
+                })
+            }
+            _ => InvalidRevisionSnafu { revision }.fail(),
         }
     }
 }
