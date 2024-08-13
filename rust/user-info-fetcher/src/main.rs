@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Display,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -197,6 +198,30 @@ struct UserInfoRequestById {
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequestByName {
     username: String,
+}
+
+/// Renders [`UserInfoRequest`] for use in error messages.
+///
+/// An independent type rather than an impl on [`UserInfoRequest`], since it is
+/// not suitable for use in other contexts.
+#[derive(Debug, Clone)]
+struct ErrorRenderUserInfoRequest(UserInfoRequest);
+impl Display for ErrorRenderUserInfoRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
+                write!(f, "with id {id:?}")
+            }
+            UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName { username }) => {
+                write!(f, "with username {username:?}")
+            }
+        }
+    }
+}
+impl From<&UserInfoRequest> for ErrorRenderUserInfoRequest {
+    fn from(value: &UserInfoRequest) -> Self {
+        Self(value.clone())
+    }
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
