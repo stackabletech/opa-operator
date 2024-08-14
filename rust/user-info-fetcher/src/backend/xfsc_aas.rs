@@ -18,7 +18,7 @@ use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use url::Url;
 
-use crate::{http_error, util::send_json_request, UserInfo, UserInfoRequest};
+use crate::{http_error, utils::http::send_json_request, UserInfo, UserInfoRequest};
 
 static API_PATH: &str = "/cip/claims";
 static SUB_CLAIM: &str = "sub";
@@ -34,7 +34,7 @@ pub enum Error {
     },
 
     #[snafu(display("request failed"))]
-    Request { source: crate::util::Error },
+    Request { source: crate::utils::http::Error },
 
     #[snafu(display("the XFSC AAS does not support querying by username, only by user ID"))]
     UserInfoByUsernameNotSupported {},

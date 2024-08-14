@@ -30,8 +30,8 @@ spec:
           clientCredentialsSecret: user-info-fetcher-client-credentials # <3>
           adminRealm: master # <4>
           userRealm: master # <4>
-          cache: # optional, enabled by default
-            entryTimeToLive: 60s # optional, defaults to 60s
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
   servers:
     roleGroups:
       default: {}
@@ -46,20 +46,53 @@ stringData:
 ----
 
 <1> Enable the `user-info-fetcher` sidecar
-<2> Enable TLS verification using the CA from the `tls` secretClass.
+<2> Enable TLS verification using the CA from the `tls` SecretClass.
 <3> Obtain Keycloak API credentials from the specified secret. The Secret must have `clientId` and `clientSecret` entries.
 <4> Refer to the applicable realm in your Keycloak server.
 
 Currently the following backends are supported:
 
-* <<_keycloak>>
+* xref:#backend-keycloak[]
+* xref:#backend-activedirectory[]
 
+[#backend-keycloak]
 == Keycloak
 
 // todo: maybe this section should be under a Tutorial?
 Fetch groups and extra credentials, but not roles.
 
 NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
+
+[#backend-activedirectory]
+== Active Directory
+
+WARNING: The Active Directory backend is experimental, and subject to change.
+
+Fetches user attributes and groups over LDAP.
+
+[source,yaml]
+----
+spec:
+  clusterConfig:
+    userInfo:
+      backend:
+        experimentalActiveDirectory: # <1>
+          ldapHostname: sble-adds.sble.test # <2>
+          baseDistinguishedName: DC=sble,DC=test # <3>
+          kerberosSecretClassName: kerberos-ad # <4>
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls-ad # <5>
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
+----
+<1> Enables the Active Directory backend
+<2> The hostname of the domain controller
+<3> The distinguished name to search, users and groups outside of this will not be seen
+<4> The name of the SecretClass that knows how to create Kerberos keytabs trusted by Active Directory
+<5> The name of the SecretClass that contains the Active Directory's root CA certificate(s)
 
 == User info fetcher API
 

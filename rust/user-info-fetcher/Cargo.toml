@@ -12,17 +12,23 @@ publish = false
 stackable-opa-crd = { path = "../crd" }
 
 axum.workspace = true
+base64.workspace = true
+byteorder.workspace = true
 clap.workspace = true
 futures.workspace = true
 hyper.workspace = true
+ldap3.workspace = true
 moka.workspace = true
+native-tls.workspace = true
 pin-project.workspace = true
 reqwest.workspace = true
+rustls-pemfile.workspace = true
 semver.workspace = true
-serde_json.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 snafu.workspace = true
 stackable-operator.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
+uuid.workspace = true
