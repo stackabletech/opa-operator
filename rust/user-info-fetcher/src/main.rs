@@ -13,12 +13,11 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use stackable_operator::config;
 use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
 
 mod backend;
 mod http_error;
-mod util;
+mod utils;
 
 pub const APP_NAME: &str = "opa-user-info-fetcher";
 
