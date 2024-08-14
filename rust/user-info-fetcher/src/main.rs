@@ -13,6 +13,7 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_operator::config;
 use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
 
 mod backend;
@@ -315,6 +316,7 @@ async fn get_user_info(
                     crd::Backend::ActiveDirectory(ad) => backend::active_directory::get_user_info(
                         &req,
                         &ad.ldap_server,
+                        &ad.tls,
                         &ad.base_distinguished_name,
                         &ad.custom_attribute_mappings,
                     )

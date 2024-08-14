@@ -104,6 +104,10 @@ pub struct ActiveDirectoryBackend {
 
     pub kerberos_secret_class_name: String,
 
+    /// Use a TLS connection. If not specified no TLS will be used.
+    #[serde(flatten)]
+    pub tls: TlsClientDetails,
+
     /// Custom attributes, and their LDAP attribute names.
     #[serde(default)]
     pub custom_attribute_mappings: BTreeMap<String, String>,

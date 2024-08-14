@@ -944,10 +944,9 @@ fn build_server_rolegroup_daemonset(
                     format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
                 );
                 cb_user_info_fetcher.add_env_var("KRB5CCNAME", "MEMORY:".to_string());
-                // keycloak
-                //     .tls
-                //     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                //     .context(VolumeAndMountsSnafu)?;
+                ad.tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(VolumeAndMountsSnafu)?;
             }
             user_info_fetcher::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
