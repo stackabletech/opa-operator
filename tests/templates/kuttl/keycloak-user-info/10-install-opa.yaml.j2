@@ -5,6 +5,21 @@ commands:
   - script: |
       kubectl apply -n $NAMESPACE -f - <<EOF
       ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: test
+        labels:
+          opa.stackable.tech/bundle: "true"
+      data:
+        test.rego: |
+          package test
+
+          import data.stackable.opa.userinfo.v1 as userinfo
+
+          currentUserInfoByUsername := userinfo.userInfoByUsername(input.username)
+          currentUserInfoById := userinfo.userInfoById(input.id)
+      ---
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
       metadata:
