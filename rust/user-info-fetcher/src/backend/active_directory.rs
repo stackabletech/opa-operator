@@ -11,13 +11,15 @@ use hyper::StatusCode;
 use ldap3::{ldap_escape, Ldap, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::commons::authentication::tls::TlsClientDetails;
-use tokio::fs::File;
 use uuid::Uuid;
 
-use crate::{http_error, ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest};
+use crate::{http_error, utils, ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
+    #[snafu(display("failed to configure TLS"))]
+    ConfigureTls { source: utils::tls::Error },
+
     #[snafu(display("failed to connect to LDAP"))]
     ConnectLdap { source: LdapError },
 
@@ -61,6 +63,7 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match *self {
+            Error::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::ConnectLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::RequestLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::BindLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -94,30 +97,11 @@ pub(crate) async fn get_user_info(
     base_distinguished_name: &str,
     custom_attribute_mappings: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> {
-    use tokio::io::AsyncReadExt as _;
-
-    let mut ldap_tls = native_tls::TlsConnector::builder();
-    if tls.uses_tls() && !tls.uses_tls_verification() {
-        ldap_tls.danger_accept_invalid_certs(true);
-    }
-    if let Some(tls_ca_cert_mount_path) = tls.tls_ca_cert_mount_path() {
-        let mut buf = Vec::new();
-        File::open(tls_ca_cert_mount_path)
-            .await
-            // .context(OpenCaCertSnafu)?
-            .unwrap()
-            .read_to_end(&mut buf)
-            .await
-            .unwrap();
-        // .context(ReadCaCertSnafu)?;
-        let ca_cert = native_tls::Certificate::from_pem(&buf).unwrap(); //.context(ParseCaCertSnafu)?;
-
-        ldap_tls
-            .disable_built_in_roots(true)
-            .add_root_certificate(ca_cert);
-    }
+    let ldap_tls = utils::tls::configure_native_tls(tls)
+        .await
+        .context(ConfigureTlsSnafu)?;
     let (ldap_conn, mut ldap) = LdapConnAsync::with_settings(
-        LdapConnSettings::new().set_connector(ldap_tls.build().unwrap()),
+        LdapConnSettings::new().set_connector(ldap_tls),
         &format!(
             "{protocol}://{ldap_server}",
             protocol = if tls.uses_tls() { "ldaps" } else { "ldap" }

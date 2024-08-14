@@ -5016,7 +5016,7 @@ rec {
           }
           {
             name = "windows-targets";
-            packageId = "windows-targets 0.48.5";
+            packageId = "windows-targets 0.52.6";
             target = { target, features }: (target."windows" or false);
           }
         ];
@@ -7521,9 +7521,9 @@ rec {
       };
       "rustls-pemfile" = rec {
         crateName = "rustls-pemfile";
-        version = "2.1.2";
+        version = "2.1.3";
         edition = "2018";
-        sha256 = "0ggpmk5n7p096nim2hn57facx6rwf76l55qqsj4fny37d0jkm699";
+        sha256 = "09bl873pkibmb2da49kkbm9jlagscjvzrv257q6k01p101my2vqr";
         libName = "rustls_pemfile";
         dependencies = [
           {
@@ -8750,6 +8750,10 @@ rec {
             name = "reqwest";
             packageId = "reqwest";
             features = [ "json" ];
+          }
+          {
+            name = "rustls-pemfile";
+            packageId = "rustls-pemfile";
           }
           {
             name = "semver";

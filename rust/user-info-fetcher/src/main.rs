@@ -13,7 +13,7 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
+use tokio::net::TcpListener;
 
 mod backend;
 mod http_error;
@@ -68,14 +68,8 @@ enum StartupError {
     #[snafu(display("failed to construct http client"))]
     ConstructHttpClient { source: reqwest::Error },
 
-    #[snafu(display("failed to open ca certificate"))]
-    OpenCaCert { source: std::io::Error },
-
-    #[snafu(display("failed to read ca certificate"))]
-    ReadCaCert { source: std::io::Error },
-
-    #[snafu(display("failed to parse ca certificate"))]
-    ParseCaCert { source: reqwest::Error },
+    #[snafu(display("failed to configure TLS"))]
+    ConfigureTls { source: utils::tls::Error },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -136,23 +130,9 @@ async fn main() -> Result<(), StartupError> {
     // I know it is for setting up the client, but an idea: make a trait for implementing backends
     // The trait can do all this for a genric client using an implementation on the trait (eg: get_http_client() which will call self.uses_tls())
     if let crd::Backend::Keycloak(keycloak) = &config.backend {
-        if keycloak.tls.uses_tls() && !keycloak.tls.uses_tls_verification() {
-            client_builder = client_builder.danger_accept_invalid_certs(true);
-        }
-        if let Some(tls_ca_cert_mount_path) = keycloak.tls.tls_ca_cert_mount_path() {
-            let mut buf = Vec::new();
-            File::open(tls_ca_cert_mount_path)
-                .await
-                .context(OpenCaCertSnafu)?
-                .read_to_end(&mut buf)
-                .await
-                .context(ReadCaCertSnafu)?;
-            let ca_cert = reqwest::Certificate::from_pem(&buf).context(ParseCaCertSnafu)?;
-
-            client_builder = client_builder
-                .tls_built_in_root_certs(false)
-                .add_root_certificate(ca_cert);
-        }
+        client_builder = utils::tls::configure_reqwest(&keycloak.tls, client_builder)
+            .await
+            .context(ConfigureTlsSnafu)?;
     }
     let http = client_builder.build().context(ConstructHttpClientSnafu)?;
 
