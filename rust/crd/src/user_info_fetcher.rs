@@ -102,6 +102,8 @@ pub struct ActiveDirectoryBackend {
     /// The root Distinguished Name (DN) where users and groups are located.
     pub base_distinguished_name: String,
 
+    pub kerberos_secret_class_name: String,
+
     /// Custom attributes, and their LDAP attribute names.
     #[serde(default)]
     pub custom_attribute_mappings: BTreeMap<String, String>,

@@ -27,8 +27,10 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        authentication::tls::TlsClientDetailsError, product_image_selection::ResolvedProductImage,
+        authentication::tls::TlsClientDetailsError,
+        product_image_selection::ResolvedProductImage,
         rbac::build_rbac_resources,
+        secret_class::{SecretClassVolume, SecretClassVolumeScope},
     },
     k8s_openapi::{
         api::{
@@ -94,6 +96,8 @@ const BUNDLES_VOLUME_NAME: &str = "bundles";
 const BUNDLES_DIR: &str = "/bundles";
 const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
+const USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: &str = "kerberos";
+const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -914,7 +918,37 @@ fn build_server_rolegroup_daemonset(
         match &user_info.backend {
             user_info_fetcher::Backend::None {} => {}
             user_info_fetcher::Backend::ExperimentalXfscAas(_) => {}
-            user_info_fetcher::Backend::ActiveDirectory(_) => {}
+            user_info_fetcher::Backend::ActiveDirectory(ad) => {
+                pb.add_volume(
+                    SecretClassVolume::new(
+                        ad.kerberos_secret_class_name.clone(),
+                        Some(SecretClassVolumeScope {
+                            pod: true,
+                            node: true,
+                            services: Vec::new(),
+                        }),
+                    )
+                    .to_volume(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME)
+                    .unwrap(),
+                );
+                cb_user_info_fetcher.add_volume_mount(
+                    USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                    USER_INFO_FETCHER_KERBEROS_DIR,
+                );
+                cb_user_info_fetcher.add_env_var(
+                    "KRB5_CONFIG",
+                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
+                );
+                cb_user_info_fetcher.add_env_var(
+                    "KRB5_CLIENT_KTNAME",
+                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
+                );
+                cb_user_info_fetcher.add_env_var("KRB5CCNAME", "MEMORY:".to_string());
+                // keycloak
+                //     .tls
+                //     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                //     .context(VolumeAndMountsSnafu)?;
+            }
             user_info_fetcher::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)

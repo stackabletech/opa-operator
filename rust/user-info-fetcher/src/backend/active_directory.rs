@@ -90,13 +90,15 @@ pub(crate) async fn get_user_info(
     ldap_server: &str,
     base_distinguished_name: &str,
     custom_attribute_mappings: &BTreeMap<String, String>,
-) -> Result<UserInfo, Error> where {
-    let (ldap_conn, mut ldap) =
-        LdapConnAsync::with_settings(LdapConnSettings::new().set_no_tls_verify(true), ldap_server)
-            .await
-            .context(ConnectLdapSnafu)?;
+) -> Result<UserInfo, Error> {
+    let (ldap_conn, mut ldap) = LdapConnAsync::with_settings(
+        LdapConnSettings::new().set_no_tls_verify(true),
+        &format!("ldaps://{ldap_server}"),
+    )
+    .await
+    .context(ConnectLdapSnafu)?;
     ldap3::drive!(ldap_conn);
-    ldap.simple_bind("asdf@sble.test", "Qwer1234")
+    ldap.sasl_gssapi_bind(ldap_server)
         .await
         .context(RequestLdapSnafu)?
         .success()
