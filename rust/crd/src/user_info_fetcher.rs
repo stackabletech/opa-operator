@@ -33,6 +33,7 @@ pub enum Backend {
     /// Cross Federation Services Components (XFSC) Authentication & Authorization Service.
     ExperimentalXfscAas(AasBackend),
 
+    /// Backend that fetches user information from Active Directory
     #[serde(rename = "experimentalActiveDirectory")]
     ActiveDirectory(ActiveDirectoryBackend),
 }
@@ -96,15 +97,16 @@ fn aas_default_port() -> u16 {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActiveDirectoryBackend {
-    /// Hostname of the identity provider, e.g. `my.aas.corp`.
-    pub ldap_server: String,
+    /// Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
+    pub ldap_hostname: String,
 
     /// The root Distinguished Name (DN) where users and groups are located.
     pub base_distinguished_name: String,
 
+    /// The name of the Kerberos SecretClass.
     pub kerberos_secret_class_name: String,
 
-    /// Use a TLS connection. If not specified no TLS will be used.
+    /// Use a TLS connection. If not specified then no TLS will be used.
     #[serde(flatten)]
     pub tls: TlsClientDetails,
 
