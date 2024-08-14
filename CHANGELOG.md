@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Added regorule library for accessing user-info-fetcher ([#580]).
+- Added Active Directory backend for user-info-fetcher ([#622]).
 
 ### Changed
 
@@ -22,6 +23,7 @@ All notable changes to this project will be documented in this file.
 [#578]: https://github.com/stackabletech/opa-operator/pull/578
 [#580]: https://github.com/stackabletech/opa-operator/pull/580
 [#621]: https://github.com/stackabletech/opa-operator/pull/621
+[#622]: https://github.com/stackabletech/opa-operator/pull/622
 
 ## [24.7.0] - 2024-07-24
 
