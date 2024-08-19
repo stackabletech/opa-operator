@@ -12,6 +12,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Rewrite of the OPA bundle builder ([#578]).
+- Reduce CRD size from `468KB` to `42KB` by accepting arbitrary YAML input instead of the underlying schema for the following fields ([#621]):
+  - `podOverrides`
+  - `affinity`
 
 ### Fixed
 
@@ -24,6 +27,7 @@ All notable changes to this project will be documented in this file.
 [#578]: https://github.com/stackabletech/opa-operator/pull/578
 [#580]: https://github.com/stackabletech/opa-operator/pull/580
 [#616]: https://github.com/stackabletech/opa-operator/pull/616
+[#621]: https://github.com/stackabletech/opa-operator/pull/621
 
 ## [24.7.0] - 2024-07-24
 
