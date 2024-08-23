@@ -94,6 +94,8 @@ const BUNDLES_VOLUME_NAME: &str = "bundles";
 const BUNDLES_DIR: &str = "/bundles";
 const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
+const USER_INFO_FETCHER_RESOURCE_CREDENTIALS_VOLUME_NAME: &str = "resource_credentials";
+const USER_INFO_FETCHER_RESOURCE_CREDENTIALS_DIR: &str = "/stackable/resource_credentials";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -932,6 +934,30 @@ fn build_server_rolegroup_daemonset(
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                     .context(VolumeAndMountsSnafu)?;
             }
+        }
+
+        match &user_info.resource_backend {
+            user_info_fetcher::ResourceBackend::Datahub(datahub) => {
+                pb.add_volume(
+                    VolumeBuilder::new(USER_INFO_FETCHER_RESOURCE_CREDENTIALS_VOLUME_NAME)
+                        .secret(SecretVolumeSource {
+                            secret_name: Some(datahub.bearer_token_secret.clone()),
+                            ..Default::default()
+                        })
+                        .build(),
+                );
+                cb_user_info_fetcher.add_volume_mount(
+                    USER_INFO_FETCHER_RESOURCE_CREDENTIALS_VOLUME_NAME,
+                    USER_INFO_FETCHER_RESOURCE_CREDENTIALS_DIR,
+                );
+                /*datahub
+                    .tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(VolumeAndMountsSnafu)?;
+
+                 */
+            },
+            _ => {}
         }
 
         pb.add_container(cb_user_info_fetcher.build());

@@ -12,11 +12,12 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
 use stackable_opa_crd::user_info_fetcher::ResourceBackend;
+use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
 
 mod backend;
 mod http_error;
+mod resourcebackend;
 mod util;
 
 pub const APP_NAME: &str = "opa-user-info-fetcher";
@@ -37,6 +38,7 @@ struct AppState {
     http: reqwest::Client,
     credentials: Arc<Credentials>,
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
+    resource_info_cache: Cache<ResourceInfoRequest, ResourceInfo>,
 }
 
 struct Credentials {
@@ -125,6 +127,13 @@ async fn main() -> Result<(), StartupError> {
         },
     });
 
+    let resourcebackend_token = Arc::new(match &config.resource_backend {
+        _ => "".to_string(),
+        crd::ResourceBackend::Datahub(_) => {
+            read_config_file(&args.credentials_dir.join("bearerToken")).await?
+        }
+    });
+
     let mut client_builder = ClientBuilder::new();
 
     // TODO: I'm not so sure we should be doing all this keycloak specific stuff here.
@@ -159,6 +168,13 @@ async fn main() -> Result<(), StartupError> {
             .time_to_live(*entry_time_to_live)
             .build()
     };
+
+    let resource_info_cache = {let crd::Cache { entry_time_to_live } = config.cache;
+        Cache::builder()
+            .name("resource-info")
+            .time_to_live(*entry_time_to_live)
+            .build()};
+
     let app = Router::new()
         .route("/table", post(get_table_info))
         .route("/user", post(get_user_info))
@@ -167,6 +183,7 @@ async fn main() -> Result<(), StartupError> {
             http,
             credentials,
             user_info_cache,
+            resource_info_cache,
         });
     let listener = TcpListener::bind("127.0.0.1:9476")
         .await
@@ -194,7 +211,9 @@ enum ResourceInfoRequest {
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct TrinoTableInfoRequestByName {
-    id: String,
+    catalog: String,
+    schema: String,
+    table: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -228,9 +247,7 @@ enum ResourceInfo {
 
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-struct TrinoTableInfo {
-
-}
+struct TrinoTableInfo {}
 
 #[derive(Snafu, Debug)]
 #[snafu(module)]
@@ -268,14 +285,22 @@ async fn get_table_info(
         http,
         credentials,
         user_info_cache,
+        resource_info_cache,
     } = state;
-    match &config.resource_backend {
-        ResourceBackend::None { .. } => {}
-        ResourceBackend::DQuantum(dquantum) => {}
-        ResourceBackend::Gravitino(gravitino) => {}
-    }
+    Ok(Json(
+        resource_info_cache
+            .try_get_with_by_ref(&req, async {
+                match &config.resource_backend {
+                    ResourceBackend::None { .. } => {Ok(ResourceInfo::TrinoTableInfo(Default::default())) }
+                    ResourceBackend::DQuantum(dquantum) => {Ok(ResourceInfo::TrinoTableInfo(Default::default()))}
+                    ResourceBackend::Gravitino(gravitino) => {Ok(ResourceInfo::TrinoTableInfo(Default::default()))}
+                    ResourceBackend::Datahub(datahub) => {Ok(ResourceInfo::TrinoTableInfo(Default::default()))}
+                }
+            })
+            .await?,
 
-    Ok(Json(ResourceInfo::TrinoTableInfo(TrinoTableInfo{})))
+
+    ))
 }
 
 async fn get_user_info(
@@ -287,6 +312,7 @@ async fn get_user_info(
         http,
         credentials,
         user_info_cache,
+        resource_info_cache,
     } = state;
     Ok(Json(
         user_info_cache

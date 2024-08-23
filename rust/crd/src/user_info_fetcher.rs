@@ -28,10 +28,11 @@ pub enum ResourceBackend {
     /// Dummy backend that adds no extra user information.
     None {},
 
-    /// Backend that fetches user information from Keycloak.
+    /// Backend that fetches user information from DQuantum.
     DQuantum(DQuantumBackend),
-    /// Backend that fetches user information from Keycloak.
+    /// Backend that fetches user information from Gravitino.
     Gravitino(GravitinoBackend),
+    Datahub(DatahubBackend),
 }
 
 impl Default for ResourceBackend {
@@ -68,6 +69,22 @@ pub struct GravitinoBackend {
     ///
     /// Must contain the fields `clientId` and `clientSecret`.
     pub client_credentials_secret: String,
+}
+
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatahubBackend {
+    pub hostname: String,
+    pub port: Option<u16>,
+
+    #[serde(flatten)]
+    pub tls: TlsClientDetails,
+
+    /// Name of a Secret that contains a token to access the DataHub api with.
+    ///
+    /// Must contain the field `bearerToken`.
+    pub bearer_token_secret: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
