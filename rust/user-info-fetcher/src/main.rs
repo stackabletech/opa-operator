@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
+use stackable_opa_crd::user_info_fetcher::ResourceBackend;
 
 mod backend;
 mod http_error;
@@ -159,6 +160,7 @@ async fn main() -> Result<(), StartupError> {
             .build()
     };
     let app = Router::new()
+        .route("/table", post(get_table_info))
         .route("/user", post(get_user_info))
         .with_state(AppState {
             config,
@@ -184,6 +186,18 @@ enum UserInfoRequest {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "camelCase", untagged)]
+enum ResourceInfoRequest {
+    TrinoTableInfoRequest(TrinoTableInfoRequestByName),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "camelCase")]
+struct TrinoTableInfoRequestByName {
+    id: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 struct UserInfoRequestById {
     id: String,
@@ -204,6 +218,18 @@ struct UserInfo {
     username: Option<String>,
     groups: Vec<String>,
     custom_attributes: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+enum ResourceInfo {
+    TrinoTableInfo(TrinoTableInfo),
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+struct TrinoTableInfo {
+
 }
 
 #[derive(Snafu, Debug)]
@@ -231,6 +257,25 @@ impl http_error::Error for GetUserInfoError {
             Self::ExperimentalXfscAas { source } => source.status_code(),
         }
     }
+}
+
+async fn get_table_info(
+    State(state): State<AppState>,
+    Json(req): Json<ResourceInfoRequest>,
+) -> Result<Json<ResourceInfo>, http_error::JsonResponse<Arc<GetUserInfoError>>> {
+    let AppState {
+        config,
+        http,
+        credentials,
+        user_info_cache,
+    } = state;
+    match &config.resource_backend {
+        ResourceBackend::None { .. } => {}
+        ResourceBackend::DQuantum(dquantum) => {}
+        ResourceBackend::Gravitino(gravitino) => {}
+    }
+
+    Ok(Json(ResourceInfo::TrinoTableInfo(TrinoTableInfo{})))
 }
 
 async fn get_user_info(

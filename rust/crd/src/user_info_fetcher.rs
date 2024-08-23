@@ -13,9 +13,61 @@ pub struct Config {
     #[serde(default)]
     pub backend: Backend,
 
+    /// The backend directory service to use.
+    #[serde(default)]
+    pub resource_backend: ResourceBackend,
+
     /// Caching configuration.
     #[serde(default)]
     pub cache: Cache,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ResourceBackend {
+    /// Dummy backend that adds no extra user information.
+    None {},
+
+    /// Backend that fetches user information from Keycloak.
+    DQuantum(DQuantumBackend),
+    /// Backend that fetches user information from Keycloak.
+    Gravitino(GravitinoBackend),
+}
+
+impl Default for ResourceBackend {
+    fn default() -> Self {
+        Self::None {}
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DQuantumBackend {
+    pub hostname: String,
+    pub port: Option<u16>,
+
+    #[serde(flatten)]
+    pub tls: TlsClientDetails,
+
+    /// Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
+    ///
+    /// Must contain the fields `clientId` and `clientSecret`.
+    pub client_credentials_secret: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GravitinoBackend {
+    pub hostname: String,
+    pub port: Option<u16>,
+
+    #[serde(flatten)]
+    pub tls: TlsClientDetails,
+
+    /// Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
+    ///
+    /// Must contain the fields `clientId` and `clientSecret`.
+    pub client_credentials_secret: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
