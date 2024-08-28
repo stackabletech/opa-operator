@@ -70,6 +70,8 @@ WARNING: The Active Directory backend is experimental, and subject to change.
 
 Fetches user attributes and groups over LDAP.
 
+For this to work user-info-fetcher needs to be provided with a Kerberos keytab that enables it to access Active Directory.
+This is provided by a configurable SecretClass.
 [source,yaml]
 ----
 spec:
