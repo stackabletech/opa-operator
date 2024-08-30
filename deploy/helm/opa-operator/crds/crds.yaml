@@ -192,13 +192,6 @@ spec:
 
                                     Must contain the fields `clientId` and `clientSecret`.
                                   type: string
-                                hostname:
-                                  type: string
-                                port:
-                                  format: uint16
-                                  minimum: 0.0
-                                  nullable: true
-                                  type: integer
                                 tls:
                                   description: Use a TLS connection. If not specified no TLS will be used.
                                   nullable: true
@@ -239,9 +232,11 @@ spec:
                                   required:
                                     - verification
                                   type: object
+                                url:
+                                  type: string
                               required:
                                 - clientCredentialsSecret
-                                - hostname
+                                - url
                               type: object
                             datahub:
                               properties:

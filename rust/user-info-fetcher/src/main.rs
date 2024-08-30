@@ -37,6 +37,7 @@ struct AppState {
     config: Arc<crd::Config>,
     http: reqwest::Client,
     credentials: Arc<Credentials>,
+    resource_backend_credentials: Arc<Credentials>,
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
     resource_info_cache: Cache<ResourceInfoRequest, ResourceInfo>,
 }
@@ -127,11 +128,15 @@ async fn main() -> Result<(), StartupError> {
         },
     });
 
-    let resourcebackend_token = Arc::new(match &config.resource_backend {
-        _ => "".to_string(),
-        crd::ResourceBackend::Datahub(_) => {
-            read_config_file(&args.credentials_dir.join("bearerToken")).await?
-        }
+    let resource_backend_credentials = Arc::new(match &config.resource_backend {
+        _ => Credentials {
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
+        },
+        crd::ResourceBackend::DQuantum(_) => Credentials {
+            client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
+            client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -182,6 +187,7 @@ async fn main() -> Result<(), StartupError> {
             config,
             http,
             credentials,
+            resource_backend_credentials,
             user_info_cache,
             resource_info_cache,
         });
@@ -247,7 +253,10 @@ enum ResourceInfo {
 
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-struct TrinoTableInfo {}
+struct TrinoTableInfo {
+    name: Option<String>,
+    attributes: HashMap<String, String>,
+}
 
 #[derive(Snafu, Debug)]
 #[snafu(module)]
@@ -284,6 +293,7 @@ async fn get_table_info(
         config,
         http,
         credentials,
+        resource_backend_credentials,
         user_info_cache,
         resource_info_cache,
     } = state;
@@ -311,6 +321,7 @@ async fn get_user_info(
         config,
         http,
         credentials,
+        resource_backend_credentials,
         user_info_cache,
         resource_info_cache,
     } = state;

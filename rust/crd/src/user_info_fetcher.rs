@@ -44,8 +44,7 @@ impl Default for ResourceBackend {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DQuantumBackend {
-    pub hostname: String,
-    pub port: Option<u16>,
+    pub url: String,
 
     #[serde(flatten)]
     pub tls: TlsClientDetails,

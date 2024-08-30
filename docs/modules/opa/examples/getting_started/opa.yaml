@@ -4,8 +4,38 @@ kind: OpaCluster
 metadata:
   name: simple-opa
 spec:
+  clusterConfig:
+    userInfo:
+      backend:
+        keycloak:
+          hostname: keycloak.my-namespace.svc.cluster.local
+          port: 8443
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls
+          clientCredentialsSecret: user-info-fetcher-client-credentials
+          adminRealm: master
+          userRealm: master
+      resourceBackend:
+        dQuantum:
+          url: "test"
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls
+          clientCredentialsSecret: user-info-fetcher-client-credentials
+
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
   image:
     productVersion: "0.67.1"
   servers:
     roleGroups:
       default: {}
+
+
+
+
