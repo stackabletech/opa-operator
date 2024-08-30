@@ -294,7 +294,7 @@ async fn get_user_info(
                     }
                     crd::Backend::ActiveDirectory(ad) => backend::active_directory::get_user_info(
                         &req,
-                        &ad.ldap_hostname,
+                        &ad.ldap_server,
                         &ad.tls,
                         &ad.base_distinguished_name,
                         &ad.custom_attribute_mappings,

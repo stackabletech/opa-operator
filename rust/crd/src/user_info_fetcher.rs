@@ -98,7 +98,7 @@ fn aas_default_port() -> u16 {
 #[serde(rename_all = "camelCase")]
 pub struct ActiveDirectoryBackend {
     /// Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
-    pub ldap_hostname: String,
+    pub ldap_server: String,
 
     /// The root Distinguished Name (DN) where users and groups are located.
     pub base_distinguished_name: String,

@@ -80,7 +80,7 @@ spec:
                                 kerberosSecretClassName:
                                   description: The name of the Kerberos SecretClass.
                                   type: string
-                                ldapHostname:
+                                ldapServer:
                                   description: Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
                                   type: string
                                 tls:
@@ -126,7 +126,7 @@ spec:
                               required:
                                 - baseDistinguishedName
                                 - kerberosSecretClassName
-                                - ldapHostname
+                                - ldapServer
                               type: object
                             experimentalXfscAas:
                               description: Backend that fetches user information from the Gaia-X Cross Federation Services Components (XFSC) Authentication & Authorization Service.

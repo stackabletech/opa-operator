@@ -84,7 +84,7 @@ spec:
     userInfo:
       backend:
         experimentalActiveDirectory: # <1>
-          ldapHostname: sble-adds.sble.test # <2>
+          ldapServer: sble-adds.sble.test # <2>
           baseDistinguishedName: DC=sble,DC=test # <3>
           kerberosSecretClassName: kerberos-ad # <4>
           tls:
