@@ -30,30 +30,32 @@ struct Property {
 }
 
 #[derive(Clone, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct Entity {
     uid: String,
     draft: bool,
     name: String,
-    entityTypeId: u8,
-    entityTypeName: String,
+    entity_type_id: u8,
+    entity_type_name: String,
     archived: bool,
     properties: Vec<Property>,
     created: String,
-    createdUser: String,
+    created_user: String,
     modified: String,
-    modifiedUser: String,
+    modified_user: String,
 }
 
 pub(crate) async fn get_resource_info(
     req: &ResourceInfoRequest,
     http: &reqwest::Client,
-    qr1px15credentials: &Credentials,
+    credentials: &Credentials,
     config: &crd::DQuantumBackend,
 ) -> Result<ResourceInfo, crate::resourcebackend::dquantum::Error> {
     let crd::DQuantumBackend {
         url,
         tls,
         client_credentials_secret,
+        hierarchy
     } = config;
 
     match req {
@@ -65,6 +67,7 @@ pub(crate) async fn get_resource_info(
             let request_url =
                 format!("{url}/entity/search/146/Name?propertyValue={catalog}/{schema}/{table}");
 
+            println!("got request for {catalog}/{schema}/{table} - retrieving url {url}");
             headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
             headers.insert(ACCEPT, "application/json".parse().unwrap());
             //headers.insert("X-XSRF-TOKEN", "f434e8e8-081c-4963-9df6-3046bf8bdeb9".parse().unwrap());
@@ -74,7 +77,7 @@ pub(crate) async fn get_resource_info(
                 send_json_request::<crate::resourcebackend::dquantum::SearchResponse>(
                     http.get(request_url)
                         .headers(headers)
-                        .basic_auth(&credentials.client_id, &credentials.client_secret),
+                        .basic_auth(&credentials.client_id, Some(&credentials.client_secret)),
                 )
                 .await
                 .context(AccessTokenSnafu)?;

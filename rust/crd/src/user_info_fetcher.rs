@@ -27,12 +27,8 @@ pub struct Config {
 pub enum ResourceBackend {
     /// Dummy backend that adds no extra user information.
     None {},
-
     /// Backend that fetches user information from DQuantum.
     DQuantum(DQuantumBackend),
-    /// Backend that fetches user information from Gravitino.
-    Gravitino(GravitinoBackend),
-    Datahub(DatahubBackend),
 }
 
 impl Default for ResourceBackend {
@@ -53,37 +49,25 @@ pub struct DQuantumBackend {
     ///
     /// Must contain the fields `clientId` and `clientSecret`.
     pub client_credentials_secret: String,
+
+    pub hierarchy: DQuantumHierarchy,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GravitinoBackend {
-    pub hostname: String,
-    pub port: Option<u16>,
-
-    #[serde(flatten)]
-    pub tls: TlsClientDetails,
-
-    /// Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
-    ///
-    /// Must contain the fields `clientId` and `clientSecret`.
-    pub client_credentials_secret: String,
+pub struct DQuantumHierarchy {
+    start_element: u8,
+    #[serde(default)]
+    child: Option<Vec<DQuantumRelation>>,
+    #[serde(default)]
+    parent: Option<Vec<DQuantumRelation>>,
 }
-
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DatahubBackend {
-    pub hostname: String,
-    pub port: Option<u16>,
-
-    #[serde(flatten)]
-    pub tls: TlsClientDetails,
-
-    /// Name of a Secret that contains a token to access the DataHub api with.
-    ///
-    /// Must contain the field `bearerToken`.
-    pub bearer_token_secret: String,
+pub struct DQuantumRelation {
+    element_id: u8,
+    relation_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

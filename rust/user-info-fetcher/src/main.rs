@@ -174,11 +174,13 @@ async fn main() -> Result<(), StartupError> {
             .build()
     };
 
-    let resource_info_cache = {let crd::Cache { entry_time_to_live } = config.cache;
+    let resource_info_cache = {
+        let crd::Cache { entry_time_to_live } = config.cache;
         Cache::builder()
             .name("resource-info")
             .time_to_live(*entry_time_to_live)
-            .build()};
+            .build()
+    };
 
     let app = Router::new()
         .route("/table", post(get_table_info))
@@ -264,6 +266,9 @@ enum GetUserInfoError {
     #[snafu(display("failed to get user information from Keycloak"))]
     Keycloak { source: backend::keycloak::Error },
 
+    #[snafu(display("failed to get user information from DQuantum"))]
+    DQuantum { source: resourcebackend::dquantum::Error },
+
     #[snafu(display(
         "failed to get user information from the XFSC Authentication & Authorization Service"
     ))]
@@ -281,6 +286,7 @@ impl http_error::Error for GetUserInfoError {
         match self {
             Self::Keycloak { source } => source.status_code(),
             Self::ExperimentalXfscAas { source } => source.status_code(),
+            Self::DQuantum { source } => source.status_code(),
         }
     }
 }
@@ -301,15 +307,18 @@ async fn get_table_info(
         resource_info_cache
             .try_get_with_by_ref(&req, async {
                 match &config.resource_backend {
-                    ResourceBackend::None { .. } => {Ok(ResourceInfo::TrinoTableInfo(Default::default())) }
-                    ResourceBackend::DQuantum(dquantum) => {Ok(ResourceInfo::TrinoTableInfo(Default::default()))}
-                    ResourceBackend::Gravitino(gravitino) => {Ok(ResourceInfo::TrinoTableInfo(Default::default()))}
-                    ResourceBackend::Datahub(datahub) => {Ok(ResourceInfo::TrinoTableInfo(Default::default()))}
+                    ResourceBackend::None { .. } => Ok(ResourceInfo::TrinoTableInfo(Default::default())),
+                    ResourceBackend::DQuantum(dquantum) => {
+                        resourcebackend::dquantum::get_resource_info(
+                            &req,
+                            &http,
+                            &credentials,
+                            dquantum,
+                        ).await
+                    }
                 }
             })
             .await?,
-
-
     ))
 }
 
