@@ -315,6 +315,7 @@ async fn get_table_info(
                             &credentials,
                             dquantum,
                         ).await
+                            .context(get_user_info_error::DQuantumSnafu)
                     }
                 }
             })

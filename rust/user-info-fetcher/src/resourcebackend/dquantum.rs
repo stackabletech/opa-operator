@@ -1,8 +1,9 @@
+use axum::http::StatusCode;
 use reqwest::header::{HeaderMap, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
 
 use crate::util::send_json_request;
-use crate::{Credentials, ResourceInfo, ResourceInfoRequest};
+use crate::{http_error, Credentials, ResourceInfo, ResourceInfoRequest};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 
@@ -12,6 +13,12 @@ pub enum Error {
     AccessToken { source: crate::util::Error },
     #[snafu(display("failed to construct search endpoint path"))]
     ConstructSearchEndpointPath { source: url::ParseError },
+}
+
+impl http_error::Error for Error {
+    fn status_code(&self) -> StatusCode {
+        StatusCode::NOT_IMPLEMENTED
+    }
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -55,7 +62,7 @@ pub(crate) async fn get_resource_info(
         url,
         tls,
         client_credentials_secret,
-        hierarchy
+        hierarchy,
     } = config;
 
     match req {
