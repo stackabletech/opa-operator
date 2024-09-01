@@ -130,8 +130,8 @@ async fn main() -> Result<(), StartupError> {
 
     let resource_backend_credentials = Arc::new(match &config.resource_backend {
         _ => Credentials {
-            client_id: "".to_string(),
-            client_secret: "".to_string(),
+            client_id: "123".to_string(),
+            client_secret: "456".to_string(),
         },
         crd::ResourceBackend::DQuantum(_) => Credentials {
             client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
@@ -139,6 +139,7 @@ async fn main() -> Result<(), StartupError> {
         },
     });
 
+    println!("resoucre credentials: {}/{}", &resource_backend_credentials.client_id, &resource_backend_credentials.client_secret);
     let mut client_builder = ClientBuilder::new();
 
     // TODO: I'm not so sure we should be doing all this keycloak specific stuff here.
@@ -312,7 +313,7 @@ async fn get_table_info(
                         resourcebackend::dquantum::get_resource_info(
                             &req,
                             &http,
-                            &credentials,
+                            &resource_backend_credentials,
                             dquantum,
                         ).await
                             .context(get_user_info_error::DQuantumSnafu)

@@ -73,8 +73,10 @@ pub(crate) async fn get_resource_info(
             let mut headers = HeaderMap::new();
             let request_url =
                 format!("{url}/entity/search/146/Name?propertyValue={catalog}/{schema}/{table}");
-
-            println!("got request for {catalog}/{schema}/{table} - retrieving url {url}");
+            let username = &credentials.client_id;
+            let password = &credentials.client_secret;
+            println!("username: {username}, password: {password} ");
+            println!("got request for {catalog}/{schema}/{table} - retrieving url {request_url}");
             headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
             headers.insert(ACCEPT, "application/json".parse().unwrap());
             //headers.insert("X-XSRF-TOKEN", "f434e8e8-081c-4963-9df6-3046bf8bdeb9".parse().unwrap());
@@ -84,7 +86,8 @@ pub(crate) async fn get_resource_info(
                 send_json_request::<crate::resourcebackend::dquantum::SearchResponse>(
                     http.get(request_url)
                         .headers(headers)
-                        .basic_auth(&credentials.client_id, Some(&credentials.client_secret)),
+                        .
+                        .basic_auth("sliebau", Some("sliebau")),
                 )
                 .await
                 .context(AccessTokenSnafu)?;
