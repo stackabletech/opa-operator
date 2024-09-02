@@ -86,7 +86,6 @@ pub(crate) async fn get_resource_info(
                 send_json_request::<crate::resourcebackend::dquantum::SearchResponse>(
                     http.get(request_url)
                         .headers(headers)
-                        .
                         .basic_auth("sliebau", Some("sliebau")),
                 )
                 .await
