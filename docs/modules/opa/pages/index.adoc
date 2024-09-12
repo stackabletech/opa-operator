@@ -1,5 +1,5 @@
 = Stackable Operator for OPA (OpenPolicyAgent)
-:description: The Stackable operator for OPA is a Kubernetes operator that manages OPA instances. Learn about its features, resources, dependencies and demos, and see the list of supported OPA versions.
+:description: Manage OPA instances with the Stackable Kubernetes operator. Supports policy-as-code with Rego, integrates with Druid, Kafka, and Trino.
 :keywords: Stackable operator, OPA, OpenPolicyAgent, Rego, Kubernetes, k8s, operator, policy, authorization, ACL
 :opa: https://www.openpolicyagent.org/
 :github: https://github.com/stackabletech/opa-operator/
