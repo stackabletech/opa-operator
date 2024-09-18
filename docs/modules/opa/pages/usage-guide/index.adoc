@@ -1,4 +1,5 @@
 = Usage guide
+:description: Learn how to configure and use the Stackable OPA operator. Follow the guide for setup instructions and advanced configurations.
 :page-aliases: usage.adoc
 
 This section will help you to use and configure the Stackable operator for OPA in various ways.

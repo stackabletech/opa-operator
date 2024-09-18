@@ -1,4 +1,5 @@
 = User info fetcher
+:description: Experimental User Info Fetcher for OPA retrieves data from backends like Keycloak. Integrate extra user details into Rego rules for enhanced policy management.
 
 WARNING: This feature is experimental, and subject to change.
 

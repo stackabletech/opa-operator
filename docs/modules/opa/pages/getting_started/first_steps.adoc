@@ -1,4 +1,5 @@
 = First steps
+:description: Set up OPA with Stackable operator, deploy your first policy rule, and query it from the command line in Kubernetes.
 :docs-policy-language: https://www.openpolicyagent.org/docs/latest/policy-language/
 
 After you went through the xref:getting_started/installation.adoc[], on this page you will deploy OPA, deploy your first rule and query it from the command line.

@@ -1,4 +1,5 @@
 = Getting started
+:description: Get started with OPA using Stackable Operator. Install, set up OPA, create a policy rule, and query it in Kubernetes.
 
 This guide will get you started with the OpenPolicyAgent (OPA) using the Stackable operator.
 It will guide you through the installation of the operator, setting up your first OPA instance, creating a policy rule and querying it.
