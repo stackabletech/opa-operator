@@ -27,8 +27,8 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        authentication::tls::TlsClientDetailsError, product_image_selection::ResolvedProductImage,
-        rbac::build_rbac_resources,
+        product_image_selection::ResolvedProductImage, rbac::build_rbac_resources,
+        tls_verification::TlsClientDetailsError,
     },
     k8s_openapi::{
         api::{
@@ -596,7 +596,7 @@ fn build_rolegroup_service(
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
-        .name(&rolegroup.object_name())
+        .name(rolegroup.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
@@ -960,7 +960,7 @@ fn build_server_rolegroup_daemonset(
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
-        .name(&rolegroup_ref.object_name())
+        .name(rolegroup_ref.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
