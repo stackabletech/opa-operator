@@ -27,8 +27,8 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        authentication::tls::TlsClientDetailsError, product_image_selection::ResolvedProductImage,
-        rbac::build_rbac_resources,
+        product_image_selection::ResolvedProductImage, rbac::build_rbac_resources,
+        tls_verification::TlsClientDetailsError,
     },
     k8s_openapi::{
         api::{
