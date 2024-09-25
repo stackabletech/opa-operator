@@ -2,6 +2,6 @@
 :description: Learn how to configure and use the Stackable OPA operator. Follow the guide for setup instructions and advanced configurations.
 :page-aliases: usage.adoc
 
-This section will help you to use and configure the Stackable operator for OPA in various ways.
+This section helps you to use and configure the Stackable operator for OPA in various ways.
 You should already be familiar with how to set up a basic instance.
 Follow the xref:getting_started/index.adoc[] guide to learn how to set up a basic instance.

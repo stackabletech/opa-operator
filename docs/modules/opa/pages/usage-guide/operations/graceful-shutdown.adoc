@@ -6,9 +6,9 @@ You can configure the graceful shutdown as described in xref:concepts:operations
 
 As a default, OPA servers have `2 minutes` to shut down gracefully.
 
-The OPA server process will receive a `SIGTERM` signal when Kubernetes wants to terminate the Pod.
-It will acknowledge the shutdown as shown in the log below and initiate a graceful shutdown.
-After the graceful shutdown timeout runs out, and the process still didn't exit, Kubernetes will issue a `SIGKILL` signal.
+The OPA server process receives a `SIGTERM` signal when Kubernetes wants to terminate the Pod.
+It acknowledges the shutdown as shown in the log below and initiate a graceful shutdown.
+After the graceful shutdown timeout runs out, and the process still didn't exit, Kubernetes issues a `SIGKILL` signal.
 
 [source,text]
 ----

@@ -5,20 +5,21 @@ but should not be required reading for regular use.
 
 == OPA replica per node
 
-We run an OPA on each node, because we want to avoid requiring network round trips for services making
-policy queries (which are often chained in serial, and block other tasks in the products).
+OPA runs on each Node to avoid requiring network round trips for services making policy queries (which are often chained in serial, and block other tasks in the products).
 
-We ensure local access via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`]. This means that https://kubernetes.io/docs/concepts/workloads/pods/[`Pods`] accessing OPA via the service discovery will be routed to the OPA `Pod` on the same https://kubernetes.io/docs/concepts/architecture/nodes/[`Node`] to reduce request latency and network traffic. This feature is only activated per default in Kubernetes versions https://github.com/kubernetes/kubernetes/pull/103462[`1.22`] or higher.
+Local access is ensured via an https://kubernetes.io/docs/concepts/services-networking/service-traffic-policy/[`InternalTrafficPolicy`].
+This means that https://kubernetes.io/docs/concepts/workloads/pods/[Pods] accessing OPA via the service discovery are routed to the OPA Pod on the same https://kubernetes.io/docs/concepts/architecture/nodes/[Node] to reduce request latency and network traffic.
 
 == OPA Bundle Builder
 
-Users can manage policy rules by creating, updating and deleting `ConfigMap` resources.
+Users can manage policy rules by creating, updating and deleting ConfigMap resources.
 
 The responsibility of the https://github.com/stackabletech/opa-bundle-builder[OPA Bundle Builder] is to convert these resources to bundles (`tar.gz` files) and make them available via an HTTP endpoint.
-The OPA Bundle Builder runs in a side container of the OPA `Pod` as a simple HTTP server that OPA is querying regularly
+The OPA Bundle Builder runs in a side container of the OPA Pod as a simple HTTP server that OPA is querying regularly
 (every 20 to 30 seconds) for updates.
 
-NOTE: Kubernetes limits the size of `ConfigMap`s to 1MB. Users have to take this limit into consideration when manging policy rules.
+NOTE: Kubernetes limits the size of ConfigMaps to 1MB.
+Users have to take this limit into consideration when manging policy rules.
 
 Only ConfigMaps labeled with `opa.stackable.tech/bundle: "true"` are considered by the builder when updating bundles. The name of
 the `data` entries in the `ConfigMap` are used as file names when storing the rules in the bundle.

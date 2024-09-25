@@ -19,7 +19,7 @@ OPA promotes "policy-as-code"; policies are defined in the declarative {rego}[Re
 
 == Getting started
 
-The xref:getting_started/index.adoc[Getting started guide] will guide you through the installation of the operator and setting up OPA.
+The xref:getting_started/index.adoc[Getting started guide] guides you through the installation of the operator and setting up OPA.
 You will also create your first Rego rule and query the OPA for a policy decision.
 
 == Operator model
@@ -28,7 +28,7 @@ The _OpaCluster_ custom resource is used to declare OPA instances, only one xref
 OPA is deployed as a DaemonSet because policy decisions must be fast and efficient.
 Therefore, an OPA agent must be available on every Node to reduce latency and network calls.
 A DaemonSet with its own ConfigMap is created for every role group.
-The DaemonSet will then deploy a Pod on every node.
+The DaemonSet then deploys a Pod on every node.
 Every role group also gets its own Service definition.
 
 image::opa_overview.drawio.svg[A diagram depicting the Kubernetes resources created by the Stackable operator for OPA]

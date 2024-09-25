@@ -26,7 +26,7 @@ The Stackable operator for OPA only supports automatic log configuration due to 
 
 Furthermore, the only customization possible for console output for the `bundle-builder` container is `NONE`.
 This deactivates console logging.
-Other log levels for console logging in this container will be overwritten by the file log level.
+Other log levels for console logging in this container are overwritten by the file log level.
 
 == Decision logging
 

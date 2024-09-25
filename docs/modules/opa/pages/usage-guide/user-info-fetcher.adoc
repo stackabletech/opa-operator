@@ -80,7 +80,7 @@ An example of the returned structure:
 }
 ----
 
-For example, the following rule will allow access for users in the `/admin` group:
+For example, the following rule allows access for users in the `/admin` group:
 
 [source,rego]
 ----
