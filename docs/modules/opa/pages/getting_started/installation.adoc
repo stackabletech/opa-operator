@@ -11,7 +11,7 @@ There are 2 ways to install Stackable operators on a Kubernetes cluster.
 stackablectl::
 +
 --
-`stackablectl` is the command line tool to interact with Stackable operators and our recommended way to install operators.
+`stackablectl` is the command line tool to interact with Stackable operators and the recommended way to install operators.
 Follow the xref:management:stackablectl:installation.adoc[installation steps] for your platform.
 
 After you have installed `stackablectl` run the following command to install the OPA operator:
@@ -21,7 +21,7 @@ After you have installed `stackablectl` run the following command to install the
 include::example$getting_started/getting_started.sh[tag=stackablectl-install-operators]
 ----
 
-The tool will show
+The tool prints
 
 [source]
 include::example$getting_started/install_output.txt[]
@@ -48,8 +48,7 @@ Then install the Stackable OPA operator:
 include::example$getting_started/getting_started.sh[tag=helm-install-operators]
 ----
 
-Helm will deploy the operator in a Kubernetes Deployment and apply the CRDs for the OPA service.
-You are now ready to deploy OPA in Kubernetes.
+Helm deploys the operator in a Kubernetes Deployment and apply the CRDs for the OPA service.
 --
 ====
 
