@@ -19,7 +19,7 @@ The OPA Bundle Builder runs in a side container of the OPA Pod as a simple HTTP 
 (every 20 to 30 seconds) for updates.
 
 NOTE: Kubernetes limits the size of ConfigMaps to 1MB.
-Users have to take this limit into consideration when manging policy rules.
+Users have to take this limit into consideration when managing policy rules.
 
 Only ConfigMaps labeled with `opa.stackable.tech/bundle: "true"` are considered by the builder when updating bundles. The name of
 the `data` entries in the `ConfigMap` are used as file names when storing the rules in the bundle.
