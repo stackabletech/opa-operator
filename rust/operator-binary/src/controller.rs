@@ -15,6 +15,7 @@ use stackable_opa_crd::{
 };
 use stackable_operator::{
     builder::{
+        self,
         configmap::ConfigMapBuilder,
         meta::ObjectMetaBuilder,
         pod::{
@@ -51,7 +52,9 @@ use stackable_operator::{
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
-        framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
+        framework::{
+            create_vector_shutdown_file_command, remove_vector_shutdown_file_command, LoggingError,
+        },
         spec::{
             AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
             ContainerLogConfigChoice, LogLevel,
@@ -279,6 +282,17 @@ pub enum Error {
         "failed to build volume or volume mount spec for the Keycloak backend TLS config"
     ))]
     VolumeAndMounts { source: TlsClientDetailsError },
+
+    #[snafu(display("failed to configure logging"))]
+    ConfigureLogging { source: LoggingError },
+
+    #[snafu(display("failed to add needed volume"))]
+    AddVolume { source: builder::pod::Error },
+
+    #[snafu(display("failed to add needed volumeMount"))]
+    AddVolumeMount {
+        source: builder::pod::container::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -746,7 +760,9 @@ fn build_server_rolegroup_daemonset(
         )
         .join(" && ")])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
@@ -773,7 +789,9 @@ fn build_server_rolegroup_daemonset(
             format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .context(AddVolumeMountSnafu)?
         .resources(
             ResourceRequirementsBuilder::new()
                 .with_cpu_request("100m")
@@ -820,7 +838,9 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+        .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
@@ -863,11 +883,13 @@ fn build_server_rolegroup_daemonset(
                 .with_config_map(rolegroup_ref.object_name())
                 .build(),
         )
+        .context(AddVolumeSnafu)?
         .add_volume(
             VolumeBuilder::new(BUNDLES_VOLUME_NAME)
                 .with_empty_dir(None::<String>, None)
                 .build(),
         )
+        .context(AddVolumeSnafu)?
         .add_volume(
             VolumeBuilder::new(LOG_VOLUME_NAME)
                 .empty_dir(EmptyDirVolumeSource {
@@ -882,6 +904,7 @@ fn build_server_rolegroup_daemonset(
                 })
                 .build(),
         )
+        .context(AddVolumeSnafu)?
         .service_account_name(sa_name)
         .security_context(
             PodSecurityContextBuilder::new()
@@ -902,6 +925,7 @@ fn build_server_rolegroup_daemonset(
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+            .context(AddVolumeMountSnafu)?
             .resources(
                 ResourceRequirementsBuilder::new()
                     .with_cpu_request("100m")
@@ -922,11 +946,14 @@ fn build_server_rolegroup_daemonset(
                             ..Default::default()
                         })
                         .build(),
-                );
-                cb_user_info_fetcher.add_volume_mount(
-                    USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-                    USER_INFO_FETCHER_CREDENTIALS_DIR,
-                );
+                )
+                .context(AddVolumeSnafu)?;
+                cb_user_info_fetcher
+                    .add_volume_mount(
+                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                        USER_INFO_FETCHER_CREDENTIALS_DIR,
+                    )
+                    .context(AddVolumeMountSnafu)?;
                 keycloak
                     .tls
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
@@ -938,18 +965,21 @@ fn build_server_rolegroup_daemonset(
     }
 
     if merged_config.logging.enable_vector_agent {
-        pb.add_container(product_logging::framework::vector_container(
-            resolved_product_image,
-            CONFIG_VOLUME_NAME,
-            LOG_VOLUME_NAME,
-            merged_config.logging.containers.get(&Container::Vector),
-            ResourceRequirementsBuilder::new()
-                .with_cpu_request("250m")
-                .with_cpu_limit("500m")
-                .with_memory_request("128Mi")
-                .with_memory_limit("128Mi")
-                .build(),
-        ));
+        pb.add_container(
+            product_logging::framework::vector_container(
+                resolved_product_image,
+                CONFIG_VOLUME_NAME,
+                LOG_VOLUME_NAME,
+                merged_config.logging.containers.get(&Container::Vector),
+                ResourceRequirementsBuilder::new()
+                    .with_cpu_request("250m")
+                    .with_cpu_limit("500m")
+                    .with_memory_request("128Mi")
+                    .with_memory_limit("128Mi")
+                    .build(),
+            )
+            .context(ConfigureLoggingSnafu)?,
+        );
     }
 
     add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;

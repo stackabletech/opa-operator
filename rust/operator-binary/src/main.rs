@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
 
-            let client = client::create_client(Some(OPERATOR_NAME.to_string())).await?;
+            let client = client::initialize_operator(Some(OPERATOR_NAME.to_string())).await?;
             create_controller(
                 client,
                 product_config,

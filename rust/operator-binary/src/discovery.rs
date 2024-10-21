@@ -7,6 +7,7 @@ use stackable_operator::{
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{ConfigMap, Service},
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
+    utils::cluster_domain::KUBERNETES_CLUSTER_DOMAIN,
 };
 
 #[derive(Snafu, Debug)]
@@ -59,13 +60,17 @@ fn build_discovery_configmap(
     resolved_product_image: &ResolvedProductImage,
     svc: &Service,
 ) -> Result<ConfigMap, Error> {
+    let cluster_domain = KUBERNETES_CLUSTER_DOMAIN
+        .get()
+        .expect("KUBERNETES_CLUSTER_DOMAIN must first be set by calling initialize_operator");
     let url = format!(
-        "http://{}.{}.svc.cluster.local:{}/",
+        "http://{}.{}.svc.{}:{}/",
         svc.metadata.name.as_deref().context(NoNameSnafu)?,
         svc.metadata
             .namespace
             .as_deref()
             .context(NoNamespaceSnafu)?,
+        cluster_domain,
         APP_PORT
     );
 

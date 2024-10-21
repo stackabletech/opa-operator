@@ -71,7 +71,7 @@ async fn main() -> Result<(), StartupError> {
         args.common.tracing_target,
     );
 
-    let client = stackable_operator::client::create_client(None)
+    let client = stackable_operator::client::initialize_operator(None)
         .await
         .context(InitKubeSnafu)?;
 

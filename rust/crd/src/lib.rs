@@ -12,16 +12,19 @@ use stackable_operator::{
             Resources, ResourcesFragment,
         },
     },
-    config::{fragment, fragment::Fragment, fragment::ValidationError, merge::Merge},
+    config::{
+        fragment::{self, Fragment, ValidationError},
+        merge::Merge,
+    },
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
     product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
-    role_utils::Role,
-    role_utils::{EmptyRoleConfig, RoleGroup, RoleGroupRef},
+    role_utils::{EmptyRoleConfig, Role, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
     time::Duration,
+    utils::cluster_domain::KUBERNETES_CLUSTER_DOMAIN,
 };
 use strum::{Display, EnumIter, EnumString};
 
@@ -304,10 +307,14 @@ impl OpaCluster {
 
     /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_fqdn(&self) -> Option<String> {
+        let cluster_domain = KUBERNETES_CLUSTER_DOMAIN
+            .get()
+            .expect("KUBERNETES_CLUSTER_DOMAIN must first be set by calling initialize_operator");
         Some(format!(
-            "{}.{}.svc.cluster.local",
+            "{}.{}.svc.{}",
             self.server_role_service_name()?,
-            self.metadata.namespace.as_ref()?
+            self.metadata.namespace.as_ref()?,
+            cluster_domain
         ))
     }
 
