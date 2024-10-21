@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Added support for OPA 0.67.1 ([#616]).
 - The operator can now run on Kubernetes clusters using a non-default cluster domain. It should automatically detect the
   correct domain to use, but you can also use the env var `KUBERNETES_CLUSTER_DOMAIN` to set the domain explicitly
-  or use the helm-chart property `kubernetesClusterDomain` ([#xxx]).
+  or use the helm-chart property `kubernetesClusterDomain` ([#637]).
 
 ### Changed
 
@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
 [#580]: https://github.com/stackabletech/opa-operator/pull/580
 [#616]: https://github.com/stackabletech/opa-operator/pull/616
 [#621]: https://github.com/stackabletech/opa-operator/pull/621
-[#xxx]: https://github.com/stackabletech/opa-operator/pull/xxx
+[#637]: https://github.com/stackabletech/opa-operator/pull/637
 
 ## [24.7.0] - 2024-07-24
 
