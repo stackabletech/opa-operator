@@ -21,7 +21,6 @@ use stackable_operator::{
             watcher,
         },
     },
-    utils::cluster_info::KubernetesClusterInfoOpts,
 };
 use tokio::net::TcpListener;
 
@@ -76,8 +75,6 @@ async fn main() -> Result<(), StartupError> {
         stackable_operator::client::initialize_operator(None, &args.common.cluster_info_opts)
             .await
             .context(InitKubeSnafu)?;
-        .await
-        .context(InitKubeSnafu)?;
 
     let (store, store_w) = reflector::store();
     let rebuild_bundle = || {
