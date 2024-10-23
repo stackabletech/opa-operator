@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
+- Failing to parse one `OpaCluster` should no longer cause the whole operator to stop functioning ([#638]).
 
 ### Removed
 
@@ -32,6 +33,7 @@ All notable changes to this project will be documented in this file.
 [#616]: https://github.com/stackabletech/opa-operator/pull/616
 [#621]: https://github.com/stackabletech/opa-operator/pull/621
 [#637]: https://github.com/stackabletech/opa-operator/pull/637
+[#638]: https://github.com/stackabletech/opa-operator/pull/638
 
 ## [24.7.0] - 2024-07-24
 

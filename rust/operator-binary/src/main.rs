@@ -12,6 +12,7 @@ use stackable_operator::{
         core::v1::{ConfigMap, Service},
     },
     kube::{
+        core::DeserializeGuard,
         runtime::{watcher, Controller},
         Api,
     },
@@ -108,10 +109,10 @@ async fn create_controller(
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
 ) {
-    let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
-    let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
-    let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
-    let services_api: Api<Service> = watch_namespace.get_api(&client);
+    let opa_api: Api<DeserializeGuard<OpaCluster>> = watch_namespace.get_api(&client);
+    let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
+    let configmaps_api: Api<DeserializeGuard<ConfigMap>> = watch_namespace.get_api(&client);
+    let services_api: Api<DeserializeGuard<Service>> = watch_namespace.get_api(&client);
 
     let controller = Controller::new(opa_api, watcher::Config::default())
         .owns(daemonsets_api, watcher::Config::default())

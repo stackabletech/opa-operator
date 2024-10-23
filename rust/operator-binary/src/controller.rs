@@ -43,6 +43,7 @@ use stackable_operator::{
         DeepMerge,
     },
     kube::{
+        core::{error_boundary, DeserializeGuard},
         runtime::{controller::Action, reflector::ObjectRef},
         Resource as KubeResource, ResourceExt,
     },
@@ -146,6 +147,11 @@ pub struct Ctx {
 #[strum_discriminants(derive(IntoStaticStr))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
+    #[snafu(display("OpaCluster object is invalid"))]
+    InvalidOpaCluster {
+        source: error_boundary::InvalidObject,
+    },
+
     #[snafu(display("object does not define meta name"))]
     NoName,
 
@@ -363,9 +369,18 @@ pub struct OpaClusterConfigDecisionLog {
     console: bool,
 }
 
-pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
+pub async fn reconcile_opa(
+    opa: Arc<DeserializeGuard<OpaCluster>>,
+    ctx: Arc<Ctx>,
+) -> Result<Action> {
     tracing::info!("Starting reconcile");
-    let opa_ref = ObjectRef::from_obj(opa.as_ref());
+    let opa = opa
+        .0
+        .as_ref()
+        .map_err(error_boundary::InvalidObject::clone)
+        .context(InvalidOpaClusterSnafu)?;
+    let opa_ref = ObjectRef::from_obj(opa);
+
     let client = &ctx.client;
     let resolved_product_image = opa
         .spec
@@ -385,7 +400,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
         &transform_all_roles_to_config(
-            opa.as_ref(),
+            opa,
             [(
                 opa_role.to_string(),
                 (
@@ -409,11 +424,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+    let vector_aggregator_address = resolve_vector_aggregator_address(opa, client)
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
 
-    let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
+    let server_role_service = build_server_role_service(opa, &resolved_product_image)?;
     // required for discovery config map later
     let server_role_service = cluster_resources
         .add(client, server_role_service)
@@ -424,8 +439,8 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .get_required_labels()
         .context(BuildLabelSnafu)?;
 
-    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), APP_NAME, required_labels)
-        .context(BuildRbacResourcesSnafu)?;
+    let (rbac_sa, rbac_rolebinding) =
+        build_rbac_resources(opa, APP_NAME, required_labels).context(BuildRbacResourcesSnafu)?;
 
     let rbac_sa = cluster_resources
         .add(client, rbac_sa)
@@ -450,15 +465,15 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .context(FailedToResolveConfigSnafu)?;
 
         let rg_configmap = build_server_rolegroup_config_map(
-            &opa,
+            opa,
             &resolved_product_image,
             &rolegroup,
             &merged_config,
             vector_aggregator_address.as_deref(),
         )?;
-        let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
+        let rg_service = build_rolegroup_service(opa, &resolved_product_image, &rolegroup)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
-            &opa,
+            opa,
             &resolved_product_image,
             &opa_role,
             &rolegroup,
@@ -512,13 +527,9 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
-    for discovery_cm in build_discovery_configmaps(
-        opa.as_ref(),
-        opa.as_ref(),
-        &resolved_product_image,
-        &server_role_service,
-    )
-    .context(BuildDiscoveryConfigSnafu)?
+    for discovery_cm in
+        build_discovery_configmaps(opa, opa, &resolved_product_image, &server_role_service)
+            .context(BuildDiscoveryConfigSnafu)?
     {
         cluster_resources
             .add(client, discovery_cm)
@@ -530,14 +541,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
     let status = OpaClusterStatus {
-        conditions: compute_conditions(
-            opa.as_ref(),
-            &[&ds_cond_builder, &cluster_operation_cond_builder],
-        ),
+        conditions: compute_conditions(opa, &[&ds_cond_builder, &cluster_operation_cond_builder]),
     };
 
     client
-        .apply_patch_status(OPERATOR_NAME, &*opa, &status)
+        .apply_patch_status(OPERATOR_NAME, opa, &status)
         .await
         .context(ApplyStatusSnafu)?;
 
@@ -1026,8 +1034,17 @@ fn build_server_rolegroup_daemonset(
     })
 }
 
-pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Action {
-    Action::requeue(*Duration::from_secs(5))
+pub fn error_policy(
+    _obj: Arc<DeserializeGuard<OpaCluster>>,
+    error: &Error,
+    _ctx: Arc<Ctx>,
+) -> Action {
+    match error {
+        // root object is invalid, will be requeued when modified anyway
+        Error::InvalidOpaCluster { .. } => Action::await_change(),
+
+        _ => Action::requeue(*Duration::from_secs(10)),
+    }
 }
 
 fn build_config_file(merged_config: &OpaConfig) -> String {
