@@ -63,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
                     product_config,
                     watch_namespace,
                     tracing_target,
+                    cluster_info_opts,
                 },
         }) => {
             stackable_operator::logging::initialize_logging(
@@ -84,7 +85,9 @@ async fn main() -> anyhow::Result<()> {
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
 
-            let client = client::initialize_operator(Some(OPERATOR_NAME.to_string())).await?;
+            let client =
+                client::initialize_operator(Some(OPERATOR_NAME.to_string()), &cluster_info_opts)
+                    .await?;
             create_controller(
                 client,
                 product_config,

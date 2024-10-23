@@ -7,7 +7,7 @@ use stackable_operator::{
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{ConfigMap, Service},
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
-    utils::cluster_domain::KUBERNETES_CLUSTER_DOMAIN,
+    utils::cluster_info::KubernetesClusterInfo,
 };
 
 #[derive(Snafu, Debug)]
@@ -41,6 +41,7 @@ pub fn build_discovery_configmaps(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
     svc: &Service,
+    cluster_info: &KubernetesClusterInfo,
 ) -> Result<Vec<ConfigMap>, Error> {
     let name = owner.name_any();
     Ok(vec![build_discovery_configmap(
@@ -49,6 +50,7 @@ pub fn build_discovery_configmaps(
         opa,
         resolved_product_image,
         svc,
+        cluster_info,
     )?])
 }
 
@@ -59,19 +61,18 @@ fn build_discovery_configmap(
     opa: &OpaCluster,
     resolved_product_image: &ResolvedProductImage,
     svc: &Service,
+    cluster_info: &KubernetesClusterInfo,
 ) -> Result<ConfigMap, Error> {
-    let cluster_domain = KUBERNETES_CLUSTER_DOMAIN
-        .get()
-        .expect("KUBERNETES_CLUSTER_DOMAIN must first be set by calling initialize_operator");
     let url = format!(
-        "http://{}.{}.svc.{}:{}/",
-        svc.metadata.name.as_deref().context(NoNameSnafu)?,
-        svc.metadata
+        "http://{name}.{namespace}.svc.{cluster_domain}:{port}/",
+        name = svc.metadata.name.as_deref().context(NoNameSnafu)?,
+        namespace = svc
+            .metadata
             .namespace
             .as_deref()
             .context(NoNamespaceSnafu)?,
-        cluster_domain,
-        APP_PORT
+        cluster_domain = cluster_info.cluster_domain,
+        port = APP_PORT
     );
 
     let metadata = ObjectMetaBuilder::new()

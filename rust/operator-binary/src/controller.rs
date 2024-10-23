@@ -527,9 +527,14 @@ pub async fn reconcile_opa(
             .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
-    for discovery_cm in
-        build_discovery_configmaps(opa, opa, &resolved_product_image, &server_role_service)
-            .context(BuildDiscoveryConfigSnafu)?
+    for discovery_cm in build_discovery_configmaps(
+        opa,
+        opa,
+        &resolved_product_image,
+        &server_role_service,
+        &client.kubernetes_cluster_info,
+    )
+    .context(BuildDiscoveryConfigSnafu)?
     {
         cluster_resources
             .add(client, discovery_cm)

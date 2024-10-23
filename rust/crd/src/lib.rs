@@ -24,7 +24,7 @@ use stackable_operator::{
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
     time::Duration,
-    utils::cluster_domain::KUBERNETES_CLUSTER_DOMAIN,
+    utils::cluster_info::KubernetesClusterInfo,
 };
 use strum::{Display, EnumIter, EnumString};
 
@@ -306,15 +306,12 @@ impl OpaCluster {
     }
 
     /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_fqdn(&self) -> Option<String> {
-        let cluster_domain = KUBERNETES_CLUSTER_DOMAIN
-            .get()
-            .expect("KUBERNETES_CLUSTER_DOMAIN must first be set by calling initialize_operator");
+    pub fn server_role_service_fqdn(&self, cluster_info: &KubernetesClusterInfo) -> Option<String> {
         Some(format!(
-            "{}.{}.svc.{}",
-            self.server_role_service_name()?,
-            self.metadata.namespace.as_ref()?,
-            cluster_domain
+            "{role_service_name}.{namespace}.svc.{cluster_domain}",
+            role_service_name = self.server_role_service_name()?,
+            namespace = self.metadata.namespace.as_ref()?,
+            cluster_domain = cluster_info.cluster_domain
         ))
     }
 
