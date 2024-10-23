@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Added regorule library for accessing user-info-fetcher ([#580]).
 - Added support for OPA 0.67.1 ([#616]).
+- The operator can now run on Kubernetes clusters using a non-default cluster domain.
+  Use the env var `KUBERNETES_CLUSTER_DOMAIN` or the operator Helm chart property `kubernetesClusterDomain` to set a non-default cluster domain ([#637]).
 
 ### Changed
 
@@ -29,6 +31,7 @@ All notable changes to this project will be documented in this file.
 [#580]: https://github.com/stackabletech/opa-operator/pull/580
 [#616]: https://github.com/stackabletech/opa-operator/pull/616
 [#621]: https://github.com/stackabletech/opa-operator/pull/621
+[#637]: https://github.com/stackabletech/opa-operator/pull/637
 [#638]: https://github.com/stackabletech/opa-operator/pull/638
 
 ## [24.7.0] - 2024-07-24

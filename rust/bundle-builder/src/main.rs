@@ -71,9 +71,10 @@ async fn main() -> Result<(), StartupError> {
         args.common.tracing_target,
     );
 
-    let client = stackable_operator::client::create_client(None)
-        .await
-        .context(InitKubeSnafu)?;
+    let client =
+        stackable_operator::client::initialize_operator(None, &args.common.cluster_info_opts)
+            .await
+            .context(InitKubeSnafu)?;
 
     let (store, store_w) = reflector::store();
     let rebuild_bundle = || {
