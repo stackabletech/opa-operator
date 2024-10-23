@@ -72,11 +72,10 @@ async fn main() -> Result<(), StartupError> {
         args.common.tracing_target,
     );
 
-    // This is just a dummy for [`stackable_operator::client::initialize_operator`] and should not be used!
-    let _cluster_info_opts = KubernetesClusterInfoOpts {
-        kubernetes_cluster_domain: None,
-    };
-    let client = stackable_operator::client::initialize_operator(None, &_cluster_info_opts)
+    let client =
+        stackable_operator::client::initialize_operator(None, &args.common.cluster_info_opts)
+            .await
+            .context(InitKubeSnafu)?;
         .await
         .context(InitKubeSnafu)?;
 
