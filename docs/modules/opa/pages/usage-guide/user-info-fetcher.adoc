@@ -85,7 +85,7 @@ spec:
     userInfo:
       backend:
         experimentalActiveDirectory: # <1>
-          ldapServer: sble-adds.sble.test # <2>
+          ldapServer: sble-addc.sble.test # <2>
           baseDistinguishedName: DC=sble,DC=test # <3>
           customAttributeMappings: # <4>
             country: c # <5>
