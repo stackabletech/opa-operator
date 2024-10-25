@@ -1,4 +1,5 @@
 = User info fetcher
+:description: Experimental User Info Fetcher for OPA retrieves data from backends like Keycloak. Integrate extra user details into Rego rules for enhanced policy management.
 
 WARNING: This feature is experimental, and subject to change.
 
@@ -15,7 +16,7 @@ metadata:
   name: opa
 spec:
   image:
-    productVersion: 0.61.0
+    productVersion: 0.67.1
   clusterConfig:
     userInfo: # <1>
       backend:
@@ -125,7 +126,7 @@ An example of the returned structure:
 
 NOTE: The exact formats of `id` and `groups` will vary depending on the xref:#backends[backend] in use. This example is using the xref:#backend-keycloak[] backend.
 
-For example, the following rule will allow access for users in the `/admin` group:
+For example, the following rule allows access for users in the `/admin` group:
 
 [source,rego]
 ----

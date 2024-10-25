@@ -2,11 +2,13 @@
 dimensions:
   - name: opa
     values:
-      - 0.61.0
-      - 0.66.0
+      # To use a custom image, add a comma and the full name after the product version
+      - 0.67.1,docker.stackable.tech/stackable/opa:0.67.1-stackable0.0.0-dev
+      - 0.66.0,docker.stackable.tech/stackable/opa:0.66.0-stackable0.0.0-dev
   - name: opa-latest
     values:
-      - 0.66.0
+      # To use a custom image, add a comma and the full name after the product version
+      - 0.67.1,docker.stackable.tech/stackable/opa:0.67.1-stackable0.0.0-dev
   - name: keycloak
     values:
       - 23.0.1

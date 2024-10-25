@@ -1,7 +1,7 @@
 use std::{io::Cursor, path::Path};
 
 use snafu::{ResultExt as _, Snafu};
-use stackable_operator::commons::authentication::tls::TlsClientDetails;
+use stackable_operator::commons::tls_verification::TlsClientDetails;
 use tokio::{fs::File, io::AsyncReadExt};
 
 #[derive(Debug, Snafu)]

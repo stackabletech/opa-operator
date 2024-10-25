@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
-    commons::authentication::tls::TlsClientDetails,
+    commons::{networking::HostName, tls_verification::TlsClientDetails},
     schemars::{self, JsonSchema},
     time::Duration,
 };
@@ -48,7 +48,7 @@ impl Default for Backend {
 #[serde(rename_all = "camelCase")]
 pub struct KeycloakBackend {
     /// Hostname of the identity provider, e.g. `my.keycloak.corp`.
-    pub hostname: String,
+    pub hostname: HostName,
 
     /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
     pub port: Option<u16>,

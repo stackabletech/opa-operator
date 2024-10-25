@@ -15,6 +15,7 @@ use stackable_opa_crd::{
 };
 use stackable_operator::{
     builder::{
+        self,
         configmap::ConfigMapBuilder,
         meta::ObjectMetaBuilder,
         pod::{
@@ -27,10 +28,10 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        authentication::tls::TlsClientDetailsError,
         product_image_selection::ResolvedProductImage,
         rbac::build_rbac_resources,
         secret_class::{SecretClassVolume, SecretClassVolumeScope},
+        tls_verification::TlsClientDetailsError,
     },
     k8s_openapi::{
         api::{
@@ -44,6 +45,7 @@ use stackable_operator::{
         DeepMerge,
     },
     kube::{
+        core::{error_boundary, DeserializeGuard},
         runtime::{controller::Action, reflector::ObjectRef},
         Resource as KubeResource, ResourceExt,
     },
@@ -53,7 +55,9 @@ use stackable_operator::{
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
-        framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
+        framework::{
+            create_vector_shutdown_file_command, remove_vector_shutdown_file_command, LoggingError,
+        },
         spec::{
             AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
             ContainerLogConfigChoice, LogLevel,
@@ -147,6 +151,11 @@ pub struct Ctx {
 #[strum_discriminants(derive(IntoStaticStr))]
 #[allow(clippy::enum_variant_names)]
 pub enum Error {
+    #[snafu(display("OpaCluster object is invalid"))]
+    InvalidOpaCluster {
+        source: error_boundary::InvalidObject,
+    },
+
     #[snafu(display("object does not define meta name"))]
     NoName,
 
@@ -279,10 +288,31 @@ pub enum Error {
         source: stackable_operator::builder::meta::Error,
     },
 
+    #[snafu(display("failed to build volume spec for the User Info Fetcher TLS config"))]
+    UserInfoFetcherKerberosVolume {
+        source: stackable_operator::builder::pod::Error,
+    },
+
+    #[snafu(display("failed to build volume mount spec for the User Info Fetcher TLS config"))]
+    UserInfoFetcherKerberosVolumeMount {
+        source: stackable_operator::builder::pod::container::Error,
+    },
+
     #[snafu(display(
-        "failed to build volume or volume mount spec for the Keycloak backend TLS config"
+        "failed to build volume or volume mount spec for the User Info Fetcher TLS config"
     ))]
-    VolumeAndMounts { source: TlsClientDetailsError },
+    UserInfoFetcherTlsVolumeAndMounts { source: TlsClientDetailsError },
+
+    #[snafu(display("failed to configure logging"))]
+    ConfigureLogging { source: LoggingError },
+
+    #[snafu(display("failed to add needed volume"))]
+    AddVolume { source: builder::pod::Error },
+
+    #[snafu(display("failed to add needed volumeMount"))]
+    AddVolumeMount {
+        source: builder::pod::container::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -353,9 +383,18 @@ pub struct OpaClusterConfigDecisionLog {
     console: bool,
 }
 
-pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action> {
+pub async fn reconcile_opa(
+    opa: Arc<DeserializeGuard<OpaCluster>>,
+    ctx: Arc<Ctx>,
+) -> Result<Action> {
     tracing::info!("Starting reconcile");
-    let opa_ref = ObjectRef::from_obj(opa.as_ref());
+    let opa = opa
+        .0
+        .as_ref()
+        .map_err(error_boundary::InvalidObject::clone)
+        .context(InvalidOpaClusterSnafu)?;
+    let opa_ref = ObjectRef::from_obj(opa);
+
     let client = &ctx.client;
     let resolved_product_image = opa
         .spec
@@ -375,7 +414,7 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     let validated_config = validate_all_roles_and_groups_config(
         &resolved_product_image.product_version,
         &transform_all_roles_to_config(
-            opa.as_ref(),
+            opa,
             [(
                 opa_role.to_string(),
                 (
@@ -399,11 +438,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(&opa, client)
+    let vector_aggregator_address = resolve_vector_aggregator_address(opa, client)
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
 
-    let server_role_service = build_server_role_service(&opa, &resolved_product_image)?;
+    let server_role_service = build_server_role_service(opa, &resolved_product_image)?;
     // required for discovery config map later
     let server_role_service = cluster_resources
         .add(client, server_role_service)
@@ -414,8 +453,8 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         .get_required_labels()
         .context(BuildLabelSnafu)?;
 
-    let (rbac_sa, rbac_rolebinding) = build_rbac_resources(opa.as_ref(), APP_NAME, required_labels)
-        .context(BuildRbacResourcesSnafu)?;
+    let (rbac_sa, rbac_rolebinding) =
+        build_rbac_resources(opa, APP_NAME, required_labels).context(BuildRbacResourcesSnafu)?;
 
     let rbac_sa = cluster_resources
         .add(client, rbac_sa)
@@ -440,15 +479,15 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
             .context(FailedToResolveConfigSnafu)?;
 
         let rg_configmap = build_server_rolegroup_config_map(
-            &opa,
+            opa,
             &resolved_product_image,
             &rolegroup,
             &merged_config,
             vector_aggregator_address.as_deref(),
         )?;
-        let rg_service = build_rolegroup_service(&opa, &resolved_product_image, &rolegroup)?;
+        let rg_service = build_rolegroup_service(opa, &resolved_product_image, &rolegroup)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
-            &opa,
+            opa,
             &resolved_product_image,
             &opa_role,
             &rolegroup,
@@ -503,10 +542,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
     }
 
     for discovery_cm in build_discovery_configmaps(
-        opa.as_ref(),
-        opa.as_ref(),
+        opa,
+        opa,
         &resolved_product_image,
         &server_role_service,
+        &client.kubernetes_cluster_info,
     )
     .context(BuildDiscoveryConfigSnafu)?
     {
@@ -520,14 +560,11 @@ pub async fn reconcile_opa(opa: Arc<OpaCluster>, ctx: Arc<Ctx>) -> Result<Action
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
     let status = OpaClusterStatus {
-        conditions: compute_conditions(
-            opa.as_ref(),
-            &[&ds_cond_builder, &cluster_operation_cond_builder],
-        ),
+        conditions: compute_conditions(opa, &[&ds_cond_builder, &cluster_operation_cond_builder]),
     };
 
     client
-        .apply_patch_status(OPERATOR_NAME, &*opa, &status)
+        .apply_patch_status(OPERATOR_NAME, opa, &status)
         .await
         .context(ApplyStatusSnafu)?;
 
@@ -750,7 +787,9 @@ fn build_server_rolegroup_daemonset(
         )
         .join(" && ")])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
@@ -777,7 +816,9 @@ fn build_server_rolegroup_daemonset(
             format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .context(AddVolumeMountSnafu)?
         .resources(
             ResourceRequirementsBuilder::new()
                 .with_cpu_request("100m")
@@ -824,7 +865,9 @@ fn build_server_rolegroup_daemonset(
         .add_env_vars(env)
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+        .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into())
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
@@ -867,11 +910,13 @@ fn build_server_rolegroup_daemonset(
                 .with_config_map(rolegroup_ref.object_name())
                 .build(),
         )
+        .context(AddVolumeSnafu)?
         .add_volume(
             VolumeBuilder::new(BUNDLES_VOLUME_NAME)
                 .with_empty_dir(None::<String>, None)
                 .build(),
         )
+        .context(AddVolumeSnafu)?
         .add_volume(
             VolumeBuilder::new(LOG_VOLUME_NAME)
                 .empty_dir(EmptyDirVolumeSource {
@@ -886,6 +931,7 @@ fn build_server_rolegroup_daemonset(
                 })
                 .build(),
         )
+        .context(AddVolumeSnafu)?
         .service_account_name(sa_name)
         .security_context(
             PodSecurityContextBuilder::new()
@@ -906,6 +952,7 @@ fn build_server_rolegroup_daemonset(
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+            .context(AddVolumeMountSnafu)?
             .resources(
                 ResourceRequirementsBuilder::new()
                     .with_cpu_request("100m")
@@ -926,15 +973,19 @@ fn build_server_rolegroup_daemonset(
                             pod: true,
                             node: true,
                             services: Vec::new(),
+                            listener_volumes: Vec::new(),
                         }),
                     )
                     .to_volume(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME)
                     .unwrap(),
-                );
-                cb_user_info_fetcher.add_volume_mount(
-                    USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
-                    USER_INFO_FETCHER_KERBEROS_DIR,
-                );
+                )
+                .context(UserInfoFetcherKerberosVolumeSnafu)?;
+                cb_user_info_fetcher
+                    .add_volume_mount(
+                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        USER_INFO_FETCHER_KERBEROS_DIR,
+                    )
+                    .context(UserInfoFetcherKerberosVolumeMountSnafu)?;
                 cb_user_info_fetcher.add_env_var(
                     "KRB5_CONFIG",
                     format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
@@ -946,7 +997,7 @@ fn build_server_rolegroup_daemonset(
                 cb_user_info_fetcher.add_env_var("KRB5CCNAME", "MEMORY:".to_string());
                 ad.tls
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(VolumeAndMountsSnafu)?;
+                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
             user_info_fetcher::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
@@ -956,15 +1007,18 @@ fn build_server_rolegroup_daemonset(
                             ..Default::default()
                         })
                         .build(),
-                );
-                cb_user_info_fetcher.add_volume_mount(
-                    USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-                    USER_INFO_FETCHER_CREDENTIALS_DIR,
-                );
+                )
+                .context(AddVolumeSnafu)?;
+                cb_user_info_fetcher
+                    .add_volume_mount(
+                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                        USER_INFO_FETCHER_CREDENTIALS_DIR,
+                    )
+                    .context(AddVolumeMountSnafu)?;
                 keycloak
                     .tls
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(VolumeAndMountsSnafu)?;
+                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
         }
 
@@ -972,18 +1026,21 @@ fn build_server_rolegroup_daemonset(
     }
 
     if merged_config.logging.enable_vector_agent {
-        pb.add_container(product_logging::framework::vector_container(
-            resolved_product_image,
-            CONFIG_VOLUME_NAME,
-            LOG_VOLUME_NAME,
-            merged_config.logging.containers.get(&Container::Vector),
-            ResourceRequirementsBuilder::new()
-                .with_cpu_request("250m")
-                .with_cpu_limit("500m")
-                .with_memory_request("128Mi")
-                .with_memory_limit("128Mi")
-                .build(),
-        ));
+        pb.add_container(
+            product_logging::framework::vector_container(
+                resolved_product_image,
+                CONFIG_VOLUME_NAME,
+                LOG_VOLUME_NAME,
+                merged_config.logging.containers.get(&Container::Vector),
+                ResourceRequirementsBuilder::new()
+                    .with_cpu_request("250m")
+                    .with_cpu_limit("500m")
+                    .with_memory_request("128Mi")
+                    .with_memory_limit("128Mi")
+                    .build(),
+            )
+            .context(ConfigureLoggingSnafu)?,
+        );
     }
 
     add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;
@@ -1030,8 +1087,17 @@ fn build_server_rolegroup_daemonset(
     })
 }
 
-pub fn error_policy(_obj: Arc<OpaCluster>, _error: &Error, _ctx: Arc<Ctx>) -> Action {
-    Action::requeue(*Duration::from_secs(5))
+pub fn error_policy(
+    _obj: Arc<DeserializeGuard<OpaCluster>>,
+    error: &Error,
+    _ctx: Arc<Ctx>,
+) -> Action {
+    match error {
+        // root object is invalid, will be requeued when modified anyway
+        Error::InvalidOpaCluster { .. } => Action::await_change(),
+
+        _ => Action::requeue(*Duration::from_secs(10)),
+    }
 }
 
 fn build_config_file(merged_config: &OpaConfig) -> String {
