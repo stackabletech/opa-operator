@@ -90,6 +90,7 @@ const LDAP_FIELD_USER_NAME: &str = "userPrincipalName";
 const LDAP_FIELD_USER_PRIMARY_GROUP_RID: &str = "primaryGroupID";
 const LDAP_FIELD_GROUP_MEMBER: &str = "member";
 
+#[tracing::instrument(skip(tls, base_distinguished_name, custom_attribute_mappings))]
 pub(crate) async fn get_user_info(
     request: &UserInfoRequest,
     ldap_server: &str,
@@ -139,11 +140,17 @@ pub(crate) async fn get_user_info(
     .into_iter()
     .chain(custom_attribute_mappings.values().map(String::as_str))
     .collect::<Vec<&str>>();
+    let user_query_filter = format!("(&(objectClass=user)({user_filter}))");
+    tracing::debug!(
+        user_query_filter,
+        ?requested_user_attrs,
+        "requesting user from LDAP"
+    );
     let user = ldap
         .search(
             base_distinguished_name,
             Scope::Subtree,
-            &format!("(&(objectClass=user)({user_filter}))"),
+            &user_query_filter,
             requested_user_attrs,
         )
         .await
@@ -155,6 +162,7 @@ pub(crate) async fn get_user_info(
         .next()
         .context(UserNotFoundSnafu { request })?;
     let user = SearchEntry::construct(user);
+    tracing::debug!(?user, "got user from LDAP");
     user_attributes(
         &mut ldap,
         base_distinguished_name,
@@ -212,13 +220,23 @@ async fn user_attributes(
                     }
 
                     // Otherwise, try to read the string value(s)
-                    _ => user
-                        .attrs
-                        .get(ldap_key)?
-                        .iter()
-                        .cloned()
-                        .map(serde_json::Value::String)
-                        .collect(),
+                    _ => {
+                        let Some(values) = user.attrs.get(ldap_key) else {
+                            if user.bin_attrs.contains_key(ldap_key) {
+                                tracing::warn!(
+                                    ?uif_key,
+                                    ?ldap_key,
+                                    "LDAP custom attribute is only returned as binary, which is not supported",
+                                );
+                            }
+                            return None;
+                        };
+                        values
+                            .iter()
+                            .cloned()
+                            .map(serde_json::Value::String)
+                            .collect::<Vec<_>>()
+                    }
                 }),
             ))
         })
@@ -277,6 +295,12 @@ async fn user_group_distinguished_names(
         .last_mut()
         .context(UserSidHasNoSubauthoritiesSnafu { user_dn: &user.dn })? =
         primary_group_relative_id;
+    tracing::debug!(
+        %user_sid,
+        %primary_group_sid,
+        %primary_group_relative_id,
+        "computed primary group SID for user",
+    );
     let primary_group_filter = format!("({LDAP_FIELD_OBJECT_SECURITY_ID}={primary_group_sid})");
 
     // We can't trivially make the primary group query recursive... but since we know the primary group's SID,
@@ -288,12 +312,19 @@ async fn user_group_distinguished_names(
     // Let's put it all together, and make it go...
     let groups_filter =
         format!("(|{primary_group_filter}{primary_group_parents_filter}{secondary_groups_filter})");
+    let groups_query_filter = format!("(&(objectClass=group){groups_filter})");
+    let requested_group_attrs = [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME];
+    tracing::debug!(
+        groups_query_filter,
+        ?requested_group_attrs,
+        "requesting user groups from LDAP",
+    );
     Ok(ldap
         .search(
             base_dn,
             Scope::Subtree,
-            &format!("(&(objectClass=group){groups_filter})"),
-            [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME],
+            &groups_query_filter,
+            requested_group_attrs,
         )
         .await
         .context(RequestLdapSnafu)?
