@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Display,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -12,11 +13,11 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use tokio::{fs::File, io::AsyncReadExt, net::TcpListener};
+use tokio::net::TcpListener;
 
 mod backend;
 mod http_error;
-mod util;
+mod utils;
 
 pub const APP_NAME: &str = "opa-user-info-fetcher";
 
@@ -67,14 +68,8 @@ enum StartupError {
     #[snafu(display("failed to construct http client"))]
     ConstructHttpClient { source: reqwest::Error },
 
-    #[snafu(display("failed to open ca certificate"))]
-    OpenCaCert { source: std::io::Error },
-
-    #[snafu(display("failed to read ca certificate"))]
-    ReadCaCert { source: std::io::Error },
-
-    #[snafu(display("failed to parse ca certificate"))]
-    ParseCaCert { source: reqwest::Error },
+    #[snafu(display("failed to configure TLS"))]
+    ConfigureTls { source: utils::tls::Error },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -122,6 +117,10 @@ async fn main() -> Result<(), StartupError> {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
+        crd::Backend::ActiveDirectory(_) => Credentials {
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -131,23 +130,9 @@ async fn main() -> Result<(), StartupError> {
     // I know it is for setting up the client, but an idea: make a trait for implementing backends
     // The trait can do all this for a genric client using an implementation on the trait (eg: get_http_client() which will call self.uses_tls())
     if let crd::Backend::Keycloak(keycloak) = &config.backend {
-        if keycloak.tls.uses_tls() && !keycloak.tls.uses_tls_verification() {
-            client_builder = client_builder.danger_accept_invalid_certs(true);
-        }
-        if let Some(tls_ca_cert_mount_path) = keycloak.tls.tls_ca_cert_mount_path() {
-            let mut buf = Vec::new();
-            File::open(tls_ca_cert_mount_path)
-                .await
-                .context(OpenCaCertSnafu)?
-                .read_to_end(&mut buf)
-                .await
-                .context(ReadCaCertSnafu)?;
-            let ca_cert = reqwest::Certificate::from_pem(&buf).context(ParseCaCertSnafu)?;
-
-            client_builder = client_builder
-                .tls_built_in_root_certs(false)
-                .add_root_certificate(ca_cert);
-        }
+        client_builder = utils::tls::configure_reqwest(&keycloak.tls, client_builder)
+            .await
+            .context(ConfigureTlsSnafu)?;
     }
     let http = client_builder.build().context(ConstructHttpClientSnafu)?;
 
@@ -195,6 +180,30 @@ struct UserInfoRequestByName {
     username: String,
 }
 
+/// Renders [`UserInfoRequest`] for use in error messages.
+///
+/// An independent type rather than an impl on [`UserInfoRequest`], since it is
+/// not suitable for use in other contexts.
+#[derive(Debug, Clone)]
+struct ErrorRenderUserInfoRequest(UserInfoRequest);
+impl Display for ErrorRenderUserInfoRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
+                write!(f, "with id {id:?}")
+            }
+            UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName { username }) => {
+                write!(f, "with username {username:?}")
+            }
+        }
+    }
+}
+impl From<&UserInfoRequest> for ErrorRenderUserInfoRequest {
+    fn from(value: &UserInfoRequest) -> Self {
+        Self(value.clone())
+    }
+}
+
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
@@ -216,6 +225,11 @@ enum GetUserInfoError {
         "failed to get user information from the XFSC Authentication & Authorization Service"
     ))]
     ExperimentalXfscAas { source: backend::xfsc_aas::Error },
+
+    #[snafu(display("failed to get user information from Active Directory"))]
+    ActiveDirectory {
+        source: backend::active_directory::Error,
+    },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -229,6 +243,7 @@ impl http_error::Error for GetUserInfoError {
         match self {
             Self::Keycloak { source } => source.status_code(),
             Self::ExperimentalXfscAas { source } => source.status_code(),
+            Self::ActiveDirectory { source } => source.status_code(),
         }
     }
 }
@@ -277,6 +292,15 @@ async fn get_user_info(
                             .await
                             .context(get_user_info_error::ExperimentalXfscAasSnafu)
                     }
+                    crd::Backend::ActiveDirectory(ad) => backend::active_directory::get_user_info(
+                        &req,
+                        &ad.ldap_server,
+                        &ad.tls,
+                        &ad.base_distinguished_name,
+                        &ad.custom_attribute_mappings,
+                    )
+                    .await
+                    .context(get_user_info_error::ActiveDirectorySnafu),
                 }
             })
             .await?,

@@ -28,7 +28,9 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        product_image_selection::ResolvedProductImage, rbac::build_rbac_resources,
+        product_image_selection::ResolvedProductImage,
+        rbac::build_rbac_resources,
+        secret_class::{SecretClassVolume, SecretClassVolumeScope},
         tls_verification::TlsClientDetailsError,
     },
     k8s_openapi::{
@@ -98,6 +100,8 @@ const BUNDLES_VOLUME_NAME: &str = "bundles";
 const BUNDLES_DIR: &str = "/bundles";
 const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
+const USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: &str = "kerberos";
+const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -284,10 +288,20 @@ pub enum Error {
         source: stackable_operator::builder::meta::Error,
     },
 
+    #[snafu(display("failed to build volume spec for the User Info Fetcher TLS config"))]
+    UserInfoFetcherKerberosVolume {
+        source: stackable_operator::builder::pod::Error,
+    },
+
+    #[snafu(display("failed to build volume mount spec for the User Info Fetcher TLS config"))]
+    UserInfoFetcherKerberosVolumeMount {
+        source: stackable_operator::builder::pod::container::Error,
+    },
+
     #[snafu(display(
-        "failed to build volume or volume mount spec for the Keycloak backend TLS config"
+        "failed to build volume or volume mount spec for the User Info Fetcher TLS config"
     ))]
-    VolumeAndMounts { source: TlsClientDetailsError },
+    UserInfoFetcherTlsVolumeAndMounts { source: TlsClientDetailsError },
 
     #[snafu(display("failed to configure logging"))]
     ConfigureLogging { source: LoggingError },
@@ -951,6 +965,40 @@ fn build_server_rolegroup_daemonset(
         match &user_info.backend {
             user_info_fetcher::Backend::None {} => {}
             user_info_fetcher::Backend::ExperimentalXfscAas(_) => {}
+            user_info_fetcher::Backend::ActiveDirectory(ad) => {
+                pb.add_volume(
+                    SecretClassVolume::new(
+                        ad.kerberos_secret_class_name.clone(),
+                        Some(SecretClassVolumeScope {
+                            pod: true,
+                            node: true,
+                            services: Vec::new(),
+                            listener_volumes: Vec::new(),
+                        }),
+                    )
+                    .to_volume(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME)
+                    .unwrap(),
+                )
+                .context(UserInfoFetcherKerberosVolumeSnafu)?;
+                cb_user_info_fetcher
+                    .add_volume_mount(
+                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        USER_INFO_FETCHER_KERBEROS_DIR,
+                    )
+                    .context(UserInfoFetcherKerberosVolumeMountSnafu)?;
+                cb_user_info_fetcher.add_env_var(
+                    "KRB5_CONFIG",
+                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
+                );
+                cb_user_info_fetcher.add_env_var(
+                    "KRB5_CLIENT_KTNAME",
+                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
+                );
+                cb_user_info_fetcher.add_env_var("KRB5CCNAME", "MEMORY:".to_string());
+                ad.tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
+            }
             user_info_fetcher::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
@@ -970,7 +1018,7 @@ fn build_server_rolegroup_daemonset(
                 keycloak
                     .tls
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(VolumeAndMountsSnafu)?;
+                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
         }
 
