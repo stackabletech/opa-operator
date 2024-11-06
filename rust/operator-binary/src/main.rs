@@ -12,6 +12,7 @@ use stackable_operator::{
         core::v1::{ConfigMap, Service},
     },
     kube::{
+        core::DeserializeGuard,
         runtime::{watcher, Controller},
         Api,
     },
@@ -62,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
                     product_config,
                     watch_namespace,
                     tracing_target,
+                    cluster_info_opts,
                 },
         }) => {
             stackable_operator::logging::initialize_logging(
@@ -83,7 +85,9 @@ async fn main() -> anyhow::Result<()> {
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
 
-            let client = client::create_client(Some(OPERATOR_NAME.to_string())).await?;
+            let client =
+                client::initialize_operator(Some(OPERATOR_NAME.to_string()), &cluster_info_opts)
+                    .await?;
             create_controller(
                 client,
                 product_config,
@@ -108,10 +112,10 @@ async fn create_controller(
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
 ) {
-    let opa_api: Api<OpaCluster> = watch_namespace.get_api(&client);
-    let daemonsets_api: Api<DaemonSet> = watch_namespace.get_api(&client);
-    let configmaps_api: Api<ConfigMap> = watch_namespace.get_api(&client);
-    let services_api: Api<Service> = watch_namespace.get_api(&client);
+    let opa_api: Api<DeserializeGuard<OpaCluster>> = watch_namespace.get_api(&client);
+    let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
+    let configmaps_api: Api<DeserializeGuard<ConfigMap>> = watch_namespace.get_api(&client);
+    let services_api: Api<DeserializeGuard<Service>> = watch_namespace.get_api(&client);
 
     let controller = Controller::new(opa_api, watcher::Config::default())
         .owns(daemonsets_api, watcher::Config::default())

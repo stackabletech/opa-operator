@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
-    commons::authentication::tls::TlsClientDetails,
+    commons::{networking::HostName, tls_verification::TlsClientDetails},
     schemars::{self, JsonSchema},
     time::Duration,
 };
@@ -82,6 +84,10 @@ pub enum Backend {
     /// Backend that fetches user information from the Gaia-X
     /// Cross Federation Services Components (XFSC) Authentication & Authorization Service.
     ExperimentalXfscAas(AasBackend),
+
+    /// Backend that fetches user information from Active Directory
+    #[serde(rename = "experimentalActiveDirectory")]
+    ActiveDirectory(ActiveDirectoryBackend),
 }
 
 impl Default for Backend {
@@ -94,7 +100,7 @@ impl Default for Backend {
 #[serde(rename_all = "camelCase")]
 pub struct KeycloakBackend {
     /// Hostname of the identity provider, e.g. `my.keycloak.corp`.
-    pub hostname: String,
+    pub hostname: HostName,
 
     /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
     pub port: Option<u16>,
@@ -138,6 +144,27 @@ pub struct AasBackend {
 
 fn aas_default_port() -> u16 {
     5000
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveDirectoryBackend {
+    /// Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
+    pub ldap_server: String,
+
+    /// The root Distinguished Name (DN) where users and groups are located.
+    pub base_distinguished_name: String,
+
+    /// The name of the Kerberos SecretClass.
+    pub kerberos_secret_class_name: String,
+
+    /// Use a TLS connection. If not specified then no TLS will be used.
+    #[serde(flatten)]
+    pub tls: TlsClientDetails,
+
+    /// Custom attributes, and their LDAP attribute names.
+    #[serde(default)]
+    pub custom_attribute_mappings: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]

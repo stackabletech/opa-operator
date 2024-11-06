@@ -1,4 +1,5 @@
 = User info fetcher
+:description: Experimental User Info Fetcher for OPA retrieves data from backends like Keycloak. Integrate extra user details into Rego rules for enhanced policy management.
 
 WARNING: This feature is experimental, and subject to change.
 
@@ -30,8 +31,8 @@ spec:
           clientCredentialsSecret: user-info-fetcher-client-credentials # <3>
           adminRealm: master # <4>
           userRealm: master # <4>
-          cache: # optional, enabled by default
-            entryTimeToLive: 60s # optional, defaults to 60s
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
   servers:
     roleGroups:
       default: {}
@@ -46,20 +47,64 @@ stringData:
 ----
 
 <1> Enable the `user-info-fetcher` sidecar
-<2> Enable TLS verification using the CA from the `tls` secretClass.
+<2> Enable TLS verification using the CA from the `tls` SecretClass.
 <3> Obtain Keycloak API credentials from the specified secret. The Secret must have `clientId` and `clientSecret` entries.
 <4> Refer to the applicable realm in your Keycloak server.
 
 Currently the following backends are supported:
 
-* <<_keycloak>>
+* xref:#backend-keycloak[]
+* xref:#backend-activedirectory[]
 
-== Keycloak
+[#backends]
+== Backends
+
+The user info fetcher can fetch data from a few different backends. We currently recommend the xref:#backend-keycloak[] backend.
+
+[#backend-keycloak]
+=== Keycloak
 
 // todo: maybe this section should be under a Tutorial?
 Fetch groups and extra credentials, but not roles.
 
 NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
+
+[#backend-activedirectory]
+=== Active Directory
+
+WARNING: The Active Directory backend is experimental, and subject to change.
+
+Fetches user attributes and groups over LDAP.
+
+For this to work user-info-fetcher needs to be provided with a Kerberos keytab that enables it to access Active Directory.
+This is provided by a configurable SecretClass.
+[source,yaml]
+----
+spec:
+  clusterConfig:
+    userInfo:
+      backend:
+        experimentalActiveDirectory: # <1>
+          ldapServer: sble-addc.sble.test # <2>
+          baseDistinguishedName: DC=sble,DC=test # <3>
+          customAttributeMappings: # <4>
+            country: c # <5>
+          kerberosSecretClassName: kerberos-ad # <6>
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls-ad # <7>
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
+----
+<1> Enables the Active Directory backend
+<2> The hostname of the domain controller
+<3> The distinguished name to search, users and groups outside of this will not be seen
+<4> Arbitrary LDAP attributes can be requested to be fetched
+<5> https://learn.microsoft.com/en-us/windows/win32/ad/address-book-properties[`c`] stores the ISO-3166 country code of the user
+<6> The name of the SecretClass that knows how to create Kerberos keytabs trusted by Active Directory
+<7> The name of the SecretClass that contains the Active Directory's root CA certificate(s)
 
 == User info fetcher API
 
@@ -79,7 +124,9 @@ An example of the returned structure:
 }
 ----
 
-For example, the following rule will allow access for users in the `/admin` group:
+NOTE: The exact formats of `id` and `groups` will vary depending on the xref:#backends[backend] in use. This example is using the xref:#backend-keycloak[] backend.
+
+For example, the following rule allows access for users in the `/admin` group:
 
 [source,rego]
 ----

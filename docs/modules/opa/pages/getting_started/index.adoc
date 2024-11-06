@@ -1,18 +1,19 @@
 = Getting started
+:description: Get started with OPA using Stackable Operator. Install, set up OPA, create a policy rule, and query it in Kubernetes.
 
-This guide will get you started with the OpenPolicyAgent (OPA) using the Stackable operator.
-It will guide you through the installation of the operator, setting up your first OPA instance, creating a policy rule and querying it.
+This guide gets you started with the OpenPolicyAgent (OPA) using the Stackable operator.
+It guides you through the installation of the operator, setting up your first OPA instance, creating a policy rule and querying it.
 
 == Prerequisites
 
-You will need:
+You need:
 
 * a Kubernetes cluster
 * kubectl
 * curl
 * optional: Helm
 
-Resource sizing depends on cluster type(s), usage and scope, but as a starting point we recommend a minimum of the following resources for this operator:
+Resource sizing depends on cluster type(s), usage and scope, but as a starting point a minimum of the following resources is recommended for this operator:
 
 * 0.2 cores (e.g. i5 or similar)
 * 256MB RAM

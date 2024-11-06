@@ -1,4 +1,5 @@
 = Defining policies
+:description: Define OPA policies using Rego in ConfigMaps. Mark them with a bundle label and include Rego rules to deploy and manage your policies effectively.
 :rego-docs: https://www.openpolicyagent.org/docs/latest/policy-language/
 
 You can define policies by using Rego, OPAs {rego-docs}[policy language].

@@ -1,11 +1,12 @@
 = First steps
+:description: Set up the OPA with Stackable operator, deploy your first policy rule, and query it from the command line in Kubernetes.
 :docs-policy-language: https://www.openpolicyagent.org/docs/latest/policy-language/
 
-After you went through the xref:getting_started/installation.adoc[], on this page you will deploy OPA, deploy your first rule and query it from the command line.
+After you went through the xref:getting_started/installation.adoc[], on this page you deploy OPA, deploy your first rule and query it from the command line.
 
 == Deploy OPA
 
-To deploy OPA, you create an OpaCluster resource in Kubernetes and the operator will create the OPA instance.
+To deploy OPA, you create an OpaCluster resource in Kubernetes and the operator creates the OPA Stacklet.
 Create a file called `opa.yaml` with the following contents:
 
 [source,yaml]
@@ -16,9 +17,9 @@ and apply it:
 [source,bash]
 include::example$getting_started/getting_started.sh[tag=apply-opa-cluster]
 
-This will create an OPA cluster.
+This creates an OPA cluster.
 The operator deploys a DaemonSet, which means that an OPA Pod is deployed on every Node of the cluster.
-This reduces network traffic and improves latency for decision requests, since every other Pod making decision requests will only have to make its request to another port on the same Node.
+This reduces network traffic and improves latency for decision requests, since every other Pod making decision requests only has to make its request to another port on the same Node.
 
 == Deploy a policy rule
 
@@ -36,7 +37,7 @@ and apply it:
 [source,bash]
 include::example$getting_started/getting_started.sh[tag=apply-rule-file]
 
-The operator will read the rule file, bundle it and publish the bundle to all OPA instances.
+The operator reads the rule file, bundles it and publishes the bundle to all OPA Pods in the cluster.
 
 == Make policy requests
 

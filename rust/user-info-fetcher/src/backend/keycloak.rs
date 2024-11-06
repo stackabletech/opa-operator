@@ -6,19 +6,19 @@ use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
 use stackable_operator::commons::authentication::oidc;
 
-use crate::{http_error, util::send_json_request, Credentials, UserInfo, UserInfoRequest};
+use crate::{http_error, utils::http::send_json_request, Credentials, UserInfo, UserInfoRequest};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to get access_token"))]
-    AccessToken { source: crate::util::Error },
+    AccessToken { source: crate::utils::http::Error },
 
     #[snafu(display("failed to search for user"))]
-    SearchForUser { source: crate::util::Error },
+    SearchForUser { source: crate::utils::http::Error },
 
     #[snafu(display("unable to find user with id {user_id:?}"))]
     UserNotFoundById {
-        source: crate::util::Error,
+        source: crate::utils::http::Error,
         user_id: String,
     },
 
@@ -32,7 +32,7 @@ pub enum Error {
         "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
     ))]
     RequestUserGroups {
-        source: crate::util::Error,
+        source: crate::utils::http::Error,
         username: String,
         user_id: String,
     },

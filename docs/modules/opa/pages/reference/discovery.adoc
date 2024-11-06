@@ -1,4 +1,5 @@
 = Discovery
+:description: Discover OPA cluster connection strings for internal access, including URL configuration for querying policies.
 :page-aliases: discovery.adoc
 :clusterName: simple-opa
 :namespace: stackable
