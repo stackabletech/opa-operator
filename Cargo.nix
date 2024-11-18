@@ -8615,7 +8615,7 @@ rec {
       };
       "stackable-opa-bundle-builder" = rec {
         crateName = "stackable-opa-bundle-builder";
-        version = "0.0.0-dev";
+        version = "24.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -8679,7 +8679,7 @@ rec {
       };
       "stackable-opa-crd" = rec {
         crateName = "stackable-opa-crd";
-        version = "0.0.0-dev";
+        version = "24.11.0";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./rust/crd; };
         libName = "stackable_opa_crd";
@@ -8726,7 +8726,7 @@ rec {
       };
       "stackable-opa-operator" = rec {
         crateName = "stackable-opa-operator";
-        version = "0.0.0-dev";
+        version = "24.11.0";
         edition = "2021";
         crateBin = [
           {
@@ -8819,7 +8819,7 @@ rec {
       };
       "stackable-opa-regorule-library" = rec {
         crateName = "stackable-opa-regorule-library";
-        version = "0.0.0-dev";
+        version = "24.11.0";
         edition = "2021";
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./rust/regorule-library; };
         libName = "stackable_opa_regorule_library";
@@ -8830,7 +8830,7 @@ rec {
       };
       "stackable-opa-user-info-fetcher" = rec {
         crateName = "stackable-opa-user-info-fetcher";
-        version = "0.0.0-dev";
+        version = "24.11.0";
         edition = "2021";
         crateBin = [
           {
