@@ -34,8 +34,7 @@ pub struct DQuantumBackend {
     /// Must contain the fields `clientId` and `clientSecret`.
     pub client_credentials_secret: String,
 
-    pub table_id: u8,
-    pub hierarchy: Entity,
+    pub hierarchy: TableEntity,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -58,8 +57,8 @@ pub enum Relation {
 pub struct TableEntity {
     entity_name: String,
     entity_id: u8,
-    parents: Entity,
-    children: Entity,
+    parents: Option<Box<Relation>>,
+    children: Option<Box<Relation>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -79,7 +78,26 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let entity = Entity {
+        let parents = Some(Box::new(Backward { entity: Entity {
+            entity_name: "data_collection".to_string(),
+            entity_id: 150,
+            relation: None,
+        }, relation_name: "data_assets".to_string() }));
+
+        let children = Some(Box::new(Backward { entity: Entity {
+            entity_name: "data_element".to_string(),
+            entity_id: 168,
+            relation: None,
+        }, relation_name: "data_asset".to_string() }));
+
+        let table_node = TableEntity{
+            entity_name: "data_asset".to_string(),
+            entity_id: 151,
+            parents,
+            children,
+        };
+
+        /*let entity = Entity {
             entity_name: "data_collection".to_string(),
             entity_id: 150,
             relation: Some(Box::new(Forward {
@@ -99,8 +117,9 @@ mod tests {
 
             })),
         };
+        */
 
-        let test = serde_yaml::to_string(&entity).unwrap();
+        let test = serde_yaml::to_string(&table_node).unwrap();
         println!("{}", test);
     }
 }
