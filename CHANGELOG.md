@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- BREAKING: Use distinct ServiceAccounts for the Stacklets, so that multiple Stacklets can be
+  deployed in one namespace. Existing Stacklets will use the newly created ServiceAccounts after
+  restart ([#656]).
+
+[#656]: https://github.com/stackabletech/opa-operator/pull/656
+
 ## [24.11.0] - 2024-11-18
 
 ### Added
@@ -25,7 +33,6 @@ All notable changes to this project will be documented in this file.
 
 - Bundle builder should no longer keep serving deleted rules until it is restarted ([#578]).
 - Failing to parse one `OpaCluster` should no longer cause the whole operator to stop functioning ([#638]).
-- BREAKING: Use distinct ServiceAccounts for the Stacklets, so that multiple Stacklets can be deployed in one namespace. Existing Stacklets will use the newly created ServiceAccounts after restart ([#656]).
 
 ### Removed
 
@@ -38,7 +45,6 @@ All notable changes to this project will be documented in this file.
 [#622]: https://github.com/stackabletech/opa-operator/pull/622
 [#637]: https://github.com/stackabletech/opa-operator/pull/637
 [#638]: https://github.com/stackabletech/opa-operator/pull/638
-[#656]: https://github.com/stackabletech/opa-operator/pull/656
 
 ## [24.7.0] - 2024-07-24
 
