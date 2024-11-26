@@ -37,6 +37,7 @@ pub struct Args {
 struct AppState {
     config: Arc<crd::Config>,
     http: reqwest::Client,
+    resource_http: reqwest::Client,
     credentials: Arc<Credentials>,
     resource_backend_credentials: Arc<Credentials>,
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
@@ -140,6 +141,7 @@ async fn main() -> Result<(), StartupError> {
 
     println!("resoucre credentials: {}/{}", &resource_backend_credentials.client_id, &resource_backend_credentials.client_secret);
     let mut client_builder = ClientBuilder::new();
+    let mut resource_client_builder = ClientBuilder::new();
 
     // TODO: I'm not so sure we should be doing all this keycloak specific stuff here.
     // We could factor it out in the provider specific implementation (e.g. when we add LDAP support).
@@ -150,7 +152,29 @@ async fn main() -> Result<(), StartupError> {
             .await
             .context(ConfigureTlsSnafu)?;
     }
+
+    if let crd::ResourceBackend::DQuantum(dquantum) = &config.resource_backend {
+        if dquantum.tls.uses_tls() && !dquantum.tls.uses_tls_verification() {
+            resource_client_builder = resource_client_builder.danger_accept_invalid_certs(true);
+        }
+        if let Some(tls_ca_cert_mount_path) = dquantum.tls.tls_ca_cert_mount_path() {
+            let mut buf = Vec::new();
+            File::open(tls_ca_cert_mount_path)
+                .await
+                .context(OpenCaCertSnafu)?
+                .read_to_end(&mut buf)
+                .await
+                .context(ReadCaCertSnafu)?;
+            let ca_cert = reqwest::Certificate::from_pem(&buf).context(ParseCaCertSnafu)?;
+
+            resource_client_builder = resource_client_builder
+                .tls_built_in_root_certs(false)
+                .add_root_certificate(ca_cert);
+        }
+    }
+
     let http = client_builder.build().context(ConstructHttpClientSnafu)?;
+    let resource_http = resource_client_builder.build().context(ConstructHttpClientSnafu)?;
 
     let user_info_cache = {
         let crd::Cache { entry_time_to_live } = config.cache;
@@ -174,6 +198,7 @@ async fn main() -> Result<(), StartupError> {
         .with_state(AppState {
             config,
             http,
+            resource_http,
             credentials,
             resource_backend_credentials,
             user_info_cache,
@@ -314,6 +339,7 @@ async fn get_table_info(
     let AppState {
         config,
         http,
+        resource_http,
         credentials,
         resource_backend_credentials,
         user_info_cache,
@@ -327,7 +353,7 @@ async fn get_table_info(
                     ResourceBackend::DQuantum(dquantum) => {
                         resourcebackend::dquantum::get_resource_info(
                             &req,
-                            &http,
+                            &resource_http,
                             &resource_backend_credentials,
                             dquantum,
                         ).await
@@ -346,6 +372,7 @@ async fn get_user_info(
     let AppState {
         config,
         http,
+        resource_http,
         credentials,
         resource_backend_credentials,
         user_info_cache,
