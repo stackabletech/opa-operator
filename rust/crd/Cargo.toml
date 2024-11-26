@@ -17,3 +17,4 @@ snafu.workspace = true
 stackable-operator.workspace = true
 strum.workspace = true
 tracing.workspace = true
+serde_yaml = "0.9.34+deprecated"

@@ -7,6 +7,7 @@ use stackable_operator::{
     schemars::{self, JsonSchema},
     time::Duration,
 };
+use crate::resource_info_fetcher::ResourceBackend;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,53 +25,6 @@ pub struct Config {
     pub cache: Cache,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ResourceBackend {
-    /// Dummy backend that adds no extra user information.
-    None {},
-    /// Backend that fetches user information from DQuantum.
-    DQuantum(DQuantumBackend),
-}
-
-impl Default for ResourceBackend {
-    fn default() -> Self {
-        Self::None {}
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DQuantumBackend {
-    pub url: String,
-
-    #[serde(flatten)]
-    pub tls: TlsClientDetails,
-
-    /// Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
-    ///
-    /// Must contain the fields `clientId` and `clientSecret`.
-    pub client_credentials_secret: String,
-
-    pub hierarchy: DQuantumHierarchy,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DQuantumHierarchy {
-    start_element: u8,
-    #[serde(default)]
-    child: Option<Vec<DQuantumRelation>>,
-    #[serde(default)]
-    parent: Option<Vec<DQuantumRelation>>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DQuantumRelation {
-    element_id: u8,
-    relation_id: String,
-}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -13,7 +13,7 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_crd::user_info_fetcher as crd;
-use stackable_opa_crd::user_info_fetcher::ResourceBackend;
+use stackable_opa_crd::resource_info_fetcher::ResourceBackend;
 use tokio::net::TcpListener;
 
 mod backend;
@@ -132,7 +132,7 @@ async fn main() -> Result<(), StartupError> {
             client_id: "123".to_string(),
             client_secret: "456".to_string(),
         },
-        crd::ResourceBackend::DQuantum(_) => Credentials {
+        ResourceBackend::DQuantum(_) => Credentials {
             client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
             client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },

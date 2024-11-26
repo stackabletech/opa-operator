@@ -1,15 +1,15 @@
 # If tilt_options.json exists read it and load the default_registry value from it
-settings = read_json('tilt_options.json', default={})
-registry = settings.get('default_registry', 'docker.stackable.tech/sandbox')
+#settings = read_json('tilt_options.json', default={})
+#registry = settings.get('default_registry', 'docker.stackable.tech/sandbox')
 
 # Configure default registry either read from config file above, or with default value of "docker.stackable.tech/sandbox"
-default_registry(registry)
+#default_registry(registry)
 
 meta = read_json('nix/meta.json')
 operator_name = meta['operator']['name']
 
 custom_build(
-    registry + '/' + operator_name,
+    operator_name,
     'make regenerate-nix && nix-build . -A docker --argstr dockerName "${EXPECTED_REGISTRY}/' + operator_name + '" && ./result/load-image | docker load',
     deps=['rust', 'Cargo.toml', 'Cargo.lock', 'default.nix', "nix", 'build.rs', 'vendor'],
     ignore=['*.~undo-tree~'],
@@ -34,7 +34,7 @@ helm_crds, helm_non_crds = filter_yaml(
       name=operator_name,
       namespace="stackable-operators",
       set=[
-         'image.repository=' + registry + '/' + operator_name,
+         'image.repository=' + operator_name,
       ],
    ),
    api_version = "^apiextensions\\.k8s\\.io/.*$",

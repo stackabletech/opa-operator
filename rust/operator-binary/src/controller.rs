@@ -9,10 +9,7 @@ use product_config::{types::PropertyNameKind, ProductConfigManager};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{
-    user_info_fetcher, Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME,
-    DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
-};
+use stackable_opa_crd::{resource_info_fetcher, user_info_fetcher, Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME};
 use stackable_operator::{
     builder::{
         self,
@@ -72,7 +69,7 @@ use stackable_operator::{
     utils::COMMON_BASH_TRAP_FUNCTIONS,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
-
+use resource_info_fetcher::ResourceBackend::DQuantum;
 use crate::{
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
@@ -1025,7 +1022,7 @@ fn build_server_rolegroup_daemonset(
         }
 
         match &user_info.resource_backend {
-            user_info_fetcher::ResourceBackend::DQuantum(dquantum) => {
+            DQuantum(dquantum) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_RESOURCE_CREDENTIALS_VOLUME_NAME)
                         .secret(SecretVolumeSource {

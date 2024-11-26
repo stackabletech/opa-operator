@@ -1,16 +1,16 @@
 use axum::http::StatusCode;
-use reqwest::header::{HeaderMap, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, ACCEPT, CONTENT_TYPE};
 use serde::Deserialize;
 
-use crate::util::send_json_request;
+use crate::utils::http::send_json_request;
 use crate::{http_error, Credentials, ResourceInfo, ResourceInfoRequest};
-use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use snafu::{Snafu, ResultExt};
+use stackable_opa_crd::resource_info_fetcher::DQuantumBackend;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to get access_token"))]
-    AccessToken { source: crate::util::Error },
+    AccessToken { source: crate::utils::http::Error },
     #[snafu(display("failed to construct search endpoint path"))]
     ConstructSearchEndpointPath { source: url::ParseError },
 }
@@ -56,9 +56,9 @@ pub(crate) async fn get_resource_info(
     req: &ResourceInfoRequest,
     http: &reqwest::Client,
     credentials: &Credentials,
-    config: &crd::DQuantumBackend,
-) -> Result<ResourceInfo, crate::resourcebackend::dquantum::Error> {
-    let crd::DQuantumBackend {
+    config: &DQuantumBackend,
+) -> Result<ResourceInfo, Error> {
+    let DQuantumBackend {
         url,
         tls,
         client_credentials_secret,
@@ -86,7 +86,6 @@ pub(crate) async fn get_resource_info(
                 send_json_request::<crate::resourcebackend::dquantum::SearchResponse>(
                     http.get(request_url)
                         .headers(headers)
-                        .
                         .basic_auth("sliebau", Some("sliebau")),
                 )
                 .await
