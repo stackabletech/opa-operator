@@ -124,16 +124,6 @@ pub enum CurrentlySupportedListenerClasses {
     ExternalStable,
 }
 
-impl CurrentlySupportedListenerClasses {
-    pub fn k8s_service_type(&self) -> String {
-        match self {
-            CurrentlySupportedListenerClasses::ClusterInternal => "ClusterIP".to_string(),
-            CurrentlySupportedListenerClasses::ExternalUnstable => "NodePort".to_string(),
-            CurrentlySupportedListenerClasses::ExternalStable => "LoadBalancer".to_string(),
-        }
-    }
-}
-
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
 #[fragment_attrs(
@@ -203,6 +193,42 @@ pub struct OpaConfig {
     pub graceful_shutdown_timeout: Option<Duration>,
 }
 
+#[derive(
+    EnumIter,
+    Clone,
+    Debug,
+    Hash,
+    Deserialize,
+    Eq,
+    JsonSchema,
+    PartialEq,
+    Serialize,
+    Display,
+    EnumString,
+)]
+pub enum OpaRole {
+    #[serde(rename = "server")]
+    #[strum(serialize = "server")]
+    Server,
+}
+
+#[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaClusterStatus {
+    #[serde(default)]
+    pub conditions: Vec<ClusterCondition>,
+}
+
+impl CurrentlySupportedListenerClasses {
+    pub fn k8s_service_type(&self) -> String {
+        match self {
+            CurrentlySupportedListenerClasses::ClusterInternal => "ClusterIP".to_string(),
+            CurrentlySupportedListenerClasses::ExternalUnstable => "NodePort".to_string(),
+            CurrentlySupportedListenerClasses::ExternalStable => "LoadBalancer".to_string(),
+        }
+    }
+}
+
 impl OpaConfig {
     fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {
@@ -256,25 +282,6 @@ impl Configuration for OpaConfigFragment {
     {
         Ok(BTreeMap::new())
     }
-}
-
-#[derive(
-    EnumIter,
-    Clone,
-    Debug,
-    Hash,
-    Deserialize,
-    Eq,
-    JsonSchema,
-    PartialEq,
-    Serialize,
-    Display,
-    EnumString,
-)]
-pub enum OpaRole {
-    #[serde(rename = "server")]
-    #[strum(serialize = "server")]
-    Server,
 }
 
 impl OpaCluster {
@@ -354,13 +361,6 @@ impl OpaCluster {
         tracing::debug!("Merged config: {:?}", conf_rolegroup);
         fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
     }
-}
-
-#[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpaClusterStatus {
-    #[serde(default)]
-    pub conditions: Vec<ClusterCondition>,
 }
 
 impl HasStatusCondition for OpaCluster {
