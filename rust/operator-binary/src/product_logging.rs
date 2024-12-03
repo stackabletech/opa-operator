@@ -1,5 +1,5 @@
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{Container, OpaCluster};
+use stackable_opa_operator::crd::{Container, OpaCluster};
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder,
     client::Client,

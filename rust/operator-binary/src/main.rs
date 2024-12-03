@@ -3,7 +3,7 @@ use std::sync::Arc;
 use clap::{crate_description, crate_version, Parser};
 use futures::StreamExt;
 use product_config::ProductConfigManager;
-use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
+use stackable_opa_operator::crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
     client::{self, Client},

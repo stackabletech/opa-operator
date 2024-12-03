@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_opa_operator::crd::user_info_fetcher as crd;
 use stackable_operator::commons::authentication::oidc;
 
 use crate::{http_error, utils::http::send_json_request, Credentials, UserInfo, UserInfoRequest};

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_opa_operator::crd::user_info_fetcher as crd;
 use url::Url;
 
 use crate::{http_error, utils::http::send_json_request, UserInfo, UserInfoRequest};

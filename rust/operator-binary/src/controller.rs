@@ -10,7 +10,7 @@ use product_config::{types::PropertyNameKind, ProductConfigManager};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::{
+use stackable_opa_operator::crd::{
     user_info_fetcher, Container, OpaCluster, OpaClusterStatus, OpaConfig, OpaRole, APP_NAME,
     DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
 };
@@ -162,7 +162,9 @@ pub enum Error {
     NoName,
 
     #[snafu(display("internal operator failure"))]
-    InternalOperatorFailure { source: stackable_opa_crd::Error },
+    InternalOperatorFailure {
+        source: stackable_opa_operator::crd::Error,
+    },
 
     #[snafu(display("failed to calculate role service name"))]
     RoleServiceNameNotFound,
@@ -241,7 +243,9 @@ pub enum Error {
     },
 
     #[snafu(display("failed to resolve and merge config for role and role group"))]
-    FailedToResolveConfig { source: stackable_opa_crd::Error },
+    FailedToResolveConfig {
+        source: stackable_opa_operator::crd::Error,
+    },
 
     #[snafu(display("illegal container name"))]
     IllegalContainerName {
