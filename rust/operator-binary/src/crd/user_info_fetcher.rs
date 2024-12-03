@@ -38,12 +38,6 @@ pub enum Backend {
     ActiveDirectory(ActiveDirectoryBackend),
 }
 
-impl Default for Backend {
-    fn default() -> Self {
-        Self::None {}
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeycloakBackend {
@@ -75,10 +69,6 @@ pub struct KeycloakBackend {
     pub user_realm: String,
 }
 
-fn default_root_path() -> String {
-    "/".to_string()
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AasBackend {
@@ -88,10 +78,6 @@ pub struct AasBackend {
     /// Port of the identity provider. Defaults to port 5000.
     #[serde(default = "aas_default_port")]
     pub port: u16,
-}
-
-fn aas_default_port() -> u16 {
-    5000
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -123,6 +109,20 @@ pub struct Cache {
     #[derivative(Default(value = "Cache::default_entry_time_to_live()"))]
     #[serde(default = "Cache::default_entry_time_to_live")]
     pub entry_time_to_live: Duration,
+}
+
+impl Default for Backend {
+    fn default() -> Self {
+        Self::None {}
+    }
+}
+
+fn default_root_path() -> String {
+    "/".to_string()
+}
+
+fn aas_default_port() -> u16 {
+    5000
 }
 
 impl Cache {
