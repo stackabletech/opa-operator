@@ -9,10 +9,9 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-stackable-opa-crd = { path = "../crd" }
-
 anyhow.workspace = true
 clap.workspace = true
+derivative.workspace = true
 fnv.workspace = true
 futures.workspace = true
 indoc.workspace = true

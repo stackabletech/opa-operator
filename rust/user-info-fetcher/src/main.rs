@@ -12,7 +12,7 @@ use moka::future::Cache;
 use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_opa_operator::crd::user_info_fetcher as crd;
 use tokio::net::TcpListener;
 
 mod backend;

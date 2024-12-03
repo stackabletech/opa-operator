@@ -47,16 +47,6 @@ rec {
       # File a bug if you depend on any for non-debug work!
       debug = internal.debugCrate { inherit packageId; };
     };
-    "stackable-opa-crd" = rec {
-      packageId = "stackable-opa-crd";
-      build = internal.buildRustCrateWithFeatures {
-        packageId = "stackable-opa-crd";
-      };
-
-      # Debug support which might change between releases.
-      # File a bug if you depend on any for non-debug work!
-      debug = internal.debugCrate { inherit packageId; };
-    };
     "stackable-opa-operator" = rec {
       packageId = "stackable-opa-operator";
       build = internal.buildRustCrateWithFeatures {
@@ -8677,53 +8667,6 @@ rec {
         ];
 
       };
-      "stackable-opa-crd" = rec {
-        crateName = "stackable-opa-crd";
-        version = "0.0.0-dev";
-        edition = "2021";
-        src = lib.cleanSourceWith { filter = sourceFilter;  src = ./rust/crd; };
-        libName = "stackable_opa_crd";
-        authors = [
-          "Stackable GmbH <info@stackable.tech>"
-        ];
-        dependencies = [
-          {
-            name = "derivative";
-            packageId = "derivative";
-          }
-          {
-            name = "semver";
-            packageId = "semver";
-          }
-          {
-            name = "serde";
-            packageId = "serde";
-            features = [ "derive" ];
-          }
-          {
-            name = "serde_json";
-            packageId = "serde_json";
-          }
-          {
-            name = "snafu";
-            packageId = "snafu 0.8.5";
-          }
-          {
-            name = "stackable-operator";
-            packageId = "stackable-operator";
-          }
-          {
-            name = "strum";
-            packageId = "strum";
-            features = [ "derive" ];
-          }
-          {
-            name = "tracing";
-            packageId = "tracing";
-          }
-        ];
-
-      };
       "stackable-opa-operator" = rec {
         crateName = "stackable-opa-operator";
         version = "0.0.0-dev";
@@ -8736,6 +8679,7 @@ rec {
           }
         ];
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./rust/operator-binary; };
+        libName = "stackable_opa_operator";
         authors = [
           "Stackable GmbH <info@stackable.tech>"
         ];
@@ -8747,6 +8691,10 @@ rec {
           {
             name = "clap";
             packageId = "clap";
+          }
+          {
+            name = "derivative";
+            packageId = "derivative";
           }
           {
             name = "fnv";
@@ -8784,10 +8732,6 @@ rec {
           {
             name = "snafu";
             packageId = "snafu 0.8.5";
-          }
-          {
-            name = "stackable-opa-crd";
-            packageId = "stackable-opa-crd";
           }
           {
             name = "stackable-operator";
@@ -8913,8 +8857,8 @@ rec {
             packageId = "snafu 0.8.5";
           }
           {
-            name = "stackable-opa-crd";
-            packageId = "stackable-opa-crd";
+            name = "stackable-opa-operator";
+            packageId = "stackable-opa-operator";
           }
           {
             name = "stackable-operator";

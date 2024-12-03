@@ -2691,26 +2691,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "stackable-opa-crd"
-version = "0.0.0-dev"
-dependencies = [
- "derivative",
- "semver",
- "serde",
- "serde_json",
- "snafu 0.8.5",
- "stackable-operator",
- "strum",
- "tracing",
-]
-
-[[package]]
 name = "stackable-opa-operator"
 version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "built",
  "clap",
+ "derivative",
  "fnv",
  "futures",
  "indoc",
@@ -2720,7 +2707,6 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu 0.8.5",
- "stackable-opa-crd",
  "stackable-operator",
  "strum",
  "tokio",
@@ -2751,7 +2737,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snafu 0.8.5",
- "stackable-opa-crd",
+ "stackable-opa-operator",
  "stackable-operator",
  "tokio",
  "tracing",
