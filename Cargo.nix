@@ -954,7 +954,7 @@ rec {
           }
           {
             name = "itertools";
-            packageId = "itertools";
+            packageId = "itertools 0.12.1";
             usesDefaultFeatures = false;
           }
           {
@@ -1587,6 +1587,25 @@ rec {
           "syn" = [ "dep:syn" ];
         };
         resolvedDefaultFeatures = [ "default" ];
+      };
+      "convert_case" = rec {
+        crateName = "convert_case";
+        version = "0.6.0";
+        edition = "2018";
+        sha256 = "1jn1pq6fp3rri88zyw6jlhwwgf6qiyc08d6gjv0qypgkl862n67c";
+        authors = [
+          "Rutrum <dave@rutrum.net>"
+        ];
+        dependencies = [
+          {
+            name = "unicode-segmentation";
+            packageId = "unicode-segmentation";
+          }
+        ];
+        features = {
+          "rand" = [ "dep:rand" ];
+          "random" = [ "rand" ];
+        };
       };
       "core-foundation" = rec {
         crateName = "core-foundation";
@@ -4004,7 +4023,7 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" ];
       };
-      "itertools" = rec {
+      "itertools 0.12.1" = rec {
         crateName = "itertools";
         version = "0.12.1";
         edition = "2018";
@@ -4023,6 +4042,27 @@ rec {
           "default" = [ "use_std" ];
           "use_std" = [ "use_alloc" "either/use_std" ];
         };
+      };
+      "itertools 0.13.0" = rec {
+        crateName = "itertools";
+        version = "0.13.0";
+        edition = "2018";
+        sha256 = "11hiy3qzl643zcigknclh446qb9zlg4dpdzfkjaa9q9fqpgyfgj1";
+        authors = [
+          "bluss"
+        ];
+        dependencies = [
+          {
+            name = "either";
+            packageId = "either";
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "default" = [ "use_std" ];
+          "use_std" = [ "use_alloc" "either/use_std" ];
+        };
+        resolvedDefaultFeatures = [ "default" "use_alloc" "use_std" ];
       };
       "itoa" = rec {
         crateName = "itoa";
@@ -4266,6 +4306,40 @@ rec {
           "schemars" = [ "dep:schemars" ];
         };
         resolvedDefaultFeatures = [ "schemars" "v1_31" ];
+      };
+      "k8s-version" = rec {
+        crateName = "k8s-version";
+        version = "0.1.2";
+        edition = "2021";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/stackabletech/operator-rs.git";
+          rev = "048c7d8befddc2f2c6414444006871c95412d67c";
+          sha256 = "1x2pfibrsysmkkmajyj30qkwsjf3rzmc3dxsd09jb9r4x7va6mr6";
+        };
+        libName = "k8s_version";
+        authors = [
+          "Stackable GmbH <info@stackable.de>"
+        ];
+        dependencies = [
+          {
+            name = "darling";
+            packageId = "darling";
+            optional = true;
+          }
+          {
+            name = "regex";
+            packageId = "regex";
+          }
+          {
+            name = "snafu";
+            packageId = "snafu 0.8.5";
+          }
+        ];
+        features = {
+          "darling" = [ "dep:darling" ];
+        };
+        resolvedDefaultFeatures = [ "darling" ];
       };
       "kube" = rec {
         crateName = "kube";
@@ -8738,6 +8812,11 @@ rec {
             packageId = "stackable-operator";
           }
           {
+            name = "stackable-versioned";
+            packageId = "stackable-versioned";
+            features = [ "k8s" ];
+          }
+          {
             name = "strum";
             packageId = "strum";
             features = [ "derive" ];
@@ -9117,6 +9196,106 @@ rec {
           }
         ];
 
+      };
+      "stackable-versioned" = rec {
+        crateName = "stackable-versioned";
+        version = "0.5.0";
+        edition = "2021";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/stackabletech/operator-rs.git";
+          rev = "048c7d8befddc2f2c6414444006871c95412d67c";
+          sha256 = "1x2pfibrsysmkkmajyj30qkwsjf3rzmc3dxsd09jb9r4x7va6mr6";
+        };
+        libName = "stackable_versioned";
+        authors = [
+          "Stackable GmbH <info@stackable.de>"
+        ];
+        dependencies = [
+          {
+            name = "stackable-versioned-macros";
+            packageId = "stackable-versioned-macros";
+          }
+        ];
+        features = {
+          "full" = [ "k8s" ];
+          "k8s" = [ "stackable-versioned-macros/k8s" ];
+        };
+        resolvedDefaultFeatures = [ "k8s" ];
+      };
+      "stackable-versioned-macros" = rec {
+        crateName = "stackable-versioned-macros";
+        version = "0.5.0";
+        edition = "2021";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/stackabletech/operator-rs.git";
+          rev = "048c7d8befddc2f2c6414444006871c95412d67c";
+          sha256 = "1x2pfibrsysmkkmajyj30qkwsjf3rzmc3dxsd09jb9r4x7va6mr6";
+        };
+        procMacro = true;
+        libName = "stackable_versioned_macros";
+        authors = [
+          "Stackable GmbH <info@stackable.de>"
+        ];
+        dependencies = [
+          {
+            name = "convert_case";
+            packageId = "convert_case";
+          }
+          {
+            name = "darling";
+            packageId = "darling";
+          }
+          {
+            name = "itertools";
+            packageId = "itertools 0.13.0";
+          }
+          {
+            name = "k8s-openapi";
+            packageId = "k8s-openapi";
+            optional = true;
+            usesDefaultFeatures = false;
+            features = [ "schemars" "v1_31" ];
+          }
+          {
+            name = "k8s-version";
+            packageId = "k8s-version";
+            features = [ "darling" ];
+          }
+          {
+            name = "kube";
+            packageId = "kube";
+            optional = true;
+            usesDefaultFeatures = false;
+            features = [ "client" "jsonpatch" "runtime" "derive" "rustls-tls" ];
+          }
+          {
+            name = "proc-macro2";
+            packageId = "proc-macro2";
+          }
+          {
+            name = "quote";
+            packageId = "quote";
+          }
+          {
+            name = "syn";
+            packageId = "syn 2.0.82";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "k8s-openapi";
+            packageId = "k8s-openapi";
+            usesDefaultFeatures = false;
+            features = [ "schemars" "v1_31" ];
+          }
+        ];
+        features = {
+          "full" = [ "k8s" ];
+          "k8s" = [ "dep:kube" "dep:k8s-openapi" ];
+        };
+        resolvedDefaultFeatures = [ "k8s" ];
       };
       "strsim" = rec {
         crateName = "strsim";
@@ -10791,6 +10970,19 @@ rec {
           "default" = [ "std" ];
         };
         resolvedDefaultFeatures = [ "std" ];
+      };
+      "unicode-segmentation" = rec {
+        crateName = "unicode-segmentation";
+        version = "1.12.0";
+        edition = "2018";
+        sha256 = "14qla2jfx74yyb9ds3d2mpwpa4l4lzb9z57c6d2ba511458z5k7n";
+        libName = "unicode_segmentation";
+        authors = [
+          "kwantam <kwantam@gmail.com>"
+          "Manish Goregaokar <manishsmail@gmail.com>"
+        ];
+        features = {
+        };
       };
       "unicode-xid" = rec {
         crateName = "unicode-xid";
