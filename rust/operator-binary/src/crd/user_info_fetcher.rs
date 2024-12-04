@@ -103,7 +103,7 @@ pub mod versioned {
         pub custom_attribute_mappings: BTreeMap<String, String>,
     }
 
-    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Cache {
         /// How long metadata about each user should be cached for.

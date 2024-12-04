@@ -1,5 +1,5 @@
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_operator::crd::{Container, OpaCluster};
+use stackable_opa_operator::crd::v1alpha1;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder,
     client::Client,
@@ -77,7 +77,7 @@ impl From<LogLevel> for BundleBuilderLogLevel {
 /// Return the address of the Vector aggregator if the corresponding ConfigMap name is given in the
 /// cluster spec
 pub async fn resolve_vector_aggregator_address(
-    opa: &OpaCluster,
+    opa: &v1alpha1::OpaCluster,
     client: &Client,
 ) -> Result<Option<String>> {
     let vector_aggregator_address = if let Some(vector_aggregator_config_map_name) =
@@ -110,14 +110,14 @@ pub async fn resolve_vector_aggregator_address(
 
 /// Extend the role group ConfigMap with logging and Vector configurations
 pub fn extend_role_group_config_map(
-    rolegroup: &RoleGroupRef<OpaCluster>,
+    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
     vector_aggregator_address: Option<&str>,
-    logging: &Logging<Container>,
+    logging: &Logging<v1alpha1::Container>,
     cm_builder: &mut ConfigMapBuilder,
 ) -> Result<()> {
     let vector_log_config = if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = logging.containers.get(&Container::Vector)
+    }) = logging.containers.get(&v1alpha1::Container::Vector)
     {
         Some(log_config)
     } else {

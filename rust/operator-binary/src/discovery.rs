@@ -1,5 +1,5 @@
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_operator::crd::{OpaCluster, OpaRole};
+use stackable_opa_operator::crd::v1alpha1;
 use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     commons::product_image_selection::ResolvedProductImage,
@@ -15,7 +15,7 @@ pub enum Error {
     #[snafu(display("object {} is missing metadata to build owner reference", opa))]
     ObjectMissingMetadataForOwnerRef {
         source: stackable_operator::builder::meta::Error,
-        opa: ObjectRef<OpaCluster>,
+        opa: ObjectRef<v1alpha1::OpaCluster>,
     },
 
     #[snafu(display("object has no name associated"))]
@@ -38,7 +38,7 @@ pub enum Error {
 /// Builds discovery [`ConfigMap`]s for connecting to a [`OpaCluster`] for all expected scenarios
 pub fn build_discovery_configmaps(
     owner: &impl Resource<DynamicType = ()>,
-    opa: &OpaCluster,
+    opa: &v1alpha1::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
     svc: &Service,
     cluster_info: &KubernetesClusterInfo,
@@ -58,7 +58,7 @@ pub fn build_discovery_configmaps(
 fn build_discovery_configmap(
     name: &str,
     owner: &impl Resource<DynamicType = ()>,
-    opa: &OpaCluster,
+    opa: &v1alpha1::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
     svc: &Service,
     cluster_info: &KubernetesClusterInfo,
@@ -85,7 +85,7 @@ fn build_discovery_configmap(
         .with_recommended_labels(build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label,
-            &OpaRole::Server.to_string(),
+            &v1alpha1::OpaRole::Server.to_string(),
             "discovery",
         ))
         .context(ObjectMetaSnafu)?
