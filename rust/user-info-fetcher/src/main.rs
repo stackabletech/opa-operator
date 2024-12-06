@@ -12,7 +12,7 @@ use moka::future::Cache;
 use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
 use tokio::net::TcpListener;
 
 mod backend;
@@ -33,7 +33,7 @@ pub struct Args {
 
 #[derive(Clone)]
 struct AppState {
-    config: Arc<crd::Config>,
+    config: Arc<v1alpha1::Config>,
     http: reqwest::Client,
     credentials: Arc<Credentials>,
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
@@ -100,24 +100,24 @@ async fn main() -> Result<(), StartupError> {
         }
     };
 
-    let config = Arc::<crd::Config>::new(
+    let config = Arc::<v1alpha1::Config>::new(
         serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?,
     );
     let credentials = Arc::new(match &config.backend {
         // TODO: factor this out into each backend (e.g. when we add LDAP support)
-        crd::Backend::None {} => Credentials {
+        v1alpha1::Backend::None {} => Credentials {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
-        crd::Backend::Keycloak(_) => Credentials {
+        v1alpha1::Backend::Keycloak(_) => Credentials {
             client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
             client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },
-        crd::Backend::ExperimentalXfscAas(_) => Credentials {
+        v1alpha1::Backend::ExperimentalXfscAas(_) => Credentials {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
-        crd::Backend::ActiveDirectory(_) => Credentials {
+        v1alpha1::Backend::ActiveDirectory(_) => Credentials {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
@@ -129,7 +129,7 @@ async fn main() -> Result<(), StartupError> {
     // We could factor it out in the provider specific implementation (e.g. when we add LDAP support).
     // I know it is for setting up the client, but an idea: make a trait for implementing backends
     // The trait can do all this for a genric client using an implementation on the trait (eg: get_http_client() which will call self.uses_tls())
-    if let crd::Backend::Keycloak(keycloak) = &config.backend {
+    if let v1alpha1::Backend::Keycloak(keycloak) = &config.backend {
         client_builder = utils::tls::configure_reqwest(&keycloak.tls, client_builder)
             .await
             .context(ConfigureTlsSnafu)?;
@@ -137,7 +137,7 @@ async fn main() -> Result<(), StartupError> {
     let http = client_builder.build().context(ConstructHttpClientSnafu)?;
 
     let user_info_cache = {
-        let crd::Cache { entry_time_to_live } = config.cache;
+        let v1alpha1::Cache { entry_time_to_live } = config.cache;
         Cache::builder()
             .name("user-info")
             .time_to_live(*entry_time_to_live)
@@ -262,7 +262,7 @@ async fn get_user_info(
         user_info_cache
             .try_get_with_by_ref(&req, async {
                 match &config.backend {
-                    crd::Backend::None {} => {
+                    v1alpha1::Backend::None {} => {
                         let user_id = match &req {
                             UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
                                 Some(id)
@@ -282,25 +282,27 @@ async fn get_user_info(
                             custom_attributes: HashMap::new(),
                         })
                     }
-                    crd::Backend::Keycloak(keycloak) => {
+                    v1alpha1::Backend::Keycloak(keycloak) => {
                         backend::keycloak::get_user_info(&req, &http, &credentials, keycloak)
                             .await
                             .context(get_user_info_error::KeycloakSnafu)
                     }
-                    crd::Backend::ExperimentalXfscAas(aas) => {
+                    v1alpha1::Backend::ExperimentalXfscAas(aas) => {
                         backend::xfsc_aas::get_user_info(&req, &http, aas)
                             .await
                             .context(get_user_info_error::ExperimentalXfscAasSnafu)
                     }
-                    crd::Backend::ActiveDirectory(ad) => backend::active_directory::get_user_info(
-                        &req,
-                        &ad.ldap_server,
-                        &ad.tls,
-                        &ad.base_distinguished_name,
-                        &ad.custom_attribute_mappings,
-                    )
-                    .await
-                    .context(get_user_info_error::ActiveDirectorySnafu),
+                    v1alpha1::Backend::ActiveDirectory(ad) => {
+                        backend::active_directory::get_user_info(
+                            &req,
+                            &ad.ldap_server,
+                            &ad.tls,
+                            &ad.base_distinguished_name,
+                            &ad.custom_attribute_mappings,
+                        )
+                        .await
+                        .context(get_user_info_error::ActiveDirectorySnafu)
+                    }
                 }
             })
             .await?,

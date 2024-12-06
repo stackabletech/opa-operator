@@ -3,7 +3,7 @@ use std::sync::Arc;
 use clap::{crate_description, crate_version, Parser};
 use futures::StreamExt;
 use product_config::ProductConfigManager;
-use stackable_opa_crd::{OpaCluster, APP_NAME, OPERATOR_NAME};
+use stackable_opa_operator::crd::{v1alpha1, OpaCluster, APP_NAME, OPERATOR_NAME};
 use stackable_operator::{
     cli::{Command, ProductOperatorRun},
     client::{self, Client},
@@ -18,7 +18,8 @@ use stackable_operator::{
     },
     logging::controller::report_controller_reconciled,
     namespace::WatchNamespace,
-    CustomResourceExt,
+    shared::yaml::SerializeOptions,
+    YamlSchema,
 };
 
 use crate::controller::OPA_CONTROLLER_NAME;
@@ -54,7 +55,8 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => {
-            OpaCluster::print_yaml_schema(built_info::PKG_VERSION)?;
+            OpaCluster::merged_crd(OpaCluster::V1Alpha1)?
+                .print_yaml_schema(built_info::PKG_VERSION, SerializeOptions::default())?;
         }
         Command::Run(OpaRun {
             operator_image,
@@ -112,7 +114,7 @@ async fn create_controller(
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
 ) {
-    let opa_api: Api<DeserializeGuard<OpaCluster>> = watch_namespace.get_api(&client);
+    let opa_api: Api<DeserializeGuard<v1alpha1::OpaCluster>> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
     let configmaps_api: Api<DeserializeGuard<ConfigMap>> = watch_namespace.get_api(&client);
     let services_api: Api<DeserializeGuard<Service>> = watch_namespace.get_api(&client);
