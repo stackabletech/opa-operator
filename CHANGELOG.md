@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Run a `containerdebug` process in the background of each Airflow container to collect debugging information ([#665]).
+- Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#665]).
 
 ### Fixed
 
