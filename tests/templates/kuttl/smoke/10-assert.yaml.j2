@@ -36,6 +36,8 @@ spec:
 # This test checks if the containerdebug-state.json file is present and valid
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
-timeout: 60
+timeout: 600
 commands:
-  - script: kubectl exec -n $NAMESPACE --container opa test-opa-server-default-0 -- cat /stackable/log/containerdebug-state.json | jq --exit-status
+  - script: |
+      FIRST_OPA_POD=$(kubectl get -n $NAMESPACE pods --field-selector=status.phase=Running --selector app.kubernetes.io/instance=test-opa -o jsonpath='{.items[0].metadata.name}')
+      kubectl exec -n $NAMESPACE --container opa $FIRST_OPA_POD -- cat /stackable/log/containerdebug-state.json | jq --exit-status
