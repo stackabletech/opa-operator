@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#665]).
+- Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
 
 ### Fixed
 
@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
   restart ([#656]).
 
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
-[#665]: https://github.com/stackabletech/opa-operator/pull/665
+[#666]: https://github.com/stackabletech/opa-operator/pull/666
 
 ## [24.11.0] - 2024-11-18
 
