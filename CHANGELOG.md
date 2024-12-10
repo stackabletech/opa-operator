@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Run a `containerdebug` process in the background of each Airflow container to collect debugging information ([#665]).
+
 ### Fixed
 
 - BREAKING: Use distinct ServiceAccounts for the Stacklets, so that multiple Stacklets can be
@@ -11,6 +15,7 @@ All notable changes to this project will be documented in this file.
   restart ([#656]).
 
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
+[#665]: https://github.com/stackabletech/opa-operator/pull/665
 
 ## [24.11.0] - 2024-11-18
 
