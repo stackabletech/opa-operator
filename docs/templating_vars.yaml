@@ -3,4 +3,4 @@ helm:
   repo_name: stackable-stable
   repo_url: https://repo.stackable.tech/repository/helm-stable/
 versions:
-  opa: 24.11.1-rc1
+  opa: 24.11.1-rc2
