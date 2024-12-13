@@ -4,7 +4,7 @@ metadata:
   name: {{ .Release.Name }}-opa-bundle-builder-clusterrole
 # This role is used for the OPA bundle builder.
 # It needs to read ConfigMaps and watch ConfigMaps for changes,
-# because the Rego rules that are used to build the bundles are 
+# because the Rego rules that are used to build the bundles are
 # stored in the ConfigMaps.
 rules:
   - apiGroups:

@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
+
+### Fixed
+
+- BREAKING: Use distinct ServiceAccounts for the Stacklets, so that multiple Stacklets can be
+  deployed in one namespace. Existing Stacklets will use the newly created ServiceAccounts after
+  restart ([#656]).
+
+[#656]: https://github.com/stackabletech/opa-operator/pull/656
+[#666]: https://github.com/stackabletech/opa-operator/pull/666
+
+## [24.11.0] - 2024-11-18
+
+### Added
+
 - Added regorule library for accessing user-info-fetcher ([#580]).
 - Added support for OPA 0.67.1 ([#616]).
 - The operator can now run on Kubernetes clusters using a non-default cluster domain.

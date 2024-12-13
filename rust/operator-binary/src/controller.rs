@@ -38,7 +38,7 @@ use stackable_operator::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
                 ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, SecretVolumeSource,
-                Service, ServicePort, ServiceSpec,
+                Service, ServiceAccount, ServicePort, ServiceSpec,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -457,7 +457,7 @@ pub async fn reconcile_opa(
         build_rbac_resources(opa, APP_NAME, required_labels).context(BuildRbacResourcesSnafu)?;
 
     let rbac_sa = cluster_resources
-        .add(client, rbac_sa)
+        .add(client, rbac_sa.clone())
         .await
         .context(ApplyServiceAccountSnafu)?;
     cluster_resources
@@ -495,7 +495,7 @@ pub async fn reconcile_opa(
             &merged_config,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
-            &rbac_sa.name_any(),
+            &rbac_sa,
         )?;
 
         cluster_resources
@@ -740,7 +740,7 @@ fn build_server_rolegroup_daemonset(
     merged_config: &OpaConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
-    sa_name: &str,
+    service_account: &ServiceAccount,
 ) -> Result<DaemonSet> {
     let role = opa.role(opa_role);
     let role_group = opa
@@ -932,7 +932,7 @@ fn build_server_rolegroup_daemonset(
                 .build(),
         )
         .context(AddVolumeSnafu)?
-        .service_account_name(sa_name)
+        .service_account_name(service_account.name_any())
         .security_context(
             PodSecurityContextBuilder::new()
                 .run_as_user(1000)
@@ -1181,6 +1181,7 @@ fn build_opa_start_command(merged_config: &OpaConfig, container_name: &str) -> S
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
+        containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
         opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
