@@ -3547,9 +3547,9 @@ rec {
       };
       "hyper-rustls" = rec {
         crateName = "hyper-rustls";
-        version = "0.27.3";
+        version = "0.27.4";
         edition = "2021";
-        sha256 = "0cxkph8hsmbz693a8ih2ciy7h0xbac844rpm981y6c0iqfsxpbq8";
+        sha256 = "0ry73hvh1wdlghq5wywdl5arxgnfcfqmcx2ca97w8vl2qr44m27n";
         libName = "hyper_rustls";
         dependencies = [
           {
@@ -9275,12 +9275,6 @@ rec {
           "Stackable GmbH <info@stackable.tech>"
         ];
         dependencies = [
-          {
-            name = "educe";
-            packageId = "educe";
-            usesDefaultFeatures = false;
-            features = [ "Default" ];
-          }
           {
             name = "semver";
             packageId = "semver";

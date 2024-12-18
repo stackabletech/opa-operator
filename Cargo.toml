@@ -16,7 +16,6 @@ base64 = "0.22"
 built = { version = "0.7", features = ["chrono", "git2"] }
 byteorder = "1.5"
 clap = "4.5"
-educe = { version = "0.6.0", default-features = false, features = ["Default"] }
 flate2 = "1.0"
 fnv = "1.0"
 futures = { version = "0.3" }
