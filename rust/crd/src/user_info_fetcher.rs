@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use derivative::Derivative;
+use educe::Educe;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
     commons::{networking::HostName, tls_verification::TlsClientDetails},
@@ -115,12 +115,12 @@ pub struct ActiveDirectoryBackend {
     pub custom_attribute_mappings: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Derivative)]
-#[derivative(Default)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, Educe)]
+#[educe(Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Cache {
     /// How long metadata about each user should be cached for.
-    #[derivative(Default(value = "Cache::default_entry_time_to_live()"))]
+    #[educe(Default = Cache::default_entry_time_to_live())]
     #[serde(default = "Cache::default_entry_time_to_live")]
     pub entry_time_to_live: Duration,
 }
