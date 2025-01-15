@@ -28,13 +28,13 @@ helm repo update
 
 echo "Installing operators with Helm"
 # tag::helm-install-operators[]
-helm install --wait opa-operator stackable-stable/opa-operator --version 24.11.1-rc2
+helm install --wait opa-operator stackable-stable/opa-operator --version 24.11.1
 # end::helm-install-operators[]
 ;;
 "stackablectl")
 echo "installing operators with stackablectl"
 # tag::stackablectl-install-operators[]
-stackablectl operator install opa=24.11.1-rc2
+stackablectl operator install opa=24.11.1
 # end::stackablectl-install-operators[]
 ;;
 *)
