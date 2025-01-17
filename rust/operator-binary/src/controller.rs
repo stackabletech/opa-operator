@@ -863,6 +863,10 @@ fn build_server_rolegroup_daemonset(
             &opa_container_name,
         )])
         .add_env_vars(env)
+        .add_env_var(
+            "CONTAINERDEBUG_LOG_DIRECTORY",
+            format!("{STACKABLE_LOG_DIR}/containerdebug"),
+        )
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
         .context(AddVolumeMountSnafu)?
