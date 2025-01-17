@@ -20,7 +20,9 @@ use stackable_operator::{
     kube::CustomResource,
     product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
-    role_utils::{EmptyRoleConfig, Role, RoleGroup, RoleGroupRef},
+    role_utils::{
+        EmptyRoleConfig, GenericProductSpecificCommonConfig, Role, RoleGroup, RoleGroupRef,
+    },
     schemars::{self, JsonSchema},
     status::condition::{ClusterCondition, HasStatusCondition},
     time::Duration,
@@ -287,7 +289,7 @@ impl OpaCluster {
     pub fn rolegroup(
         &self,
         rolegroup_ref: &RoleGroupRef<OpaCluster>,
-    ) -> Result<&RoleGroup<OpaConfigFragment>, Error> {
+    ) -> Result<&RoleGroup<OpaConfigFragment, GenericProductSpecificCommonConfig>, Error> {
         let role_variant =
             OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
                 role: rolegroup_ref.role.to_owned(),

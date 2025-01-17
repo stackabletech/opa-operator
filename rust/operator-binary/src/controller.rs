@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use const_format::concatcp;
 use indoc::formatdoc;
 use product_config::{types::PropertyNameKind, ProductConfigManager};
 use serde::{Deserialize, Serialize};
@@ -82,6 +83,7 @@ use crate::{
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
+pub const OPA_FULL_CONTROLLER_NAME: &str = concatcp!(OPA_CONTROLLER_NAME, '.', OPERATOR_NAME);
 
 pub const CONFIG_FILE: &str = "config.json";
 pub const APP_PORT: u16 = 8081;
