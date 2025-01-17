@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
+- Aggregate emitted Kubernetes events on the CustomResources ([#675]).
+
+### Changed
+
+- Append a dot (`.`) to the default cluster domain to reduce DNS requests ([#675]).
 
 ### Fixed
 
@@ -16,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
+[#675]: https://github.com/stackabletech/opa-operator/pull/675
 
 ## [24.11.0] - 2024-11-18
 
