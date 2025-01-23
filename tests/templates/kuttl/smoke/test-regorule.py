@@ -27,7 +27,7 @@ if __name__ == "__main__":
     # --> {'hello': True}
 
     # url = 'http://test-opa-svc:8081/v1/data/test'
-    response = requests.post(args['url']).json()
+    response = requests.post(args['url'], json={"input": {}}).json()
 
     if "result" in response and "hello" in response["result"] and response["result"]["hello"]:
         print("Test successful!")
