@@ -13,7 +13,10 @@ use stackable_operator::{
     },
     kube::{
         core::DeserializeGuard,
-        runtime::{watcher, Controller},
+        runtime::{
+            events::{Recorder, Reporter},
+            watcher, Controller,
+        },
         Api,
     },
     logging::controller::report_controller_reconciled,
@@ -21,7 +24,7 @@ use stackable_operator::{
     CustomResourceExt,
 };
 
-use crate::controller::OPA_CONTROLLER_NAME;
+use crate::controller::OPA_FULL_CONTROLLER_NAME;
 
 mod controller;
 mod discovery;
@@ -122,6 +125,13 @@ async fn create_controller(
         .owns(configmaps_api, watcher::Config::default())
         .owns(services_api, watcher::Config::default());
 
+    let event_recorder = Arc::new(Recorder::new(
+        client.as_kube_client(),
+        Reporter {
+            controller: OPA_FULL_CONTROLLER_NAME.to_string(),
+            instance: None,
+        },
+    ));
     controller
         .run(
             controller::reconcile_opa,
@@ -133,13 +143,22 @@ async fn create_controller(
                 user_info_fetcher_image,
             }),
         )
-        .map(|res| {
-            report_controller_reconciled(
-                &client,
-                &format!("{OPA_CONTROLLER_NAME}.{OPERATOR_NAME}"),
-                &res,
-            )
-        })
-        .collect::<()>()
+        // We can let the reporting happen in the background
+        .for_each_concurrent(
+            16, // concurrency limit
+            |result| {
+                // The event_recorder needs to be shared across all invocations, so that
+                // events are correctly aggregated
+                let event_recorder = event_recorder.clone();
+                async move {
+                    report_controller_reconciled(
+                        &event_recorder,
+                        OPA_FULL_CONTROLLER_NAME,
+                        &result,
+                    )
+                    .await;
+                }
+            },
+        )
         .await;
 }
