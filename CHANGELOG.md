@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
-- Added support for OPA 1.0.0 ([#677])
+- Added support for OPA `1.0.0` ([#677]).
 
 ### Fixed
 
@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 
-- remove support for OPA 0.66.0 ([#677])
+- Removed support for OPA `0.66.0` ([#677]).
 
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
