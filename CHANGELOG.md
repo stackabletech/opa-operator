@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 
-- remove support for OPA 0.66.0 ([#677])
+- Removed support for OPA `0.66.0` ([#677]).
 
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
