@@ -16,7 +16,7 @@ metadata:
   name: opa
 spec:
   image:
-    productVersion: 0.67.1
+    productVersion: 1.0.0
   clusterConfig:
     userInfo: # <1>
       backend:
@@ -131,8 +131,6 @@ For example, the following rule allows access for users in the `/admin` group:
 [source,rego]
 ----
 package test
-
-import rego.v1
 
 default allow := false
 
