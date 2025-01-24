@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
-- Added support for OPA 1.0.0 ([#677])
+- Added support for OPA `1.0.0` ([#677]).
 
 ### Fixed
 
