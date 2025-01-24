@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
 - Added support for OPA `1.0.0` ([#677]).
+- Aggregate emitted Kubernetes events on the CustomResources ([#675]).
 
 ### Fixed
 
@@ -22,6 +23,7 @@ All notable changes to this project will be documented in this file.
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
 [#677]: https://github.com/stackabletech/opa-operator/pull/677
+[#675]: https://github.com/stackabletech/opa-operator/pull/675
 
 ## [24.11.0] - 2024-11-18
 
