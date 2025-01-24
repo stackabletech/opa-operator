@@ -1366,10 +1366,10 @@ rec {
       };
       "clap" = rec {
         crateName = "clap";
-        version = "4.5.26";
+        version = "4.5.27";
         edition = "2021";
         crateBin = [];
-        sha256 = "10v7qvn90calfbhap1c4r249i5c7fbxj09fn3szfz9pkis85xsx8";
+        sha256 = "15j720q1z953h1qxm2q5nwkmyhhl2vb45v017rqlhjrbk12h36vn";
         dependencies = [
           {
             name = "clap_builder";
@@ -1407,9 +1407,9 @@ rec {
       };
       "clap_builder" = rec {
         crateName = "clap_builder";
-        version = "4.5.26";
+        version = "4.5.27";
         edition = "2021";
-        sha256 = "08f1mzcvi7zjhm7hvz6al4jnv70ccqhwiaq74hihlspwnl0iic4n";
+        sha256 = "1mys7v60lys8zkwpk49wif9qnja9zamm4dnrsbj40wdmni78h9hv";
         dependencies = [
           {
             name = "anstream";
@@ -4406,9 +4406,9 @@ rec {
       };
       "indexmap" = rec {
         crateName = "indexmap";
-        version = "2.7.0";
+        version = "2.7.1";
         edition = "2021";
-        sha256 = "07s7jmdymvd0rm4yswp0j3napx57hkjm9gs9n55lvs2g78vj5y32";
+        sha256 = "0lmnm1zbr5gq3wic3d8a76gpvampridzwckfl97ckd5m08mrk74c";
         dependencies = [
           {
             name = "equivalent";
@@ -4484,9 +4484,9 @@ rec {
       };
       "ipnet" = rec {
         crateName = "ipnet";
-        version = "2.10.1";
+        version = "2.11.0";
         edition = "2018";
-        sha256 = "025p9wm94q1w2l13hbbr4cbmfygly3a2ag8g5s618l2jhq4l3hnx";
+        sha256 = "0c5i9sfi2asai28m8xp48k5gvwkqrg5ffpi767py6mzsrswv17s6";
         authors = [
           "Kris Price <kris@krisprice.nz>"
         ];
@@ -6376,9 +6376,9 @@ rec {
       };
       "openssl-probe" = rec {
         crateName = "openssl-probe";
-        version = "0.1.5";
-        edition = "2015";
-        sha256 = "1kq18qm48rvkwgcggfkqq6pm948190czqc94d6bm2sir5hq1l0gz";
+        version = "0.1.6";
+        edition = "2021";
+        sha256 = "0bl52x55laalqb707k009h8kfawliwp992rlsvkzy49n47p2fpnh";
         libName = "openssl_probe";
         authors = [
           "Alex Crichton <alex@alexcrichton.com>"
@@ -7956,9 +7956,9 @@ rec {
       };
       "rustix" = rec {
         crateName = "rustix";
-        version = "0.38.43";
+        version = "0.38.44";
         edition = "2021";
-        sha256 = "1xjfhdnmqsbwnfmm77vyh7ldhqx0g9waqm4982404d7jdgp93257";
+        sha256 = "0m61v0h15lf5rrnbjhcb9306bgqrhskrqv7i1n0939dsw8dbrdgx";
         authors = [
           "Dan Gohman <dev@sunfishcode.online>"
           "Jakub Konka <kubkon@jakubkonka.com>"
@@ -8576,9 +8576,9 @@ rec {
       };
       "semver" = rec {
         crateName = "semver";
-        version = "1.0.24";
+        version = "1.0.25";
         edition = "2018";
-        sha256 = "1fmvjjkd3f64y5fqr1nakkq371mnwzv09fbz5mbmdxril63ypdiw";
+        sha256 = "00sy306qpi7vfand7dxm2vc76nlc8fkh1rrhdy0qh12v50nzx7gp";
         authors = [
           "David Tolnay <dtolnay@gmail.com>"
         ];
@@ -8709,9 +8709,9 @@ rec {
       };
       "serde_json" = rec {
         crateName = "serde_json";
-        version = "1.0.135";
+        version = "1.0.137";
         edition = "2021";
-        sha256 = "1n9hcsbxpr2lg5kvlksbcy6bkvqv9rn3hy59600i21kli2i7n39b";
+        sha256 = "0sql0gndrw2miw440sl0m2lrk6bsxyxrmlnpma52k6dzd9pgn34k";
         authors = [
           "Erick Tryzelaar <erick.tryzelaar@gmail.com>"
           "David Tolnay <dtolnay@gmail.com>"
@@ -9522,13 +9522,13 @@ rec {
       };
       "stackable-operator" = rec {
         crateName = "stackable-operator";
-        version = "0.84.0";
+        version = "0.84.1";
         edition = "2021";
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "af0d1f19d8770d346096a38c6dc82ba70e371039";
-          sha256 = "0r9ld6csfqcfaky9k98c9r1x663r8m1lkd1d9v957qkl32zl2gxw";
+          rev = "b8fe43f7368249bf95b06d6cba3fd0135f7523ac";
+          sha256 = "0vwq3dzxj56y4vrnw4ry7wajm12f32jipvc6f3izdrixy2pazq3i";
         };
         libName = "stackable_operator";
         authors = [
@@ -9687,8 +9687,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "af0d1f19d8770d346096a38c6dc82ba70e371039";
-          sha256 = "0r9ld6csfqcfaky9k98c9r1x663r8m1lkd1d9v957qkl32zl2gxw";
+          rev = "b8fe43f7368249bf95b06d6cba3fd0135f7523ac";
+          sha256 = "0vwq3dzxj56y4vrnw4ry7wajm12f32jipvc6f3izdrixy2pazq3i";
         };
         procMacro = true;
         libName = "stackable_operator_derive";
@@ -9722,8 +9722,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "af0d1f19d8770d346096a38c6dc82ba70e371039";
-          sha256 = "0r9ld6csfqcfaky9k98c9r1x663r8m1lkd1d9v957qkl32zl2gxw";
+          rev = "b8fe43f7368249bf95b06d6cba3fd0135f7523ac";
+          sha256 = "0vwq3dzxj56y4vrnw4ry7wajm12f32jipvc6f3izdrixy2pazq3i";
         };
         libName = "stackable_shared";
         authors = [
@@ -11425,9 +11425,9 @@ rec {
       };
       "unicode-ident" = rec {
         crateName = "unicode-ident";
-        version = "1.0.14";
+        version = "1.0.15";
         edition = "2018";
-        sha256 = "10ywa1pg0glgkr4l3dppjxizr9r2b7im0ycbfa0137l69z5fdfdd";
+        sha256 = "0hr2b72jf9zb5avd2k6p7rbwkjjgl21vdhd90114kihp5ghqik8i";
         libName = "unicode_ident";
         authors = [
           "David Tolnay <dtolnay@gmail.com>"
@@ -11554,9 +11554,9 @@ rec {
       };
       "uuid" = rec {
         crateName = "uuid";
-        version = "1.12.0";
+        version = "1.12.1";
         edition = "2018";
-        sha256 = "1i2i7ar5651d58ip1l8cghg3y60pn0rqmssvw6lm8d4s3xc1hh3l";
+        sha256 = "0jxdmn94164g5yj9k152k5a47fysrz1f5dzrr1nbjaqrd1g8yxdk";
         authors = [
           "Ashley Mannix<ashleymannix@live.com.au>"
           "Dylan DPC<dylan.dpc@gmail.com>"

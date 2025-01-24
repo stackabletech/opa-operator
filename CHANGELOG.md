@@ -9,10 +9,6 @@ All notable changes to this project will be documented in this file.
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
 - Aggregate emitted Kubernetes events on the CustomResources ([#675]).
 
-### Changed
-
-- Append a dot (`.`) to the default cluster domain to reduce DNS requests ([#675]).
-
 ### Fixed
 
 - BREAKING: Use distinct ServiceAccounts for the Stacklets, so that multiple Stacklets can be
