@@ -75,6 +75,7 @@ rules:
       - events.k8s.io
     resources:
       - events
+      - patch
     verbs:
       - create
   - apiGroups:

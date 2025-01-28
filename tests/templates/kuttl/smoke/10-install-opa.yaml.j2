@@ -9,11 +9,13 @@ data:
   test.rego: |
     package test
 
-    hello {
+    import rego.v1
+
+    hello if {
       true
     }
 
-    world {
+    world if {
       false
     }
 ---

@@ -74,7 +74,7 @@ sleep 5
 
 request_hello() {
 # tag::request-hello[]
-curl -s http://localhost:8081/v1/data/test/hello
+curl -s http://localhost:8081/v1/data/test/hello -d '{"input": {}}'
 # end::request-hello[]
 }
 
@@ -91,7 +91,7 @@ fi
 
 request_world() {
 # tag::request-world[]
-curl -s http://localhost:8081/v1/data/test/world
+curl -s http://localhost:8081/v1/data/test/world -d '{"input": {}}'
 # end::request-world[]
 }
 
