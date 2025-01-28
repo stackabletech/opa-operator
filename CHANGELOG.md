@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Added support for OPA `1.0.0` ([#677]).
 - Aggregate emitted Kubernetes events on the CustomResources ([#675]).
 
+### Removed
+
+- Removed support for OPA `0.66.0` ([#677]).
+
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
 [#677]: https://github.com/stackabletech/opa-operator/pull/677
 [#675]: https://github.com/stackabletech/opa-operator/pull/675
