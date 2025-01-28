@@ -10,20 +10,23 @@ All notable changes to this project will be documented in this file.
 - Added support for OPA `1.0.0` ([#677]).
 - Aggregate emitted Kubernetes events on the CustomResources ([#675]).
 
+### Removed
+
+- Removed support for OPA `0.66.0` ([#677]).
+
+[#666]: https://github.com/stackabletech/opa-operator/pull/666
+[#677]: https://github.com/stackabletech/opa-operator/pull/677
+[#675]: https://github.com/stackabletech/opa-operator/pull/675
+
+## [24.11.1] - 2025-01-10
+
 ### Fixed
 
 - BREAKING: Use distinct ServiceAccounts for the Stacklets, so that multiple Stacklets can be
   deployed in one namespace. Existing Stacklets will use the newly created ServiceAccounts after
   restart ([#656]).
 
-### Removed
-
-- Removed support for OPA `0.66.0` ([#677]).
-
 [#656]: https://github.com/stackabletech/opa-operator/pull/656
-[#666]: https://github.com/stackabletech/opa-operator/pull/666
-[#677]: https://github.com/stackabletech/opa-operator/pull/677
-[#675]: https://github.com/stackabletech/opa-operator/pull/675
 
 ## [24.11.0] - 2024-11-18
 
