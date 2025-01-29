@@ -14,8 +14,13 @@ All notable changes to this project will be documented in this file.
 
 - Removed support for OPA `0.66.0` ([#677]).
 
+### Changed
+
+- Default to OCI for image metadata and product image selection ([#671]).
+
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
 [#677]: https://github.com/stackabletech/opa-operator/pull/677
+[#671]: https://github.com/stackabletech/opa-operator/pull/671
 [#675]: https://github.com/stackabletech/opa-operator/pull/675
 
 ## [24.11.1] - 2025-01-10
