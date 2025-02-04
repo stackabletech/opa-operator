@@ -1,5 +1,3 @@
-use crate::controller::{build_recommended_labels, APP_PORT};
-
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{OpaCluster, OpaRole};
 use stackable_operator::{
@@ -9,6 +7,8 @@ use stackable_operator::{
     kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
     utils::cluster_info::KubernetesClusterInfo,
 };
+
+use crate::controller::{build_recommended_labels, APP_PORT};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
