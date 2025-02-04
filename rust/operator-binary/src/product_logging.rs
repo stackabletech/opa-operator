@@ -1,6 +1,5 @@
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_crd::{Container, OpaCluster};
-use stackable_operator::product_logging::spec::LogLevel;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder,
     client::Client,
@@ -8,7 +7,7 @@ use stackable_operator::{
     kube::ResourceExt,
     product_logging::{
         self,
-        spec::{ContainerLogConfig, ContainerLogConfigChoice, Logging},
+        spec::{ContainerLogConfig, ContainerLogConfigChoice, LogLevel, Logging},
     },
     role_utils::RoleGroupRef,
 };
