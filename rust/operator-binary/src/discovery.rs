@@ -35,7 +35,7 @@ pub enum Error {
     },
 }
 
-/// Builds discovery [`ConfigMap`]s for connecting to a [`OpaCluster`] for all expected scenarios
+/// Builds discovery [`ConfigMap`]s for connecting to a [`v1alpha1::OpaCluster`] for all expected scenarios
 pub fn build_discovery_configmaps(
     owner: &impl Resource<DynamicType = ()>,
     opa: &v1alpha1::OpaCluster,
@@ -54,7 +54,7 @@ pub fn build_discovery_configmaps(
     )?])
 }
 
-/// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`OpaCluster`]
+/// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`v1alpha1::OpaCluster`]
 fn build_discovery_configmap(
     name: &str,
     owner: &impl Resource<DynamicType = ()>,
