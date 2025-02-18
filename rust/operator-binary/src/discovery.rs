@@ -4,7 +4,7 @@ use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{ConfigMap, Service},
-    kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
+    kube::{runtime::reflector::ObjectRef, Resource},
     utils::cluster_info::KubernetesClusterInfo,
 };
 
@@ -35,27 +35,8 @@ pub enum Error {
     },
 }
 
-/// Builds discovery [`ConfigMap`]s for connecting to a [`v1alpha1::OpaCluster`] for all expected scenarios
-pub fn build_discovery_configmaps(
-    owner: &impl Resource<DynamicType = ()>,
-    opa: &v1alpha1::OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    svc: &Service,
-    cluster_info: &KubernetesClusterInfo,
-) -> Result<Vec<ConfigMap>, Error> {
-    let name = owner.name_any();
-    Ok(vec![build_discovery_configmap(
-        &name,
-        owner,
-        opa,
-        resolved_product_image,
-        svc,
-        cluster_info,
-    )?])
-}
-
 /// Build a discovery [`ConfigMap`] containing information about how to connect to a certain [`v1alpha1::OpaCluster`]
-fn build_discovery_configmap(
+pub fn build_discovery_configmap(
     name: &str,
     owner: &impl Resource<DynamicType = ()>,
     opa: &v1alpha1::OpaCluster,
