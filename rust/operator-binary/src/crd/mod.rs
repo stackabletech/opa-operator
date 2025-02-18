@@ -324,6 +324,14 @@ impl v1alpha1::OpaCluster {
         self.metadata.name.clone()
     }
 
+    /// The name of the role-level load-balanced Kubernetes `Service`
+    pub fn server_role_service_name_load_balanced(&self) -> Option<String> {
+        if let Some(service_name) = self.server_role_service_name() {
+            return Some(format!("{service_name}-lb"));
+        }
+        None
+    }
+
     /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_fqdn(&self, cluster_info: &KubernetesClusterInfo) -> Option<String> {
         Some(format!(
