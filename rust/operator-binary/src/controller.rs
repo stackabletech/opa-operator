@@ -38,7 +38,7 @@ use stackable_operator::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
                 ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, SecretVolumeSource,
-                Service, ServiceAccount, ServicePort, ServiceSpec,
+                ServiceAccount,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -49,7 +49,7 @@ use stackable_operator::{
         runtime::{controller::Action, reflector::ObjectRef},
         Resource as KubeResource, ResourceExt,
     },
-    kvp::{Label, LabelError, Labels, ObjectLabels},
+    kvp::{LabelError, Labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
@@ -79,6 +79,7 @@ use crate::{
     product_logging::{
         extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
     },
+    service::{build_discoverable_services, build_rolegroup_service, ServiceConfig},
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
@@ -318,6 +319,9 @@ pub enum Error {
     AddVolumeMount {
         source: builder::pod::container::Error,
     },
+
+    #[snafu(display("failed to build required services"))]
+    BuildRequiredServices { source: crate::service::Error },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -447,21 +451,58 @@ pub async fn reconcile_opa(
         .await
         .context(ResolveVectorAggregatorAddressSnafu)?;
 
-    let server_role_service =
-        build_server_role_service_traffic_local(opa, &resolved_product_image)?;
-    // required for discovery config map later
-    let server_role_service = cluster_resources
-        .add(client, server_role_service)
-        .await
-        .context(ApplyRoleServiceSnafu)?;
+    let required_services = vec![
+        // The server-role service is the primary endpoint that should be used by clients that do
+        // require local access - Deprecated, kept for downwards compatibility
+        ServiceConfig {
+            name: opa
+                .server_role_service_name_itp_local_deprecated()
+                .context(RoleServiceNameNotFoundSnafu)?,
+            internal_traffic_policy: "Local".to_string(),
+        },
+        // The server-role service is the primary endpoint that should be used by clients that do
+        // require local access
+        ServiceConfig {
+            name: opa
+                .server_role_service_name_itp_local()
+                .context(RoleServiceNameNotFoundSnafu)?,
+            internal_traffic_policy: "Local".to_string(),
+        },
+        // The server-role service is the primary endpoint that should be used by clients that do
+        // perform internal round robin
+        ServiceConfig {
+            name: opa
+                .server_role_service_name_itp_cluster()
+                .context(RoleServiceNameNotFoundSnafu)?,
+            internal_traffic_policy: "Cluster".to_string(),
+        },
+    ];
 
-    let server_role_service_load_balanced =
-        build_server_role_service_traffic_cluster(opa, &resolved_product_image)?;
-    // required for discovery config map later
-    let server_role_service_load_balanced = cluster_resources
-        .add(client, server_role_service_load_balanced)
-        .await
-        .context(ApplyRoleServiceSnafu)?;
+    let services = build_discoverable_services(opa, &resolved_product_image, required_services)
+        .context(BuildRequiredServicesSnafu)?;
+
+    for svc in services {
+        // required for discovery config map later
+        let role_service = cluster_resources
+            .add(client, svc)
+            .await
+            .context(ApplyRoleServiceSnafu)?;
+
+        let discovery_cm = build_discovery_configmap(
+            &role_service.name_any(),
+            opa,
+            opa,
+            &resolved_product_image,
+            &role_service,
+            &client.kubernetes_cluster_info,
+        )
+        .context(BuildDiscoveryConfigSnafu)?;
+
+        cluster_resources
+            .add(client, discovery_cm)
+            .await
+            .context(ApplyDiscoveryConfigSnafu)?;
+    }
 
     let required_labels = cluster_resources
         .get_required_labels()
@@ -499,7 +540,8 @@ pub async fn reconcile_opa(
             &merged_config,
             vector_aggregator_address.as_deref(),
         )?;
-        let rg_service = build_rolegroup_service(opa, &resolved_product_image, &rolegroup)?;
+        let rg_service = build_rolegroup_service(opa, &resolved_product_image, &rolegroup)
+            .context(BuildRequiredServicesSnafu)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
             opa,
             &resolved_product_image,
@@ -555,36 +597,6 @@ pub async fn reconcile_opa(
             .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
-    let discovery_cm_traffic_local = build_discovery_configmap(
-        &server_role_service.name_any(),
-        opa,
-        opa,
-        &resolved_product_image,
-        &server_role_service,
-        &client.kubernetes_cluster_info,
-    )
-    .context(BuildDiscoveryConfigSnafu)?;
-
-    cluster_resources
-        .add(client, discovery_cm_traffic_local)
-        .await
-        .context(ApplyDiscoveryConfigSnafu)?;
-
-    let discovery_cm_traffic_cluster = build_discovery_configmap(
-        &server_role_service_load_balanced.name_any(),
-        opa,
-        opa,
-        &resolved_product_image,
-        &server_role_service_load_balanced,
-        &client.kubernetes_cluster_info,
-    )
-    .context(BuildDiscoveryConfigSnafu)?;
-
-    cluster_resources
-        .add(client, discovery_cm_traffic_cluster)
-        .await
-        .context(ApplyDiscoveryConfigSnafu)?;
-
     let cluster_operation_cond_builder =
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
@@ -603,131 +615,6 @@ pub async fn reconcile_opa(
         .context(DeleteOrphansSnafu)?;
 
     Ok(Action::await_change())
-}
-
-/// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
-/// including targets outside of the cluster.
-pub fn build_server_role_service_traffic_local(
-    opa: &v1alpha1::OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-) -> Result<Service> {
-    let service_name = opa
-        .server_role_service_name()
-        .context(RoleServiceNameNotFoundSnafu)?;
-    build_server_role_service(
-        opa,
-        resolved_product_image,
-        &service_name,
-        Some("Local".to_string()),
-    )
-}
-
-/// The server-role service is the endpoint that should be used by clients that do perform internal load balancing.
-pub fn build_server_role_service_traffic_cluster(
-    opa: &v1alpha1::OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-) -> Result<Service> {
-    let service_name = opa
-        .server_role_service_name_load_balanced()
-        .context(RoleServiceNameNotFoundSnafu)?;
-    build_server_role_service(
-        opa,
-        resolved_product_image,
-        &service_name,
-        Some("Cluster".to_string()),
-    )
-}
-
-fn build_server_role_service(
-    opa: &v1alpha1::OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    service_name: &str,
-    internal_traffic_policy: Option<String>,
-) -> Result<Service> {
-    let role_name = v1alpha1::OpaRole::Server.to_string();
-
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(service_name)
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label,
-            &role_name,
-            "global",
-        ))
-        .context(ObjectMetaSnafu)?
-        .build();
-
-    let service_selector_labels =
-        Labels::role_selector(opa, APP_NAME, &role_name).context(BuildLabelSnafu)?;
-
-    let service_spec = ServiceSpec {
-        type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(vec![ServicePort {
-            name: Some(APP_PORT_NAME.to_string()),
-            port: APP_PORT.into(),
-            protocol: Some("TCP".to_string()),
-            ..ServicePort::default()
-        }]),
-        selector: Some(service_selector_labels.into()),
-        internal_traffic_policy,
-        ..ServiceSpec::default()
-    };
-
-    Ok(Service {
-        metadata,
-        spec: Some(service_spec),
-        status: None,
-    })
-}
-
-/// The rolegroup [`Service`] is a headless service that allows direct access to the instances of a certain rolegroup
-///
-/// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
-fn build_rolegroup_service(
-    opa: &v1alpha1::OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
-) -> Result<Service> {
-    let prometheus_label =
-        Label::try_from(("prometheus.io/scrape", "true")).context(BuildLabelSnafu)?;
-
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(rolegroup.object_name())
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label,
-            &rolegroup.role,
-            &rolegroup.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
-        .with_label(prometheus_label)
-        .build();
-
-    let service_selector_labels =
-        Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
-            .context(BuildLabelSnafu)?;
-
-    let service_spec = ServiceSpec {
-        // Internal communication does not need to be exposed
-        type_: Some("ClusterIP".to_string()),
-        cluster_ip: Some("None".to_string()),
-        ports: Some(service_ports()),
-        selector: Some(service_selector_labels.into()),
-        publish_not_ready_addresses: Some(true),
-        ..ServiceSpec::default()
-    };
-
-    Ok(Service {
-        metadata,
-        spec: Some(service_spec),
-        status: None,
-    })
 }
 
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the administrator
@@ -1351,24 +1238,6 @@ fn build_prepare_start_command(
     prepare_container_args.push(format!("mkdir -p {BUNDLES_TMP_DIR}"));
 
     prepare_container_args
-}
-
-fn service_ports() -> Vec<ServicePort> {
-    vec![
-        ServicePort {
-            name: Some(APP_PORT_NAME.to_string()),
-            port: APP_PORT.into(),
-            protocol: Some("TCP".to_string()),
-            ..ServicePort::default()
-        },
-        ServicePort {
-            name: Some(METRICS_PORT_NAME.to_string()),
-            port: 9504, // Arbitrary port number, this is never actually used anywhere
-            protocol: Some("TCP".to_string()),
-            target_port: Some(IntOrString::String(APP_PORT_NAME.to_string())),
-            ..ServicePort::default()
-        },
-    ]
 }
 
 /// Creates recommended `ObjectLabels` to be used in deployed resources

@@ -319,24 +319,32 @@ impl v1alpha1::OpaCluster {
             })
     }
 
-    /// The name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_name(&self) -> Option<String> {
+    /// DEPRECATED: The name of the role-level traffic policy local Kubernetes `Service`
+    pub fn server_role_service_name_itp_local_deprecated(&self) -> Option<String> {
         self.metadata.name.clone()
     }
 
-    /// The name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_name_load_balanced(&self) -> Option<String> {
-        if let Some(service_name) = self.server_role_service_name() {
-            return Some(format!("{service_name}-lb"));
+    /// The name of the role-level traffic policy cluster Kubernetes `Service`
+    pub fn server_role_service_name_itp_local(&self) -> Option<String> {
+        if let Some(service_name) = &self.metadata.name {
+            return Some(format!("{service_name}-local"));
         }
         None
     }
 
-    /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
+    /// The name of the role-level traffic policy cluster Kubernetes `Service`
+    pub fn server_role_service_name_itp_cluster(&self) -> Option<String> {
+        if let Some(service_name) = &self.metadata.name {
+            return Some(format!("{service_name}-cluster"));
+        }
+        None
+    }
+
+    /// The fully-qualified domain name of the role-level local Kubernetes `Service`
     pub fn server_role_service_fqdn(&self, cluster_info: &KubernetesClusterInfo) -> Option<String> {
         Some(format!(
             "{role_service_name}.{namespace}.svc.{cluster_domain}",
-            role_service_name = self.server_role_service_name()?,
+            role_service_name = self.server_role_service_name_itp_local_deprecated()?,
             namespace = self.metadata.namespace.as_ref()?,
             cluster_domain = cluster_info.cluster_domain
         ))
