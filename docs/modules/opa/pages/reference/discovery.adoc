@@ -31,7 +31,7 @@ spec:
 
 Currently, three discovery ConfigMaps are provided.
 
-=== (DEPRECATED) Internal Traffic Policy `Local` 
+=== (DEPRECATED) Internal Traffic Policy `Local`
 
 The discovery ConfigMap `{namespace}/{clusterName}` contains the following fields where `{clusterName}` represents the name and `{namespace}` the namespace of the cluster.
 This is deprecated and only kept for backwards compatibitliy. Users are adviced to switch to `{namespace}/{clusterName}-local`, which is the identical replacement.
@@ -51,7 +51,7 @@ In order to query policies you have to configure your product and its OPA URL as
     http://{clusterName}.{namespace}.svc.cluster.local:8081/v1/data/{packageName}/{policyName}
 ====
 
-=== Internal Traffic Policy `Local` 
+=== Internal Traffic Policy `Local`
 
 The discovery ConfigMap `{namespace}/{clusterName}-local` contains the following fields where `{clusterName}-local` represents the name and `{namespace}` the namespace of the cluster.
 Using this discovery service, requests from one Node will always reach the OPA Pod on the same Node. This allows for low latency authorization queriers.
@@ -71,7 +71,7 @@ In order to query policies you have to configure your product and its OPA URL as
     http://{clusterName}-local.{namespace}.svc.cluster.local:8081/v1/data/{packageName}/{policyName}
 ====
 
-=== Internal Traffic Policy `Cluster` 
+=== Internal Traffic Policy `Cluster`
 
 The discovery ConfigMap `{namespace}/{clusterName}-cluster` contains the following fields where `{clusterName}-cluster` represents the name and `{namespace}` the namespace of the cluster.
 Using this discovery service, requests to OPA are distributed over all available OPA Pods, improving parallelism when evaluating policies but slightly increasing the latency of each single query
