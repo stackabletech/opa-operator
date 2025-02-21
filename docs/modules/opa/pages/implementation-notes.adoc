@@ -5,7 +5,7 @@ but should not be required reading for regular use.
 
 == OPA replica per node
 
-OPA is deployed as a DaemonSet and runs on each Node. two entrypoint Services are defined.
+OPA is deployed as a DaemonSet and runs on each Node. The following entrypoint Services are defined:
 
 === Local Traffic Policy
 
