@@ -27,14 +27,6 @@ pub enum Error {
     #[snafu(display("object has no name associated"))]
     NoName,
 
-    #[snafu(display("object has no namespace associated"))]
-    NoNamespace,
-
-    #[snafu(display("failed to build ConfigMap"))]
-    BuildConfigMap {
-        source: stackable_operator::builder::configmap::Error,
-    },
-
     #[snafu(display("failed to build object meta data"))]
     ObjectMeta {
         source: stackable_operator::builder::meta::Error,
@@ -58,13 +50,7 @@ pub fn build_discoverable_services(
 
     // discoverable role services
     for sc in service_configs {
-        let service_name = sc.name;
-        services.push(build_server_role_service(
-            opa,
-            resolved_product_image,
-            &service_name,
-            Some(sc.internal_traffic_policy.to_string()),
-        )?);
+        services.push(build_server_role_service(opa, resolved_product_image, sc)?);
     }
 
     Ok(services)
@@ -73,14 +59,13 @@ pub fn build_discoverable_services(
 fn build_server_role_service(
     opa: &v1alpha1::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    service_name: &str,
-    internal_traffic_policy: Option<String>,
+    service_config: ServiceConfig,
 ) -> Result<Service> {
     let role_name = v1alpha1::OpaRole::Server.to_string();
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
-        .name(service_name)
+        .name(service_config.name)
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu {
             opa: ObjectRef::from_obj(opa),
@@ -106,7 +91,7 @@ fn build_server_role_service(
             ..ServicePort::default()
         }]),
         selector: Some(service_selector_labels.into()),
-        internal_traffic_policy,
+        internal_traffic_policy: Some(service_config.internal_traffic_policy),
         ..ServiceSpec::default()
     };
 

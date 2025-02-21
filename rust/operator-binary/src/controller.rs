@@ -158,9 +158,6 @@ pub enum Error {
         source: error_boundary::InvalidObject,
     },
 
-    #[snafu(display("object does not define meta name"))]
-    NoName,
-
     #[snafu(display("internal operator failure"))]
     InternalOperatorFailure {
         source: stackable_opa_operator::crd::Error,
@@ -453,7 +450,7 @@ pub async fn reconcile_opa(
 
     let required_services = vec![
         // The server-role service is the primary endpoint that should be used by clients that do
-        // require local access - Deprecated, kept for downwards compatibility
+        // require local access - deprecated, kept for downwards compatibility
         ServiceConfig {
             name: opa
                 .server_role_service_name_itp_local_deprecated()

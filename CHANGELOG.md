@@ -9,7 +9,8 @@ All notable changes to this project will be documented in this file.
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
 - Added support for OPA `1.0.x` ([#677]) and ([#687]).
 - Aggregate emitted Kubernetes events on the CustomResources ([#675]).
-- Added role level service and discovery configmap called `<cluster-name>-lb` with `internalTrafficPolicy` set to "Cluster" ([#688]).
+- Added role level services and discovery configmaps called `<cluster-name>-local` with `internalTrafficPolicy` set to `Local`
+  and `<cluster-name>-cluster` with `internalTrafficPolicy` set to `Cluster` ([#688]). 
 
 ### Removed
 

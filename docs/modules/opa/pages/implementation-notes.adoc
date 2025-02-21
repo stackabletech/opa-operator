@@ -5,7 +5,7 @@ but should not be required reading for regular use.
 
 == OPA replica per node
 
-Since OPA is deployed as a DaemonSet and runs on each Node, two entrypoint Services are defined.
+OPA is deployed as a DaemonSet and runs on each Node. two entrypoint Services are defined.
 
 === Local Traffic Policy
 
@@ -16,15 +16,16 @@ This means that https://kubernetes.io/docs/concepts/workloads/pods/[Pods] access
 
 This should be the default entrypoint and has the same name as the defined OPA cluster.
 
-If the `metadata.name` is `opa`, this service is called `opa`.
+If the `metadata.name` is `opa`, this service is called `opa-local`.
 
-=== Cluster Traffic Policy (load-balanced / round-robin)
+=== Cluster Traffic Policy (round-robin)
 
-This service is called as the OPA cluster suffixed with `-lb`. This entrypoint can be used if latency (e.g. no network requests) is less important.
+This service is called as the OPA cluster suffixed with `-cluster`. This entrypoint can be used if latency (e.g. no network requests) is less important.
 Evaluating complicated rego rules may take some time depending on the provided resources, and can be the limiting factor in e.g. bulk requests.
-Therefore, using this service, every Pod in the cluster is utilized to evaluate policies than instead e.g. just one.
+Therefore, using this service, every Pod in the cluster is utilized to evaluate policies (via round robin). This allows better parallelism when
+evaluating policies, but results in network roundtrips.
 
-If the `metadata.name` is `opa`, this service is called `opa-lb`.
+If the `metadata.name` is `opa`, this service is called `opa-cluster`.
 
 == OPA Bundle Builder
 
