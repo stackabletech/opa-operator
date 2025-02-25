@@ -79,6 +79,7 @@ async fn read_config_file(path: &Path) -> Result<String, StartupError> {
 }
 
 #[tokio::main]
+#[snafu::report]
 async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
