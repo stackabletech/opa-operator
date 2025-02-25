@@ -112,6 +112,13 @@ pub struct ActiveDirectoryBackend {
     /// Custom attributes, and their LDAP attribute names.
     #[serde(default)]
     pub custom_attribute_mappings: BTreeMap<String, String>,
+
+    /// Attributes that groups must have to be returned.
+    ///
+    /// These fields will be spliced into an LDAP Search Query, so wildcards can be used,
+    /// but characters with a special meaning in LDAP will need to be escaped.
+    #[serde(default)]
+    pub custom_group_attribute_filters: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

@@ -77,6 +77,15 @@ spec:
                                   default: {}
                                   description: Custom attributes, and their LDAP attribute names.
                                   type: object
+                                customGroupAttributeFilters:
+                                  additionalProperties:
+                                    type: string
+                                  default: {}
+                                  description: |-
+                                    Attributes that groups must have to be returned.
+
+                                    These fields will be spliced into an LDAP Search Query, so wildcards can be used, but characters with a special meaning in LDAP will need to be escaped.
+                                  type: object
                                 kerberosSecretClassName:
                                   description: The name of the Kerberos SecretClass.
                                   type: string
