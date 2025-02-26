@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Run a `containerdebug` process in the background of each OPA container to collect debugging information ([#666]).
 - Added support for OPA `1.0.x` ([#677]) and ([#687]).
 - Aggregate emitted Kubernetes events on the CustomResources ([#675]).
+- Added support for filtering groups searched by Active Directory ([#693]).
 
 ### Removed
 
@@ -23,6 +24,7 @@ All notable changes to this project will be documented in this file.
 [#675]: https://github.com/stackabletech/opa-operator/pull/675
 [#677]: https://github.com/stackabletech/opa-operator/pull/677
 [#687]: https://github.com/stackabletech/opa-operator/pull/687
+[#693]: https://github.com/stackabletech/opa-operator/pull/693
 
 ## [24.11.1] - 2025-01-10
 

@@ -300,6 +300,7 @@ async fn get_user_info(
                             &ad.tls,
                             &ad.base_distinguished_name,
                             &ad.custom_attribute_mappings,
+                            &ad.additional_group_attribute_filters,
                         )
                         .await
                         .context(get_user_info_error::ActiveDirectorySnafu)

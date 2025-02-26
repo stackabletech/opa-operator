@@ -89,12 +89,14 @@ spec:
           baseDistinguishedName: DC=sble,DC=test # <3>
           customAttributeMappings: # <4>
             country: c # <5>
-          kerberosSecretClassName: kerberos-ad # <6>
+          additionalGroupAttributeFilters: # <6>
+            foo: bar
+          kerberosSecretClassName: kerberos-ad # <7>
           tls:
             verification:
               server:
                 caCert:
-                  secretClass: tls-ad # <7>
+                  secretClass: tls-ad # <8>
       cache: # optional, enabled by default
         entryTimeToLive: 60s # optional, defaults to 60s
 ----
@@ -103,8 +105,9 @@ spec:
 <3> The distinguished name to search, users and groups outside of this will not be seen
 <4> Arbitrary LDAP attributes can be requested to be fetched
 <5> https://learn.microsoft.com/en-us/windows/win32/ad/address-book-properties[`c`] stores the ISO-3166 country code of the user
-<6> The name of the SecretClass that knows how to create Kerberos keytabs trusted by Active Directory
-<7> The name of the SecretClass that contains the Active Directory's root CA certificate(s)
+<6> Groups can be filtered by LDAP attributes to reduce the load in searching for membership. `*` can be used as a wildcard in these filters.
+<7> The name of the SecretClass that knows how to create Kerberos keytabs trusted by Active Directory
+<8> The name of the SecretClass that contains the Active Directory's root CA certificate(s)
 
 == User info fetcher API
 

@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    fmt::Display,
+    fmt::{Display, Write},
     io::{Cursor, Read},
     num::ParseIntError,
     str::FromStr,
@@ -90,13 +90,19 @@ const LDAP_FIELD_USER_NAME: &str = "userPrincipalName";
 const LDAP_FIELD_USER_PRIMARY_GROUP_RID: &str = "primaryGroupID";
 const LDAP_FIELD_GROUP_MEMBER: &str = "member";
 
-#[tracing::instrument(skip(tls, base_distinguished_name, custom_attribute_mappings))]
+#[tracing::instrument(skip(
+    tls,
+    base_distinguished_name,
+    custom_attribute_mappings,
+    additional_group_attribute_filters,
+))]
 pub(crate) async fn get_user_info(
     request: &UserInfoRequest,
     ldap_server: &str,
     tls: &TlsClientDetails,
     base_distinguished_name: &str,
     custom_attribute_mappings: &BTreeMap<String, String>,
+    additional_group_attribute_filters: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> {
     let ldap_tls = utils::tls::configure_native_tls(tls)
         .await
@@ -168,16 +174,27 @@ pub(crate) async fn get_user_info(
         base_distinguished_name,
         &user,
         custom_attribute_mappings,
+        additional_group_attribute_filters,
     )
     .await
 }
 
-#[tracing::instrument(skip(ldap, base_dn, user, custom_attribute_mappings), fields(user.dn))]
+#[tracing::instrument(
+    skip(
+        ldap,
+        base_dn,
+        user,
+        custom_attribute_mappings,
+        additional_group_attribute_filters,
+    ),
+    fields(user.dn),
+)]
 async fn user_attributes(
     ldap: &mut Ldap,
     base_dn: &str,
     user: &SearchEntry,
     custom_attribute_mappings: &BTreeMap<String, String>,
+    additional_group_attribute_filters: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> {
     let user_sid = user
         .bin_attrs
@@ -242,7 +259,14 @@ async fn user_attributes(
         })
         .collect::<HashMap<_, _>>();
     let groups = if let Some(user_sid) = &user_sid {
-        user_group_distinguished_names(ldap, base_dn, user, user_sid).await?
+        user_group_distinguished_names(
+            ldap,
+            base_dn,
+            user,
+            user_sid,
+            additional_group_attribute_filters,
+        )
+        .await?
     } else {
         tracing::debug!(user.dn, "user has no SID, cannot fetch groups...");
         Vec::new()
@@ -257,12 +281,13 @@ async fn user_attributes(
 }
 
 /// Gets the distinguished names of all of `user`'s groups, both primary and secondary.
-#[tracing::instrument(skip(ldap, base_dn, user, user_sid))]
+#[tracing::instrument(skip(ldap, base_dn, user, user_sid, additional_group_attribute_filters))]
 async fn user_group_distinguished_names(
     ldap: &mut Ldap,
     base_dn: &str,
     user: &SearchEntry,
     user_sid: &SecurityId,
+    additional_group_attribute_filters: &BTreeMap<String, String>,
 ) -> Result<Vec<String>, Error> {
     // User group memberships are tricky, because users have exactly one *primary* and any number of *secondary* groups.
     // Additionally groups can be members of other groups.
@@ -309,10 +334,22 @@ async fn user_group_distinguished_names(
         "({LDAP_FIELD_GROUP_MEMBER}{LDAP_MATCHING_RULE_IN_CHAIN}=<SID={primary_group_sid}>)"
     );
 
+    // Users can also specify custom filters via `group_attribute_filters`
+    let custom_group_filter =
+        additional_group_attribute_filters
+            .iter()
+            .fold(String::new(), |mut out, (k, v)| {
+                // NOTE: This is technically an LDAP injection vuln, but these are provided statically by the OPA administrator,
+                // who would be able to do plenty of other harm... (like providing their own OPA images that do whatever they want).
+                // We could base64 the value to "defuse" it entirely, but that would also prevent using wildcards.
+                write!(out, "({k}={v})").expect("string concatenation is infallible");
+                out
+            });
+
     // Let's put it all together, and make it go...
     let groups_filter =
         format!("(|{primary_group_filter}{primary_group_parents_filter}{secondary_groups_filter})");
-    let groups_query_filter = format!("(&(objectClass=group){groups_filter})");
+    let groups_query_filter = format!("(&(objectClass=group){custom_group_filter}{groups_filter})");
     let requested_group_attrs = [LDAP_FIELD_OBJECT_DISTINGUISHED_NAME];
     tracing::debug!(
         groups_query_filter,
