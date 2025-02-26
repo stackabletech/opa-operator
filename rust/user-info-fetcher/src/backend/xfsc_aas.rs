@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
 use url::Url;
 
 use crate::{http_error, utils::http::send_json_request, UserInfo, UserInfoRequest};
@@ -81,9 +81,9 @@ impl TryFrom<UserClaims> for UserInfo {
 pub(crate) async fn get_user_info(
     req: &UserInfoRequest,
     http: &reqwest::Client,
-    config: &crd::AasBackend,
+    config: &v1alpha1::AasBackend,
 ) -> Result<UserInfo, Error> {
-    let crd::AasBackend { hostname, port } = config;
+    let v1alpha1::AasBackend { hostname, port } = config;
 
     let cip_endpoint_raw = format!("http://{hostname}:{port}{API_PATH}");
     let cip_endpoint = Url::parse(&cip_endpoint_raw).context(ParseAasEndpointUrlSnafu {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_crd::user_info_fetcher as crd;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
 use stackable_operator::commons::authentication::oidc;
 
 use crate::{http_error, utils::http::send_json_request, Credentials, UserInfo, UserInfoRequest};
@@ -90,9 +90,9 @@ pub(crate) async fn get_user_info(
     req: &UserInfoRequest,
     http: &reqwest::Client,
     credentials: &Credentials,
-    config: &crd::KeycloakBackend,
+    config: &v1alpha1::KeycloakBackend,
 ) -> Result<UserInfo, Error> {
-    let crd::KeycloakBackend {
+    let v1alpha1::KeycloakBackend {
         client_credentials_secret: _,
         admin_realm,
         user_realm,
