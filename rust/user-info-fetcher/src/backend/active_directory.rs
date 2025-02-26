@@ -94,7 +94,7 @@ const LDAP_FIELD_GROUP_MEMBER: &str = "member";
     tls,
     base_distinguished_name,
     custom_attribute_mappings,
-    group_attribute_filters,
+    additional_group_attribute_filters,
 ))]
 pub(crate) async fn get_user_info(
     request: &UserInfoRequest,
@@ -102,7 +102,7 @@ pub(crate) async fn get_user_info(
     tls: &TlsClientDetails,
     base_distinguished_name: &str,
     custom_attribute_mappings: &BTreeMap<String, String>,
-    group_attribute_filters: &BTreeMap<String, String>,
+    additional_group_attribute_filters: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> {
     let ldap_tls = utils::tls::configure_native_tls(tls)
         .await
@@ -174,7 +174,7 @@ pub(crate) async fn get_user_info(
         base_distinguished_name,
         &user,
         custom_attribute_mappings,
-        group_attribute_filters,
+        additional_group_attribute_filters,
     )
     .await
 }
@@ -185,7 +185,7 @@ pub(crate) async fn get_user_info(
         base_dn,
         user,
         custom_attribute_mappings,
-        group_attribute_filters,
+        additional_group_attribute_filters,
     ),
     fields(user.dn),
 )]
@@ -194,7 +194,7 @@ async fn user_attributes(
     base_dn: &str,
     user: &SearchEntry,
     custom_attribute_mappings: &BTreeMap<String, String>,
-    group_attribute_filters: &BTreeMap<String, String>,
+    additional_group_attribute_filters: &BTreeMap<String, String>,
 ) -> Result<UserInfo, Error> {
     let user_sid = user
         .bin_attrs
@@ -259,8 +259,14 @@ async fn user_attributes(
         })
         .collect::<HashMap<_, _>>();
     let groups = if let Some(user_sid) = &user_sid {
-        user_group_distinguished_names(ldap, base_dn, user, user_sid, group_attribute_filters)
-            .await?
+        user_group_distinguished_names(
+            ldap,
+            base_dn,
+            user,
+            user_sid,
+            additional_group_attribute_filters,
+        )
+        .await?
     } else {
         tracing::debug!(user.dn, "user has no SID, cannot fetch groups...");
         Vec::new()
@@ -275,13 +281,13 @@ async fn user_attributes(
 }
 
 /// Gets the distinguished names of all of `user`'s groups, both primary and secondary.
-#[tracing::instrument(skip(ldap, base_dn, user, user_sid, group_attribute_filters))]
+#[tracing::instrument(skip(ldap, base_dn, user, user_sid, additional_group_attribute_filters))]
 async fn user_group_distinguished_names(
     ldap: &mut Ldap,
     base_dn: &str,
     user: &SearchEntry,
     user_sid: &SecurityId,
-    group_attribute_filters: &BTreeMap<String, String>,
+    additional_group_attribute_filters: &BTreeMap<String, String>,
 ) -> Result<Vec<String>, Error> {
     // User group memberships are tricky, because users have exactly one *primary* and any number of *secondary* groups.
     // Additionally groups can be members of other groups.
@@ -330,7 +336,7 @@ async fn user_group_distinguished_names(
 
     // Users can also specify custom filters via `group_attribute_filters`
     let custom_group_filter =
-        group_attribute_filters
+        additional_group_attribute_filters
             .iter()
             .fold(String::new(), |mut out, (k, v)| {
                 // NOTE: This is technically an LDAP injection vuln, but these are provided statically by the OPA administrator,
