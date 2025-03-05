@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Bump `stackable-operator` to 0.87.0 and `stackable-versioned` to 0.6.0 ([#696]).
 - Default to OCI for image metadata and product image selection ([#671]).
 
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
@@ -25,6 +26,7 @@ All notable changes to this project will be documented in this file.
 [#677]: https://github.com/stackabletech/opa-operator/pull/677
 [#687]: https://github.com/stackabletech/opa-operator/pull/687
 [#693]: https://github.com/stackabletech/opa-operator/pull/693
+[#696]: https://github.com/stackabletech/opa-operator/pull/696
 
 ## [24.11.1] - 2025-01-10
 
