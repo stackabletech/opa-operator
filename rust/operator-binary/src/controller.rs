@@ -747,6 +747,7 @@ fn build_server_rolegroup_daemonset(
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
 ) -> Result<DaemonSet> {
+    let opa_name = opa.metadata.name.as_deref().context(NoNameSnafu)?;
     let role = opa.role(opa_role);
     let role_group = opa
         .rolegroup(rolegroup_ref)
@@ -979,9 +980,9 @@ fn build_server_rolegroup_daemonset(
                     SecretClassVolume::new(
                         ad.kerberos_secret_class_name.clone(),
                         Some(SecretClassVolumeScope {
-                            pod: true,
-                            node: true,
-                            services: Vec::new(),
+                            pod: false,
+                            node: false,
+                            services: vec![opa_name.to_string()],
                             listener_volumes: Vec::new(),
                         }),
                     )
