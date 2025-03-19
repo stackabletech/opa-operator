@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 - Bump `stackable-operator` to 0.87.0 and `stackable-versioned` to 0.6.0 ([#696]).
 - Default to OCI for image metadata and product image selection ([#671]).
+- Active Directory backend for user-info-fetcher now uses the `service={opacluster}` scope rather than `pod,node` ([#698]).
 
 [#666]: https://github.com/stackabletech/opa-operator/pull/666
 [#671]: https://github.com/stackabletech/opa-operator/pull/671
@@ -27,6 +28,7 @@ All notable changes to this project will be documented in this file.
 [#687]: https://github.com/stackabletech/opa-operator/pull/687
 [#693]: https://github.com/stackabletech/opa-operator/pull/693
 [#696]: https://github.com/stackabletech/opa-operator/pull/696
+[#698]: https://github.com/stackabletech/opa-operator/pull/698
 
 ## [24.11.1] - 2025-01-10
 
