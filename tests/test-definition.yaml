@@ -39,6 +39,12 @@ tests:
       - opa-latest
       - keycloak
       - openshift
+  # AD must be initialized (by running ad-init) first,
+  # and the correct users and groups must be set up (see test-regorule.py)
+  # name: ad-user-info
+  #   dimensions:
+  #     - opa-latest
+  #     - openshift
   - name: aas-user-info
     dimensions:
       - opa-latest
