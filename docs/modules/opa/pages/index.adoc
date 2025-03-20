@@ -48,11 +48,11 @@ OPA and the Stackable operator for OPA do not have any dependencies.
 
 Currently the following products on the Stackable Data Platform support policy decisions with OPA:
 
+* xref:airflow:usage-guide/security.adoc#_open_policy_agent[Apache Airflow]
 * xref:druid:usage-guide/security.adoc#_authorization_with_open_policy_agent_opa[Apache Druid]
 * xref:kafka:usage-guide/security.adoc#_authorization[Apache Kafka]
-* xref:trino:usage-guide/security.adoc#_authorization[Trino]
-* xref:airflow:usage-guide/security.adoc#_open_policy_agent[Apache Airflow]
 * xref:superset:usage-guide/security.adoc#_opa_role_mapping[Apache Superset]
+* xref:trino:usage-guide/security.adoc#_authorization[Trino]
 
 == Supported versions
 
