@@ -56,14 +56,5 @@ commands:
           config:
             logging:
               enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
-          podOverrides:
-            spec:
-              volumes:
-              - name: kerberos
-                ephemeral:
-                  volumeClaimTemplate:
-                    metadata:
-                      annotations:
-                        secrets.stackable.tech/scope: service=opa
           roleGroups:
             default: {}
