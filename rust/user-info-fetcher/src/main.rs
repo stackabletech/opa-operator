@@ -122,6 +122,10 @@ async fn main() -> Result<(), StartupError> {
             client_id: "".to_string(),
             client_secret: "".to_string(),
         },
+        v1alpha1::Backend::Entra(_) => Credentials {
+            client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
+            client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -231,6 +235,9 @@ enum GetUserInfoError {
     ActiveDirectory {
         source: backend::active_directory::Error,
     },
+
+    #[snafu(display("failed to get user information from Entra"))]
+    Entra { source: backend::entra::Error },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -245,6 +252,7 @@ impl http_error::Error for GetUserInfoError {
             Self::Keycloak { source } => source.status_code(),
             Self::ExperimentalXfscAas { source } => source.status_code(),
             Self::ActiveDirectory { source } => source.status_code(),
+            Self::Entra { source } => source.status_code(),
         }
     }
 }
@@ -304,6 +312,11 @@ async fn get_user_info(
                         )
                         .await
                         .context(get_user_info_error::ActiveDirectorySnafu)
+                    }
+                    v1alpha1::Backend::Entra(entra) => {
+                        backend::entra::get_user_info(&req, &http, &credentials, entra)
+                            .await
+                            .context(get_user_info_error::EntraSnafu)
                     }
                 }
             })

@@ -1030,6 +1030,27 @@ fn build_server_rolegroup_daemonset(
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                     .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
+            user_info_fetcher::v1alpha1::Backend::Entra(entra) => {
+                pb.add_volume(
+                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                        .secret(SecretVolumeSource {
+                            secret_name: Some(entra.client_credentials_secret.clone()),
+                            ..Default::default()
+                        })
+                        .build(),
+                )
+                .context(AddVolumeSnafu)?;
+                cb_user_info_fetcher
+                    .add_volume_mount(
+                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                        USER_INFO_FETCHER_CREDENTIALS_DIR,
+                    )
+                    .context(AddVolumeMountSnafu)?;
+                entra
+                    .tls
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
+            }
         }
 
         pb.add_container(cb_user_info_fetcher.build());

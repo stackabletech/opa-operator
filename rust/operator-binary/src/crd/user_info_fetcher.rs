@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
@@ -38,6 +38,10 @@ pub mod versioned {
         /// Backend that fetches user information from Active Directory
         #[serde(rename = "experimentalActiveDirectory")]
         ActiveDirectory(v1alpha1::ActiveDirectoryBackend),
+
+        /// Backend that fetches user information from Microsoft Entra
+        #[serde(rename = "experimentalEntraBackend")]
+        Entra(v1alpha1::EntraBackend),
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -112,6 +116,30 @@ pub mod versioned {
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
+    pub struct EntraBackend {
+        /// Hostname of the identity provider, e.g. `login.microsoft.com`.
+        #[serde(default = "default_entra_host")]
+        pub hostname: HostName,
+
+        /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
+        pub port: Option<u16>,
+
+        /// Root HTTP path of the identity provider. Defaults to `/`.
+        #[serde(default = "default_root_path")]
+        pub tenant_id: String,
+
+        /// Use a TLS connection. If not specified no TLS will be used.
+        #[serde(flatten)]
+        pub tls: TlsClientDetails,
+
+        /// Name of a Secret that contains client credentials of a Entra account with permission to read user metadata.
+        ///
+        /// Must contain the fields `clientId` and `clientSecret`.
+        pub client_credentials_secret: String,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct Cache {
         /// How long metadata about each user should be cached for.
         #[serde(default = "v1alpha1::Cache::default_entry_time_to_live")]
@@ -127,6 +155,10 @@ impl Default for v1alpha1::Backend {
 
 fn default_root_path() -> String {
     "/".to_string()
+}
+
+fn default_entra_host() -> HostName {
+    HostName::from_str("login.microsoft.com").unwrap()
 }
 
 fn aas_default_port() -> u16 {
