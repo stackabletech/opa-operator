@@ -75,7 +75,9 @@ struct OAuthResponse {
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
     id: String,
-    username: String,
+    //username: String,
+    mail: String,
+    display_name: String,
     #[serde(default)]
     attributes: HashMap<String, serde_json::Value>,
 }
@@ -83,7 +85,8 @@ struct UserMetadata {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
-    path: String,
+    id: String,
+    displayName: String,
 }
 
 pub(crate) async fn get_user_info(
@@ -92,5 +95,71 @@ pub(crate) async fn get_user_info(
     credentials: &Credentials,
     config: &v1alpha1::EntraBackend,
 ) -> Result<UserInfo, Error> {
-    Ok(UserInfo::default())
+    let v1alpha1::EntraBackend {
+        client_credentials_secret: _,
+        hostname,
+        port,
+        tenant_id,
+        tls,
+    } = config;
+
+    // TODO: tls
+    let host_port = port.unwrap_or(443);
+    let token_url = format!("http://{hostname}:{host_port}/{tenant_id}/oauth2/v2.0/token");
+
+    // -H "Content-Type: application/x-www-form-urlencoded" \
+    // -d "client_id=${CLIENT_ID}" \
+    // -d "client_secret=${CLIENT_SECRET}" \
+    // -d "scope=https://graph.microsoft.com/.default" \
+    // -d "grant_type=client_credentials" | jq -r .access_token)
+
+    let authn = send_json_request::<OAuthResponse>(http.post(token_url).form(&[
+        ("client_id", &credentials.client_id),
+        ("client_secret", &credentials.client_secret),
+        ("scope", &"https://graph.microsoft.com/.default".to_string()),
+        ("grant_type", &"client_credentials".to_string()),
+    ]))
+    .await
+    .context(AccessTokenSnafu)?;
+
+    let tok = &authn.access_token;
+    tracing::warn!("Got token: {tok}");
+
+    let users_base_url = format!("http://{hostname}:{host_port}/v1.0/users");
+
+    let user_info = match req {
+        UserInfoRequest::UserInfoRequestById(req) => {
+            let user_id = req.id.clone();
+            send_json_request::<UserMetadata>(
+                http.get(format!("{users_base_url}/{user_id}"))
+                    .bearer_auth(&authn.access_token),
+            )
+            .await
+            .context(UserNotFoundByIdSnafu { user_id })?
+        }
+        UserInfoRequest::UserInfoRequestByName(req) => {
+            let username = &req.username;
+            let users_url = format!("{users_base_url}/{username}");
+            send_json_request::<UserMetadata>(http.get(users_url).bearer_auth(&authn.access_token))
+                .await
+                .context(SearchForUserSnafu)?
+        }
+    };
+
+    let groups = send_json_request::<Vec<GroupMembership>>(
+        http.get(format!("{users_base_url}/{id}/memberOf", id = user_info.id))
+            .bearer_auth(&authn.access_token),
+    )
+    .await
+    .context(RequestUserGroupsSnafu {
+        username: user_info.display_name.clone(),
+        user_id: user_info.id.clone(),
+    })?;
+
+    Ok(UserInfo {
+        id: Some(user_info.id),
+        username: Some(user_info.display_name),
+        groups: groups.into_iter().map(|g| g.displayName).collect(),
+        custom_attributes: user_info.attributes,
+    })
 }
