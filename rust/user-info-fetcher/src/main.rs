@@ -5,9 +5,9 @@ use std::{
     sync::Arc,
 };
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 use clap::Parser;
-use futures::{future, pin_mut, FutureExt};
+use futures::{FutureExt, future, pin_mut};
 use moka::future::Cache;
 use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
