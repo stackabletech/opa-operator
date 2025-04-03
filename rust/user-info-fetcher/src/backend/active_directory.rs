@@ -8,12 +8,12 @@ use std::{
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use hyper::StatusCode;
-use ldap3::{ldap_escape, Ldap, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry};
+use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::commons::tls_verification::TlsClientDetails;
 use uuid::Uuid;
 
-use crate::{http_error, utils, ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest};
+use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error, utils};
 
 #[derive(Snafu, Debug)]
 pub enum Error {

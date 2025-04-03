@@ -18,7 +18,7 @@ use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
 use url::Url;
 
-use crate::{http_error, utils::http::send_json_request, UserInfo, UserInfoRequest};
+use crate::{UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
 
 static API_PATH: &str = "/cip/claims";
 static SUB_CLAIM: &str = "sub";
