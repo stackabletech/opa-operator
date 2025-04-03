@@ -3,8 +3,9 @@ use std::sync::Arc;
 use clap::Parser;
 use futures::StreamExt;
 use product_config::ProductConfigManager;
-use stackable_opa_operator::crd::{v1alpha1, OpaCluster, APP_NAME, OPERATOR_NAME};
+use stackable_opa_operator::crd::{APP_NAME, OPERATOR_NAME, OpaCluster, v1alpha1};
 use stackable_operator::{
+    YamlSchema,
     cli::{Command, ProductOperatorRun},
     client::{self, Client},
     k8s_openapi::api::{
@@ -12,17 +13,17 @@ use stackable_operator::{
         core::v1::{ConfigMap, Service},
     },
     kube::{
+        Api,
         core::DeserializeGuard,
         runtime::{
+            Controller,
             events::{Recorder, Reporter},
-            watcher, Controller,
+            watcher,
         },
-        Api,
     },
     logging::controller::report_controller_reconciled,
     namespace::WatchNamespace,
     shared::yaml::SerializeOptions,
-    YamlSchema,
 };
 
 use crate::controller::OPA_FULL_CONTROLLER_NAME;
@@ -128,13 +129,10 @@ async fn create_controller(
         .owns(configmaps_api, watcher::Config::default())
         .owns(services_api, watcher::Config::default());
 
-    let event_recorder = Arc::new(Recorder::new(
-        client.as_kube_client(),
-        Reporter {
-            controller: OPA_FULL_CONTROLLER_NAME.to_string(),
-            instance: None,
-        },
-    ));
+    let event_recorder = Arc::new(Recorder::new(client.as_kube_client(), Reporter {
+        controller: OPA_FULL_CONTROLLER_NAME.to_string(),
+        instance: None,
+    }));
     controller
         .run(
             controller::reconcile_opa,

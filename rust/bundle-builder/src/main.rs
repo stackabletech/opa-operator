@@ -4,12 +4,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use axum::{extract::State, http, response::IntoResponse, routing::get, Router};
+use axum::{Router, extract::State, http, response::IntoResponse, routing::get};
 use clap::Parser;
 use flate2::write::GzEncoder;
 use futures::{
+    FutureExt, StreamExt, TryFutureExt,
     future::{self, BoxFuture},
-    pin_mut, FutureExt, StreamExt, TryFutureExt,
+    pin_mut,
 };
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
