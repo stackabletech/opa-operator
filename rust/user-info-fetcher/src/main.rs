@@ -23,6 +23,10 @@ mod backend;
 mod http_error;
 mod utils;
 
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 pub const APP_NAME: &str = "opa-user-info-fetcher";
 
 // TODO (@NickLarsenNZ): Change the variable to `CONSOLE_LOG`
@@ -140,6 +144,15 @@ async fn main() -> Result<(), StartupError> {
         .build()
         .init()
         .context(TracingInitSnafu)?;
+
+    tracing::info!(
+        built_info.pkg_version = built_info::PKG_VERSION,
+        built_info.git_version = built_info::GIT_VERSION,
+        built_info.target = built_info::TARGET,
+        built_info.built_time_utc = built_info::BUILT_TIME_UTC,
+        built_info.rustc_version = built_info::RUSTC_VERSION,
+        "Starting user-info-fetcher",
+    );
 
     let shutdown_requested = tokio::signal::ctrl_c().map(|_| ());
     #[cfg(unix)]

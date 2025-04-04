@@ -10751,6 +10751,13 @@ rec {
             packageId = "uuid";
           }
         ];
+        buildDependencies = [
+          {
+            name = "built";
+            packageId = "built";
+            features = [ "chrono" "git2" ];
+          }
+        ];
 
       };
       "stackable-operator" = rec {

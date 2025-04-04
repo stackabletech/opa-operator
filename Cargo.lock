@@ -3186,6 +3186,7 @@ version = "0.0.0-dev"
 dependencies = [
  "axum 0.8.1",
  "base64 0.22.1",
+ "built",
  "byteorder",
  "clap",
  "futures",

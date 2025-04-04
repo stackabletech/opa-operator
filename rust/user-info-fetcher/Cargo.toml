@@ -33,3 +33,6 @@ tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
+
+[build-dependencies]
+built.workspace = true
