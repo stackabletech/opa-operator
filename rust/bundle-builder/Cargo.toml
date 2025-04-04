@@ -24,3 +24,6 @@ snafu.workspace = true
 tar.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[build-dependencies]
+built.workspace = true

@@ -29,6 +29,10 @@ use stackable_telemetry::{Tracing, tracing::settings::Settings};
 use tokio::net::TcpListener;
 use tracing::level_filters::LevelFilter;
 
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 const OPERATOR_NAME: &str = "opa.stackable.tech";
 pub const APP_NAME: &str = "opa-bundle-builder";
 
@@ -123,6 +127,15 @@ async fn main() -> Result<(), StartupError> {
         .build()
         .init()
         .context(TracingInitSnafu)?;
+
+    tracing::info!(
+        built_info.pkg_version = built_info::PKG_VERSION,
+        built_info.git_version = built_info::GIT_VERSION,
+        built_info.target = built_info::TARGET,
+        built_info.built_time_utc = built_info::BUILT_TIME_UTC,
+        built_info.rustc_version = built_info::RUSTC_VERSION,
+        "Starting bundle-builder",
+    );
 
     let client =
         stackable_operator::client::initialize_operator(None, &args.common.cluster_info_opts)

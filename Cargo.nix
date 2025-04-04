@@ -10521,6 +10521,13 @@ rec {
             packageId = "tracing";
           }
         ];
+        buildDependencies = [
+          {
+            name = "built";
+            packageId = "built";
+            features = [ "chrono" "git2" ];
+          }
+        ];
 
       };
       "stackable-opa-operator" = rec {
