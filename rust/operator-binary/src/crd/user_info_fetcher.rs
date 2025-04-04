@@ -2,7 +2,10 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
-    commons::{networking::HostName, tls_verification::TlsClientDetails},
+    commons::{
+        networking::HostName,
+        tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
+    },
     schemars::{self, JsonSchema},
     time::Duration,
 };
@@ -117,18 +120,18 @@ pub mod versioned {
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct EntraBackend {
-        /// Hostname of the identity provider, e.g. `login.microsoft.com`.
-        #[serde(default = "default_entra_host")]
+        /// Hostname of the identity provider, defaults to `login.microsoft.com`.
+        #[serde(default = "entra_default_host")]
         pub hostname: HostName,
 
-        /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
-        pub port: Option<u16>,
+        /// Port of the identity provider. Defaults to 443.
+        #[serde(default = "entra_default_port")]
+        pub port: u16,
 
-        /// Root HTTP path of the identity provider. Defaults to `/`.
-        #[serde(default = "default_root_path")]
+        /// The Microsoft Entra tenant ID.
         pub tenant_id: String,
 
-        /// Use a TLS connection. If not specified no TLS will be used.
+        /// Use a TLS connection. Should usually be set to WebPki.
         #[serde(flatten)]
         pub tls: TlsClientDetails,
 
@@ -157,8 +160,12 @@ fn default_root_path() -> String {
     "/".to_string()
 }
 
-fn default_entra_host() -> HostName {
+fn entra_default_host() -> HostName {
     HostName::from_str("login.microsoft.com").unwrap()
+}
+
+fn entra_default_port() -> u16 {
+    443
 }
 
 fn aas_default_port() -> u16 {

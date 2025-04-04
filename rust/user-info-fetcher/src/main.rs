@@ -138,6 +138,10 @@ async fn main() -> Result<(), StartupError> {
         client_builder = utils::tls::configure_reqwest(&keycloak.tls, client_builder)
             .await
             .context(ConfigureTlsSnafu)?;
+    } else if let v1alpha1::Backend::Entra(entra) = &config.backend {
+        client_builder = utils::tls::configure_reqwest(&entra.tls, client_builder)
+            .await
+            .context(ConfigureTlsSnafu)?;
     }
     let http = client_builder.build().context(ConstructHttpClientSnafu)?;
 

@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use hyper::StatusCode;
 use serde::Deserialize;
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::commons::authentication::oidc;
+use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
 
 use crate::{http_error, utils::http::send_json_request, Credentials, UserInfo, UserInfoRequest};
 
@@ -22,12 +22,6 @@ pub enum Error {
         user_id: String,
     },
 
-    #[snafu(display("unable to find user with username {username:?}"))]
-    UserNotFoundByName { username: String },
-
-    #[snafu(display("more than one user was returned when there should be one or none"))]
-    TooManyUsersReturned,
-
     #[snafu(display(
         "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
     ))]
@@ -36,12 +30,6 @@ pub enum Error {
         username: String,
         user_id: String,
     },
-
-    #[snafu(display("failed to parse OIDC endpoint url"))]
-    ParseOidcEndpointUrl { source: oidc::Error },
-
-    #[snafu(display("failed to construct OIDC endpoint path"))]
-    ConstructOidcEndpointPath { source: url::ParseError },
 }
 
 impl http_error::Error for Error {
@@ -50,11 +38,7 @@ impl http_error::Error for Error {
             Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
-            Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
-            Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
-            Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -86,7 +70,14 @@ struct UserMetadata {
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
     id: String,
-    displayName: String,
+    display_name: String,
+}
+
+struct EntraEndpoint {
+    hostname: HostName,
+    port: u16,
+    tenant_id: String,
+    protocol: String,
 }
 
 pub(crate) async fn get_user_info(
@@ -103,35 +94,23 @@ pub(crate) async fn get_user_info(
         tls,
     } = config;
 
-    // TODO: tls
-    let host_port = port.unwrap_or(443);
-    let token_url = format!("http://{hostname}:{host_port}/{tenant_id}/oauth2/v2.0/token");
-
-    // -H "Content-Type: application/x-www-form-urlencoded" \
-    // -d "client_id=${CLIENT_ID}" \
-    // -d "client_secret=${CLIENT_SECRET}" \
-    // -d "scope=https://graph.microsoft.com/.default" \
-    // -d "grant_type=client_credentials" | jq -r .access_token)
+    let entra_endpoint = EntraEndpoint::new(hostname.clone(), port.clone(), tenant_id.clone(), tls);
+    let token_url = entra_endpoint.oauth2_token();
 
     let authn = send_json_request::<OAuthResponse>(http.post(token_url).form(&[
-        ("client_id", &credentials.client_id),
-        ("client_secret", &credentials.client_secret),
-        ("scope", &"https://graph.microsoft.com/.default".to_string()),
-        ("grant_type", &"client_credentials".to_string()),
+        ("client_id", credentials.client_id.as_str()),
+        ("client_secret", credentials.client_secret.as_str()),
+        ("scope", "https://graph.microsoft.com/.default"),
+        ("grant_type", "client_credentials"),
     ]))
     .await
     .context(AccessTokenSnafu)?;
-
-    let tok = &authn.access_token;
-    tracing::warn!("Got token: {tok}");
-
-    let users_base_url = format!("http://{hostname}:{host_port}/v1.0/users");
 
     let user_info = match req {
         UserInfoRequest::UserInfoRequestById(req) => {
             let user_id = req.id.clone();
             send_json_request::<UserMetadata>(
-                http.get(format!("{users_base_url}/{user_id}"))
+                http.get(entra_endpoint.users(&user_id))
                     .bearer_auth(&authn.access_token),
             )
             .await
@@ -139,15 +118,17 @@ pub(crate) async fn get_user_info(
         }
         UserInfoRequest::UserInfoRequestByName(req) => {
             let username = &req.username;
-            let users_url = format!("{users_base_url}/{username}");
-            send_json_request::<UserMetadata>(http.get(users_url).bearer_auth(&authn.access_token))
-                .await
-                .context(SearchForUserSnafu)?
+            send_json_request::<UserMetadata>(
+                http.get(entra_endpoint.users(&username))
+                    .bearer_auth(&authn.access_token),
+            )
+            .await
+            .context(SearchForUserSnafu)?
         }
     };
 
     let groups = send_json_request::<Vec<GroupMembership>>(
-        http.get(format!("{users_base_url}/{id}/memberOf", id = user_info.id))
+        http.get(entra_endpoint.member_of(&user_info.id))
             .bearer_auth(&authn.access_token),
     )
     .await
@@ -159,7 +140,54 @@ pub(crate) async fn get_user_info(
     Ok(UserInfo {
         id: Some(user_info.id),
         username: Some(user_info.display_name),
-        groups: groups.into_iter().map(|g| g.displayName).collect(),
+        groups: groups.into_iter().map(|g| g.display_name).collect(),
         custom_attributes: user_info.attributes,
     })
+}
+
+impl EntraEndpoint {
+    pub fn new(hostname: HostName, port: u16, tenant_id: String, tls: &TlsClientDetails) -> Self {
+        Self {
+            hostname,
+            port,
+            tenant_id,
+            protocol: if tls.uses_tls() {
+                "https".to_string()
+            } else {
+                "http".to_string()
+            },
+        }
+    }
+
+    pub fn oauth2_token(&self) -> String {
+        format!(
+            "{base_url}/{tenant_id}/oauth2/v2.0/token",
+            base_url = self.base_url(),
+            tenant_id = self.tenant_id
+        )
+    }
+
+    pub fn users(&self, user: &str) -> String {
+        format!("{base_url}/v1.0/users/{user}", base_url = self.base_url())
+    }
+
+    pub fn member_of(&self, user: &str) -> String {
+        format!(
+            "{base_url}/v1.0/users/{user}/memberOf",
+            base_url = self.base_url()
+        )
+    }
+
+    fn base_url(&self) -> String {
+        format!(
+            "{protocol}://{hostname}{opt_port}",
+            opt_port = if self.port == 443 || self.port == 80 {
+                "".to_string()
+            } else {
+                format!(":{port}", port = self.port)
+            },
+            hostname = self.hostname,
+            protocol = self.protocol
+        )
+    }
 }
