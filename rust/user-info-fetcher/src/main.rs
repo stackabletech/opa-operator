@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::Display,
+    ops::Deref as _,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -13,13 +14,23 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
+use stackable_operator::cli::RollingPeriod;
+use stackable_telemetry::{Tracing, tracing::settings::Settings};
 use tokio::net::TcpListener;
+use tracing::level_filters::LevelFilter;
 
 mod backend;
 mod http_error;
 mod utils;
 
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 pub const APP_NAME: &str = "opa-user-info-fetcher";
+
+// TODO (@NickLarsenNZ): Change the variable to `CONSOLE_LOG`
+pub const ENV_VAR_CONSOLE_LOG: &str = "OPA_OPERATOR_LOG";
 
 #[derive(clap::Parser)]
 pub struct Args {
@@ -70,6 +81,11 @@ enum StartupError {
 
     #[snafu(display("failed to configure TLS"))]
     ConfigureTls { source: utils::tls::Error },
+
+    #[snafu(display("failed to initialize stackable-telemetry"))]
+    TracingInit {
+        source: stackable_telemetry::tracing::Error,
+    },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -83,10 +99,59 @@ async fn read_config_file(path: &Path) -> Result<String, StartupError> {
 async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
-    stackable_operator::logging::initialize_logging(
-        "OPA_OPERATOR_LOG",
-        APP_NAME,
-        args.common.tracing_target,
+    let _tracing_guard = Tracing::builder()
+        .service_name("user-info-fetcher")
+        .with_console_output((
+            ENV_VAR_CONSOLE_LOG,
+            LevelFilter::INFO,
+            !args.common.telemetry_arguments.no_console_output,
+        ))
+        // NOTE (@NickLarsenNZ): Before stackable-telemetry was used, the log directory was
+        // set via an env: `OPA_OPERATOR_LOG_DIRECTORY`.
+        // See: https://github.com/stackabletech/operator-rs/blob/f035997fca85a54238c8de895389cc50b4d421e2/crates/stackable-operator/src/logging/mod.rs#L40
+        // Now it will be `ROLLING_LOGS` (or via `--rolling-logs <DIRECTORY>`).
+        .with_file_output(
+            args.common
+                .telemetry_arguments
+                .rolling_logs
+                .map(|log_directory| {
+                    let rotation_period = args
+                        .common
+                        .telemetry_arguments
+                        .rolling_logs_period
+                        .unwrap_or(RollingPeriod::Never)
+                        .deref()
+                        .clone();
+
+                    Settings::builder()
+                        .with_environment_variable(ENV_VAR_CONSOLE_LOG)
+                        .with_default_level(LevelFilter::INFO)
+                        .file_log_settings_builder(log_directory, "tracing-rs.log")
+                        .with_rotation_period(rotation_period)
+                        .build()
+                }),
+        )
+        .with_otlp_log_exporter((
+            "OTLP_LOG",
+            LevelFilter::DEBUG,
+            args.common.telemetry_arguments.otlp_logs,
+        ))
+        .with_otlp_trace_exporter((
+            "OTLP_TRACE",
+            LevelFilter::DEBUG,
+            args.common.telemetry_arguments.otlp_traces,
+        ))
+        .build()
+        .init()
+        .context(TracingInitSnafu)?;
+
+    tracing::info!(
+        built_info.pkg_version = built_info::PKG_VERSION,
+        built_info.git_version = built_info::GIT_VERSION,
+        built_info.target = built_info::TARGET,
+        built_info.built_time_utc = built_info::BUILT_TIME_UTC,
+        built_info.rustc_version = built_info::RUSTC_VERSION,
+        "Starting user-info-fetcher",
     );
 
     let shutdown_requested = tokio::signal::ctrl_c().map(|_| ());
