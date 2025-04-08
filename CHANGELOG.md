@@ -21,10 +21,6 @@ All notable changes to this project will be documented in this file.
 - BREAKING: Inject the vector aggregator address into the vector config using the env var `VECTOR_AGGREGATOR_ADDRESS` instead
     of having the operator write it to the vector config ([#707]).
 
-### Fixed
-
-- Fix a bug where changes to ConfigMaps that are referenced in the OpaCluster spec didn't trigger a reconciliation ([#707]).
-
 [#703]: https://github.com/stackabletech/opa-operator/pull/703
 [#707]: https://github.com/stackabletech/opa-operator/pull/707
 
