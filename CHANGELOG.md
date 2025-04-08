@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Log the startup event for bundle-builder and user-info-fetcher ([#703]).
+
+### Changed
+
+- Replace stackable-operator `initialize_logging` with stackable-telemetry `Tracing` ([#703]).
+  - BREAKING: operator-binary: The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`,
+    and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+  - BREAKING: bundle-builder: The file log directory was set by `OPA_BUNDLE_BUILDER_LOG_DIRECTORY`,
+    and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+  - BREAKING: user-info-fetcher: The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`,
+    and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+  - Replace stackable-operator `print_startup_string` with `tracing::info!` with fields.
+
+[#703]: https://github.com/stackabletech/opa-operator/pull/703
+
 ## [25.3.0] - 2025-03-21
 
 ### Added
