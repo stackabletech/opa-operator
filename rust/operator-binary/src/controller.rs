@@ -816,7 +816,7 @@ fn build_server_rolegroup_daemonset(
             bundle_builder_log_level(merged_config).to_string(),
         )
         .add_env_var(
-            "OPA_BUNDLE_BUILDER_LOG_DIRECTORY",
+            "ROLLING_LOGS_DIR",
             format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
