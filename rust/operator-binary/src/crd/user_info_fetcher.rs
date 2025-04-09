@@ -5,8 +5,8 @@ use stackable_operator::{
     commons::{networking::HostName, tls_verification::TlsClientDetails},
     schemars::{self, JsonSchema},
     time::Duration,
+    versioned::versioned,
 };
-use stackable_versioned::versioned;
 
 #[versioned(version(name = "v1alpha1"))]
 pub mod versioned {

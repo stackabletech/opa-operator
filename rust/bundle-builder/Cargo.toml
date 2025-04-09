@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 stackable-opa-regorule-library = { path = "../regorule-library" }
 stackable-operator.workspace = true
-stackable-telemetry.workspace = true
 
 axum.workspace = true
 clap.workspace = true

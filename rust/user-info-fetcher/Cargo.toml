@@ -11,7 +11,6 @@ publish = false
 [dependencies]
 stackable-opa-operator = { path = "../operator-binary" }
 stackable-operator.workspace = true
-stackable-telemetry.workspace = true
 
 axum.workspace = true
 base64.workspace = true

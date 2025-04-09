@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     fmt::Display,
-    ops::Deref as _,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -14,8 +13,10 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::cli::RollingPeriod;
-use stackable_telemetry::{Tracing, tracing::settings::Settings};
+use stackable_operator::telemetry::{
+    Tracing,
+    tracing::{RollingPeriod, settings::Settings},
+};
 use tokio::net::TcpListener;
 use tracing::level_filters::LevelFilter;
 
@@ -84,7 +85,7 @@ enum StartupError {
 
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit {
-        source: stackable_telemetry::tracing::Error,
+        source: stackable_operator::telemetry::tracing::Error,
     },
 }
 
@@ -120,7 +121,6 @@ async fn main() -> Result<(), StartupError> {
                         .telemetry_arguments
                         .rolling_logs_period
                         .unwrap_or(RollingPeriod::Never)
-                        .deref()
                         .clone();
 
                     Settings::builder()

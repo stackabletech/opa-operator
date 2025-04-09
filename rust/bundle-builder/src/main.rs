@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     num::TryFromIntError,
-    ops::Deref as _,
     sync::{Arc, Mutex},
 };
 
@@ -15,7 +14,6 @@ use futures::{
 };
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
-    cli::RollingPeriod,
     k8s_openapi::api::core::v1::ConfigMap,
     kube::{
         api::ObjectMeta,
@@ -24,8 +22,11 @@ use stackable_operator::{
             watcher,
         },
     },
+    telemetry::{
+        Tracing,
+        tracing::{RollingPeriod, settings::Settings},
+    },
 };
-use stackable_telemetry::{Tracing, tracing::settings::Settings};
 use tokio::net::TcpListener;
 use tracing::level_filters::LevelFilter;
 
@@ -74,7 +75,7 @@ enum StartupError {
 
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit {
-        source: stackable_telemetry::tracing::Error,
+        source: stackable_operator::telemetry::tracing::Error,
     },
 }
 
@@ -103,7 +104,6 @@ async fn main() -> Result<(), StartupError> {
                         .telemetry_arguments
                         .rolling_logs_period
                         .unwrap_or(RollingPeriod::Never)
-                        .deref()
                         .clone();
 
                     Settings::builder()
