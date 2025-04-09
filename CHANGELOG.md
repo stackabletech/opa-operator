@@ -18,12 +18,15 @@ All notable changes to this project will be documented in this file.
   - BREAKING: user-info-fetcher: The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`,
     and is now set by `ROLLING_LOGS` (or via `--rolling-logs <DIRECTORY>`).
   - Replace stackable-operator `print_startup_string` with `tracing::info!` with fields.
+- BREAKING: Inject the vector aggregator address into the vector config using the env var `VECTOR_AGGREGATOR_ADDRESS` instead
+    of having the operator write it to the vector config ([#707]).
 
 ### Fixed
 
 - Use `json` file extension for log files ([#709]).
 
 [#703]: https://github.com/stackabletech/opa-operator/pull/703
+[#707]: https://github.com/stackabletech/opa-operator/pull/707
 [#709]: https://github.com/stackabletech/opa-operator/pull/709
 
 ## [25.3.0] - 2025-03-21
