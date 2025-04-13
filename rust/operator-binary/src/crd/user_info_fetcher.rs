@@ -2,10 +2,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
-    commons::{
-        networking::HostName,
-        tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
-    },
+    commons::{networking::HostName, tls_verification::TlsClientDetails},
     schemars::{self, JsonSchema},
     time::Duration,
 };

@@ -59,9 +59,7 @@ struct OAuthResponse {
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
     id: String,
-    //username: String,
-    mail: String,
-    display_name: String,
+    user_principal_name: String,
     #[serde(default)]
     attributes: HashMap<String, serde_json::Value>,
 }
@@ -69,7 +67,6 @@ struct UserMetadata {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
-    id: String,
     display_name: String,
 }
 
@@ -110,7 +107,7 @@ pub(crate) async fn get_user_info(
         UserInfoRequest::UserInfoRequestById(req) => {
             let user_id = req.id.clone();
             send_json_request::<UserMetadata>(
-                http.get(entra_endpoint.users(&user_id))
+                http.get(entra_endpoint.user_info(&user_id))
                     .bearer_auth(&authn.access_token),
             )
             .await
@@ -119,7 +116,7 @@ pub(crate) async fn get_user_info(
         UserInfoRequest::UserInfoRequestByName(req) => {
             let username = &req.username;
             send_json_request::<UserMetadata>(
-                http.get(entra_endpoint.users(&username))
+                http.get(entra_endpoint.user_info(&username))
                     .bearer_auth(&authn.access_token),
             )
             .await
@@ -128,18 +125,18 @@ pub(crate) async fn get_user_info(
     };
 
     let groups = send_json_request::<Vec<GroupMembership>>(
-        http.get(entra_endpoint.member_of(&user_info.id))
+        http.get(entra_endpoint.group_info(&user_info.id))
             .bearer_auth(&authn.access_token),
     )
     .await
     .context(RequestUserGroupsSnafu {
-        username: user_info.display_name.clone(),
+        username: user_info.user_principal_name.clone(),
         user_id: user_info.id.clone(),
     })?;
 
     Ok(UserInfo {
         id: Some(user_info.id),
-        username: Some(user_info.display_name),
+        username: Some(user_info.user_principal_name),
         groups: groups.into_iter().map(|g| g.display_name).collect(),
         custom_attributes: user_info.attributes,
     })
@@ -167,11 +164,12 @@ impl EntraEndpoint {
         )
     }
 
-    pub fn users(&self, user: &str) -> String {
+    // Works both with id/oid and userPrincipalName
+    pub fn user_info(&self, user: &str) -> String {
         format!("{base_url}/v1.0/users/{user}", base_url = self.base_url())
     }
 
-    pub fn member_of(&self, user: &str) -> String {
+    pub fn group_info(&self, user: &str) -> String {
         format!(
             "{base_url}/v1.0/users/{user}/memberOf",
             base_url = self.base_url()
@@ -189,5 +187,81 @@ impl EntraEndpoint {
             hostname = self.hostname,
             protocol = self.protocol
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use stackable_operator::commons::tls_verification::{
+        CaCert, Tls, TlsServerVerification, TlsVerification,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_defaults() {
+        let entra_endpoint = EntraEndpoint::new(
+            HostName::from_str("login.microsoft.com").expect("Could not parse hostname"),
+            443,
+            "1234-5678".to_string(),
+            &TlsClientDetails {
+                tls: Some(Tls {
+                    verification: TlsVerification::Server(TlsServerVerification {
+                        ca_cert: CaCert::WebPki {},
+                    }),
+                }),
+            },
+        );
+
+        assert_eq!(
+            entra_endpoint.oauth2_token(),
+            "https://login.microsoft.com/1234-5678/oauth2/v2.0/token"
+        );
+        assert_eq!(
+            entra_endpoint.user_info("0000-0000"),
+            "https://login.microsoft.com/v1.0/users/0000-0000"
+        );
+        assert_eq!(
+            entra_endpoint.group_info("0000-0000"),
+            "https://login.microsoft.com/v1.0/users/0000-0000/memberOf"
+        );
+    }
+
+    #[test]
+    fn test_non_defaults_tls() {
+        let entra_endpoint = EntraEndpoint::new(
+            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
+            8443,
+            "1234-5678".to_string(),
+            &TlsClientDetails {
+                tls: Some(Tls {
+                    verification: TlsVerification::Server(TlsServerVerification {
+                        ca_cert: CaCert::WebPki {},
+                    }),
+                }),
+            },
+        );
+
+        assert_eq!(
+            entra_endpoint.oauth2_token(),
+            "https://login.myentra.com:8443/1234-5678/oauth2/v2.0/token"
+        );
+    }
+
+    #[test]
+    fn test_non_defaults_non_tls() {
+        let entra_endpoint = EntraEndpoint::new(
+            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
+            8080,
+            "1234-5678".to_string(),
+            &TlsClientDetails { tls: None },
+        );
+
+        assert_eq!(
+            entra_endpoint.oauth2_token(),
+            "http://login.myentra.com:8080/1234-5678/oauth2/v2.0/token"
+        );
     }
 }
