@@ -84,7 +84,12 @@ pub(crate) async fn get_user_info(
         tls,
     } = config;
 
-    let entra_endpoint = EntraEndpoint::new(hostname.clone(), *port, tenant_id.clone(), tls);
+    let entra_endpoint = EntraEndpoint::new(
+        hostname.clone(),
+        *port,
+        tenant_id.clone(),
+        &TlsClientDetails { tls: tls.clone() },
+    );
     let token_url = entra_endpoint.oauth2_token();
 
     let authn = send_json_request::<OAuthResponse>(http.post(token_url).form(&[

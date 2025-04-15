@@ -13,6 +13,7 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
+use stackable_operator::commons::tls_verification::TlsClientDetails;
 use tokio::net::TcpListener;
 
 mod backend;
@@ -139,9 +140,14 @@ async fn main() -> Result<(), StartupError> {
             .await
             .context(ConfigureTlsSnafu)?;
     } else if let v1alpha1::Backend::Entra(entra) = &config.backend {
-        client_builder = utils::tls::configure_reqwest(&entra.tls, client_builder)
-            .await
-            .context(ConfigureTlsSnafu)?;
+        client_builder = utils::tls::configure_reqwest(
+            &TlsClientDetails {
+                tls: entra.tls.clone(),
+            },
+            client_builder,
+        )
+        .await
+        .context(ConfigureTlsSnafu)?;
     }
     let http = client_builder.build().context(ConstructHttpClientSnafu)?;
 

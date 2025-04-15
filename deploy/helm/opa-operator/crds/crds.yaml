@@ -65,7 +65,7 @@ spec:
                             - required:
                                 - experimentalActiveDirectory
                             - required:
-                                - experimentalEntra
+                                - experimentalEntraBackend
                           properties:
                             experimentalActiveDirectory:
                               description: Backend that fetches user information from Active Directory
@@ -139,7 +139,7 @@ spec:
                                 - kerberosSecretClassName
                                 - ldapServer
                               type: object
-                            experimentalEntra:
+                            experimentalEntraBackend:
                               description: Backend that fetches user information from Microsoft Entra
                               properties:
                                 clientCredentialsSecret:
@@ -162,7 +162,12 @@ spec:
                                   description: The Microsoft Entra tenant ID.
                                   type: string
                                 tls:
-                                  description: Use a TLS connection. If not specified no TLS will be used.
+                                  default:
+                                    verification:
+                                      server:
+                                        caCert:
+                                          webPki: {}
+                                  description: Use a TLS connection. Should usually be set to WebPki.
                                   nullable: true
                                   properties:
                                     verification:

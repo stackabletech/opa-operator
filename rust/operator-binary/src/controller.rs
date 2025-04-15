@@ -31,7 +31,7 @@ use stackable_operator::{
         product_image_selection::ResolvedProductImage,
         rbac::build_rbac_resources,
         secret_class::{SecretClassVolume, SecretClassVolumeScope},
-        tls_verification::TlsClientDetailsError,
+        tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
     k8s_openapi::{
         api::{
@@ -1046,10 +1046,12 @@ fn build_server_rolegroup_daemonset(
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
                     )
                     .context(AddVolumeMountSnafu)?;
-                entra
-                    .tls
-                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
+
+                TlsClientDetails {
+                    tls: entra.tls.clone(),
+                }
+                .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
         }
 
