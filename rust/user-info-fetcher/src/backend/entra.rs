@@ -4,7 +4,8 @@ use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
+use stackable_operator::commons::tls_verification::TlsClientDetails;
+use url::Url;
 
 use crate::{Credentials, UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
 
@@ -16,7 +17,7 @@ pub enum Error {
     #[snafu(display("failed to search for user"))]
     SearchForUser { source: crate::utils::http::Error },
 
-    #[snafu(display("unable to find user with id {user_id:?}"))]
+    #[snafu(display("failed to search for user with id {user_id:?}"))]
     UserNotFoundById {
         source: crate::utils::http::Error,
         user_id: String,
@@ -30,6 +31,12 @@ pub enum Error {
         username: String,
         user_id: String,
     },
+
+    #[snafu(display("failed to to build entra endpoint for {endpoint}"))]
+    BuildEntraEndpointFailed {
+        source: url::ParseError,
+        endpoint: String,
+    },
 }
 
 impl http_error::Error for Error {
@@ -39,6 +46,7 @@ impl http_error::Error for Error {
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
+            Self::BuildEntraEndpointFailed { .. } => StatusCode::BAD_REQUEST,
         }
     }
 }
@@ -69,14 +77,6 @@ struct GroupMembership {
     display_name: Option<String>,
 }
 
-struct EntraEndpoint {
-    hostname_token: HostName,
-    hostname_graph: HostName,
-    port: u16,
-    tenant_id: String,
-    protocol: String,
-}
-
 pub(crate) async fn get_user_info(
     req: &UserInfoRequest,
     http: &reqwest::Client,
@@ -85,22 +85,22 @@ pub(crate) async fn get_user_info(
 ) -> Result<UserInfo, Error> {
     let v1alpha1::EntraBackend {
         client_credentials_secret: _,
-        hostname_token,
-        hostname_graph,
+        token_endpoint,
+        user_info_endpoint,
         port,
         tenant_id,
         tls,
     } = config;
 
-    let entra_endpoint = EntraEndpoint::new(
-        hostname_token.clone(),
-        hostname_graph.clone(),
+    let entra_endpoint = EntraBackend::try_new(
+        &token_endpoint.as_url_host(),
+        &user_info_endpoint.as_url_host(),
         *port,
-        tenant_id.to_string(),
-        &TlsClientDetails { tls: tls.clone() },
-    );
-    let token_url = entra_endpoint.oauth2_token();
+        tenant_id,
+        TlsClientDetails { tls: tls.clone() }.uses_tls(),
+    )?;
 
+    let token_url = entra_endpoint.oauth2_token();
     let authn = send_json_request::<OAuthResponse>(http.post(token_url).form(&[
         ("client_id", credentials.client_id.as_str()),
         ("client_secret", credentials.client_secret.as_str()),
@@ -150,145 +150,148 @@ pub(crate) async fn get_user_info(
     })
 }
 
-impl EntraEndpoint {
-    pub fn new(
-        hostname_token: HostName,
-        hostname_graph: HostName,
+struct EntraBackend {
+    token_endpoint_url: Url,
+    user_info_endpoint_url: Url,
+}
+
+impl EntraBackend {
+    pub fn try_new(
+        token_endpoint: &str,
+        user_info_endpoint: &str,
         port: u16,
-        tenant_id: String,
-        tls: &TlsClientDetails,
-    ) -> Self {
-        Self {
-            hostname_token,
-            hostname_graph,
-            port,
-            tenant_id,
-            protocol: if tls.uses_tls() {
-                "https".to_string()
-            } else {
-                "http".to_string()
-            },
-        }
+        tenant_id: &str,
+        uses_tls: bool,
+    ) -> Result<Self, Error> {
+        let schema = if uses_tls { "https" } else { "http" };
+
+        let token_endpoint =
+            format!("{schema}://{token_endpoint}:{port}/{tenant_id}/oauth2/v2.0/token");
+        let token_endpoint_url =
+            Url::parse(&token_endpoint).context(BuildEntraEndpointFailedSnafu {
+                endpoint: token_endpoint,
+            })?;
+
+        let user_info_endpoint = format!("{schema}://{user_info_endpoint}:{port}");
+        let user_info_endpoint_url =
+            Url::parse(&user_info_endpoint).context(BuildEntraEndpointFailedSnafu {
+                endpoint: user_info_endpoint,
+            })?;
+
+        Ok(Self {
+            token_endpoint_url,
+            user_info_endpoint_url,
+        })
     }
 
     pub fn oauth2_token(&self) -> String {
-        format!(
-            "{base_url}/{tenant_id}/oauth2/v2.0/token",
-            base_url = self.base_url(&self.hostname_token),
-            tenant_id = self.tenant_id
-        )
+        self.token_endpoint_url.to_string()
     }
 
     // Works both with id/oid and userPrincipalName
     pub fn user_info(&self, user: &str) -> String {
-        format!(
-            "{base_url}/v1.0/users/{user}",
-            base_url = self.base_url(&self.hostname_graph),
-        )
+        let mut user_info_url = self.user_info_endpoint_url.clone();
+        user_info_url.set_path(&format!("/v1.0/users/{user}"));
+
+        user_info_url.to_string()
     }
 
     pub fn group_info(&self, user: &str) -> String {
-        format!(
-            "{base_url}/v1.0/users/{user}/memberOf",
-            base_url = self.base_url(&self.hostname_graph),
-        )
-    }
+        let mut user_info_url = self.user_info_endpoint_url.clone();
+        user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
 
-    fn base_url(&self, hostname: &HostName) -> String {
-        format!(
-            "{protocol}://{hostname}{opt_port}",
-            opt_port = if self.port == 443 || self.port == 80 {
-                "".to_string()
-            } else {
-                format!(":{port}", port = self.port)
-            },
-            protocol = self.protocol
-        )
+        user_info_url.to_string()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use stackable_operator::commons::tls_verification::{
-        CaCert, Tls, TlsServerVerification, TlsVerification,
-    };
-
     use super::*;
 
     #[test]
     fn test_defaults() {
-        let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("login.microsoft.com").expect("Could not parse hostname"),
-            HostName::from_str("graph.microsoft.com").expect("Could not parse hostname"),
+        let entra = EntraBackend::try_new(
+            "login.microsoft.com",
+            "graph.microsoft.com",
             443,
-            "1234-5678".to_string(),
-            &TlsClientDetails {
-                tls: Some(Tls {
-                    verification: TlsVerification::Server(TlsServerVerification {
-                        ca_cert: CaCert::WebPki {},
-                    }),
-                }),
-            },
-        );
+            "1234-5678",
+            true,
+        )
+        .unwrap();
 
         assert_eq!(
-            entra_endpoint.oauth2_token(),
+            entra.oauth2_token(),
             "https://login.microsoft.com/1234-5678/oauth2/v2.0/token"
         );
         assert_eq!(
-            entra_endpoint.user_info("0000-0000"),
+            entra.user_info("0000-0000"),
             "https://graph.microsoft.com/v1.0/users/0000-0000"
         );
         assert_eq!(
-            entra_endpoint.group_info("0000-0000"),
+            entra.group_info("0000-0000"),
             "https://graph.microsoft.com/v1.0/users/0000-0000/memberOf"
         );
     }
 
     #[test]
     fn test_non_defaults_tls() {
-        let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
-            HostName::from_str("graph.myentra.com").expect("Could not parse hostname"),
+        let entra = EntraBackend::try_new(
+            "login.myentra.com",
+            "graph.myentra.com",
             8443,
-            "1234-5678".to_string(),
-            &TlsClientDetails {
-                tls: Some(Tls {
-                    verification: TlsVerification::Server(TlsServerVerification {
-                        ca_cert: CaCert::WebPki {},
-                    }),
-                }),
-            },
-        );
+            "1234-5678",
+            true,
+        )
+        .unwrap();
 
         assert_eq!(
-            entra_endpoint.oauth2_token(),
+            entra.oauth2_token(),
             "https://login.myentra.com:8443/1234-5678/oauth2/v2.0/token"
         );
         assert_eq!(
-            entra_endpoint.user_info("0000-0000"),
+            entra.user_info("0000-0000"),
             "https://graph.myentra.com:8443/v1.0/users/0000-0000"
         );
     }
 
     #[test]
-    fn test_non_defaults_non_tls() {
-        let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
-            HostName::from_str("graph.myentra.com").expect("Could not parse hostname"),
-            8080,
-            "1234-5678".to_string(),
-            &TlsClientDetails { tls: None },
-        );
+    fn test_defaults_non_tls() {
+        let entra = EntraBackend::try_new(
+            "login.myentra.com",
+            "graph.myentra.com",
+            80,
+            "1234-5678",
+            false,
+        )
+        .unwrap();
 
         assert_eq!(
-            entra_endpoint.oauth2_token(),
+            entra.oauth2_token(),
+            "http://login.myentra.com/1234-5678/oauth2/v2.0/token"
+        );
+        assert_eq!(
+            entra.user_info("0000-0000"),
+            "http://graph.myentra.com/v1.0/users/0000-0000"
+        );
+    }
+
+    #[test]
+    fn test_non_defaults_non_tls() {
+        let entra = EntraBackend::try_new(
+            "login.myentra.com",
+            "graph.myentra.com",
+            8080,
+            "1234-5678",
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(
+            entra.oauth2_token(),
             "http://login.myentra.com:8080/1234-5678/oauth2/v2.0/token"
         );
         assert_eq!(
-            entra_endpoint.user_info("0000-0000"),
+            entra.user_info("0000-0000"),
             "http://graph.myentra.com:8080/v1.0/users/0000-0000"
         );
     }

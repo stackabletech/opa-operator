@@ -121,12 +121,12 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct EntraBackend {
         /// Hostname of the token provider, defaults to `login.microsoft.com`.
-        #[serde(default = "entra_default_host_token")]
-        pub hostname_token: HostName,
+        #[serde(default = "entra_default_token_endpoint")]
+        pub token_endpoint: HostName,
 
         /// Hostname of the user info provider, defaults to `graph.microsoft.com`.
-        #[serde(default = "entra_default_host_graph")]
-        pub hostname_graph: HostName,
+        #[serde(default = "entra_default_user_info_endpoint")]
+        pub user_info_endpoint: HostName,
 
         /// Port of the identity provider. Defaults to 443.
         #[serde(default = "entra_default_port")]
@@ -136,10 +136,16 @@ pub mod versioned {
         pub tenant_id: String,
 
         /// Use a TLS connection. Should usually be set to WebPki.
+        // We do not use the flattened `TlsClientDetails` here since we cannot
+        // default to WebPki using a default and flatten
+        // https://github.com/serde-rs/serde/issues/1626
+        // This means we have to wrap `Tls` in `TlsClientDetails` to its
+        // method like `uses_tls()`.
         #[serde(default = "default_tls_web_pki")]
         pub tls: Option<Tls>,
 
-        /// Name of a Secret that contains client credentials of a Entra account with permission to read user metadata.
+        /// Name of a Secret that contains client credentials of an Entra account with
+        /// permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
         ///
         /// Must contain the fields `clientId` and `clientSecret`.
         pub client_credentials_secret: String,
@@ -164,11 +170,11 @@ fn default_root_path() -> String {
     "/".to_string()
 }
 
-fn entra_default_host_token() -> HostName {
+fn entra_default_token_endpoint() -> HostName {
     HostName::from_str("login.microsoft.com").unwrap()
 }
 
-fn entra_default_host_graph() -> HostName {
+fn entra_default_user_info_endpoint() -> HostName {
     HostName::from_str("graph.microsoft.com").unwrap()
 }
 
