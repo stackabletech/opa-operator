@@ -64,7 +64,8 @@ struct GroupMembership {
 }
 
 struct EntraEndpoint {
-    hostname: HostName,
+    hostname_token: HostName,
+    hostname_graph: HostName,
     port: u16,
     tenant_id: String,
     protocol: String,
@@ -78,16 +79,18 @@ pub(crate) async fn get_user_info(
 ) -> Result<UserInfo, Error> {
     let v1alpha1::EntraBackend {
         client_credentials_secret: _,
-        hostname,
+        hostname_token,
+        hostname_graph,
         port,
         tenant_id,
         tls,
     } = config;
 
     let entra_endpoint = EntraEndpoint::new(
-        hostname.clone(),
+        hostname_token.clone(),
+        hostname_graph.clone(),
         *port,
-        tenant_id.clone(),
+        tenant_id.to_string(),
         &TlsClientDetails { tls: tls.clone() },
     );
     let token_url = entra_endpoint.oauth2_token();
@@ -141,9 +144,16 @@ pub(crate) async fn get_user_info(
 }
 
 impl EntraEndpoint {
-    pub fn new(hostname: HostName, port: u16, tenant_id: String, tls: &TlsClientDetails) -> Self {
+    pub fn new(
+        hostname_token: HostName,
+        hostname_graph: HostName,
+        port: u16,
+        tenant_id: String,
+        tls: &TlsClientDetails,
+    ) -> Self {
         Self {
-            hostname,
+            hostname_token,
+            hostname_graph,
             port,
             tenant_id,
             protocol: if tls.uses_tls() {
@@ -157,7 +167,7 @@ impl EntraEndpoint {
     pub fn oauth2_token(&self) -> String {
         format!(
             "{base_url}/{tenant_id}/oauth2/v2.0/token",
-            base_url = self.base_url("login"),
+            base_url = self.base_url(&self.hostname_token),
             tenant_id = self.tenant_id
         )
     }
@@ -166,26 +176,25 @@ impl EntraEndpoint {
     pub fn user_info(&self, user: &str) -> String {
         format!(
             "{base_url}/v1.0/users/{user}",
-            base_url = self.base_url("graph"),
+            base_url = self.base_url(&self.hostname_graph),
         )
     }
 
     pub fn group_info(&self, user: &str) -> String {
         format!(
             "{base_url}/v1.0/users/{user}/memberOf",
-            base_url = self.base_url("graph"),
+            base_url = self.base_url(&self.hostname_graph),
         )
     }
 
-    fn base_url(&self, prefix: &str) -> String {
+    fn base_url(&self, hostname: &HostName) -> String {
         format!(
-            "{protocol}://{prefix}.{hostname}{opt_port}",
+            "{protocol}://{hostname}{opt_port}",
             opt_port = if self.port == 443 || self.port == 80 {
                 "".to_string()
             } else {
                 format!(":{port}", port = self.port)
             },
-            hostname = self.hostname,
             protocol = self.protocol
         )
     }
@@ -204,7 +213,8 @@ mod tests {
     #[test]
     fn test_defaults() {
         let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("microsoft.com").expect("Could not parse hostname"),
+            HostName::from_str("login.microsoft.com").expect("Could not parse hostname"),
+            HostName::from_str("graph.microsoft.com").expect("Could not parse hostname"),
             443,
             "1234-5678".to_string(),
             &TlsClientDetails {
@@ -233,7 +243,8 @@ mod tests {
     #[test]
     fn test_non_defaults_tls() {
         let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("myentra.com").expect("Could not parse hostname"),
+            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
+            HostName::from_str("graph.myentra.com").expect("Could not parse hostname"),
             8443,
             "1234-5678".to_string(),
             &TlsClientDetails {
@@ -258,7 +269,8 @@ mod tests {
     #[test]
     fn test_non_defaults_non_tls() {
         let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("myentra.com").expect("Could not parse hostname"),
+            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
+            HostName::from_str("graph.myentra.com").expect("Could not parse hostname"),
             8080,
             "1234-5678".to_string(),
             &TlsClientDetails { tls: None },

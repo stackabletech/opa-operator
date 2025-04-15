@@ -120,9 +120,13 @@ pub mod versioned {
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct EntraBackend {
-        /// Hostname of the identity provider, defaults to `login.microsoft.com`.
-        #[serde(default = "entra_default_host")]
-        pub hostname: HostName,
+        /// Hostname of the token provider, defaults to `login.microsoft.com`.
+        #[serde(default = "entra_default_host_token")]
+        pub hostname_token: HostName,
+
+        /// Hostname of the user info provider, defaults to `graph.microsoft.com`.
+        #[serde(default = "entra_default_host_graph")]
+        pub hostname_graph: HostName,
 
         /// Port of the identity provider. Defaults to 443.
         #[serde(default = "entra_default_port")]
@@ -160,8 +164,12 @@ fn default_root_path() -> String {
     "/".to_string()
 }
 
-fn entra_default_host() -> HostName {
-    HostName::from_str("microsoft.com").unwrap()
+fn entra_default_host_token() -> HostName {
+    HostName::from_str("login.microsoft.com").unwrap()
+}
+
+fn entra_default_host_graph() -> HostName {
+    HostName::from_str("graph.microsoft.com").unwrap()
 }
 
 fn entra_default_port() -> u16 {

@@ -148,9 +148,13 @@ spec:
 
                                     Must contain the fields `clientId` and `clientSecret`.
                                   type: string
-                                hostname:
-                                  default: microsoft.com
-                                  description: Hostname of the identity provider, defaults to `login.microsoft.com`.
+                                hostnameGraph:
+                                  default: graph.microsoft.com
+                                  description: Hostname of the user info provider, defaults to `graph.microsoft.com`.
+                                  type: string
+                                hostnameToken:
+                                  default: login.microsoft.com
+                                  description: Hostname of the token provider, defaults to `login.microsoft.com`.
                                   type: string
                                 port:
                                   default: 443
