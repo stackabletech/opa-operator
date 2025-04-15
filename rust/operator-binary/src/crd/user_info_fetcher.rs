@@ -43,7 +43,7 @@ pub mod versioned {
         ActiveDirectory(v1alpha1::ActiveDirectoryBackend),
 
         /// Backend that fetches user information from Microsoft Entra
-        #[serde(rename = "experimentalEntraBackend")]
+        #[serde(rename = "experimentalEntra")]
         Entra(v1alpha1::EntraBackend),
     }
 
@@ -161,7 +161,7 @@ fn default_root_path() -> String {
 }
 
 fn entra_default_host() -> HostName {
-    HostName::from_str("login.microsoft.com").unwrap()
+    HostName::from_str("microsoft.com").unwrap()
 }
 
 fn entra_default_port() -> u16 {

@@ -131,10 +131,13 @@ async fn create_controller(
         .owns(configmaps_api, watcher::Config::default())
         .owns(services_api, watcher::Config::default());
 
-    let event_recorder = Arc::new(Recorder::new(client.as_kube_client(), Reporter {
-        controller: OPA_FULL_CONTROLLER_NAME.to_string(),
-        instance: None,
-    }));
+    let event_recorder = Arc::new(Recorder::new(
+        client.as_kube_client(),
+        Reporter {
+            controller: OPA_FULL_CONTROLLER_NAME.to_string(),
+            instance: None,
+        },
+    ));
     controller
         .run(
             controller::reconcile_opa,

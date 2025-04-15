@@ -157,26 +157,29 @@ impl EntraEndpoint {
     pub fn oauth2_token(&self) -> String {
         format!(
             "{base_url}/{tenant_id}/oauth2/v2.0/token",
-            base_url = self.base_url(),
+            base_url = self.base_url("login"),
             tenant_id = self.tenant_id
         )
     }
 
     // Works both with id/oid and userPrincipalName
     pub fn user_info(&self, user: &str) -> String {
-        format!("{base_url}/v1.0/users/{user}", base_url = self.base_url())
+        format!(
+            "{base_url}/v1.0/users/{user}",
+            base_url = self.base_url("graph"),
+        )
     }
 
     pub fn group_info(&self, user: &str) -> String {
         format!(
             "{base_url}/v1.0/users/{user}/memberOf",
-            base_url = self.base_url()
+            base_url = self.base_url("graph"),
         )
     }
 
-    fn base_url(&self) -> String {
+    fn base_url(&self, prefix: &str) -> String {
         format!(
-            "{protocol}://{hostname}{opt_port}",
+            "{protocol}://{prefix}.{hostname}{opt_port}",
             opt_port = if self.port == 443 || self.port == 80 {
                 "".to_string()
             } else {
@@ -201,7 +204,7 @@ mod tests {
     #[test]
     fn test_defaults() {
         let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("login.microsoft.com").expect("Could not parse hostname"),
+            HostName::from_str("microsoft.com").expect("Could not parse hostname"),
             443,
             "1234-5678".to_string(),
             &TlsClientDetails {
@@ -219,18 +222,18 @@ mod tests {
         );
         assert_eq!(
             entra_endpoint.user_info("0000-0000"),
-            "https://login.microsoft.com/v1.0/users/0000-0000"
+            "https://graph.microsoft.com/v1.0/users/0000-0000"
         );
         assert_eq!(
             entra_endpoint.group_info("0000-0000"),
-            "https://login.microsoft.com/v1.0/users/0000-0000/memberOf"
+            "https://graph.microsoft.com/v1.0/users/0000-0000/memberOf"
         );
     }
 
     #[test]
     fn test_non_defaults_tls() {
         let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
+            HostName::from_str("myentra.com").expect("Could not parse hostname"),
             8443,
             "1234-5678".to_string(),
             &TlsClientDetails {
@@ -246,12 +249,16 @@ mod tests {
             entra_endpoint.oauth2_token(),
             "https://login.myentra.com:8443/1234-5678/oauth2/v2.0/token"
         );
+        assert_eq!(
+            entra_endpoint.user_info("0000-0000"),
+            "https://graph.myentra.com:8443/v1.0/users/0000-0000"
+        );
     }
 
     #[test]
     fn test_non_defaults_non_tls() {
         let entra_endpoint = EntraEndpoint::new(
-            HostName::from_str("login.myentra.com").expect("Could not parse hostname"),
+            HostName::from_str("myentra.com").expect("Could not parse hostname"),
             8080,
             "1234-5678".to_string(),
             &TlsClientDetails { tls: None },
@@ -260,6 +267,10 @@ mod tests {
         assert_eq!(
             entra_endpoint.oauth2_token(),
             "http://login.myentra.com:8080/1234-5678/oauth2/v2.0/token"
+        );
+        assert_eq!(
+            entra_endpoint.user_info("0000-0000"),
+            "http://graph.myentra.com:8080/v1.0/users/0000-0000"
         );
     }
 }

@@ -65,7 +65,7 @@ spec:
                             - required:
                                 - experimentalActiveDirectory
                             - required:
-                                - experimentalEntraBackend
+                                - experimentalEntra
                           properties:
                             experimentalActiveDirectory:
                               description: Backend that fetches user information from Active Directory
@@ -139,7 +139,7 @@ spec:
                                 - kerberosSecretClassName
                                 - ldapServer
                               type: object
-                            experimentalEntraBackend:
+                            experimentalEntra:
                               description: Backend that fetches user information from Microsoft Entra
                               properties:
                                 clientCredentialsSecret:
@@ -149,7 +149,7 @@ spec:
                                     Must contain the fields `clientId` and `clientSecret`.
                                   type: string
                                 hostname:
-                                  default: login.microsoft.com
+                                  default: microsoft.com
                                   description: Hostname of the identity provider, defaults to `login.microsoft.com`.
                                   type: string
                                 port:
