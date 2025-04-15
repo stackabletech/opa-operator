@@ -192,14 +192,12 @@ impl EntraBackend {
     pub fn user_info(&self, user: &str) -> String {
         let mut user_info_url = self.user_info_endpoint_url.clone();
         user_info_url.set_path(&format!("/v1.0/users/{user}"));
-
         user_info_url.to_string()
     }
 
     pub fn group_info(&self, user: &str) -> String {
         let mut user_info_url = self.user_info_endpoint_url.clone();
         user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
-
         user_info_url.to_string()
     }
 }

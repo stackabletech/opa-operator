@@ -144,17 +144,9 @@ spec:
                               properties:
                                 clientCredentialsSecret:
                                   description: |-
-                                    Name of a Secret that contains client credentials of a Entra account with permission to read user metadata.
+                                    Name of a Secret that contains client credentials of an Entra account with permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
 
                                     Must contain the fields `clientId` and `clientSecret`.
-                                  type: string
-                                hostnameGraph:
-                                  default: graph.microsoft.com
-                                  description: Hostname of the user info provider, defaults to `graph.microsoft.com`.
-                                  type: string
-                                hostnameToken:
-                                  default: login.microsoft.com
-                                  description: Hostname of the token provider, defaults to `login.microsoft.com`.
                                   type: string
                                 port:
                                   default: 443
@@ -210,6 +202,14 @@ spec:
                                   required:
                                     - verification
                                   type: object
+                                tokenEndpoint:
+                                  default: login.microsoft.com
+                                  description: Hostname of the token provider, defaults to `login.microsoft.com`.
+                                  type: string
+                                userInfoEndpoint:
+                                  default: graph.microsoft.com
+                                  description: Hostname of the user info provider, defaults to `graph.microsoft.com`.
+                                  type: string
                               required:
                                 - clientCredentialsSecret
                                 - tenantId
