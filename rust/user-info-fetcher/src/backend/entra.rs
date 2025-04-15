@@ -48,13 +48,6 @@ struct OAuthResponse {
     access_token: String,
 }
 
-/// The minimal structure of [UserRepresentation] that is returned by [`/users`][users] and [`/users/{id}`][user-by-id].
-/// <div class="warning">Some fields, such as `groups` are never present. See [keycloak/keycloak#20292][issue-20292]</div>
-///
-/// [users]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#_get_adminrealmsrealmusers
-/// [user-by-id]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#_get_adminrealmsrealmusersid
-/// [UserRepresentation]: https://www.keycloak.org/docs-api/22.0.1/rest-api/index.html#UserRepresentation
-/// [issue-20292]: https://github.com/keycloak/keycloak/issues/20294
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
@@ -91,7 +84,7 @@ pub(crate) async fn get_user_info(
         tls,
     } = config;
 
-    let entra_endpoint = EntraEndpoint::new(hostname.clone(), port.clone(), tenant_id.clone(), tls);
+    let entra_endpoint = EntraEndpoint::new(hostname.clone(), *port, tenant_id.clone(), tls);
     let token_url = entra_endpoint.oauth2_token();
 
     let authn = send_json_request::<OAuthResponse>(http.post(token_url).form(&[
@@ -116,7 +109,7 @@ pub(crate) async fn get_user_info(
         UserInfoRequest::UserInfoRequestByName(req) => {
             let username = &req.username;
             send_json_request::<UserMetadata>(
-                http.get(entra_endpoint.user_info(&username))
+                http.get(entra_endpoint.user_info(username))
                     .bearer_auth(&authn.access_token),
             )
             .await
