@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use clap::{crate_description, crate_version, Parser};
+use clap::Parser;
 use futures::StreamExt;
 use product_config::ProductConfigManager;
-use stackable_opa_operator::crd::{v1alpha1, OpaCluster, APP_NAME, OPERATOR_NAME};
+use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, v1alpha1};
 use stackable_operator::{
+    YamlSchema,
     cli::{Command, ProductOperatorRun},
     client::{self, Client},
     k8s_openapi::api::{
@@ -12,17 +13,18 @@ use stackable_operator::{
         core::v1::{ConfigMap, Service},
     },
     kube::{
+        Api,
         core::DeserializeGuard,
         runtime::{
+            Controller,
             events::{Recorder, Reporter},
-            watcher, Controller,
+            watcher,
         },
-        Api,
     },
     logging::controller::report_controller_reconciled,
     namespace::WatchNamespace,
     shared::yaml::SerializeOptions,
-    YamlSchema,
+    telemetry::Tracing,
 };
 
 use crate::controller::OPA_FULL_CONTROLLER_NAME;
@@ -67,23 +69,25 @@ async fn main() -> anyhow::Result<()> {
                 ProductOperatorRun {
                     product_config,
                     watch_namespace,
-                    tracing_target,
+                    telemetry_arguments,
                     cluster_info_opts,
                 },
         }) => {
-            stackable_operator::logging::initialize_logging(
-                "OPA_OPERATOR_LOG",
-                APP_NAME,
-                tracing_target,
-            );
+            // NOTE (@NickLarsenNZ): Before stackable-telemetry was used:
+            // - The console log level was set by `OPA_OPERATOR_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
+            // - The file log level was set by `OPA_OPERATOR_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
+            // - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+            let _tracing_guard =
+                Tracing::pre_configured(built_info::PKG_NAME, telemetry_arguments).init()?;
 
-            stackable_operator::utils::print_startup_string(
-                crate_description!(),
-                crate_version!(),
-                built_info::GIT_VERSION,
-                built_info::TARGET,
-                built_info::BUILT_TIME_UTC,
-                built_info::RUSTC_VERSION,
+            tracing::info!(
+                built_info.pkg_version = built_info::PKG_VERSION,
+                built_info.git_version = built_info::GIT_VERSION,
+                built_info.target = built_info::TARGET,
+                built_info.built_time_utc = built_info::BUILT_TIME_UTC,
+                built_info.rustc_version = built_info::RUSTC_VERSION,
+                "Starting {description}",
+                description = built_info::PKG_DESCRIPTION
             );
             let product_config = product_config.load(&[
                 "deploy/config-spec/properties.yaml",
@@ -127,13 +131,10 @@ async fn create_controller(
         .owns(configmaps_api, watcher::Config::default())
         .owns(services_api, watcher::Config::default());
 
-    let event_recorder = Arc::new(Recorder::new(
-        client.as_kube_client(),
-        Reporter {
-            controller: OPA_FULL_CONTROLLER_NAME.to_string(),
-            instance: None,
-        },
-    ));
+    let event_recorder = Arc::new(Recorder::new(client.as_kube_client(), Reporter {
+        controller: OPA_FULL_CONTROLLER_NAME.to_string(),
+        instance: None,
+    }));
     controller
         .run(
             controller::reconcile_opa,

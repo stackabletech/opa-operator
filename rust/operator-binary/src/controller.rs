@@ -6,12 +6,12 @@ use std::{
 
 use const_format::concatcp;
 use indoc::formatdoc;
-use product_config::{types::PropertyNameKind, ProductConfigManager};
+use product_config::{ProductConfigManager, types::PropertyNameKind};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::{
-    user_info_fetcher, v1alpha1, APP_NAME, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
+    APP_NAME, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME, user_info_fetcher, v1alpha1,
 };
 use stackable_operator::{
     builder::{
@@ -19,11 +19,11 @@ use stackable_operator::{
         configmap::ConfigMapBuilder,
         meta::ObjectMetaBuilder,
         pod::{
+            PodBuilder,
             container::{ContainerBuilder, FieldPathEnvVar},
             resources::ResourceRequirementsBuilder,
             security::PodSecurityContextBuilder,
             volume::VolumeBuilder,
-            PodBuilder,
         },
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
@@ -34,6 +34,7 @@ use stackable_operator::{
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
     k8s_openapi::{
+        DeepMerge,
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
@@ -42,12 +43,11 @@ use stackable_operator::{
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
-        DeepMerge,
     },
     kube::{
-        core::{error_boundary, DeserializeGuard},
-        runtime::{controller::Action, reflector::ObjectRef},
         Resource as KubeResource, ResourceExt,
+        core::{DeserializeGuard, error_boundary},
+        runtime::{controller::Action, reflector::ObjectRef},
     },
     kvp::{Label, LabelError, Labels, ObjectLabels},
     logging::controller::ReconcilerError,
@@ -56,7 +56,7 @@ use stackable_operator::{
     product_logging::{
         self,
         framework::{
-            create_vector_shutdown_file_command, remove_vector_shutdown_file_command, LoggingError,
+            LoggingError, create_vector_shutdown_file_command, remove_vector_shutdown_file_command,
         },
         spec::{
             AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
@@ -76,9 +76,7 @@ use strum::{EnumDiscriminants, IntoStaticStr};
 use crate::{
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
-    product_logging::{
-        extend_role_group_config_map, resolve_vector_aggregator_address, BundleBuilderLogLevel,
-    },
+    product_logging::{BundleBuilderLogLevel, extend_role_group_config_map},
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
@@ -251,10 +249,8 @@ pub enum Error {
         source: stackable_operator::builder::pod::container::Error,
     },
 
-    #[snafu(display("failed to resolve the Vector aggregator address"))]
-    ResolveVectorAggregatorAddress {
-        source: crate::product_logging::Error,
-    },
+    #[snafu(display("vector agent is enabled but vector aggregator ConfigMap is missing"))]
+    VectorAggregatorConfigMapMissing,
 
     #[snafu(display("failed to add the logging configuration to the ConfigMap [{cm_name}]"))]
     InvalidLoggingConfig {
@@ -443,10 +439,6 @@ pub async fn reconcile_opa(
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
-    let vector_aggregator_address = resolve_vector_aggregator_address(opa, client)
-        .await
-        .context(ResolveVectorAggregatorAddressSnafu)?;
-
     let server_role_service = build_server_role_service(opa, &resolved_product_image)?;
     // required for discovery config map later
     let server_role_service = cluster_resources
@@ -488,7 +480,6 @@ pub async fn reconcile_opa(
             &resolved_product_image,
             &rolegroup,
             &merged_config,
-            vector_aggregator_address.as_deref(),
         )?;
         let rg_service = build_rolegroup_service(opa, &resolved_product_image, &rolegroup)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
@@ -682,7 +673,6 @@ fn build_server_rolegroup_config_map(
     resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
     merged_config: &v1alpha1::OpaConfig,
-    vector_aggregator_address: Option<&str>,
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
@@ -711,15 +701,11 @@ fn build_server_rolegroup_config_map(
         );
     }
 
-    extend_role_group_config_map(
-        rolegroup,
-        vector_aggregator_address,
-        &merged_config.logging,
-        &mut cm_builder,
-    )
-    .context(InvalidLoggingConfigSnafu {
-        cm_name: rolegroup.object_name(),
-    })?;
+    extend_role_group_config_map(rolegroup, &merged_config.logging, &mut cm_builder).context(
+        InvalidLoggingConfigSnafu {
+            cm_name: rolegroup.object_name(),
+        },
+    )?;
 
     cm_builder
         .build()
@@ -787,11 +773,9 @@ fn build_server_rolegroup_daemonset(
             "pipefail".to_string(),
             "-c".to_string(),
         ])
-        .args(vec![build_prepare_start_command(
-            merged_config,
-            &prepare_container_name,
-        )
-        .join(" && ")])
+        .args(vec![
+            build_prepare_start_command(merged_config, &prepare_container_name).join(" && "),
+        ])
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -814,11 +798,11 @@ fn build_server_rolegroup_daemonset(
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_env_var(
-            "OPA_BUNDLE_BUILDER_LOG",
+            "CONSOLE_LOG",
             bundle_builder_log_level(merged_config).to_string(),
         )
         .add_env_var(
-            "OPA_BUNDLE_BUILDER_LOG_DIRECTORY",
+            "ROLLING_LOGS_DIR",
             format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
@@ -1059,24 +1043,32 @@ fn build_server_rolegroup_daemonset(
     }
 
     if merged_config.logging.enable_vector_agent {
-        pb.add_container(
-            product_logging::framework::vector_container(
-                resolved_product_image,
-                CONFIG_VOLUME_NAME,
-                LOG_VOLUME_NAME,
-                merged_config
-                    .logging
-                    .containers
-                    .get(&v1alpha1::Container::Vector),
-                ResourceRequirementsBuilder::new()
-                    .with_cpu_request("250m")
-                    .with_cpu_limit("500m")
-                    .with_memory_request("128Mi")
-                    .with_memory_limit("128Mi")
-                    .build(),
-            )
-            .context(ConfigureLoggingSnafu)?,
-        );
+        match &opa.spec.cluster_config.vector_aggregator_config_map_name {
+            Some(vector_aggregator_config_map_name) => {
+                pb.add_container(
+                    product_logging::framework::vector_container(
+                        resolved_product_image,
+                        CONFIG_VOLUME_NAME,
+                        LOG_VOLUME_NAME,
+                        merged_config
+                            .logging
+                            .containers
+                            .get(&v1alpha1::Container::Vector),
+                        ResourceRequirementsBuilder::new()
+                            .with_cpu_request("250m")
+                            .with_cpu_limit("500m")
+                            .with_memory_request("128Mi")
+                            .with_memory_limit("128Mi")
+                            .build(),
+                        vector_aggregator_config_map_name,
+                    )
+                    .context(ConfigureLoggingSnafu)?,
+                );
+            }
+            None => {
+                VectorAggregatorConfigMapMissingSnafu.fail()?;
+            }
+        }
     }
 
     add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;

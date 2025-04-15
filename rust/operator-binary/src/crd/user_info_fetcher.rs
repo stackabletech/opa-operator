@@ -8,6 +8,7 @@ use stackable_operator::{
     },
     schemars::{self, JsonSchema},
     time::Duration,
+    versioned::versioned,
 };
 use stackable_versioned::versioned;
 use v1alpha1::EntraBackend;

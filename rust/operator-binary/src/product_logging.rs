@@ -1,10 +1,7 @@
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::Snafu;
 use stackable_opa_operator::crd::v1alpha1;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder,
-    client::Client,
-    k8s_openapi::api::core::v1::ConfigMap,
-    kube::ResourceExt,
     product_logging::{
         self,
         spec::{ContainerLogConfig, ContainerLogConfigChoice, LogLevel, Logging},
@@ -31,8 +28,6 @@ pub enum Error {
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
-
-const VECTOR_AGGREGATOR_CM_ENTRY: &str = "ADDRESS";
 
 #[derive(strum::Display)]
 #[strum(serialize_all = "lowercase")]
@@ -74,44 +69,9 @@ impl From<LogLevel> for BundleBuilderLogLevel {
     }
 }
 
-/// Return the address of the Vector aggregator if the corresponding ConfigMap name is given in the
-/// cluster spec
-pub async fn resolve_vector_aggregator_address(
-    opa: &v1alpha1::OpaCluster,
-    client: &Client,
-) -> Result<Option<String>> {
-    let vector_aggregator_address = if let Some(vector_aggregator_config_map_name) =
-        &opa.spec.cluster_config.vector_aggregator_config_map_name
-    {
-        let vector_aggregator_address = client
-            .get::<ConfigMap>(
-                vector_aggregator_config_map_name,
-                opa.namespace()
-                    .as_deref()
-                    .context(ObjectHasNoNamespaceSnafu)?,
-            )
-            .await
-            .context(ConfigMapNotFoundSnafu {
-                cm_name: vector_aggregator_config_map_name.to_string(),
-            })?
-            .data
-            .and_then(|mut data| data.remove(VECTOR_AGGREGATOR_CM_ENTRY))
-            .context(MissingConfigMapEntrySnafu {
-                entry: VECTOR_AGGREGATOR_CM_ENTRY,
-                cm_name: vector_aggregator_config_map_name.to_string(),
-            })?;
-        Some(vector_aggregator_address)
-    } else {
-        None
-    };
-
-    Ok(vector_aggregator_address)
-}
-
 /// Extend the role group ConfigMap with logging and Vector configurations
 pub fn extend_role_group_config_map(
     rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
-    vector_aggregator_address: Option<&str>,
     logging: &Logging<v1alpha1::Container>,
     cm_builder: &mut ConfigMapBuilder,
 ) -> Result<()> {
@@ -127,11 +87,7 @@ pub fn extend_role_group_config_map(
     if logging.enable_vector_agent {
         cm_builder.add_data(
             product_logging::framework::VECTOR_CONFIG_FILE,
-            product_logging::framework::create_vector_config(
-                rolegroup,
-                vector_aggregator_address.context(MissingVectorAggregatorAddressSnafu)?,
-                vector_log_config,
-            ),
+            product_logging::framework::create_vector_config(rolegroup, vector_log_config),
         );
     }
 

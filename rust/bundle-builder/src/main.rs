@@ -4,12 +4,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use axum::{extract::State, http, response::IntoResponse, routing::get, Router};
+use axum::{Router, extract::State, http, response::IntoResponse, routing::get};
 use clap::Parser;
 use flate2::write::GzEncoder;
 use futures::{
+    FutureExt, StreamExt, TryFutureExt,
     future::{self, BoxFuture},
-    pin_mut, FutureExt, StreamExt, TryFutureExt,
+    pin_mut,
 };
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
@@ -21,8 +22,13 @@ use stackable_operator::{
             watcher,
         },
     },
+    telemetry::Tracing,
 };
 use tokio::net::TcpListener;
+
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
 
 const OPERATOR_NAME: &str = "opa.stackable.tech";
 pub const APP_NAME: &str = "opa-bundle-builder";
@@ -59,16 +65,33 @@ enum StartupError {
 
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
+
+    #[snafu(display("failed to initialize stackable-telemetry"))]
+    TracingInit {
+        source: stackable_operator::telemetry::tracing::Error,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
-    stackable_operator::logging::initialize_logging(
-        "OPA_BUNDLE_BUILDER_LOG",
-        APP_NAME,
-        args.common.tracing_target,
+    // NOTE (@NickLarsenNZ): Before stackable-telemetry was used:
+    // - The console log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
+    // - The file log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
+    // - The file log directory was set by `OPA_BUNDLE_BUILDER_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+    let _tracing_guard =
+        Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry_arguments)
+            .init()
+            .context(TracingInitSnafu)?;
+
+    tracing::info!(
+        built_info.pkg_version = built_info::PKG_VERSION,
+        built_info.git_version = built_info::GIT_VERSION,
+        built_info.target = built_info::TARGET,
+        built_info.built_time_utc = built_info::BUILT_TIME_UTC,
+        built_info.rustc_version = built_info::RUSTC_VERSION,
+        "Starting bundle-builder",
     );
 
     let client =

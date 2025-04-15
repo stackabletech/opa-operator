@@ -27,8 +27,8 @@ use stackable_operator::{
     status::condition::{ClusterCondition, HasStatusCondition},
     time::Duration,
     utils::cluster_info::KubernetesClusterInfo,
+    versioned::versioned,
 };
-use stackable_versioned::versioned;
 use strum::{Display, EnumIter, EnumString};
 
 pub mod user_info_fetcher;

@@ -1,5 +1,5 @@
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::{v1alpha1, SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD};
+use stackable_opa_operator::crd::{SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD, v1alpha1};
 use stackable_operator::builder::pod::PodBuilder;
 
 #[derive(Debug, Snafu)]

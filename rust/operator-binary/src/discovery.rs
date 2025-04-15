@@ -4,11 +4,11 @@ use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{ConfigMap, Service},
-    kube::{runtime::reflector::ObjectRef, Resource, ResourceExt},
+    kube::{Resource, ResourceExt, runtime::reflector::ObjectRef},
     utils::cluster_info::KubernetesClusterInfo,
 };
 
-use crate::controller::{build_recommended_labels, APP_PORT};
+use crate::controller::{APP_PORT, build_recommended_labels};
 
 #[derive(Snafu, Debug)]
 pub enum Error {

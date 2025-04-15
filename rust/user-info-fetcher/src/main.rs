@@ -5,20 +5,24 @@ use std::{
     sync::Arc,
 };
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 use clap::Parser;
-use futures::{future, pin_mut, FutureExt};
+use futures::{FutureExt, future, pin_mut};
 use moka::future::Cache;
 use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::commons::tls_verification::TlsClientDetails;
+use stackable_operator::{commons::tls_verification::TlsClientDetails, telemetry::Tracing};
 use tokio::net::TcpListener;
 
 mod backend;
 mod http_error;
 mod utils;
+
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
 
 pub const APP_NAME: &str = "opa-user-info-fetcher";
 
@@ -71,6 +75,11 @@ enum StartupError {
 
     #[snafu(display("failed to configure TLS"))]
     ConfigureTls { source: utils::tls::Error },
+
+    #[snafu(display("failed to initialize stackable-telemetry"))]
+    TracingInit {
+        source: stackable_operator::telemetry::tracing::Error,
+    },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -84,10 +93,22 @@ async fn read_config_file(path: &Path) -> Result<String, StartupError> {
 async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
-    stackable_operator::logging::initialize_logging(
-        "OPA_OPERATOR_LOG",
-        APP_NAME,
-        args.common.tracing_target,
+    // NOTE (@NickLarsenNZ): Before stackable-telemetry was used:
+    // - The console log level was set by `OPA_OPERATOR_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
+    // - The file log level was set by `OPA_OPERATOR_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
+    // - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+    let _tracing_guard =
+        Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry_arguments)
+            .init()
+            .context(TracingInitSnafu)?;
+
+    tracing::info!(
+        built_info.pkg_version = built_info::PKG_VERSION,
+        built_info.git_version = built_info::GIT_VERSION,
+        built_info.target = built_info::TARGET,
+        built_info.built_time_utc = built_info::BUILT_TIME_UTC,
+        built_info.rustc_version = built_info::RUSTC_VERSION,
+        "Starting user-info-fetcher",
     );
 
     let shutdown_requested = tokio::signal::ctrl_c().map(|_| ());
