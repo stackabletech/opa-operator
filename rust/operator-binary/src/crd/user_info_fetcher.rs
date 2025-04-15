@@ -40,7 +40,7 @@ pub mod versioned {
         ActiveDirectory(v1alpha1::ActiveDirectoryBackend),
 
         /// Backend that fetches user information from Microsoft Entra
-        #[serde(rename = "experimentalEntraBackend")]
+        #[serde(rename = "experimentalEntra")]
         Entra(v1alpha1::EntraBackend),
     }
 
