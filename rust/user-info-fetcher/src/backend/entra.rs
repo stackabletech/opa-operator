@@ -59,8 +59,14 @@ struct UserMetadata {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct GroupMembershipResponse {
+    value: Vec<GroupMembership>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct GroupMembership {
-    display_name: String,
+    display_name: Option<String>,
 }
 
 struct EntraEndpoint {
@@ -125,7 +131,7 @@ pub(crate) async fn get_user_info(
         }
     };
 
-    let groups = send_json_request::<Vec<GroupMembership>>(
+    let groups = send_json_request::<GroupMembershipResponse>(
         http.get(entra_endpoint.group_info(&user_info.id))
             .bearer_auth(&authn.access_token),
     )
@@ -133,12 +139,17 @@ pub(crate) async fn get_user_info(
     .context(RequestUserGroupsSnafu {
         username: user_info.user_principal_name.clone(),
         user_id: user_info.id.clone(),
-    })?;
+    })?
+    .value;
 
     Ok(UserInfo {
         id: Some(user_info.id),
         username: Some(user_info.user_principal_name),
-        groups: groups.into_iter().map(|g| g.display_name).collect(),
+        groups: groups
+            .into_iter()
+            .map(|g| g.display_name)
+            .flatten()
+            .collect(),
         custom_attributes: user_info.attributes,
     })
 }
