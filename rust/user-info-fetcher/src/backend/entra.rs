@@ -6,7 +6,7 @@ use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
 use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
 
-use crate::{http_error, utils::http::send_json_request, Credentials, UserInfo, UserInfoRequest};
+use crate::{Credentials, UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
 
 #[derive(Snafu, Debug)]
 pub enum Error {

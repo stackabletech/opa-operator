@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use stackable_operator::{
     commons::{
         networking::HostName,
@@ -10,8 +10,6 @@ use stackable_operator::{
     time::Duration,
     versioned::versioned,
 };
-use stackable_versioned::versioned;
-use v1alpha1::EntraBackend;
 
 #[versioned(version(name = "v1alpha1"))]
 pub mod versioned {
@@ -195,38 +193,3 @@ impl Default for v1alpha1::Cache {
         }
     }
 }
-
-// #[derive(Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// struct EntraBackendHelper {
-//     #[serde(default = "entra_default_host")]
-//     hostname: HostName,
-//     #[serde(default = "entra_default_port")]
-//     port: u16,
-//     tenant_id: String,
-//     #[serde(flatten)]
-//     tls: Option<TlsClientDetails>,
-//     client_credentials_secret: String,
-// }
-
-// impl<'de> Deserialize<'de> for EntraBackend {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         let helper = EntraBackendHelper::deserialize(deserializer)?;
-//         Ok(EntraBackend {
-//             hostname: helper.hostname,
-//             port: helper.port,
-//             tenant_id: helper.tenant_id,
-//             tls: helper.tls.unwrap_or_else(|| TlsClientDetails {
-//                 tls: Some(Tls {
-//                     verification: TlsVerification::Server(TlsServerVerification {
-//                         ca_cert: CaCert::WebPki {},
-//                     }),
-//                 }),
-//             }),
-//             client_credentials_secret: helper.client_credentials_secret,
-//         })
-//     }
-// }
