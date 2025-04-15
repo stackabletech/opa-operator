@@ -145,11 +145,7 @@ pub(crate) async fn get_user_info(
     Ok(UserInfo {
         id: Some(user_info.id),
         username: Some(user_info.user_principal_name),
-        groups: groups
-            .into_iter()
-            .map(|g| g.display_name)
-            .flatten()
-            .collect(),
+        groups: groups.into_iter().filter_map(|g| g.display_name).collect(),
         custom_attributes: user_info.attributes,
     })
 }
