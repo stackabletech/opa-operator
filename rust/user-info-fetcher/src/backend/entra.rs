@@ -14,8 +14,11 @@ pub enum Error {
     #[snafu(display("failed to get access_token"))]
     AccessToken { source: crate::utils::http::Error },
 
-    #[snafu(display("failed to search for user"))]
-    SearchForUser { source: crate::utils::http::Error },
+    #[snafu(display("failed to search for user with username {username:?}"))]
+    SearchForUser {
+        source: crate::utils::http::Error,
+        username: String,
+    },
 
     #[snafu(display("failed to search for user with id {user_id:?}"))]
     UserNotFoundById {
@@ -127,7 +130,7 @@ pub(crate) async fn get_user_info(
                     .bearer_auth(&authn.access_token),
             )
             .await
-            .context(SearchForUserSnafu)?
+            .context(SearchForUserSnafu { username })?
         }
     };
 
@@ -250,6 +253,10 @@ mod tests {
             entra.user_info("0000-0000"),
             "https://graph.myentra.com:8443/v1.0/users/0000-0000"
         );
+        assert_eq!(
+            entra.group_info("0000-0000"),
+            "https://graph.myentra.com:8443/v1.0/users/0000-0000/memberOf"
+        );
     }
 
     #[test]
@@ -271,6 +278,10 @@ mod tests {
             entra.user_info("0000-0000"),
             "http://graph.myentra.com/v1.0/users/0000-0000"
         );
+        assert_eq!(
+            entra.group_info("0000-0000"),
+            "http://graph.myentra.com/v1.0/users/0000-0000/memberOf"
+        );
     }
 
     #[test]
@@ -291,6 +302,10 @@ mod tests {
         assert_eq!(
             entra.user_info("0000-0000"),
             "http://graph.myentra.com:8080/v1.0/users/0000-0000"
+        );
+        assert_eq!(
+            entra.group_info("0000-0000"),
+            "http://graph.myentra.com:8080/v1.0/users/0000-0000/memberOf"
         );
     }
 }
