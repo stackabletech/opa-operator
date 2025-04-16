@@ -12,18 +12,18 @@ All notable changes to this project will be documented in this file.
 
 - BREAKING: Replace stackable-operator `initialize_logging` with stackable-telemetry `Tracing` ([#703], [#710], [#715]).
   - operator-binary:
-    - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG`.
-    - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG`.
+    - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG_LEVEL`.
+    - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG_LEVEL`.
     - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set
       by `FILE_LOG_DIRECTORY` (or via `--file-log-directory <DIRECTORY>`).
   - bundle-builder:
-    - The console log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set by `CONSOLE_LOG`.
-    - The file log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set by `FILE_LOG`.
+    - The console log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set by `CONSOLE_LOG_LEVEL`.
+    - The file log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set by `FILE_LOG_LEVEL`.
     - The file log directory was set by `OPA_BUNDLE_BUILDER_LOG_DIRECTORY`, and is now set
       by `FILE_LOG_DIRECTORY` (or via `--file-log-directory <DIRECTORY>`).
   - user-info-fetcher:
-    - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG`.
-    - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG`.
+    - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG_LEVEL`.
+    - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG_LEVEL`.
     - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set
       by `FILE_LOG_DIRECTORY` (or via `--file-log-directory <DIRECTORY>`).
   - Replace stackable-operator `print_startup_string` with `tracing::info!` with fields.

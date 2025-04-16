@@ -798,7 +798,7 @@ fn build_server_rolegroup_daemonset(
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
         .add_env_var(
-            "CONSOLE_LOG",
+            "FILE_LOG_LEVEL",
             bundle_builder_log_level(merged_config).to_string(),
         )
         .add_env_var(
@@ -1180,11 +1180,11 @@ fn build_opa_start_command(merged_config: &v1alpha1::OpaConfig, container_name: 
     // See https://stackoverflow.com/a/8048493
 
     let logging_redirects = format!(
-        "&> >(CONSOLE_LEVEL={console} FILE_LEVEL={file} DECISION_LEVEL={decision} SERVER_LEVEL={server} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)",
-        file = file_log_level,
-        console = console_log_level,
-        decision = decision_log_level,
-        server = server_log_level
+        "&> >(CONSOLE_LEVEL={console_level} FILE_LEVEL={file_level} DECISION_LEVEL={decision_level} SERVER_LEVEL={server_level} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)",
+        file_level = file_log_level,
+        console_level = console_log_level,
+        decision_level = decision_log_level,
+        server_level = server_log_level
     );
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
