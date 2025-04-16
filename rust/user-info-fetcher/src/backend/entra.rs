@@ -115,13 +115,15 @@ pub(crate) async fn get_user_info(
 
     let user_info = match req {
         UserInfoRequest::UserInfoRequestById(req) => {
-            let user_id = req.id.clone();
+            let user_id = &req.id;
             send_json_request::<UserMetadata>(
                 http.get(entra_endpoint.user_info(&user_id))
                     .bearer_auth(&authn.access_token),
             )
             .await
-            .context(UserNotFoundByIdSnafu { user_id })?
+            .with_context(|_| UserNotFoundByIdSnafu {
+                user_id: user_id.clone(),
+            })?
         }
         UserInfoRequest::UserInfoRequestByName(req) => {
             let username = &req.username;
@@ -130,7 +132,9 @@ pub(crate) async fn get_user_info(
                     .bearer_auth(&authn.access_token),
             )
             .await
-            .context(SearchForUserSnafu { username })?
+            .with_context(|_| SearchForUserSnafu {
+                username: username.clone(),
+            })?
         }
     };
 
