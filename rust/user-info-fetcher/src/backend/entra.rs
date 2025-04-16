@@ -117,7 +117,7 @@ pub(crate) async fn get_user_info(
         UserInfoRequest::UserInfoRequestById(req) => {
             let user_id = &req.id;
             send_json_request::<UserMetadata>(
-                http.get(entra_endpoint.user_info(&user_id))
+                http.get(entra_endpoint.user_info(user_id))
                     .bearer_auth(&authn.access_token),
             )
             .await
