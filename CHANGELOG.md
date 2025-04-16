@@ -10,22 +10,22 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- BREAKING: Replace stackable-operator `initialize_logging` with stackable-telemetry `Tracing` ([#703], [#710]).
+- BREAKING: Replace stackable-operator `initialize_logging` with stackable-telemetry `Tracing` ([#703], [#710], [#715]).
   - operator-binary:
     - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG`.
     - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG`.
     - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set
-      by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+      by `FILE_LOG_DIRECTORY` (or via `--file-log-directory <DIRECTORY>`).
   - bundle-builder:
     - The console log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set by `CONSOLE_LOG`.
     - The file log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set by `FILE_LOG`.
     - The file log directory was set by `OPA_BUNDLE_BUILDER_LOG_DIRECTORY`, and is now set
-      by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+      by `FILE_LOG_DIRECTORY` (or via `--file-log-directory <DIRECTORY>`).
   - user-info-fetcher:
     - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG`.
     - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG`.
     - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set
-      by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+      by `FILE_LOG_DIRECTORY` (or via `--file-log-directory <DIRECTORY>`).
   - Replace stackable-operator `print_startup_string` with `tracing::info!` with fields.
 - BREAKING: Inject the vector aggregator address into the vector config using the env var `VECTOR_AGGREGATOR_ADDRESS` instead
     of having the operator write it to the vector config ([#707]).
@@ -38,6 +38,7 @@ All notable changes to this project will be documented in this file.
 [#707]: https://github.com/stackabletech/opa-operator/pull/707
 [#709]: https://github.com/stackabletech/opa-operator/pull/709
 [#710]: https://github.com/stackabletech/opa-operator/pull/710
+[#715]: https://github.com/stackabletech/opa-operator/pull/715
 
 ## [25.3.0] - 2025-03-21
 
