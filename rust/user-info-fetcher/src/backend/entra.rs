@@ -139,7 +139,7 @@ pub(crate) async fn get_user_info(
             .bearer_auth(&authn.access_token),
     )
     .await
-    .context(RequestUserGroupsSnafu {
+    .with_context(|_| RequestUserGroupsSnafu {
         username: user_info.user_principal_name.clone(),
         user_id: user_info.id.clone(),
     })?
