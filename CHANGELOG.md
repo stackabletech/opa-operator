@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Log the startup event for bundle-builder and user-info-fetcher ([#703]).
+- Support expermimental user-info-fetcher Entra backend to fetch user groups ([#712]).
 
 ### Changed
 
@@ -38,6 +39,7 @@ All notable changes to this project will be documented in this file.
 [#707]: https://github.com/stackabletech/opa-operator/pull/707
 [#709]: https://github.com/stackabletech/opa-operator/pull/709
 [#710]: https://github.com/stackabletech/opa-operator/pull/710
+[#712]: https://github.com/stackabletech/opa-operator/pull/712
 
 ## [25.3.0] - 2025-03-21
 
