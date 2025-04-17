@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Log the startup event for bundle-builder and user-info-fetcher ([#703]).
-- Support expermimental user-info-fetcher Entra backend to fetch user groups ([#712]).
+- Support experimental user-info-fetcher Entra backend to fetch user groups ([#712]).
 
 ### Changed
 
