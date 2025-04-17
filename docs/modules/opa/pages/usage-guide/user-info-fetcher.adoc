@@ -55,6 +55,7 @@ Currently the following backends are supported:
 
 * xref:#backend-keycloak[]
 * xref:#backend-activedirectory[]
+* xref:#backend-entra[]
 
 [#backends]
 == Backends
@@ -108,6 +109,29 @@ spec:
 <6> Groups can be filtered by LDAP attributes to reduce the load in searching for membership. `*` can be used as a wildcard in these filters.
 <7> The name of the SecretClass that knows how to create Kerberos keytabs trusted by Active Directory
 <8> The name of the SecretClass that contains the Active Directory's root CA certificate(s)
+
+[#backend-entra]
+=== Entra
+
+WARNING: The Entra backend is experimental, and subject to change.
+
+Fetch groups but not roles for a user from Entra.
+
+NOTE: The client in Entra must use the `client_credentials` flow and requires the `User.ReadAll` and `GroupMemberShip.ReadAll` permissions.
+
+[source,yaml]
+----
+spec:
+  clusterConfig:
+    userInfo:
+      backend:
+        experimentalEntra: # <1>
+          tenantId: 00000000-0000-0000-0000-000000000000 # <2>
+          clientCredentialsSecret: user-info-fetcher-client-credentials # <3>
+----
+<1> Enables the Entra backend
+<2> The Entra tenant ID
+<3> A secret containing the `clientId` and `clientSecret` keys
 
 == User info fetcher API
 
