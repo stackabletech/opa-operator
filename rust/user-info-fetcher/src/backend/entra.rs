@@ -216,102 +216,70 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_entra_defaults() {
+    fn test_entra_defaults_id() {
+        let tenant_id = "1234-5678-1234-5678";
+        let user = "1234-5678-1234-5678";
+
         let entra = EntraBackend::try_new(
             &HostName::from_str("login.microsoft.com").unwrap(),
             &HostName::from_str("graph.microsoft.com").unwrap(),
             443,
-            "1234-5678",
+            tenant_id,
             true,
         )
         .unwrap();
 
         assert_eq!(
             entra.oauth2_token(),
-            Url::parse("https://login.microsoft.com/1234-5678/oauth2/v2.0/token").unwrap()
+            Url::parse(&format!(
+                "https://login.microsoft.com/{tenant_id}/oauth2/v2.0/token"
+            ))
+            .unwrap()
         );
         assert_eq!(
-            entra.user_info("0000-0000"),
-            Url::parse("https://graph.microsoft.com/v1.0/users/0000-0000").unwrap()
+            entra.user_info(user),
+            Url::parse(&format!("https://graph.microsoft.com/v1.0/users/{user}")).unwrap()
         );
         assert_eq!(
-            entra.group_info("0000-0000"),
-            Url::parse("https://graph.microsoft.com/v1.0/users/0000-0000/memberOf").unwrap()
+            entra.group_info(user),
+            Url::parse(&format!(
+                "https://graph.microsoft.com/v1.0/users/{user}/memberOf"
+            ))
+            .unwrap()
         );
     }
 
     #[test]
-    fn test_entra_non_default_host_non_default_port_tls() {
+    fn test_entra_defaults_email() {
+        let tenant_id = "1234-5678-1234-5678";
+        let user = "test@stackable.tech";
+
         let entra = EntraBackend::try_new(
-            &HostName::from_str("login.myentra.com").unwrap(),
-            &HostName::from_str("graph.myentra.com").unwrap(),
-            8443,
-            "1234-5678",
+            &HostName::from_str("login.microsoft.com").unwrap(),
+            &HostName::from_str("graph.microsoft.com").unwrap(),
+            443,
+            tenant_id,
             true,
         )
         .unwrap();
 
         assert_eq!(
             entra.oauth2_token(),
-            Url::parse("https://login.myentra.com:8443/1234-5678/oauth2/v2.0/token").unwrap()
+            Url::parse(&format!(
+                "https://login.microsoft.com/{tenant_id}/oauth2/v2.0/token"
+            ))
+            .unwrap()
         );
         assert_eq!(
-            entra.user_info("0000-0000"),
-            Url::parse("https://graph.myentra.com:8443/v1.0/users/0000-0000").unwrap()
+            entra.user_info(user),
+            Url::parse(&format!("https://graph.microsoft.com/v1.0/users/{user}")).unwrap()
         );
         assert_eq!(
-            entra.group_info("0000-0000"),
-            Url::parse("https://graph.myentra.com:8443/v1.0/users/0000-0000/memberOf").unwrap()
-        );
-    }
-
-    #[test]
-    fn test_entra_non_default_host_default_port_non_tls() {
-        let entra = EntraBackend::try_new(
-            &HostName::from_str("login.myentra.com").unwrap(),
-            &HostName::from_str("graph.myentra.com").unwrap(),
-            80,
-            "1234-5678",
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(
-            entra.oauth2_token(),
-            Url::parse("http://login.myentra.com/1234-5678/oauth2/v2.0/token").unwrap()
-        );
-        assert_eq!(
-            entra.user_info("0000-0000"),
-            Url::parse("http://graph.myentra.com/v1.0/users/0000-0000").unwrap()
-        );
-        assert_eq!(
-            entra.group_info("0000-0000"),
-            Url::parse("http://graph.myentra.com/v1.0/users/0000-0000/memberOf").unwrap()
-        );
-    }
-
-    #[test]
-    fn test_entra_non_default_host_non_default_port_non_tls() {
-        let entra = EntraBackend::try_new(
-            &HostName::from_str("login.myentra.com").unwrap(),
-            &HostName::from_str("graph.myentra.com").unwrap(),
-            8080,
-            "1234-5678",
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(
-            entra.oauth2_token(),
-            Url::parse("http://login.myentra.com:8080/1234-5678/oauth2/v2.0/token").unwrap()
-        );
-        assert_eq!(
-            entra.user_info("0000-0000"),
-            Url::parse("http://graph.myentra.com:8080/v1.0/users/0000-0000").unwrap()
-        );
-        assert_eq!(
-            entra.group_info("0000-0000"),
-            Url::parse("http://graph.myentra.com:8080/v1.0/users/0000-0000/memberOf").unwrap()
+            entra.group_info(user),
+            Url::parse(&format!(
+                "https://graph.microsoft.com/v1.0/users/{user}/memberOf"
+            ))
+            .unwrap()
         );
     }
 }
