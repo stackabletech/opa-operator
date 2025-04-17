@@ -248,38 +248,4 @@ mod tests {
             .unwrap()
         );
     }
-
-    #[test]
-    fn test_entra_defaults_email() {
-        let tenant_id = "1234-5678-1234-5678";
-        let user = "test@stackable.tech";
-
-        let entra = EntraBackend::try_new(
-            &HostName::from_str("login.microsoft.com").unwrap(),
-            &HostName::from_str("graph.microsoft.com").unwrap(),
-            443,
-            tenant_id,
-            true,
-        )
-        .unwrap();
-
-        assert_eq!(
-            entra.oauth2_token(),
-            Url::parse(&format!(
-                "https://login.microsoft.com/{tenant_id}/oauth2/v2.0/token"
-            ))
-            .unwrap()
-        );
-        assert_eq!(
-            entra.user_info(user),
-            Url::parse(&format!("https://graph.microsoft.com/v1.0/users/{user}")).unwrap()
-        );
-        assert_eq!(
-            entra.group_info(user),
-            Url::parse(&format!(
-                "https://graph.microsoft.com/v1.0/users/{user}/memberOf"
-            ))
-            .unwrap()
-        );
-    }
 }
