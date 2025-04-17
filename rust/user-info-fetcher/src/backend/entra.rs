@@ -95,7 +95,7 @@ pub(crate) async fn get_user_info(
         tls,
     } = config;
 
-    let entra_endpoint = EntraBackend::try_new(
+    let entra_backend = EntraBackend::try_new(
         &token_hostname.as_url_host(),
         &user_info_hostname.as_url_host(),
         *port,
@@ -103,7 +103,7 @@ pub(crate) async fn get_user_info(
         TlsClientDetails { tls: tls.clone() }.uses_tls(),
     )?;
 
-    let token_url = entra_endpoint.oauth2_token();
+    let token_url = entra_backend.oauth2_token();
     let authn = send_json_request::<OAuthResponse>(http.post(token_url).form(&[
         ("client_id", credentials.client_id.as_str()),
         ("client_secret", credentials.client_secret.as_str()),
@@ -117,7 +117,7 @@ pub(crate) async fn get_user_info(
         UserInfoRequest::UserInfoRequestById(req) => {
             let user_id = &req.id;
             send_json_request::<UserMetadata>(
-                http.get(entra_endpoint.user_info(user_id))
+                http.get(entra_backend.user_info(user_id))
                     .bearer_auth(&authn.access_token),
             )
             .await
@@ -128,7 +128,7 @@ pub(crate) async fn get_user_info(
         UserInfoRequest::UserInfoRequestByName(req) => {
             let username = &req.username;
             send_json_request::<UserMetadata>(
-                http.get(entra_endpoint.user_info(username))
+                http.get(entra_backend.user_info(username))
                     .bearer_auth(&authn.access_token),
             )
             .await
@@ -139,7 +139,7 @@ pub(crate) async fn get_user_info(
     };
 
     let groups = send_json_request::<GroupMembershipResponse>(
-        http.get(entra_endpoint.group_info(&user_info.id))
+        http.get(entra_backend.group_info(&user_info.id))
             .bearer_auth(&authn.access_token),
     )
     .await
