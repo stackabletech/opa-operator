@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::commons::tls_verification::TlsClientDetails;
+use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
 use url::Url;
 
 use crate::{Credentials, UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
@@ -96,8 +96,8 @@ pub(crate) async fn get_user_info(
     } = config;
 
     let entra_backend = EntraBackend::try_new(
-        &token_hostname.as_url_host(),
-        &user_info_hostname.as_url_host(),
+        token_hostname,
+        user_info_hostname,
         *port,
         tenant_id,
         TlsClientDetails { tls: tls.clone() }.uses_tls(),
@@ -164,8 +164,8 @@ struct EntraBackend {
 
 impl EntraBackend {
     pub fn try_new(
-        token_endpoint: &str,
-        user_info_endpoint: &str,
+        token_endpoint: &HostName,
+        user_info_endpoint: &HostName,
         port: u16,
         tenant_id: &str,
         uses_tls: bool,
@@ -191,33 +191,35 @@ impl EntraBackend {
         })
     }
 
-    pub fn oauth2_token(&self) -> String {
-        self.token_endpoint_url.to_string()
+    pub fn oauth2_token(&self) -> Url {
+        self.token_endpoint_url.clone()
     }
 
     // Works both with id/oid and userPrincipalName
-    pub fn user_info(&self, user: &str) -> String {
+    pub fn user_info(&self, user: &str) -> Url {
         let mut user_info_url = self.user_info_endpoint_url.clone();
         user_info_url.set_path(&format!("/v1.0/users/{user}"));
-        user_info_url.to_string()
+        user_info_url
     }
 
-    pub fn group_info(&self, user: &str) -> String {
+    pub fn group_info(&self, user: &str) -> Url {
         let mut user_info_url = self.user_info_endpoint_url.clone();
         user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
-        user_info_url.to_string()
+        user_info_url
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
-    fn test_defaults() {
+    fn test_entra_defaults() {
         let entra = EntraBackend::try_new(
-            "login.microsoft.com",
-            "graph.microsoft.com",
+            &HostName::from_str("login.microsoft.com").unwrap(),
+            &HostName::from_str("graph.microsoft.com").unwrap(),
             443,
             "1234-5678",
             true,
@@ -226,23 +228,23 @@ mod tests {
 
         assert_eq!(
             entra.oauth2_token(),
-            "https://login.microsoft.com/1234-5678/oauth2/v2.0/token"
+            Url::parse("https://login.microsoft.com/1234-5678/oauth2/v2.0/token").unwrap()
         );
         assert_eq!(
             entra.user_info("0000-0000"),
-            "https://graph.microsoft.com/v1.0/users/0000-0000"
+            Url::parse("https://graph.microsoft.com/v1.0/users/0000-0000").unwrap()
         );
         assert_eq!(
             entra.group_info("0000-0000"),
-            "https://graph.microsoft.com/v1.0/users/0000-0000/memberOf"
+            Url::parse("https://graph.microsoft.com/v1.0/users/0000-0000/memberOf").unwrap()
         );
     }
 
     #[test]
-    fn test_non_defaults_tls() {
+    fn test_entra_non_default_host_non_default_port_tls() {
         let entra = EntraBackend::try_new(
-            "login.myentra.com",
-            "graph.myentra.com",
+            &HostName::from_str("login.myentra.com").unwrap(),
+            &HostName::from_str("graph.myentra.com").unwrap(),
             8443,
             "1234-5678",
             true,
@@ -251,23 +253,23 @@ mod tests {
 
         assert_eq!(
             entra.oauth2_token(),
-            "https://login.myentra.com:8443/1234-5678/oauth2/v2.0/token"
+            Url::parse("https://login.myentra.com:8443/1234-5678/oauth2/v2.0/token").unwrap()
         );
         assert_eq!(
             entra.user_info("0000-0000"),
-            "https://graph.myentra.com:8443/v1.0/users/0000-0000"
+            Url::parse("https://graph.myentra.com:8443/v1.0/users/0000-0000").unwrap()
         );
         assert_eq!(
             entra.group_info("0000-0000"),
-            "https://graph.myentra.com:8443/v1.0/users/0000-0000/memberOf"
+            Url::parse("https://graph.myentra.com:8443/v1.0/users/0000-0000/memberOf").unwrap()
         );
     }
 
     #[test]
-    fn test_defaults_non_tls() {
+    fn test_entra_non_default_host_default_port_non_tls() {
         let entra = EntraBackend::try_new(
-            "login.myentra.com",
-            "graph.myentra.com",
+            &HostName::from_str("login.myentra.com").unwrap(),
+            &HostName::from_str("graph.myentra.com").unwrap(),
             80,
             "1234-5678",
             false,
@@ -276,23 +278,23 @@ mod tests {
 
         assert_eq!(
             entra.oauth2_token(),
-            "http://login.myentra.com/1234-5678/oauth2/v2.0/token"
+            Url::parse("http://login.myentra.com/1234-5678/oauth2/v2.0/token").unwrap()
         );
         assert_eq!(
             entra.user_info("0000-0000"),
-            "http://graph.myentra.com/v1.0/users/0000-0000"
+            Url::parse("http://graph.myentra.com/v1.0/users/0000-0000").unwrap()
         );
         assert_eq!(
             entra.group_info("0000-0000"),
-            "http://graph.myentra.com/v1.0/users/0000-0000/memberOf"
+            Url::parse("http://graph.myentra.com/v1.0/users/0000-0000/memberOf").unwrap()
         );
     }
 
     #[test]
-    fn test_non_defaults_non_tls() {
+    fn test_entra_non_default_host_non_default_port_non_tls() {
         let entra = EntraBackend::try_new(
-            "login.myentra.com",
-            "graph.myentra.com",
+            &HostName::from_str("login.myentra.com").unwrap(),
+            &HostName::from_str("graph.myentra.com").unwrap(),
             8080,
             "1234-5678",
             false,
@@ -301,15 +303,15 @@ mod tests {
 
         assert_eq!(
             entra.oauth2_token(),
-            "http://login.myentra.com:8080/1234-5678/oauth2/v2.0/token"
+            Url::parse("http://login.myentra.com:8080/1234-5678/oauth2/v2.0/token").unwrap()
         );
         assert_eq!(
             entra.user_info("0000-0000"),
-            "http://graph.myentra.com:8080/v1.0/users/0000-0000"
+            Url::parse("http://graph.myentra.com:8080/v1.0/users/0000-0000").unwrap()
         );
         assert_eq!(
             entra.group_info("0000-0000"),
-            "http://graph.myentra.com:8080/v1.0/users/0000-0000/memberOf"
+            Url::parse("http://graph.myentra.com:8080/v1.0/users/0000-0000/memberOf").unwrap()
         );
     }
 }
