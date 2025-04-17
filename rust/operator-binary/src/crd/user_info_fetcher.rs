@@ -121,12 +121,12 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct EntraBackend {
         /// Hostname of the token provider, defaults to `login.microsoft.com`.
-        #[serde(default = "entra_default_token_endpoint")]
-        pub token_endpoint: HostName,
+        #[serde(default = "entra_default_token_hostname")]
+        pub token_hostname: HostName,
 
         /// Hostname of the user info provider, defaults to `graph.microsoft.com`.
-        #[serde(default = "entra_default_user_info_endpoint")]
-        pub user_info_endpoint: HostName,
+        #[serde(default = "entra_default_user_info_hostname")]
+        pub user_info_hostname: HostName,
 
         /// Port of the identity provider. Defaults to 443.
         #[serde(default = "entra_default_port")]
@@ -170,11 +170,11 @@ fn default_root_path() -> String {
     "/".to_string()
 }
 
-fn entra_default_token_endpoint() -> HostName {
+fn entra_default_token_hostname() -> HostName {
     HostName::from_str("login.microsoft.com").unwrap()
 }
 
-fn entra_default_user_info_endpoint() -> HostName {
+fn entra_default_user_info_hostname() -> HostName {
     HostName::from_str("graph.microsoft.com").unwrap()
 }
 

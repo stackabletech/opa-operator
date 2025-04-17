@@ -202,11 +202,11 @@ spec:
                                   required:
                                     - verification
                                   type: object
-                                tokenEndpoint:
+                                tokenHostname:
                                   default: login.microsoft.com
                                   description: Hostname of the token provider, defaults to `login.microsoft.com`.
                                   type: string
-                                userInfoEndpoint:
+                                userInfoHostname:
                                   default: graph.microsoft.com
                                   description: Hostname of the user info provider, defaults to `graph.microsoft.com`.
                                   type: string

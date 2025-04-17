@@ -88,16 +88,16 @@ pub(crate) async fn get_user_info(
 ) -> Result<UserInfo, Error> {
     let v1alpha1::EntraBackend {
         client_credentials_secret: _,
-        token_endpoint,
-        user_info_endpoint,
+        token_hostname,
+        user_info_hostname,
         port,
         tenant_id,
         tls,
     } = config;
 
     let entra_endpoint = EntraBackend::try_new(
-        &token_endpoint.as_url_host(),
-        &user_info_endpoint.as_url_host(),
+        &token_hostname.as_url_host(),
+        &user_info_hostname.as_url_host(),
         *port,
         tenant_id,
         TlsClientDetails { tls: tls.clone() }.uses_tls(),
