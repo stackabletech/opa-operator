@@ -171,7 +171,7 @@ impl EntraBackend {
         uses_tls: bool,
     ) -> Result<Self, Error> {
         let schema = if uses_tls { "https" } else { "http" };
-        let port = port.unwrap_or_else(|| if uses_tls { 443 } else { 80 });
+        let port = port.unwrap_or(if uses_tls { 443 } else { 80 });
 
         let token_endpoint =
             format!("{schema}://{token_endpoint}:{port}/{tenant_id}/oauth2/v2.0/token");
