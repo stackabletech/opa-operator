@@ -166,11 +166,12 @@ impl EntraBackend {
     pub fn try_new(
         token_endpoint: &HostName,
         user_info_endpoint: &HostName,
-        port: u16,
+        port: Option<u16>,
         tenant_id: &str,
         uses_tls: bool,
     ) -> Result<Self, Error> {
         let schema = if uses_tls { "https" } else { "http" };
+        let port = port.unwrap_or_else(|| if uses_tls { 443 } else { 80 });
 
         let token_endpoint =
             format!("{schema}://{token_endpoint}:{port}/{tenant_id}/oauth2/v2.0/token");
@@ -223,7 +224,7 @@ mod tests {
         let entra = EntraBackend::try_new(
             &HostName::from_str("login.microsoft.com").unwrap(),
             &HostName::from_str("graph.microsoft.com").unwrap(),
-            443,
+            None,
             tenant_id,
             true,
         )
@@ -244,6 +245,40 @@ mod tests {
             entra.group_info(user),
             Url::parse(&format!(
                 "https://graph.microsoft.com/v1.0/users/{user}/memberOf"
+            ))
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_entra_custom_id() {
+        let tenant_id = "1234-5678-1234-5678";
+        let user = "1234-5678-1234-5678";
+
+        let entra = EntraBackend::try_new(
+            &HostName::from_str("login.mock.com").unwrap(),
+            &HostName::from_str("graph.mock.com").unwrap(),
+            Some(8080),
+            tenant_id,
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(
+            entra.oauth2_token(),
+            Url::parse(&format!(
+                "http://login.mock.com:8080/{tenant_id}/oauth2/v2.0/token"
+            ))
+            .unwrap()
+        );
+        assert_eq!(
+            entra.user_info(user),
+            Url::parse(&format!("http://graph.mock.com:8080/v1.0/users/{user}")).unwrap()
+        );
+        assert_eq!(
+            entra.group_info(user),
+            Url::parse(&format!(
+                "http://graph.mock.com:8080/v1.0/users/{user}/memberOf"
             ))
             .unwrap()
         );

@@ -149,10 +149,10 @@ spec:
                                     Must contain the fields `clientId` and `clientSecret`.
                                   type: string
                                 port:
-                                  default: 443
-                                  description: Port of the identity provider. Defaults to 443.
+                                  description: Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
                                   format: uint16
                                   minimum: 0.0
+                                  nullable: true
                                   type: integer
                                 tenantId:
                                   description: The Microsoft Entra tenant ID.

@@ -128,9 +128,8 @@ pub mod versioned {
         #[serde(default = "entra_default_user_info_hostname")]
         pub user_info_hostname: HostName,
 
-        /// Port of the identity provider. Defaults to 443.
-        #[serde(default = "entra_default_port")]
-        pub port: u16,
+        /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
+        pub port: Option<u16>,
 
         /// The Microsoft Entra tenant ID.
         pub tenant_id: String,
@@ -139,7 +138,7 @@ pub mod versioned {
         // We do not use the flattened `TlsClientDetails` here since we cannot
         // default to WebPki using a default and flatten
         // https://github.com/serde-rs/serde/issues/1626
-        // This means we have to wrap `Tls` in `TlsClientDetails` to its
+        // This means we have to wrap `Tls` in `TlsClientDetails` to use its
         // method like `uses_tls()`.
         #[serde(default = "default_tls_web_pki")]
         pub tls: Option<Tls>,
@@ -176,10 +175,6 @@ fn entra_default_token_hostname() -> HostName {
 
 fn entra_default_user_info_hostname() -> HostName {
     HostName::from_str("graph.microsoft.com").unwrap()
-}
-
-fn entra_default_port() -> u16 {
-    443
 }
 
 fn default_tls_web_pki() -> Option<Tls> {
