@@ -1180,11 +1180,7 @@ fn build_opa_start_command(merged_config: &v1alpha1::OpaConfig, container_name: 
     // See https://stackoverflow.com/a/8048493
 
     let logging_redirects = format!(
-        "&> >(CONSOLE_LEVEL={console_level} FILE_LEVEL={file_level} DECISION_LEVEL={decision_level} SERVER_LEVEL={server_level} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)",
-        file_level = file_log_level,
-        console_level = console_log_level,
-        decision_level = decision_log_level,
-        server_level = server_log_level
+        "&> >(CONSOLE_LEVEL={console_log_level} FILE_LEVEL={file_log_level} DECISION_LEVEL={decision_log_level} SERVER_LEVEL={server_log_level} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)"
     );
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
