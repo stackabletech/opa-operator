@@ -782,6 +782,8 @@ fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
+    let console_and_file_log_level = bundle_builder_log_level(merged_config);
+
     cb_bundle_builder
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
@@ -797,10 +799,8 @@ fn build_server_rolegroup_daemonset(
             &bundle_builder_container_name,
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
-        .add_env_var(
-            "FILE_LOG_LEVEL",
-            bundle_builder_log_level(merged_config).to_string(),
-        )
+        .add_env_var("CONSOLE_LOG_LEVEL", console_and_file_log_level.to_string())
+        .add_env_var("FILE_LOG_LEVEL", console_and_file_log_level.to_string())
         .add_env_var(
             "FILE_LOG_DIRECTORY",
             format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
