@@ -34,14 +34,10 @@ Helm::
 +
 --
 You can also use Helm to install the operator.
-Add the Stackable Helm repository:
 
-[source,shell]
-----
-include::example$getting_started/getting_started.sh[tag=helm-add-repo]
-----
+NOTE: `helm repo` subcommands are not supported for OCI registries. The operators are installed directly, without adding the Helm Chart repository first.
 
-Then install the Stackable OPA operator:
+Install the Stackable OPA operator:
 
 [source,shell]
 ----

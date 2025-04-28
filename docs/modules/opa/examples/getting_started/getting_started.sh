@@ -19,16 +19,9 @@ fi
 
 case "$1" in
 "helm")
-echo "Adding 'stackable-dev' Helm Chart repository"
-# tag::helm-add-repo[]
-helm repo add stackable-dev https://repo.stackable.tech/repository/helm-dev/
-# end::helm-add-repo[]
-echo "Updating Helm repo"
-helm repo update
-
 echo "Installing operators with Helm"
 # tag::helm-install-operators[]
-helm install --wait opa-operator stackable-dev/opa-operator --version 0.0.0-dev
+helm install --wait opa-operator oci://oci.stackable.tech/sdp-charts/opa-operator --version 0.0.0-dev
 # end::helm-install-operators[]
 ;;
 "stackablectl")
