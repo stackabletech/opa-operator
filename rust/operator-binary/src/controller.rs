@@ -31,7 +31,7 @@ use stackable_operator::{
         product_image_selection::ResolvedProductImage,
         rbac::build_rbac_resources,
         secret_class::{SecretClassVolume, SecretClassVolumeScope},
-        tls_verification::TlsClientDetailsError,
+        tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
     k8s_openapi::{
         DeepMerge,
@@ -1013,6 +1013,29 @@ fn build_server_rolegroup_daemonset(
                     .tls
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                     .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
+            }
+            user_info_fetcher::v1alpha1::Backend::Entra(entra) => {
+                pb.add_volume(
+                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                        .secret(SecretVolumeSource {
+                            secret_name: Some(entra.client_credentials_secret.clone()),
+                            ..Default::default()
+                        })
+                        .build(),
+                )
+                .context(AddVolumeSnafu)?;
+                cb_user_info_fetcher
+                    .add_volume_mount(
+                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                        USER_INFO_FETCHER_CREDENTIALS_DIR,
+                    )
+                    .context(AddVolumeMountSnafu)?;
+
+                TlsClientDetails {
+                    tls: entra.tls.clone(),
+                }
+                .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
         }
 

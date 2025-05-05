@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   - Use `--file-log-rotation-period` (or `FILE_LOG_ROTATION_PERIOD`) to configure the frequency of rotation.
   - Use `--console-log-format` (or `CONSOLE_LOG_FORMAT`) to set the format to `plain` (default) or `json`.
 - Log the startup event for bundle-builder and user-info-fetcher ([#703]).
+- Support experimental user-info-fetcher Entra backend to fetch user groups ([#712]).
 
 ### Changed
 
@@ -42,6 +43,7 @@ All notable changes to this project will be documented in this file.
 [#707]: https://github.com/stackabletech/opa-operator/pull/707
 [#709]: https://github.com/stackabletech/opa-operator/pull/709
 [#710]: https://github.com/stackabletech/opa-operator/pull/710
+[#712]: https://github.com/stackabletech/opa-operator/pull/712
 [#715]: https://github.com/stackabletech/opa-operator/pull/715
 
 ## [25.3.0] - 2025-03-21

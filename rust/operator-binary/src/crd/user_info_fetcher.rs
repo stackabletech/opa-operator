@@ -1,8 +1,11 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
-    commons::{networking::HostName, tls_verification::TlsClientDetails},
+    commons::{
+        networking::HostName,
+        tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
+    },
     schemars::{self, JsonSchema},
     time::Duration,
     versioned::versioned,
@@ -38,6 +41,10 @@ pub mod versioned {
         /// Backend that fetches user information from Active Directory
         #[serde(rename = "experimentalActiveDirectory")]
         ActiveDirectory(v1alpha1::ActiveDirectoryBackend),
+
+        /// Backend that fetches user information from Microsoft Entra
+        #[serde(rename = "experimentalEntra")]
+        Entra(v1alpha1::EntraBackend),
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -112,6 +119,39 @@ pub mod versioned {
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
+    pub struct EntraBackend {
+        /// Hostname of the token provider, defaults to `login.microsoft.com`.
+        #[serde(default = "entra_default_token_hostname")]
+        pub token_hostname: HostName,
+
+        /// Hostname of the user info provider, defaults to `graph.microsoft.com`.
+        #[serde(default = "entra_default_user_info_hostname")]
+        pub user_info_hostname: HostName,
+
+        /// Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
+        pub port: Option<u16>,
+
+        /// The Microsoft Entra tenant ID.
+        pub tenant_id: String,
+
+        /// Use a TLS connection. Should usually be set to WebPki.
+        // We do not use the flattened `TlsClientDetails` here since we cannot
+        // default to WebPki using a default and flatten
+        // https://github.com/serde-rs/serde/issues/1626
+        // This means we have to wrap `Tls` in `TlsClientDetails` to use its
+        // method like `uses_tls()`.
+        #[serde(default = "default_tls_web_pki")]
+        pub tls: Option<Tls>,
+
+        /// Name of a Secret that contains client credentials of an Entra account with
+        /// permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
+        ///
+        /// Must contain the fields `clientId` and `clientSecret`.
+        pub client_credentials_secret: String,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct Cache {
         /// How long metadata about each user should be cached for.
         #[serde(default = "v1alpha1::Cache::default_entry_time_to_live")]
@@ -127,6 +167,22 @@ impl Default for v1alpha1::Backend {
 
 fn default_root_path() -> String {
     "/".to_string()
+}
+
+fn entra_default_token_hostname() -> HostName {
+    HostName::from_str("login.microsoft.com").unwrap()
+}
+
+fn entra_default_user_info_hostname() -> HostName {
+    HostName::from_str("graph.microsoft.com").unwrap()
+}
+
+fn default_tls_web_pki() -> Option<Tls> {
+    Some(Tls {
+        verification: TlsVerification::Server(TlsServerVerification {
+            ca_cert: CaCert::WebPki {},
+        }),
+    })
 }
 
 fn aas_default_port() -> u16 {
