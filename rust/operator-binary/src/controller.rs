@@ -782,6 +782,8 @@ fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
+    let console_and_file_log_level = bundle_builder_log_level(merged_config);
+
     cb_bundle_builder
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
@@ -797,12 +799,10 @@ fn build_server_rolegroup_daemonset(
             &bundle_builder_container_name,
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
+        .add_env_var("CONSOLE_LOG_LEVEL", console_and_file_log_level.to_string())
+        .add_env_var("FILE_LOG_LEVEL", console_and_file_log_level.to_string())
         .add_env_var(
-            "CONSOLE_LOG",
-            bundle_builder_log_level(merged_config).to_string(),
-        )
-        .add_env_var(
-            "ROLLING_LOGS_DIR",
+            "FILE_LOG_DIRECTORY",
             format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
         )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
@@ -1203,11 +1203,7 @@ fn build_opa_start_command(merged_config: &v1alpha1::OpaConfig, container_name: 
     // See https://stackoverflow.com/a/8048493
 
     let logging_redirects = format!(
-        "&> >(CONSOLE_LEVEL={console} FILE_LEVEL={file} DECISION_LEVEL={decision} SERVER_LEVEL={server} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)",
-        file = file_log_level,
-        console = console_log_level,
-        decision = decision_log_level,
-        server = server_log_level
+        "&> >(CONSOLE_LEVEL={console_log_level} FILE_LEVEL={file_log_level} DECISION_LEVEL={decision_log_level} SERVER_LEVEL={server_log_level} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)"
     );
 
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
