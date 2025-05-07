@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
   - Use `--console-log-format` (or `CONSOLE_LOG_FORMAT`) to set the format to `plain` (default) or `json`.
 - Log the startup event for bundle-builder and user-info-fetcher ([#703]).
 - Support experimental user-info-fetcher Entra backend to fetch user groups ([#712]).
+- Add support for OPA `1.4.2` ([#723]).
 
 ### Changed
 
@@ -40,6 +41,10 @@ All notable changes to this project will be documented in this file.
 
 - Use `json` file extension for log files ([#709]).
 
+### Removed
+
+- Remove support for OPA `0.67.1` ([#723]).
+
 [#703]: https://github.com/stackabletech/opa-operator/pull/703
 [#707]: https://github.com/stackabletech/opa-operator/pull/707
 [#709]: https://github.com/stackabletech/opa-operator/pull/709
@@ -47,6 +52,7 @@ All notable changes to this project will be documented in this file.
 [#712]: https://github.com/stackabletech/opa-operator/pull/712
 [#715]: https://github.com/stackabletech/opa-operator/pull/715
 [#721]: https://github.com/stackabletech/opa-operator/pull/721
+[#723]: https://github.com/stackabletech/opa-operator/pull/723
 
 ## [25.3.0] - 2025-03-21
 
