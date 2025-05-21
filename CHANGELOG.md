@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - BREAKING: Inject the vector aggregator address into the vector config using the env var `VECTOR_AGGREGATOR_ADDRESS` instead
     of having the operator write it to the vector config ([#707]).
 - test: Bump to Vector 0.46.1 ([#721]).
+- Use versioned common structs ([#727]).
 
 ### Fixed
 
@@ -53,6 +54,7 @@ All notable changes to this project will be documented in this file.
 [#715]: https://github.com/stackabletech/opa-operator/pull/715
 [#721]: https://github.com/stackabletech/opa-operator/pull/721
 [#723]: https://github.com/stackabletech/opa-operator/pull/723
+[#727]: https://github.com/stackabletech/opa-operator/pull/727
 
 ## [25.3.0] - 2025-03-21
 

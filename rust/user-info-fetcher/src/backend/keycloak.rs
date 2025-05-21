@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::commons::authentication::oidc;
+use stackable_operator::crd::authentication::oidc;
 
 use crate::{Credentials, UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
 
@@ -38,7 +38,7 @@ pub enum Error {
     },
 
     #[snafu(display("failed to parse OIDC endpoint url"))]
-    ParseOidcEndpointUrl { source: oidc::Error },
+    ParseOidcEndpointUrl { source: oidc::v1alpha1::Error },
 
     #[snafu(display("failed to construct OIDC endpoint path"))]
     ConstructOidcEndpointPath { source: url::ParseError },
@@ -104,7 +104,7 @@ pub(crate) async fn get_user_info(
 
     // We re-use existent functionality from operator-rs, besides it being a bit of miss-use.
     // Some attributes (such as principal_claim) are irrelevant, and will not be read by the code-flow we trigger.
-    let wrapping_auth_provider = oidc::AuthenticationProvider::new(
+    let wrapping_auth_provider = oidc::v1alpha1::AuthenticationProvider::new(
         hostname.clone(),
         *port,
         root_path.clone(),
