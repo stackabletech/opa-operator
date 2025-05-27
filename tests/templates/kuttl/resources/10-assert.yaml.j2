@@ -17,7 +17,7 @@ spec:
         - name: opa
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 256Mi
             limits:
               cpu: 110m
@@ -38,11 +38,11 @@ spec:
         - name: opa
           resources:
             requests:
-              cpu: 120m
-              memory: 384Mi
+              cpu: 60m
+              memory: 284Mi
             limits:
               cpu: 130m
-              memory: 384Mi
+              memory: 284Mi
         - name: bundle-builder
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
         - name: vector
@@ -59,7 +59,7 @@ spec:
         - name: opa
           resources:
             requests:
-              cpu: 140m
+              cpu: 70m
               memory: 256Mi
             limits:
               cpu: 150m
