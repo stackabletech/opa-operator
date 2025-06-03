@@ -927,13 +927,7 @@ fn build_server_rolegroup_daemonset(
         )
         .context(AddVolumeSnafu)?
         .service_account_name(service_account.name_any())
-        .security_context(
-            PodSecurityContextBuilder::new()
-                .run_as_user(1000)
-                .run_as_group(0)
-                .fs_group(1000)
-                .build(),
-        );
+        .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         let mut cb_user_info_fetcher =
