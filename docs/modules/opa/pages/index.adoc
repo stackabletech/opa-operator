@@ -52,6 +52,7 @@ Currently the following products on the Stackable Data Platform support policy d
 * xref:druid:usage-guide/security.adoc#_authorization_with_open_policy_agent_opa[Apache Druid]
 * xref:hdfs:usage-guide/security.adoc#_authorization[Apache Hadoop HDFS]
 * xref:kafka:usage-guide/security.adoc#_authorization[Apache Kafka]
+* xref:nifi:usage-guide/security.adoc#authorization-opa[Apache NiFi]
 * xref:superset:usage-guide/security.adoc#_opa_role_mapping[Apache Superset]
 * xref:trino:usage-guide/security.adoc#_authorization[Trino]
 
