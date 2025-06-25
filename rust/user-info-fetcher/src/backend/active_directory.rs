@@ -89,6 +89,7 @@ const LDAP_FIELD_OBJECT_DISTINGUISHED_NAME: &str = "dn";
 const LDAP_FIELD_USER_NAME: &str = "userPrincipalName";
 const LDAP_FIELD_USER_PRIMARY_GROUP_RID: &str = "primaryGroupID";
 const LDAP_FIELD_GROUP_MEMBER: &str = "member";
+const LDAP_FIELD_SAM_ACCOUNT_NAME: &str = "sAMAccountName";
 
 #[tracing::instrument(skip(
     tls,
@@ -133,9 +134,7 @@ pub(crate) async fn get_user_info(
                 )
             )
         }
-        UserInfoRequest::UserInfoRequestByName(username) => {
-            format!("{LDAP_FIELD_USER_NAME}={}", ldap_escape(&username.username))
-        }
+        UserInfoRequest::UserInfoRequestByName(username) => user_name_filter(&username.username),
     };
     let requested_user_attrs = [
         LDAP_FIELD_OBJECT_SECURITY_ID,
@@ -177,6 +176,16 @@ pub(crate) async fn get_user_info(
         additional_group_attribute_filters,
     )
     .await
+}
+
+/// Constructs a user filter that searches both the UPN as well as the sAMAccountName attributes.
+/// See this issue for details: https://github.com/stackabletech/opa-operator/issues/702
+fn user_name_filter(username: &str) -> String {
+    let escaped_username = ldap_escape(username);
+    let realm = "SBLE.TEST"; // TODO: Replace with actual realm
+    format!(
+        "(|({LDAP_FIELD_USER_NAME}={escaped_username}@{realm})({LDAP_FIELD_USER_NAME}={escaped_username})({LDAP_FIELD_SAM_ACCOUNT_NAME}={escaped_username}))"
+    )
 }
 
 #[tracing::instrument(
