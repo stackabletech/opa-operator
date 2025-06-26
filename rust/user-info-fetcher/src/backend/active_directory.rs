@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
+    env,
     fmt::{Display, Write},
     io::{Cursor, Read},
     num::ParseIntError,
@@ -58,6 +59,9 @@ pub enum Error {
         source: ParseSecurityIdError,
         user_dn: String,
     },
+
+    #[snafu(display("environment variable KERBEROS_REALM is not set"))]
+    KerberosRealmEnvVar { source: env::VarError },
 }
 
 impl http_error::Error for Error {
@@ -75,6 +79,7 @@ impl http_error::Error for Error {
             Error::InvalidPrimaryGroupRelativeId { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UserSidHasNoSubauthorities { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ParseUserSid { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::KerberosRealmEnvVar { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -134,7 +139,7 @@ pub(crate) async fn get_user_info(
                 )
             )
         }
-        UserInfoRequest::UserInfoRequestByName(username) => user_name_filter(&username.username),
+        UserInfoRequest::UserInfoRequestByName(username) => user_name_filter(&username.username)?,
     };
     let requested_user_attrs = [
         LDAP_FIELD_OBJECT_SECURITY_ID,
@@ -179,13 +184,15 @@ pub(crate) async fn get_user_info(
 }
 
 /// Constructs a user filter that searches both the UPN as well as the sAMAccountName attributes.
+/// It also searches for `username@realm` in addition to just `username`.
+/// The realm is expected to be set in the `KERBEROS_REALM` environment variable.
 /// See this issue for details: <https://github.com/stackabletech/opa-operator/issues/702>
-fn user_name_filter(username: &str) -> String {
+fn user_name_filter(username: &str) -> Result<String, Error> {
     let escaped_username = ldap_escape(username);
-    let realm = "SBLE.TEST"; // TODO: Replace with actual realm
-    format!(
+    let realm = ldap_escape(env::var("KERBEROS_REALM").context(KerberosRealmEnvVarSnafu)?);
+    Ok(format!(
         "|({LDAP_FIELD_USER_NAME}={escaped_username}@{realm})({LDAP_FIELD_USER_NAME}={escaped_username})({LDAP_FIELD_SAM_ACCOUNT_NAME}={escaped_username})"
-    )
+    ))
 }
 
 #[tracing::instrument(

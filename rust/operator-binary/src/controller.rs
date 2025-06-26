@@ -936,7 +936,14 @@ fn build_server_rolegroup_daemonset(
         cb_user_info_fetcher
             .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
             .image(user_info_fetcher_image) // ...override the image
-            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
+            .command(vec![
+                "/bin/bash".to_string(),
+                "-x".to_string(),
+                "-euo".to_string(),
+                "pipefail".to_string(),
+                "-c".to_string(),
+            ])
+            .args(vec![build_user_info_fetcher_start_command()])
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
@@ -1339,4 +1346,16 @@ pub fn build_recommended_labels<'a, T>(
         role,
         role_group,
     }
+}
+
+/// Builds the command to start the user info fetcher.
+/// When using the Active Directory backend, the KERBEROS_REALM is derived from the krb5.conf file.
+/// This is later used for the LDAP user search filter.
+fn build_user_info_fetcher_start_command() -> String {
+    formatdoc! {"
+        if [ -f {USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf ]; then
+            export KERBEROS_REALM=$(grep -oP 'default_realm = \\K.*' {USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf)
+        fi
+        /sbin/stackable-opa-user-info-fetcher
+    "}
 }
