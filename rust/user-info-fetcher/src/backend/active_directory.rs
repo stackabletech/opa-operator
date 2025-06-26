@@ -179,7 +179,7 @@ pub(crate) async fn get_user_info(
 }
 
 /// Constructs a user filter that searches both the UPN as well as the sAMAccountName attributes.
-/// See this issue for details: https://github.com/stackabletech/opa-operator/issues/702
+/// See this issue for details: <https://github.com/stackabletech/opa-operator/issues/702>
 fn user_name_filter(username: &str) -> String {
     let escaped_username = ldap_escape(username);
     let realm = "SBLE.TEST"; // TODO: Replace with actual realm
