@@ -41,6 +41,7 @@ All notable changes to this project will be documented in this file.
   - The `runAsUser` and `runAsGroup` fields will not be set anymore by the operator
   - The defaults from the docker images itself will now apply, which will be different from 1000/0 going forward
   - This is marked as breaking because tools and policies might exist, which require these fields to be set
+- user-info-fetcher: the AD backend now uses the Kerberos realm to expand the user search filter ([#737])
 
 ### Fixed
 
@@ -60,6 +61,7 @@ All notable changes to this project will be documented in this file.
 [#723]: https://github.com/stackabletech/opa-operator/pull/723
 [#727]: https://github.com/stackabletech/opa-operator/pull/727
 [#732]: https://github.com/stackabletech/opa-operator/pull/732
+[#737]: https://github.com/stackabletech/opa-operator/pull/737
 
 ## [25.3.0] - 2025-03-21
 
