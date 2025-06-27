@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 stackable-opa-operator = { path = "../operator-binary" }
 stackable-operator.workspace = true
+krb5 = { path = "../../../krb5-rs/rust/krb5"}
 
 axum.workspace = true
 base64.workspace = true

@@ -5072,6 +5072,47 @@ rec {
         };
         resolvedDefaultFeatures = [ "darling" ];
       };
+      "krb5" = rec {
+        crateName = "krb5";
+        version = "0.0.0-dev";
+        edition = "2021";
+        src = lib.cleanSourceWith { filter = sourceFilter;  src = ../krb5-rs/rust/krb5; };
+        authors = [
+          "Stackable GmbH <info@stackable.tech>"
+        ];
+        dependencies = [
+          {
+            name = "krb5-sys";
+            packageId = "krb5-sys";
+          }
+          {
+            name = "snafu";
+            packageId = "snafu 0.8.5";
+          }
+        ];
+
+      };
+      "krb5-sys" = rec {
+        crateName = "krb5-sys";
+        version = "0.0.0-dev";
+        edition = "2021";
+        src = lib.cleanSourceWith { filter = sourceFilter;  src = ../krb5-rs/rust/krb5-sys; };
+        libName = "krb5_sys";
+        authors = [
+          "Stackable GmbH <info@stackable.tech>"
+        ];
+        buildDependencies = [
+          {
+            name = "bindgen";
+            packageId = "bindgen";
+          }
+          {
+            name = "pkg-config";
+            packageId = "pkg-config";
+          }
+        ];
+
+      };
       "kube" = rec {
         crateName = "kube";
         version = "1.0.0";
@@ -9996,6 +10037,10 @@ rec {
           {
             name = "hyper";
             packageId = "hyper";
+          }
+          {
+            name = "krb5";
+            packageId = "krb5";
           }
           {
             name = "ldap3";
