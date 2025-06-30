@@ -202,6 +202,9 @@ fn user_name_filter(username: &str) -> Result<String, Error> {
     ))
 }
 
+/// Returns the default Kerberos realm name, which is used to construct user filters.
+/// TODO: this could be moved in a backend specific initialization function,
+/// but currently there is no trait for backend implementations.
 fn default_realm_name() -> Result<String, Error> {
     let krb_context = KrbContext::new().context(KerberosContextSnafu)?;
     let krb_realm = krb_context.default_realm().context(KerberosRealmSnafu)?;
