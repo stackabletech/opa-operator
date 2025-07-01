@@ -66,7 +66,7 @@ pub enum Error {
     #[snafu(display("failed to get Kerberos realm"))]
     KerberosRealm { source: krb5::Error },
 
-    #[snafu(display("failed to get Kerberos realm name"))]
+    #[snafu(display("failed to decode Kerberos realm name"))]
     KerberosRealmName { source: std::str::Utf8Error },
 }
 
@@ -196,9 +196,9 @@ pub(crate) async fn get_user_info(
 /// See this issue for details: <https://github.com/stackabletech/opa-operator/issues/702>
 fn user_name_filter(username: &str) -> Result<String, Error> {
     let escaped_username = ldap_escape(username);
-    let realm = ldap_escape(default_realm_name()?);
+    let escaped_realm = ldap_escape(default_realm_name()?);
     Ok(format!(
-        "|({LDAP_FIELD_USER_NAME}={escaped_username}@{realm})({LDAP_FIELD_USER_NAME}={escaped_username})({LDAP_FIELD_SAM_ACCOUNT_NAME}={escaped_username})"
+        "|({LDAP_FIELD_USER_NAME}={escaped_username}@{escaped_realm})({LDAP_FIELD_USER_NAME}={escaped_username})({LDAP_FIELD_SAM_ACCOUNT_NAME}={escaped_username})"
     ))
 }
 
