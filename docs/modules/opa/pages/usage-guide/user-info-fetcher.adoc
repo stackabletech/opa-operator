@@ -70,6 +70,69 @@ Fetch groups and extra credentials, but not roles.
 
 NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
 
+user-info-fetcher needs a service account at Keycloak with the permissions to read user objects.
+To create such as user you need to take the following steps:
+
+*With your user realm selected* click on `Clients` at the left side and use the `Import client` button:
+
+image::keycloak-user-info-fetcher/1.png[]
+
+Create a file with the following JSON objects.
+Swap out `secret` with your desired password and potentially `redirectUris` and `webOrigins`.
+
+[source,json]
+----
+{
+  "clientId" : "user-info-fetcher",
+  "surrogateAuthRequired" : false,
+  "enabled" : true,
+  "alwaysDisplayInConsole" : false,
+  "clientAuthenticatorType" : "client-secret",
+  "secret" : "XXX",
+  "redirectUris" : [ "*" ],
+  "webOrigins" : [ "*" ],
+  "notBefore" : 0,
+  "bearerOnly" : false,
+  "serviceAccountsEnabled" : true,
+  "publicClient" : false,
+  "frontchannelLogout" : true,
+  "protocol" : "openid-connect",
+  "attributes" : {
+    "oidc.ciba.grant.enabled" : "true",
+    "oauth2.device.authorization.grant.enabled" : "false"
+  },
+  "authenticationFlowBindingOverrides" : { },
+  "fullScopeAllowed" : true
+}
+----
+
+Upload the file to the client importer and click on `Save`.
+
+image::keycloak-user-info-fetcher/2.png[]
+
+Afterwards you need to modify the created user `service-account-user-info-fetcher`.
+To achieve this open the user and click on the `Role mapping tab`:
+
+image::keycloak-user-info-fetcher/3.png[]
+
+Assign the role `view-users` as shown below.
+This is needed, so that the user is allowed to read other users information.
+
+image::keycloak-user-info-fetcher/4.png[]
+
+Afterwards you can store the user-info-fetcher credentials in Kubernetes with something like
+
+[source,yaml]
+----
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-info-fetcher-client-credentials
+stringData:
+  clientId: user-info-fetcher
+  clientSecret: XXX # replace with your chosen password
+----
+
 [#backend-activedirectory]
 === Active Directory
 
@@ -152,6 +215,23 @@ An example of the returned structure:
 ----
 
 NOTE: The exact formats of `id` and `groups` will vary depending on the xref:#backends[backend] in use. This example is using the xref:#backend-keycloak[] backend.
+
+=== Debug request
+
+To debug the user-info-fetcher you can `curl` it's API for a given user.
+To achieve this shell into the `user-info-fetcher` container and execute
+
+[source,bash]
+----
+curl --header "Content-Type: application/json" -d '{"username":"my-user"}' http://127.0.0.1:9476/user
+----
+
+You can also use `-d '{"id":"123456"}'` to query by the user ID.
+
+=== Rego rule library
+
+You could call the HTTP API from rego rules yourself.
+However, we provide a convenience rego rule library, which we ship with `OpaClusters` by default.
 
 For example, the following rule allows access for users in the `/admin` group:
 
