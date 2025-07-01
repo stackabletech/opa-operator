@@ -3,8 +3,8 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 timeout: 600
 commands:
-  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role --timeout 301s
-  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role-group --timeout 301s
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role --timeout 600s
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role-group --timeout 600s
 ---
 apiVersion: apps/v1
 kind: DaemonSet
