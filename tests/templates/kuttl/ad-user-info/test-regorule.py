@@ -11,6 +11,11 @@ users_and_groups = {
         "CN=Domain Users,CN=Users,DC=sble,DC=test",
         "CN=Users,CN=Builtin,DC=sble,DC=test",
     ],
+    "alice": [
+        "CN=Superset Admins,CN=Users,DC=sble,DC=test",
+        "CN=Domain Users,CN=Users,DC=sble,DC=test",
+        "CN=Users,CN=Builtin,DC=sble,DC=test",
+    ],
     "sam-alice": [
         "CN=Superset Admins,CN=Users,DC=sble,DC=test",
         "CN=Domain Users,CN=Users,DC=sble,DC=test",
