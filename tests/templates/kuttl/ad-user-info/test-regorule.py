@@ -1,11 +1,17 @@
 #!/usr/bin/env python
-import requests
 import argparse
 import json
+
+import requests
 
 # todo: make the test more comprehensive to check customAttributes
 users_and_groups = {
     "alice@sble.test": [
+        "CN=Superset Admins,CN=Users,DC=sble,DC=test",
+        "CN=Domain Users,CN=Users,DC=sble,DC=test",
+        "CN=Users,CN=Builtin,DC=sble,DC=test",
+    ],
+    "sam-alice": [
         "CN=Superset Admins,CN=Users,DC=sble,DC=test",
         "CN=Domain Users,CN=Users,DC=sble,DC=test",
         "CN=Users,CN=Builtin,DC=sble,DC=test",
