@@ -1,43 +1,64 @@
 #!/usr/bin/env python
 import argparse
 import json
+from dataclasses import dataclass, field
 
 import requests
 
-# todo: make the test more comprehensive to check customAttributes
-users_and_groups = {
-    "alice@sble.test": [
-        "CN=Superset Admins,CN=Users,DC=sble,DC=test",
-        "CN=Domain Users,CN=Users,DC=sble,DC=test",
-        "CN=Users,CN=Builtin,DC=sble,DC=test",
-    ],
-    "alice": [
-        "CN=Superset Admins,CN=Users,DC=sble,DC=test",
-        "CN=Domain Users,CN=Users,DC=sble,DC=test",
-        "CN=Users,CN=Builtin,DC=sble,DC=test",
-    ],
-    "sam-alice": [
-        "CN=Superset Admins,CN=Users,DC=sble,DC=test",
-        "CN=Domain Users,CN=Users,DC=sble,DC=test",
-        "CN=Users,CN=Builtin,DC=sble,DC=test",
-    ],
-    "bob@sble.test": [
-        "CN=Domain Users,CN=Users,DC=sble,DC=test",
-        "CN=Users,CN=Builtin,DC=sble,DC=test",
-    ],
-    "charlie@CUSTOM.TEST": [
-        "CN=Domain Users,CN=Users,DC=sble,DC=test",
-        "CN=Users,CN=Builtin,DC=sble,DC=test",
-    ],
+
+@dataclass
+class Fixture:
+    expected_username: str
+    expected_groups: list[str] = field(default_factory=list)
+    expected_custom_attributes: dict[str, str] = field(default_factory=dict)
+
+
+fixtures = {
+    "alice@sble.test": Fixture(
+        expected_username="alice@sble.test",
+        expected_groups=[
+            "CN=Superset Admins,CN=Users,DC=sble,DC=test",
+            "CN=Domain Users,CN=Users,DC=sble,DC=test",
+            "CN=Users,CN=Builtin,DC=sble,DC=test",
+        ],
+    ),
+    "alice": Fixture(
+        expected_username="alice@sble.test",
+        expected_groups=[
+            "CN=Superset Admins,CN=Users,DC=sble,DC=test",
+            "CN=Domain Users,CN=Users,DC=sble,DC=test",
+            "CN=Users,CN=Builtin,DC=sble,DC=test",
+        ],
+    ),
+    "sam-alice": Fixture(
+        expected_username="alice@sble.test",
+        expected_groups=[
+            "CN=Superset Admins,CN=Users,DC=sble,DC=test",
+            "CN=Domain Users,CN=Users,DC=sble,DC=test",
+            "CN=Users,CN=Builtin,DC=sble,DC=test",
+        ],
+    ),
+    "bob@sble.test": Fixture(
+        expected_username="bob@SBLE.TEST",
+        expected_groups=[
+            "CN=Domain Users,CN=Users,DC=sble,DC=test",
+            "CN=Users,CN=Builtin,DC=sble,DC=test",
+        ],
+    ),
+    "charlie@CUSTOM.TEST": Fixture(
+        expected_username="charlie@custom.test",
+        expected_groups=[
+            "CN=Domain Users,CN=Users,DC=sble,DC=test",
+            "CN=Users,CN=Builtin,DC=sble,DC=test",
+        ],
+    ),
 }
 
 
-def assertions(
-    username, response, opa_attribute, expected_groups, expected_attributes={}
-):
+def assertions(username, response, opa_attribute, fixture):
     assert "result" in response
     result = response["result"]
-    print(result)
+    # print(result)
     assert opa_attribute in result, f"expected {opa_attribute} in {result}"
 
     # repeated the right hand side for better output on error
@@ -46,17 +67,21 @@ def assertions(
     assert "id" in result[opa_attribute]
     assert "username" in result[opa_attribute]
 
+    assert result[opa_attribute]["username"] == fixture.expected_username, (
+        f"for {username=} got user name {result[opa_attribute]['username']}, expected: {fixture.expected_username}"
+    )
+
     # todo: split out group assertions
-    print(f"Testing for {username} in groups {expected_groups}")
     groups = sorted(result[opa_attribute]["groups"])
-    expected_groups = sorted(expected_groups)
-    assert groups == expected_groups, f"got {groups}, expected: {expected_groups}"
+    expected_groups = sorted(fixture.expected_groups)
+    assert groups == expected_groups, (
+        f"for {username=} got {groups=}, expected: {expected_groups=}"
+    )
 
     # todo: split out customAttribute assertions
-    print(f"Testing for {username} with customAttributes {expected_attributes}")
     custom_attributes = result[opa_attribute]["customAttributes"]
-    assert custom_attributes == expected_attributes, (
-        f"got {custom_attributes}, expected: {expected_attributes}"
+    assert custom_attributes == fixture.expected_custom_attributes, (
+        f"for {username=} got {custom_attributes=}, expected: {fixture.expected_custom_attributes}"
     )
 
 
@@ -74,19 +99,19 @@ if __name__ == "__main__":
         )
         return response.json()
 
-    for username, groups in users_and_groups.items():
+    for username, fixture in fixtures.items():
         try:
             # todo: try this out locally until it works
             # url = 'http://test-opa-svc:8081/v1/data'
             payload = {"input": {"username": username}}
             response = make_request(payload)
-            assertions(username, response, "currentUserInfoByUsername", groups, {})
+            assertions(username, response, "currentUserInfoByUsername", fixture)
 
             # do the reverse lookup
             user_id = response["result"]["currentUserInfoByUsername"]["id"]
             payload = {"input": {"id": user_id}}
             response = make_request(payload)
-            assertions(username, response, "currentUserInfoById", groups, {})
+            assertions(username, response, "currentUserInfoById", fixture)
         except Exception as e:
             print(f"exception: {e}")
             if response is not None:
