@@ -57,4 +57,16 @@ commands:
             logging:
               enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
           roleGroups:
-            default: {}
+            default:
+              podOverrides:
+                spec:
+                  containers:
+                    - name: bundle-builder
+                      imagePullPolicy: IfNotPresent
+                    - name: user-info-fetcher
+                      imagePullPolicy: IfNotPresent
+                      env:
+                        - name: CONSOLE_LOG
+                          value: DEBUG
+                        - name: CONSOLE_LOG_LEVEL
+                          value: DEBUG

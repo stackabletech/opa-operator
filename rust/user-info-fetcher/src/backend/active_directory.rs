@@ -8,6 +8,7 @@ use std::{
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use hyper::StatusCode;
+use krb5::KrbContext;
 use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::commons::tls_verification::TlsClientDetails;
@@ -58,6 +59,15 @@ pub enum Error {
         source: ParseSecurityIdError,
         user_dn: String,
     },
+
+    #[snafu(display("failed to create Kerberos context"))]
+    KerberosContext { source: krb5::Error },
+
+    #[snafu(display("failed to get Kerberos realm"))]
+    KerberosRealm { source: krb5::Error },
+
+    #[snafu(display("failed to decode Kerberos realm name"))]
+    KerberosRealmName { source: std::str::Utf8Error },
 }
 
 impl http_error::Error for Error {
@@ -75,6 +85,9 @@ impl http_error::Error for Error {
             Error::InvalidPrimaryGroupRelativeId { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UserSidHasNoSubauthorities { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ParseUserSid { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::KerberosContext { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::KerberosRealm { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::KerberosRealmName { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -89,6 +102,7 @@ const LDAP_FIELD_OBJECT_DISTINGUISHED_NAME: &str = "dn";
 const LDAP_FIELD_USER_NAME: &str = "userPrincipalName";
 const LDAP_FIELD_USER_PRIMARY_GROUP_RID: &str = "primaryGroupID";
 const LDAP_FIELD_GROUP_MEMBER: &str = "member";
+const LDAP_FIELD_SAM_ACCOUNT_NAME: &str = "sAMAccountName";
 
 #[tracing::instrument(skip(
     tls,
@@ -133,9 +147,7 @@ pub(crate) async fn get_user_info(
                 )
             )
         }
-        UserInfoRequest::UserInfoRequestByName(username) => {
-            format!("{LDAP_FIELD_USER_NAME}={}", ldap_escape(&username.username))
-        }
+        UserInfoRequest::UserInfoRequestByName(username) => user_name_filter(&username.username)?,
     };
     let requested_user_attrs = [
         LDAP_FIELD_OBJECT_SECURITY_ID,
@@ -177,6 +189,29 @@ pub(crate) async fn get_user_info(
         additional_group_attribute_filters,
     )
     .await
+}
+
+/// Constructs a user filter that searches both the UPN as well as the sAMAccountName attributes.
+/// It also searches for `username@realm` in addition to just `username`.
+/// See this issue for details: <https://github.com/stackabletech/opa-operator/issues/702>
+fn user_name_filter(username: &str) -> Result<String, Error> {
+    let escaped_username = ldap_escape(username);
+    let escaped_realm = ldap_escape(default_realm_name()?);
+    Ok(format!(
+        "|({LDAP_FIELD_USER_NAME}={escaped_username}@{escaped_realm})({LDAP_FIELD_USER_NAME}={escaped_username})({LDAP_FIELD_SAM_ACCOUNT_NAME}={escaped_username})"
+    ))
+}
+
+/// Returns the default Kerberos realm name, which is used to construct user filters.
+/// TODO: this could be moved in a backend specific initialization function,
+/// but currently there is no trait for backend implementations.
+fn default_realm_name() -> Result<String, Error> {
+    let krb_context = KrbContext::new().context(KerberosContextSnafu)?;
+    let krb_realm = krb_context.default_realm().context(KerberosRealmSnafu)?;
+    Ok(krb_realm
+        .to_str()
+        .context(KerberosRealmNameSnafu)?
+        .to_string())
 }
 
 #[tracing::instrument(
