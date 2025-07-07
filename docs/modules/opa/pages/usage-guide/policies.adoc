@@ -21,11 +21,11 @@ data:
   test.rego: | # <2>
     package test
 
-    hello {
+    hello if {
       true
     }
 
-    world {
+    world if {
       false
     }
 ----
