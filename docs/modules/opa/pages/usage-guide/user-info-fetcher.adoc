@@ -110,6 +110,18 @@ spec:
 <7> The name of the SecretClass that knows how to create Kerberos keytabs trusted by Active Directory
 <8> The name of the SecretClass that contains the Active Directory's root CA certificate(s)
 
+
+When retrieving user groups from Active Directory, the user info fetcher filters by both `upn` as well as `sAmAccountName` using the following query:
+
+[source]
+----
+(&(objectClass=user)(|(userPrincipalName=<upn>@<realm>)(userPrincipalName=<upn>)(sAMAccountName=<upn>)))
+----
+
+where `<upn>` is the user principal name of the user and `<realm>` is the realm of the user.
+
+The above is to accommodate for different Active Directory user management strategies and is subject to change in future releases.
+
 [#backend-entra]
 === Entra
 
