@@ -9,11 +9,11 @@ data:
   test.rego: |
     package test
 
-    hello {
+    hello if {
       true
     }
 
-    world {
+    world if {
       false
     }
 ---
