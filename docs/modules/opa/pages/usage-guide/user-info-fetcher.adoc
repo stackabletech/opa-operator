@@ -70,14 +70,14 @@ Fetch groups and extra credentials, but not roles.
 
 NOTE: The OAuth2 Client in Keycloak must be given the `view-users` _Service Account Role_ for the realm that the users are in.
 
-user-info-fetcher needs a service account at Keycloak with the permissions to read user objects.
+The user-info-fetcher requires a service account in Keycloak with the permissions to read user objects.
 To create such as user you need to take the following steps:
 
 *With your user realm selected* click on `Clients` at the left side and use the `Import client` button:
 
 image::keycloak-user-info-fetcher/1.png[]
 
-Create a file with the following JSON objects.
+Create a file with the following JSON object.
 Swap out `secret` with your desired password and potentially `redirectUris` and `webOrigins`.
 
 [source,json]
@@ -116,11 +116,11 @@ To achieve this open the user and click on the `Role mapping tab`:
 image::keycloak-user-info-fetcher/3.png[]
 
 Assign the role `view-users` as shown below.
-This is needed, so that the user is allowed to read other users information.
+This is necessary to allow the user to read other users' information.
 
 image::keycloak-user-info-fetcher/4.png[]
 
-Afterwards you can store the user-info-fetcher credentials in Kubernetes with something like
+Afterwards you can store the user-info-fetcher credentials in Kubernetes in a Secret:
 
 [source,yaml]
 ----
@@ -230,7 +230,7 @@ You can also use `-d '{"id":"123456"}'` to query by the user ID.
 
 === Rego rule library
 
-You could call the HTTP API from rego rules yourself.
+The HTTP API exposed by the user-info-fetcher can be called directly using the rego function `http.send`.
 However, we provide a convenience rego rule library, which we ship with `OpaClusters` by default.
 
 For example, the following rule allows access for users in the `/admin` group:
