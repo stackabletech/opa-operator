@@ -72,14 +72,13 @@ pub enum Error {
 pub mod versioned {
     #[versioned(crd(
         group = "opa.stackable.tech",
-        kind = "OpaCluster",
         status = "OpaClusterStatus",
         namespaced,
         shortname = "opa",
     ))]
     #[derive(Clone, Debug, Deserialize, CustomResource, JsonSchema, Serialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct OpaSpec {
+    pub struct OpaClusterSpec {
         /// Global OPA cluster configuration that applies to all roles and role groups.
         #[serde(default)]
         pub cluster_config: v1alpha1::OpaClusterConfig,
