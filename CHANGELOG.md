@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Log the startup event for bundle-builder and user-info-fetcher ([#703]).
 - Support experimental user-info-fetcher Entra backend to fetch user groups ([#712]).
 - Add support for OPA `1.4.2` ([#723]).
+- Add RBAC rule to helm template for automatic cluster domain detection ([#743]).
 
 ### Changed
 
@@ -42,14 +43,21 @@ All notable changes to this project will be documented in this file.
   - The defaults from the docker images itself will now apply, which will be different from 1000/0 going forward
   - This is marked as breaking because tools and policies might exist, which require these fields to be set
 - user-info-fetcher: the AD backend now uses the Kerberos realm to expand the user search filter ([#737])
+- BREAKING: Bump stackable-operator to 0.94.0 and update other dependencies ([#743]).
+  - The default Kubernetes cluster domain name is now fetched from the kubelet API unless explicitly configured.
+  - This requires operators to have the RBAC permission to get nodes/proxy in the apiGroup "". The helm-chart takes care of this.
+  - The CLI argument `--kubernetes-node-name` or env variable `KUBERNETES_NODE_NAME` needs to be set. The helm-chart takes care of this.
 
 ### Fixed
 
 - Use `json` file extension for log files ([#709]).
+- Allow uppercase characters in domain names ([#743]).
 
 ### Removed
 
 - Remove support for OPA `0.67.1` ([#723]).
+- Remove the `lastUpdateTime` field from the stacklet status ([#743]).
+- Remove role binding to legacy service accounts ([#743]).
 
 [#703]: https://github.com/stackabletech/opa-operator/pull/703
 [#707]: https://github.com/stackabletech/opa-operator/pull/707
@@ -62,6 +70,7 @@ All notable changes to this project will be documented in this file.
 [#727]: https://github.com/stackabletech/opa-operator/pull/727
 [#732]: https://github.com/stackabletech/opa-operator/pull/732
 [#737]: https://github.com/stackabletech/opa-operator/pull/737
+[#743]: https://github.com/stackabletech/opa-operator/pull/743
 
 ## [25.3.0] - 2025-03-21
 
