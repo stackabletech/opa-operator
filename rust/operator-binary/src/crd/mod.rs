@@ -58,23 +58,27 @@ pub enum Error {
     FragmentValidationFailure { source: ValidationError },
 }
 
-#[versioned(version(name = "v1alpha1"), options(skip(from)))]
+#[versioned(
+    version(name = "v1alpha1"),
+    crates(
+        kube_core = "stackable_operator::kube::core",
+        kube_client = "stackable_operator::kube::client",
+        k8s_openapi = "stackable_operator::k8s_openapi",
+        schemars = "stackable_operator::schemars",
+        versioned = "stackable_operator::versioned"
+    ),
+    skip(from)
+)]
 pub mod versioned {
-    #[versioned(k8s(
+    #[versioned(crd(
         group = "opa.stackable.tech",
-        kind = "OpaCluster",
         status = "OpaClusterStatus",
         namespaced,
         shortname = "opa",
-        crates(
-            kube_core = ::stackable_operator::kube::core,
-            k8s_openapi = ::stackable_operator::k8s_openapi,
-            schemars = ::stackable_operator::schemars
-        )
     ))]
     #[derive(Clone, Debug, Deserialize, CustomResource, JsonSchema, Serialize)]
     #[serde(rename_all = "camelCase")]
-    pub struct OpaSpec {
+    pub struct OpaClusterSpec {
         /// Global OPA cluster configuration that applies to all roles and role groups.
         #[serde(default)]
         pub cluster_config: v1alpha1::OpaClusterConfig,

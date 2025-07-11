@@ -1,9 +1,12 @@
+// TODO: Look into how to properly resolve `clippy::result_large_err`.
+// This will need changes in our and upstream error types.
+#![allow(clippy::result_large_err)]
 use std::sync::Arc;
 
 use clap::Parser;
 use futures::StreamExt;
 use product_config::ProductConfigManager;
-use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, v1alpha1};
+use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha1};
 use stackable_operator::{
     YamlSchema,
     cli::{Command, ProductOperatorRun},
@@ -60,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => {
-            OpaCluster::merged_crd(OpaCluster::V1Alpha1)?
+            OpaCluster::merged_crd(OpaClusterVersion::V1Alpha1)?
                 .print_yaml_schema(built_info::PKG_VERSION, SerializeOptions::default())?;
         }
         Command::Run(OpaRun {
