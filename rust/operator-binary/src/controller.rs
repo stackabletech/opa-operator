@@ -105,6 +105,12 @@ const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
+const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
+const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
+const FILE_LOG_DIRECTORY_ENV: &str = "FILE_LOG_DIRECTORY";
+const KUBERNETES_NODE_NAME_ENV: &str = "KUBERNETES_NODE_NAME";
+const KUBERNETES_CLUSTER_DOMAIN_ENV: &str = "KUBERNETES_CLUSTER_DOMAIN";
+
 // logging defaults
 const DEFAULT_DECISION_LOGGING_ENABLED: bool = false;
 const DEFAULT_FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
@@ -728,14 +734,14 @@ fn add_stackable_rust_cli_env_vars(
 ) {
     let log_level = log_level.into();
     container_builder
-        .add_env_var("CONSOLE_LOG_LEVEL", log_level.clone())
-        .add_env_var("FILE_LOG_LEVEL", log_level)
+        .add_env_var(CONSOLE_LOG_LEVEL_ENV, log_level.clone())
+        .add_env_var(FILE_LOG_LEVEL_ENV, log_level)
         .add_env_var(
-            "FILE_LOG_DIRECTORY",
+            FILE_LOG_DIRECTORY_ENV,
             format!("{STACKABLE_LOG_DIR}/{container}",),
         )
         .add_env_var_from_source(
-            "KUBERNETES_NODE_NAME",
+            KUBERNETES_NODE_NAME_ENV,
             EnvVarSource {
                 field_ref: Some(ObjectFieldSelector {
                     field_path: "spec.nodeName".to_owned(),
@@ -750,7 +756,7 @@ fn add_stackable_rust_cli_env_vars(
         // By setting the cluster domain explicitly we avoid that the sidecars try to look it up
         // based on some information coming from the node.
         .add_env_var(
-            "KUBERNETES_CLUSTER_DOMAIN",
+            KUBERNETES_CLUSTER_DOMAIN_ENV,
             cluster_info.cluster_domain.to_string(),
         );
 }
