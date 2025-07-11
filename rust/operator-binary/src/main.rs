@@ -28,6 +28,7 @@ use stackable_operator::{
     namespace::WatchNamespace,
     shared::yaml::SerializeOptions,
     telemetry::Tracing,
+    utils::cluster_info::KubernetesClusterInfo,
 };
 
 use crate::controller::OPA_FULL_CONTROLLER_NAME;
@@ -100,12 +101,14 @@ async fn main() -> anyhow::Result<()> {
             let client =
                 client::initialize_operator(Some(OPERATOR_NAME.to_string()), &cluster_info_opts)
                     .await?;
+            let kubernetes_cluster_info = client.kubernetes_cluster_info.clone();
             create_controller(
                 client,
                 product_config,
                 watch_namespace,
                 operator_image.clone(),
                 operator_image,
+                kubernetes_cluster_info,
             )
             .await;
         }
@@ -123,6 +126,7 @@ async fn create_controller(
     watch_namespace: WatchNamespace,
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
+    cluster_info: KubernetesClusterInfo,
 ) {
     let opa_api: Api<DeserializeGuard<v1alpha1::OpaCluster>> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
@@ -150,6 +154,7 @@ async fn create_controller(
                 product_config,
                 opa_bundle_builder_image,
                 user_info_fetcher_image,
+                cluster_info,
             }),
         )
         // We can let the reporting happen in the background

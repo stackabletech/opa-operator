@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Adds new telemetry CLI arguments and environment variables ([#715]).
+- Adds new telemetry CLI arguments and environment variables ([#715], [#XXX]).
   - Use `--file-log-max-files` (or `FILE_LOG_MAX_FILES`) to limit the number of log files kept.
   - Use `--file-log-rotation-period` (or `FILE_LOG_ROTATION_PERIOD`) to configure the frequency of rotation.
   - Use `--console-log-format` (or `CONSOLE_LOG_FORMAT`) to set the format to `plain` (default) or `json`.
@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- BREAKING: Replace stackable-operator `initialize_logging` with stackable-telemetry `Tracing` ([#703], [#710], [#715]).
+- BREAKING: Replace stackable-operator `initialize_logging` with stackable-telemetry `Tracing` ([#703], [#710], [#715], [#XXX]).
   - operator-binary:
     - The console log level was set by `OPA_OPERATOR_LOG`, and is now set by `CONSOLE_LOG_LEVEL`.
     - The file log level was set by `OPA_OPERATOR_LOG`, and is now set by `FILE_LOG_LEVEL`.
@@ -43,7 +43,7 @@ All notable changes to this project will be documented in this file.
   - The defaults from the docker images itself will now apply, which will be different from 1000/0 going forward
   - This is marked as breaking because tools and policies might exist, which require these fields to be set
 - user-info-fetcher: the AD backend now uses the Kerberos realm to expand the user search filter ([#737])
-- BREAKING: Bump stackable-operator to 0.94.0 and update other dependencies ([#743]).
+- BREAKING: Bump stackable-operator to 0.94.0 and update other dependencies ([#743], [#XXX]).
   - The default Kubernetes cluster domain name is now fetched from the kubelet API unless explicitly configured.
   - This requires operators to have the RBAC permission to get nodes/proxy in the apiGroup "". The helm-chart takes care of this.
   - The CLI argument `--kubernetes-node-name` or env variable `KUBERNETES_NODE_NAME` needs to be set. The helm-chart takes care of this.
@@ -52,6 +52,8 @@ All notable changes to this project will be documented in this file.
 
 - Use `json` file extension for log files ([#709]).
 - Allow uppercase characters in domain names ([#743]).
+- Add missing RBAC permission to patch Kubernetes `events` used for error reporting to helm-chart ([#XXX]).
+- Correctly propagate the Kubernetes cluster domain to the `opa-bundle-builder` and `user-info-fetcher` sidecars ([#XXX]).
 
 ### Removed
 

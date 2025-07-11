@@ -38,8 +38,9 @@ use stackable_operator::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec},
             core::v1::{
-                ConfigMap, EmptyDirVolumeSource, EnvVar, HTTPGetAction, Probe, SecretVolumeSource,
-                Service, ServiceAccount, ServicePort, ServiceSpec,
+                ConfigMap, EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction,
+                ObjectFieldSelector, Probe, SecretVolumeSource, Service, ServiceAccount,
+                ServicePort, ServiceSpec,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -69,7 +70,7 @@ use stackable_operator::{
         operations::ClusterOperationsConditionBuilder,
     },
     time::Duration,
-    utils::COMMON_BASH_TRAP_FUNCTIONS,
+    utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
@@ -144,6 +145,7 @@ pub struct Ctx {
     pub product_config: ProductConfigManager,
     pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
+    pub cluster_info: KubernetesClusterInfo,
 }
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -492,6 +494,7 @@ pub async fn reconcile_opa(
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
             &rbac_sa,
+            &ctx.cluster_info,
         )?;
 
         cluster_resources
@@ -714,6 +717,44 @@ fn build_server_rolegroup_config_map(
         })
 }
 
+/// Env variables that are need to run stackable Rust binaries, such as
+/// * opa-bundle-builder
+/// * user-info-fetcher
+fn add_stackable_rust_cli_env_vars(
+    container_builder: &mut ContainerBuilder,
+    cluster_info: &KubernetesClusterInfo,
+    log_level: impl Into<String>,
+    container: &v1alpha1::Container,
+) {
+    let log_level = log_level.into();
+    container_builder
+        .add_env_var("CONSOLE_LOG_LEVEL", log_level.clone())
+        .add_env_var("FILE_LOG_LEVEL", log_level)
+        .add_env_var(
+            "FILE_LOG_DIRECTORY",
+            format!("{STACKABLE_LOG_DIR}/{container}",),
+        )
+        .add_env_var_from_source(
+            "KUBERNETES_NODE_NAME",
+            EnvVarSource {
+                field_ref: Some(ObjectFieldSelector {
+                    field_path: "spec.nodeName".to_owned(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        // We set the cluster domain always explicitly, because the product Pods does not have the
+        // RBAC permission to get the `nodes/proxy` resource at cluster scope. This is likely
+        // because it only has a RoleBinding and no ClusterRoleBinding.
+        // By setting the cluster domain explicitly we avoid that the sidecars try to look it up
+        // based on some information coming from the node.
+        .add_env_var(
+            "KUBERNETES_CLUSTER_DOMAIN",
+            cluster_info.cluster_domain.to_string(),
+        );
+}
+
 /// The rolegroup [`DaemonSet`] runs the rolegroup, as configured by the administrator.
 ///
 /// The [`Pod`](`stackable_operator::k8s_openapi::api::core::v1::Pod`)s are accessible through the
@@ -732,6 +773,7 @@ fn build_server_rolegroup_daemonset(
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
+    cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let opa_name = opa.metadata.name.as_deref().context(NoNameSnafu)?;
     let role = opa.role(opa_role);
@@ -782,8 +824,6 @@ fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
-    let console_and_file_log_level = bundle_builder_log_level(merged_config);
-
     cb_bundle_builder
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
@@ -799,12 +839,6 @@ fn build_server_rolegroup_daemonset(
             &bundle_builder_container_name,
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
-        .add_env_var("CONSOLE_LOG_LEVEL", console_and_file_log_level.to_string())
-        .add_env_var("FILE_LOG_LEVEL", console_and_file_log_level.to_string())
-        .add_env_var(
-            "FILE_LOG_DIRECTORY",
-            format!("{STACKABLE_LOG_DIR}/{bundle_builder_container_name}"),
-        )
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -838,6 +872,12 @@ fn build_server_rolegroup_daemonset(
             }),
             ..Probe::default()
         });
+    add_stackable_rust_cli_env_vars(
+        &mut cb_bundle_builder,
+        cluster_info,
+        sidecar_container_log_level(merged_config, &v1alpha1::Container::BundleBuilder).to_string(),
+        &v1alpha1::Container::BundleBuilder,
+    );
 
     cb_opa
         .image_from_product_image(resolved_product_image)
@@ -949,6 +989,13 @@ fn build_server_rolegroup_daemonset(
                     .with_memory_limit("128Mi")
                     .build(),
             );
+        add_stackable_rust_cli_env_vars(
+            &mut cb_user_info_fetcher,
+            cluster_info,
+            sidecar_container_log_level(merged_config, &v1alpha1::Container::UserInfoFetcher)
+                .to_string(),
+            &v1alpha1::Container::UserInfoFetcher,
+        );
 
         match &user_info.backend {
             user_info_fetcher::v1alpha1::Backend::None {} => {}
@@ -1257,13 +1304,42 @@ fn build_bundle_builder_start_command(
     }
 }
 
-fn bundle_builder_log_level(merged_config: &v1alpha1::OpaConfig) -> BundleBuilderLogLevel {
+/// TODO: *Technically* this function would need to be way more complex.
+/// For now it's a good-enough approximation, this is fine :D
+///
+/// The following config
+///
+/// ```
+/// containers:
+///   opa-bundle-builder:
+///     console:
+///       level: DEBUG
+///     file:
+///       level: INFO
+///     loggers:
+///       ROOT:
+///         level: INFO
+///     my.module:
+///       level: DEBUG
+///     some.chatty.module:
+///       level: NONE
+/// ```
+///
+/// should result in
+/// `CONSOLE_LOG_LEVEL=info,my.module=debug,some.chatty.module=none`
+///  and
+/// `FILE_LOG_LEVEL=info,my.module=info,some.chatty.module=none`.
+/// Note that `my.module` is `info` instead of `debug`, because it's clamped by the global file log
+/// level.
+///
+/// Context: https://docs.stackable.tech/home/stable/concepts/logging/
+fn sidecar_container_log_level(
+    merged_config: &v1alpha1::OpaConfig,
+    sidecar_container: &v1alpha1::Container,
+) -> BundleBuilderLogLevel {
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config
-        .logging
-        .containers
-        .get(&v1alpha1::Container::BundleBuilder)
+    }) = merged_config.logging.containers.get(sidecar_container)
     {
         if let Some(logger) = log_config
             .loggers
