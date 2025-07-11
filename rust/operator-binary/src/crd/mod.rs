@@ -168,6 +168,7 @@ pub mod versioned {
         Vector,
         BundleBuilder,
         Opa,
+        UserInfoFetcher,
     }
 
     #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
