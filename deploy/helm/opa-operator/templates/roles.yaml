@@ -82,7 +82,6 @@ rules:
       - events.k8s.io
     resources:
       - events
-      - patch
     verbs:
       - create
       - patch
@@ -132,6 +131,7 @@ rules:
       - events.k8s.io
     resources:
       - events
+      - patch
     verbs:
       - create
 {{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
