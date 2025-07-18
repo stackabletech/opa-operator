@@ -21,13 +21,13 @@ case "$1" in
 "helm")
 echo "Installing operators with Helm"
 # tag::helm-install-operators[]
-helm install --wait opa-operator oci://oci.stackable.tech/sdp-charts/opa-operator --version 0.0.0-dev
+helm install --wait opa-operator oci://oci.stackable.tech/sdp-charts/opa-operator --version 25.7.0-rc1
 # end::helm-install-operators[]
 ;;
 "stackablectl")
 echo "installing operators with stackablectl"
 # tag::stackablectl-install-operators[]
-stackablectl operator install opa=0.0.0-dev
+stackablectl operator install opa=25.7.0-rc1
 # end::stackablectl-install-operators[]
 ;;
 *)
