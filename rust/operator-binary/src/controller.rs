@@ -640,12 +640,7 @@ pub fn build_server_role_service(
 
     let service_spec = ServiceSpec {
         type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(vec![ServicePort {
-            name: Some(APP_PORT_NAME.to_string()),
-            port: APP_PORT.into(),
-            protocol: Some("TCP".to_string()),
-            ..ServicePort::default()
-        }]),
+        ports: Some(data_service_ports()),
         selector: Some(service_selector_labels.into()),
         internal_traffic_policy: Some("Local".to_string()),
         ..ServiceSpec::default()
@@ -980,6 +975,8 @@ fn build_server_rolegroup_daemonset(
             format!("{STACKABLE_LOG_DIR}/containerdebug"),
         )
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
+        // The metrics are served on the same port as the HTTP traffic
+        .add_container_port(METRICS_PORT_NAME, APP_PORT.into())
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
