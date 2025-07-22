@@ -366,7 +366,7 @@ impl OpaClusterConfigFile {
                 },
             },
             decision_logs: decision_logging,
-            // Enable more Prometheus statistics, such as bundle loads
+            // Enable more Prometheus metrics, such as bundle loads
             // See https://www.openpolicyagent.org/docs/monitoring#status-metrics
             status: Some(OpaClusterConfigStatus {
                 service: OPA_STACKABLE_SERVICE_NAME.to_owned(),
