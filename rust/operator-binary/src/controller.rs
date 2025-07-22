@@ -975,8 +975,11 @@ fn build_server_rolegroup_daemonset(
             format!("{STACKABLE_LOG_DIR}/containerdebug"),
         )
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
-        // The metrics are served on the same port as the HTTP traffic
-        .add_container_port(METRICS_PORT_NAME, APP_PORT.into())
+        // If we also add a container port "metrics" pointing to the same port number, we get a
+        //
+        // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
+        //
+        // So we don't do that
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
