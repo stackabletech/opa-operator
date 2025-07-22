@@ -17,7 +17,7 @@ use stackable_operator::{
         merge::Merge,
     },
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
-    kube::CustomResource,
+    kube::{CustomResource, ResourceExt},
     product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
     role_utils::{
@@ -326,7 +326,11 @@ impl v1alpha1::OpaCluster {
 
     /// The name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_name(&self) -> Option<String> {
-        self.metadata.name.clone()
+        Some(format!(
+            "{cluster_name}-{role}",
+            cluster_name = self.name_any(),
+            role = v1alpha1::OpaRole::Server
+        ))
     }
 
     /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
