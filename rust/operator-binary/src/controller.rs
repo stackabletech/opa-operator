@@ -679,7 +679,7 @@ fn build_rolegroup_headless_service(
         // Currently we don't offer listener-exposition of OPA mostly due to security concerns.
         // OPA is currently public within the Kubernetes (without authentication).
         // Opening it up to outside of Kubernetes might worsen things.
-        // We are open to implement listener-integration, but this needs to be though through before
+        // We are open to implement listener-integration, but this needs to be thought through before
         // implementing it.
         // Note: We have kind of similar situations for HMS and Zookeeper, as the authentication
         // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
