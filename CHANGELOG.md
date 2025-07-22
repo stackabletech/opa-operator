@@ -53,6 +53,7 @@ All notable changes to this project will be documented in this file.
   so events can be aggregated (e.g. "error happened 10 times over the last 5 minutes") ([#745]).
 - The per-rolegroup services now only server the HTTP port and have a `-headless` suffix to better indicate there
   purpose and to be consistent with other operators ([#748]).
+- The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
 
 ### Fixed
 
