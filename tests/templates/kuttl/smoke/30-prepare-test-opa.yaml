@@ -1,0 +1,5 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: kubectl cp -n $NAMESPACE ./30_test-regorule.py test-opa-0:/tmp
+  - script: kubectl cp -n $NAMESPACE ./30_test-metrics.py test-opa-0:/tmp
