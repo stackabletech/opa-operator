@@ -2958,7 +2958,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stackable-opa-bundle-builder"
-version = "25.7.0-rc1"
+version = "25.7.0"
 dependencies = [
  "axum",
  "built",
@@ -2976,7 +2976,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-operator"
-version = "25.7.0-rc1"
+version = "25.7.0"
 dependencies = [
  "anyhow",
  "built",
@@ -2999,11 +2999,11 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-regorule-library"
-version = "25.7.0-rc1"
+version = "25.7.0"
 
 [[package]]
 name = "stackable-opa-user-info-fetcher"
-version = "25.7.0-rc1"
+version = "25.7.0"
 dependencies = [
  "axum",
  "base64",
