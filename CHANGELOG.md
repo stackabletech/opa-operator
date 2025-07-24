@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add a dedicated per-rolegroup `-metrics` Service, which can be used to get Prometheus metrics ([#748]).
+- Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
+
+### Changed
+
+- BREAKING: The per-rolegroup services now only server the HTTP port and have a `-headless` suffix to better indicate there
+  purpose and to be consistent with other operators ([#748]).
+- BREAKING: The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
+
+[#748]: https://github.com/stackabletech/opa-operator/pull/748
+
 ## [25.7.0] - 2025-07-23
 
 ## [25.7.0-rc1] - 2025-07-18
@@ -18,8 +31,6 @@ All notable changes to this project will be documented in this file.
 - Support experimental user-info-fetcher Entra backend to fetch user groups ([#712]).
 - Add support for OPA `1.4.2` ([#723]).
 - Add RBAC rule to helm template for automatic cluster domain detection ([#743]).
-- Add a dedicated per-rolegroup `-metrics` Service, which can be used to get Prometheus metrics ([#748]).
-- Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
 
 ### Changed
 
@@ -55,9 +66,6 @@ All notable changes to this project will be documented in this file.
   - The CLI argument `--kubernetes-node-name` or env variable `KUBERNETES_NODE_NAME` needs to be set. The helm-chart takes care of this.
 - The operator helm-chart now grants RBAC `patch` permissions on `events.k8s.io/events`,
   so events can be aggregated (e.g. "error happened 10 times over the last 5 minutes") ([#745]).
-- The per-rolegroup services now only server the HTTP port and have a `-headless` suffix to better indicate there
-  purpose and to be consistent with other operators ([#748]).
-- The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
 
 ### Fixed
 
@@ -86,7 +94,6 @@ All notable changes to this project will be documented in this file.
 [#743]: https://github.com/stackabletech/opa-operator/pull/743
 [#744]: https://github.com/stackabletech/opa-operator/pull/744
 [#745]: https://github.com/stackabletech/opa-operator/pull/745
-[#748]: https://github.com/stackabletech/opa-operator/pull/748
 
 ## [25.3.0] - 2025-03-21
 
