@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add a dedicated per-rolegroup `-metrics` Service, which can be used to get Prometheus metrics ([#748]).
+- Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
+
+### Changed
+
+- BREAKING: The per-rolegroup services now only serves the HTTP port and has a `-headless` suffix to better indicate their
+  purpose and to be consistent with other operators ([#748]).
+- BREAKING: The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
+
+[#748]: https://github.com/stackabletech/opa-operator/pull/748
+
 ## [25.7.0] - 2025-07-23
 
 ## [25.7.0-rc1] - 2025-07-18

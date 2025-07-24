@@ -34,7 +34,7 @@ if __name__ == "__main__":
         and "hello" in response["result"]
         and response["result"]["hello"]
     ):
-        print("Test successful!")
+        print("Regorule test successful!")
         exit(0)
     else:
         print(

@@ -50,7 +50,7 @@ use stackable_operator::{
         core::{DeserializeGuard, error_boundary},
         runtime::{controller::Action, reflector::ObjectRef},
     },
-    kvp::{Label, LabelError, Labels, ObjectLabels},
+    kvp::{LabelError, Labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
     product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
@@ -91,6 +91,7 @@ pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
+pub const OPA_STACKABLE_SERVICE_NAME: &str = "stackable";
 
 const CONFIG_VOLUME_NAME: &str = "config";
 const CONFIG_DIR: &str = "/stackable/config";
@@ -181,6 +182,12 @@ pub enum Error {
 
     #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
+        source: stackable_operator::cluster_resources::Error,
+        rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
+    },
+
+    #[snafu(display("failed to apply metrics Service for [{rolegroup}]"))]
+    ApplyRoleGroupMetricsService {
         source: stackable_operator::cluster_resources::Error,
         rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
     },
@@ -337,19 +344,20 @@ pub struct OpaClusterConfigFile {
     bundles: OpaClusterBundle,
     #[serde(skip_serializing_if = "Option::is_none")]
     decision_logs: Option<OpaClusterConfigDecisionLog>,
+    status: Option<OpaClusterConfigStatus>,
 }
 
 impl OpaClusterConfigFile {
     pub fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
         Self {
             services: vec![OpaClusterConfigService {
-                name: String::from("stackable"),
-                url: String::from("http://localhost:3030/opa/v1"),
+                name: OPA_STACKABLE_SERVICE_NAME.to_owned(),
+                url: "http://localhost:3030/opa/v1".to_owned(),
             }],
             bundles: OpaClusterBundle {
                 stackable: OpaClusterBundleConfig {
-                    service: String::from("stackable"),
-                    resource: String::from("opa/bundle.tar.gz"),
+                    service: OPA_STACKABLE_SERVICE_NAME.to_owned(),
+                    resource: "opa/bundle.tar.gz".to_owned(),
                     persist: true,
                     polling: OpaClusterBundleConfigPolling {
                         min_delay_seconds: 10,
@@ -358,6 +366,12 @@ impl OpaClusterConfigFile {
                 },
             },
             decision_logs: decision_logging,
+            // Enable more Prometheus metrics, such as bundle loads
+            // See https://www.openpolicyagent.org/docs/monitoring#status-metrics
+            status: Some(OpaClusterConfigStatus {
+                service: OPA_STACKABLE_SERVICE_NAME.to_owned(),
+                prometheus: true,
+            }),
         }
     }
 }
@@ -390,6 +404,12 @@ struct OpaClusterBundleConfigPolling {
 #[derive(Serialize, Deserialize)]
 pub struct OpaClusterConfigDecisionLog {
     console: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OpaClusterConfigStatus {
+    service: String,
+    prometheus: bool,
 }
 
 pub async fn reconcile_opa(
@@ -489,7 +509,10 @@ pub async fn reconcile_opa(
             &rolegroup,
             &merged_config,
         )?;
-        let rg_service = build_rolegroup_service(opa, &resolved_product_image, &rolegroup)?;
+        let rg_service =
+            build_rolegroup_headless_service(opa, &resolved_product_image, &rolegroup)?;
+        let rg_metrics_service =
+            build_rolegroup_metrics_service(opa, &resolved_product_image, &rolegroup)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
             opa,
             &resolved_product_image,
@@ -511,6 +534,12 @@ pub async fn reconcile_opa(
             })?;
         cluster_resources
             .add(client, rg_service)
+            .await
+            .with_context(|_| ApplyRoleGroupServiceSnafu {
+                rolegroup: rolegroup.clone(),
+            })?;
+        cluster_resources
+            .add(client, rg_metrics_service)
             .await
             .with_context(|_| ApplyRoleGroupServiceSnafu {
                 rolegroup: rolegroup.clone(),
@@ -611,12 +640,7 @@ pub fn build_server_role_service(
 
     let service_spec = ServiceSpec {
         type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(vec![ServicePort {
-            name: Some(APP_PORT_NAME.to_string()),
-            port: APP_PORT.into(),
-            protocol: Some("TCP".to_string()),
-            ..ServicePort::default()
-        }]),
+        ports: Some(data_service_ports()),
         selector: Some(service_selector_labels.into()),
         internal_traffic_policy: Some("Local".to_string()),
         ..ServiceSpec::default()
@@ -632,17 +656,14 @@ pub fn build_server_role_service(
 /// The rolegroup [`Service`] is a headless service that allows direct access to the instances of a certain rolegroup
 ///
 /// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
-fn build_rolegroup_service(
+fn build_rolegroup_headless_service(
     opa: &v1alpha1::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
 ) -> Result<Service> {
-    let prometheus_label =
-        Label::try_from(("prometheus.io/scrape", "true")).context(BuildLabelSnafu)?;
-
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
-        .name(rolegroup.object_name())
+        .name(rolegroup.rolegroup_headless_service_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
@@ -652,19 +673,20 @@ fn build_rolegroup_service(
             &rolegroup.role_group,
         ))
         .context(ObjectMetaSnafu)?
-        .with_label(prometheus_label)
         .build();
 
-    let service_selector_labels =
-        Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
-            .context(BuildLabelSnafu)?;
-
     let service_spec = ServiceSpec {
-        // Internal communication does not need to be exposed
+        // Currently we don't offer listener-exposition of OPA mostly due to security concerns.
+        // OPA is currently public within the Kubernetes (without authentication).
+        // Opening it up to outside of Kubernetes might worsen things.
+        // We are open to implement listener-integration, but this needs to be thought through before
+        // implementing it.
+        // Note: We have kind of similar situations for HMS and Zookeeper, as the authentication
+        // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
-        ports: Some(service_ports()),
-        selector: Some(service_selector_labels.into()),
+        ports: Some(data_service_ports()),
+        selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
         publish_not_ready_addresses: Some(true),
         ..ServiceSpec::default()
     };
@@ -674,6 +696,55 @@ fn build_rolegroup_service(
         spec: Some(service_spec),
         status: None,
     })
+}
+
+/// The rolegroup metrics [`Service`] is a service that exposes metrics and has the
+/// prometheus.io/scrape label.
+fn build_rolegroup_metrics_service(
+    opa: &v1alpha1::OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
+    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
+) -> Result<Service> {
+    let labels = Labels::try_from([("prometheus.io/scrape", "true")])
+        .expect("static Prometheus labels must be valid");
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(rolegroup.rolegroup_metrics_service_name())
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label,
+            &rolegroup.role,
+            &rolegroup.role_group,
+        ))
+        .context(ObjectMetaSnafu)?
+        .with_labels(labels)
+        .build();
+
+    let service_spec = ServiceSpec {
+        type_: Some("ClusterIP".to_string()),
+        cluster_ip: Some("None".to_string()),
+        ports: Some(vec![metrics_service_port()]),
+        selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
+        ..ServiceSpec::default()
+    };
+
+    Ok(Service {
+        metadata,
+        spec: Some(service_spec),
+        status: None,
+    })
+}
+
+/// Returns the [`Labels`] that can be used to select all Pods that are part of the roleGroup.
+fn role_group_selector_labels(
+    opa: &v1alpha1::OpaCluster,
+    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
+) -> Result<Labels> {
+    Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
+        .context(BuildLabelSnafu)
 }
 
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the administrator
@@ -904,6 +975,11 @@ fn build_server_rolegroup_daemonset(
             format!("{STACKABLE_LOG_DIR}/containerdebug"),
         )
         .add_container_port(APP_PORT_NAME, APP_PORT.into())
+        // If we also add a container port "metrics" pointing to the same port number, we get a
+        //
+        // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
+        //
+        // So we don't do that
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -1387,22 +1463,24 @@ fn build_prepare_start_command(
     prepare_container_args
 }
 
-fn service_ports() -> Vec<ServicePort> {
-    vec![
-        ServicePort {
-            name: Some(APP_PORT_NAME.to_string()),
-            port: APP_PORT.into(),
-            protocol: Some("TCP".to_string()),
-            ..ServicePort::default()
-        },
-        ServicePort {
-            name: Some(METRICS_PORT_NAME.to_string()),
-            port: 9504, // Arbitrary port number, this is never actually used anywhere
-            protocol: Some("TCP".to_string()),
-            target_port: Some(IntOrString::String(APP_PORT_NAME.to_string())),
-            ..ServicePort::default()
-        },
-    ]
+fn data_service_ports() -> Vec<ServicePort> {
+    // Currently only HTTP is exposed
+    vec![ServicePort {
+        name: Some(APP_PORT_NAME.to_string()),
+        port: APP_PORT.into(),
+        protocol: Some("TCP".to_string()),
+        ..ServicePort::default()
+    }]
+}
+
+fn metrics_service_port() -> ServicePort {
+    ServicePort {
+        name: Some(METRICS_PORT_NAME.to_string()),
+        // The metrics are served on the same port as the HTTP traffic
+        port: APP_PORT.into(),
+        protocol: Some("TCP".to_string()),
+        ..ServicePort::default()
+    }
 }
 
 /// Creates recommended `ObjectLabels` to be used in deployed resources
