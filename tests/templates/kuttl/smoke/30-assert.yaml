@@ -4,4 +4,4 @@ kind: TestAssert
 metadata:
   name: test-regorule
 commands:
-  - script: kubectl exec -n $NAMESPACE test-opa-0 -- python /tmp/30_test-regorule.py -u 'http://test-opa:8081/v1/data/test'
+  - script: kubectl exec -n $NAMESPACE test-opa-0 -- python /tmp/30_test-regorule.py -u 'http://test-opa-server:8081/v1/data/test'

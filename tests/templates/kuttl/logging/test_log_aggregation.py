@@ -5,7 +5,7 @@ import time
 
 def send_opa_decision_request():
     response = requests.post(
-        'http://test-opa:8081/v1/data/test/world'
+        'http://test-opa-server:8081/v1/data/test/world'
     )
 
     assert response.status_code == 200, \
