@@ -14,9 +14,10 @@ All notable changes to this project will be documented in this file.
 - BREAKING: The per-rolegroup services now only serves the HTTP port and has a `-headless` suffix to better indicate their
   purpose and to be consistent with other operators ([#748]).
 - BREAKING: The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
-- The User info fetcher is no longer an experimental feature ([#XXX]).
+- The User info fetcher is no longer an experimental feature ([#752]).
 
 [#748]: https://github.com/stackabletech/opa-operator/pull/748
+[#752]: https://github.com/stackabletech/opa-operator/pull/752
 
 ## [25.7.0] - 2025-07-23
 
