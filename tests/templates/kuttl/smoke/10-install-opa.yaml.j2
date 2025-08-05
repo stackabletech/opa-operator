@@ -39,7 +39,7 @@ spec:
       logging:
         enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
     envOverrides:
-      SERVER_ROLE_LEVEL_ENV_VAR: "SERVER_ROLE_LEVEL_ENV_VAR"    
+      SERVER_ROLE_LEVEL_ENV_VAR: "SERVER_ROLE_LEVEL_ENV_VAR"
     roleGroups:
       default:
         envOverrides:

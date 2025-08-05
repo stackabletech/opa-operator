@@ -4,4 +4,7 @@ kind: TestAssert
 metadata:
   name: test-env-overrides
 commands:
+  # Role level env var
+  - script: kubectl exec -n $NAMESPACE -c opa svc/test-opa-server -- env | grep SERVER_ROLE_LEVEL_ENV_VAR
+  # RoleGroup level env var
   - script: kubectl exec -n $NAMESPACE -c opa svc/test-opa-server -- env | grep SERVER_ROLE_GROUP_LEVEL_ENV_VAR
