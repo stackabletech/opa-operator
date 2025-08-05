@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fixed `envOverrides` which was ignored due to not being added to the product config machinery ([#754]).
+- Fixed `envOverrides` not getting applied due to not being added to the product config machinery ([#754]).
 
 [#748]: https://github.com/stackabletech/opa-operator/pull/748
 [#752]: https://github.com/stackabletech/opa-operator/pull/752
