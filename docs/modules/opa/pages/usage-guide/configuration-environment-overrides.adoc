@@ -8,7 +8,7 @@ This will lead to faulty installations.
 
 == Configuration properties
 
-Currently, not supported for `config.yaml`.
+Currently, not supported for `config.json`.
 
 == Environment variables
 

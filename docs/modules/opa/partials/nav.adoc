@@ -8,6 +8,7 @@
 ** xref:opa:usage-guide/resources.adoc[]
 ** xref:opa:usage-guide/logging.adoc[]
 ** xref:opa:usage-guide/monitoring.adoc[]
+** xref:opa:usage-guide/OpenTelemetry.adoc[]
 ** xref:opa:usage-guide/configuration-environment-overrides.adoc[]
 ** xref:opa:usage-guide/operations/index.adoc[]
 *** xref:opa:usage-guide/operations/cluster-operations.adoc[]
