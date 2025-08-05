@@ -449,6 +449,7 @@ pub async fn reconcile_opa(
                 (
                     vec![
                         PropertyNameKind::File(CONFIG_FILE.to_string()),
+                        PropertyNameKind::Env,
                         PropertyNameKind::Cli,
                     ],
                     opa.spec.servers.clone(),

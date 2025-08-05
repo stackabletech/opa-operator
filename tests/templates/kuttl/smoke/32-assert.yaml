@@ -1,0 +1,7 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+metadata:
+  name: test-env-overrides
+commands:
+  - script: kubectl exec -n $NAMESPACE -c opa svc/test-opa-server -- env | grep SERVER_ROLE_GROUP_LEVEL_ENV_VAR
