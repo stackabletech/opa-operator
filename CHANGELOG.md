@@ -16,8 +16,13 @@ All notable changes to this project will be documented in this file.
 - BREAKING: The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
 - The User info fetcher is no longer an experimental feature ([#752]).
 
+### Fixed
+
+- Fixed `envOverrides` not getting applied due to not being added to the product config machinery ([#754]).
+
 [#748]: https://github.com/stackabletech/opa-operator/pull/748
 [#752]: https://github.com/stackabletech/opa-operator/pull/752
+[#754]: https://github.com/stackabletech/opa-operator/pull/754
 
 ## [25.7.0] - 2025-07-23
 
