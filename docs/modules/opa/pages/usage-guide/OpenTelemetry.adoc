@@ -4,7 +4,7 @@
 
 Opa supports sending OpenTelemetry traces as stated in {opa-docs}[the documentation].
 
-As at SDP 25.7, `configOverrides` are not supported.
+As of SDP 25.7, `configOverrides` are (still) not supported, we are tracking the progress in https://github.com/stackabletech/opa-operator/issues/756[this GitHub issue].
 To enable traces you need to modify the config and thus xref:opa:usage-guide/operations/cluster-operations.adoc[pause the reconciliation] of your OpaCluster, so that changes to the ConfigMap aren't immediately overridden by the opa-operator.
 
 WARNING: It's not encouraged to pause the reconciliation more than just temporarily. We recommend disabling it while you debug e.g. performance problems and re-enabling it afterwards. This problem will be solved once we support configOverrides for OPA.
