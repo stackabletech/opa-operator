@@ -12,7 +12,8 @@ body:
       label: Affected Stackable version
       description: Which version of the Stackable Operator do you see this bug in?
 
-#   - type: input
+# 
+  - type: input
     attributes:
       label: Affected OpenPolicyAgent version
       description: Which version of OpenPolicyAgent do you see this bug in?
