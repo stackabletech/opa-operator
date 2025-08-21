@@ -97,10 +97,9 @@ async fn main() -> Result<(), StartupError> {
     // - The console log level was set by `OPA_OPERATOR_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
     // - The file log level was set by `OPA_OPERATOR_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
     // - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
-    let _tracing_guard =
-        Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry_arguments)
-            .init()
-            .context(TracingInitSnafu)?;
+    let _tracing_guard = Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry)
+        .init()
+        .context(TracingInitSnafu)?;
 
     tracing::info!(
         built_info.pkg_version = built_info::PKG_VERSION,

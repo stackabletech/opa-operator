@@ -28,7 +28,7 @@ use stackable_operator::{
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        product_image_selection::ResolvedProductImage,
+        product_image_selection::{self, ResolvedProductImage},
         rbac::build_rbac_resources,
         secret_class::{SecretClassVolume, SecretClassVolumeScope},
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
@@ -65,11 +65,11 @@ use stackable_operator::{
         },
     },
     role_utils::RoleGroupRef,
+    shared::time::Duration,
     status::condition::{
         compute_conditions, daemonset::DaemonSetConditionBuilder,
         operations::ClusterOperationsConditionBuilder,
     },
-    time::Duration,
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
@@ -329,6 +329,11 @@ pub enum Error {
     AddVolumeMount {
         source: builder::pod::container::Error,
     },
+
+    #[snafu(display("failed to resolve product image"))]
+    ResolveProductImage {
+        source: product_image_selection::Error,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -428,7 +433,8 @@ pub async fn reconcile_opa(
     let resolved_product_image = opa
         .spec
         .image
-        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION);
+        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION)
+        .context(ResolveProductImageSnafu)?;
     let opa_role = v1alpha1::OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
@@ -629,7 +635,7 @@ pub fn build_server_role_service(
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &role_name,
             "global",
         ))
@@ -669,7 +675,7 @@ fn build_rolegroup_headless_service(
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &rolegroup.role,
             &rolegroup.role_group,
         ))
@@ -716,7 +722,7 @@ fn build_rolegroup_metrics_service(
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &rolegroup.role,
             &rolegroup.role_group,
         ))
@@ -764,7 +770,7 @@ fn build_server_rolegroup_config_map(
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &rolegroup.role,
             &rolegroup.role_group,
         ))
@@ -1009,7 +1015,7 @@ fn build_server_rolegroup_daemonset(
     let pb_metadata = ObjectMetaBuilder::new()
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &rolegroup_ref.role,
             &rolegroup_ref.role_group,
         ))
@@ -1208,7 +1214,7 @@ fn build_server_rolegroup_daemonset(
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &rolegroup_ref.role,
             &rolegroup_ref.role_group,
         ))
