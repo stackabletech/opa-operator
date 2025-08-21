@@ -7,7 +7,7 @@ use stackable_operator::{
         tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
     },
     schemars::{self, JsonSchema},
-    time::Duration,
+    shared::time::Duration,
     versioned::versioned,
 };
 

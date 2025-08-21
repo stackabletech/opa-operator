@@ -84,7 +84,7 @@ fn build_discovery_configmap(
         })?
         .with_recommended_labels(build_recommended_labels(
             opa,
-            &resolved_product_image.app_version_label,
+            &resolved_product_image.app_version_label_value,
             &v1alpha1::OpaRole::Server.to_string(),
             "discovery",
         ))

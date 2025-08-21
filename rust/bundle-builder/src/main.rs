@@ -83,10 +83,9 @@ async fn main() -> Result<(), StartupError> {
     // - The console log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
     // - The file log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
     // - The file log directory was set by `OPA_BUNDLE_BUILDER_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
-    let _tracing_guard =
-        Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry_arguments)
-            .init()
-            .context(TracingInitSnafu)?;
+    let _tracing_guard = Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry)
+        .init()
+        .context(TracingInitSnafu)?;
 
     tracing::info!(
         built_info.pkg_version = built_info::PKG_VERSION,
@@ -97,10 +96,9 @@ async fn main() -> Result<(), StartupError> {
         "Starting bundle-builder",
     );
 
-    let client =
-        stackable_operator::client::initialize_operator(None, &args.common.cluster_info_opts)
-            .await
-            .context(InitKubeSnafu)?;
+    let client = stackable_operator::client::initialize_operator(None, &args.common.cluster_info)
+        .await
+        .context(InitKubeSnafu)?;
 
     let (store, store_w) = reflector::store();
     let rebuild_bundle = || {
