@@ -1605,7 +1605,7 @@ dependencies = [
 [[package]]
 name = "k8s-version"
 version = "0.1.3"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "darling 0.21.3",
  "regex",
@@ -3071,7 +3071,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator"
 version = "0.96.0"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "chrono",
  "clap",
@@ -3109,7 +3109,7 @@ dependencies = [
 [[package]]
 name = "stackable-operator-derive"
 version = "0.3.1"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "darling 0.21.3",
  "proc-macro2",
@@ -3120,7 +3120,7 @@ dependencies = [
 [[package]]
 name = "stackable-shared"
 version = "0.0.2"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "k8s-openapi",
  "kube",
@@ -3136,7 +3136,7 @@ dependencies = [
 [[package]]
 name = "stackable-telemetry"
 version = "0.6.1"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "axum",
  "clap",
@@ -3160,7 +3160,7 @@ dependencies = [
 [[package]]
 name = "stackable-versioned"
 version = "0.8.1"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "schemars",
  "serde",
@@ -3173,7 +3173,7 @@ dependencies = [
 [[package]]
 name = "stackable-versioned-macros"
 version = "0.8.1"
-source = "git+https://github.com/stackabletech//operator-rs.git?branch=release%2F0.96.0#35202a96e63b66bd1e448c5427c4b28ffbc3f805"
+source = "git+https://github.com/stackabletech/operator-rs.git?tag=stackable-operator-0.96.0#89f484ca4e86b565e083e9ad7573e21dbe29a3af"
 dependencies = [
  "convert_case",
  "darling 0.21.3",
