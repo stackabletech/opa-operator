@@ -17,6 +17,7 @@ use futures::{
 };
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
+    cli::CommonOptions,
     k8s_openapi::api::core::v1::ConfigMap,
     kube::{
         api::ObjectMeta,
@@ -25,6 +26,7 @@ use stackable_operator::{
             watcher,
         },
     },
+    namespace::WatchNamespace,
     telemetry::Tracing,
 };
 use tokio::net::TcpListener;
@@ -39,7 +41,11 @@ pub const APP_NAME: &str = "opa-bundle-builder";
 #[derive(clap::Parser)]
 pub struct Args {
     #[clap(flatten)]
-    common: stackable_operator::cli::ProductOperatorRun,
+    pub common: CommonOptions,
+
+    /// Provides a specific namespace to watch (instead of watching all namespaces)
+    #[arg(long, env, default_value = "")]
+    pub watch_namespace: WatchNamespace,
 }
 
 type Bundle = Vec<u8>;
@@ -121,7 +127,7 @@ async fn main() -> Result<(), StartupError> {
     let reflector = std::pin::pin!(reflector::reflector(
         store_w,
         watcher(
-            args.common.watch_namespace.get_api::<ConfigMap>(&client),
+            args.watch_namespace.get_api::<ConfigMap>(&client),
             watcher::Config::default().labels(&format!("{OPERATOR_NAME}/bundle")),
         ),
     )

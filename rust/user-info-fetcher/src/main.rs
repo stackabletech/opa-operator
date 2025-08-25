@@ -13,7 +13,9 @@ use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::{commons::tls_verification::TlsClientDetails, telemetry::Tracing};
+use stackable_operator::{
+    cli::CommonOptions, commons::tls_verification::TlsClientDetails, telemetry::Tracing,
+};
 use tokio::net::TcpListener;
 
 mod backend;
@@ -28,12 +30,14 @@ pub const APP_NAME: &str = "opa-user-info-fetcher";
 
 #[derive(clap::Parser)]
 pub struct Args {
+    #[clap(flatten)]
+    common: CommonOptions,
+
     #[clap(long, env)]
     config: PathBuf,
+
     #[clap(long, env)]
     credentials_dir: PathBuf,
-    #[clap(flatten)]
-    common: stackable_operator::cli::ProductOperatorRun,
 }
 
 #[derive(Clone)]
