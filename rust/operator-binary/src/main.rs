@@ -9,7 +9,7 @@ use product_config::ProductConfigManager;
 use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha1};
 use stackable_operator::{
     YamlSchema,
-    cli::{Command, ProductOperatorRun},
+    cli::{Command, CommonOptions, ProductOperatorRun},
     client::{self, Client},
     k8s_openapi::api::{
         apps::v1::DaemonSet,
@@ -71,11 +71,14 @@ async fn main() -> anyhow::Result<()> {
             operator_image,
             common:
                 ProductOperatorRun {
+                    common:
+                        CommonOptions {
+                            telemetry,
+                            cluster_info,
+                        },
                     product_config,
                     watch_namespace,
                     operator_environment: _,
-                    telemetry,
-                    cluster_info,
                 },
         }) => {
             // NOTE (@NickLarsenNZ): Before stackable-telemetry was used:
