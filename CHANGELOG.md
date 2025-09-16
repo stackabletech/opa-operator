@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Add a dedicated per-rolegroup `-metrics` Service, which can be used to get Prometheus metrics ([#748]).
 - Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
+- Helm: Allow Pod `priorityClassName` to be configured ([#762]).
 
 ### Changed
 
@@ -23,6 +24,7 @@ All notable changes to this project will be documented in this file.
 [#748]: https://github.com/stackabletech/opa-operator/pull/748
 [#752]: https://github.com/stackabletech/opa-operator/pull/752
 [#754]: https://github.com/stackabletech/opa-operator/pull/754
+[#762]: https://github.com/stackabletech/opa-operator/pull/762
 
 ## [25.7.0] - 2025-07-23
 
