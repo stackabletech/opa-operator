@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Add a dedicated per-rolegroup `-metrics` Service, which can be used to get Prometheus metrics ([#748]).
 - Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
 - Helm: Allow Pod `priorityClassName` to be configured ([#762]).
+- Add support for OPA `1.8.0` ([#765]).
 
 ### Changed
 
@@ -16,15 +17,21 @@ All notable changes to this project will be documented in this file.
   purpose and to be consistent with other operators ([#748]).
 - BREAKING: The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
 - The User info fetcher is no longer an experimental feature ([#752]).
+- Deprecate support for OPA `1.4.2` ([#765]).
 
 ### Fixed
 
 - Fixed `envOverrides` not getting applied due to not being added to the product config machinery ([#754]).
 
+### Removed
+
+- Remove support for OPA `1.0.1` ([#765]).
+
 [#748]: https://github.com/stackabletech/opa-operator/pull/748
 [#752]: https://github.com/stackabletech/opa-operator/pull/752
 [#754]: https://github.com/stackabletech/opa-operator/pull/754
 [#762]: https://github.com/stackabletech/opa-operator/pull/762
+[#765]: https://github.com/stackabletech/opa-operator/pull/765
 
 ## [25.7.0] - 2025-07-23
 
