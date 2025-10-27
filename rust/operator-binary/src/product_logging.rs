@@ -30,24 +30,6 @@ pub enum Error {
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(strum::Display)]
-#[strum(serialize_all = "lowercase")]
-pub enum OpaLogLevel {
-    Debug,
-    Info,
-    Error,
-}
-
-impl From<LogLevel> for OpaLogLevel {
-    fn from(level: LogLevel) -> Self {
-        match level {
-            LogLevel::TRACE | LogLevel::DEBUG => Self::Debug,
-            LogLevel::INFO => Self::Info,
-            LogLevel::WARN | LogLevel::ERROR | LogLevel::FATAL | LogLevel::NONE => Self::Error,
-        }
-    }
-}
-
-#[derive(strum::Display)]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum BundleBuilderLogLevel {
     Trace,
