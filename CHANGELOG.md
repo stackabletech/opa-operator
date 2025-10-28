@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Add end-of-support checker which can be controlled with environment variables and CLI arguments ([#771]).
+  - `EOS_CHECK_MODE` (`--eos-check-mode`) to set the EoS check mode. Currently, only "offline" is supported.
+  - `EOS_INTERVAL` (`--eos-interval`) to set the interval in which the operator checks if it is EoS.
+  - `EOS_DISABLED` (`--eos-disabled`) to disable the EoS checker completely.
 - Add a dedicated per-rolegroup `-metrics` Service, which can be used to get Prometheus metrics ([#748]).
 - Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
 - Helm: Allow Pod `priorityClassName` to be configured ([#762]).
@@ -34,6 +38,7 @@ All notable changes to this project will be documented in this file.
 [#762]: https://github.com/stackabletech/opa-operator/pull/762
 [#765]: https://github.com/stackabletech/opa-operator/pull/765
 [#767]: https://github.com/stackabletech/opa-operator/pull/767
+[#771]: https://github.com/stackabletech/opa-operator/pull/771
 
 ## [25.7.0] - 2025-07-23
 

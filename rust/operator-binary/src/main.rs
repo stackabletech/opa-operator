@@ -9,8 +9,9 @@ use product_config::ProductConfigManager;
 use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha1};
 use stackable_operator::{
     YamlSchema,
-    cli::{Command, CommonOptions, ProductOperatorRun},
+    cli::{Command, RunArguments},
     client::{self, Client},
+    eos::EndOfSupportChecker,
     k8s_openapi::api::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
@@ -57,7 +58,7 @@ struct OpaRun {
     operator_image: String,
 
     #[clap(flatten)]
-    common: ProductOperatorRun,
+    common: RunArguments,
 }
 
 #[tokio::main]
@@ -71,22 +72,20 @@ async fn main() -> anyhow::Result<()> {
         Command::Run(OpaRun {
             operator_image,
             common:
-                ProductOperatorRun {
-                    common:
-                        CommonOptions {
-                            telemetry,
-                            cluster_info,
-                        },
-                    product_config,
-                    watch_namespace,
+                RunArguments {
                     operator_environment: _,
+                    watch_namespace,
+                    product_config,
+                    maintenance,
+                    common,
                 },
         }) => {
             // NOTE (@NickLarsenNZ): Before stackable-telemetry was used:
             // - The console log level was set by `OPA_OPERATOR_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
             // - The file log level was set by `OPA_OPERATOR_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
             // - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
-            let _tracing_guard = Tracing::pre_configured(built_info::PKG_NAME, telemetry).init()?;
+            let _tracing_guard =
+                Tracing::pre_configured(built_info::PKG_NAME, common.telemetry).init()?;
 
             tracing::info!(
                 built_info.pkg_version = built_info::PKG_VERSION,
@@ -97,23 +96,32 @@ async fn main() -> anyhow::Result<()> {
                 "Starting {description}",
                 description = built_info::PKG_DESCRIPTION
             );
+
+            let eos_checker =
+                EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, maintenance.end_of_support)?
+                    .run();
+
             let product_config = product_config.load(&[
                 "deploy/config-spec/properties.yaml",
                 "/etc/stackable/opa-operator/config-spec/properties.yaml",
             ])?;
 
             let client =
-                client::initialize_operator(Some(OPERATOR_NAME.to_string()), &cluster_info).await?;
+                client::initialize_operator(Some(OPERATOR_NAME.to_string()), &common.cluster_info)
+                    .await?;
+
             let kubernetes_cluster_info = client.kubernetes_cluster_info.clone();
-            create_controller(
+
+            let controller = create_controller(
                 client,
                 product_config,
                 watch_namespace,
                 operator_image.clone(),
                 operator_image,
                 kubernetes_cluster_info,
-            )
-            .await;
+            );
+
+            futures::join!(controller, eos_checker);
         }
     };
 
