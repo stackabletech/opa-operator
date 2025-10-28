@@ -325,19 +325,19 @@ impl v1alpha1::OpaCluster {
     }
 
     /// The name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_name(&self) -> Option<String> {
-        Some(format!(
+    pub fn server_role_service_name(&self) -> String {
+        format!(
             "{cluster_name}-{role}",
             cluster_name = self.name_any(),
             role = v1alpha1::OpaRole::Server
-        ))
+        )
     }
 
     /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
     pub fn server_role_service_fqdn(&self, cluster_info: &KubernetesClusterInfo) -> Option<String> {
         Some(format!(
             "{role_service_name}.{namespace}.svc.{cluster_domain}",
-            role_service_name = self.server_role_service_name()?,
+            role_service_name = self.server_role_service_name(),
             namespace = self.metadata.namespace.as_ref()?,
             cluster_domain = cluster_info.cluster_domain
         ))

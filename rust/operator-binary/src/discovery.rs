@@ -8,7 +8,7 @@ use stackable_operator::{
     utils::cluster_info::KubernetesClusterInfo,
 };
 
-use crate::controller::{APP_PORT, build_recommended_labels};
+use crate::{controller::build_recommended_labels, service::APP_PORT};
 
 #[derive(Snafu, Debug)]
 pub enum Error {

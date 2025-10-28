@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Expose more Prometheus metrics, such as successful or failed bundle loads and information about the OPA environment ([#748]).
 - Helm: Allow Pod `priorityClassName` to be configured ([#762]).
 - Add support for OPA `1.8.0` ([#765]).
+- Add `prometheus.io/path|port|scheme` annotations to metrics service ([#767]).
 
 ### Changed
 
@@ -36,6 +37,7 @@ All notable changes to this project will be documented in this file.
 [#754]: https://github.com/stackabletech/opa-operator/pull/754
 [#762]: https://github.com/stackabletech/opa-operator/pull/762
 [#765]: https://github.com/stackabletech/opa-operator/pull/765
+[#767]: https://github.com/stackabletech/opa-operator/pull/767
 [#771]: https://github.com/stackabletech/opa-operator/pull/771
 
 ## [25.7.0] - 2025-07-23
