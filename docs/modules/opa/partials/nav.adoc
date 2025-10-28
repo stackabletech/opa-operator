@@ -10,6 +10,7 @@
 ** xref:opa:usage-guide/monitoring.adoc[]
 ** xref:opa:usage-guide/OpenTelemetry.adoc[]
 ** xref:opa:usage-guide/configuration-environment-overrides.adoc[]
+** xref:opa:usage-guide/tls.adoc[]
 ** xref:opa:usage-guide/operations/index.adoc[]
 *** xref:opa:usage-guide/operations/cluster-operations.adoc[]
 // *** xref:hdfs:usage-guide/operations/pod-placement.adoc[] Missing

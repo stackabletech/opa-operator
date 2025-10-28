@@ -30,8 +30,10 @@ spec:
     productVersion: "{{ test_scenario['values']['opa'] }}"
 {% endif %}
     pullPolicy: IfNotPresent
-{% if lookup('env', 'VECTOR_AGGREGATOR') %}
   clusterConfig:
+    tls:
+      serverSecretClass: opa-tls
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
     vectorAggregatorConfigMapName: vector-aggregator-discovery
 {% endif %}
   servers:

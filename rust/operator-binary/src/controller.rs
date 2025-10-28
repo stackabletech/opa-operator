@@ -23,7 +23,7 @@ use stackable_operator::{
             container::{ContainerBuilder, FieldPathEnvVar},
             resources::ResourceRequirementsBuilder,
             security::PodSecurityContextBuilder,
-            volume::VolumeBuilder,
+            volume::{SecretOperatorVolumeSourceBuilder, VolumeBuilder},
         },
     },
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
@@ -104,6 +104,8 @@ const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 const USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: &str = "kerberos";
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
+const TLS_VOLUME_NAME: &str = "tls";
+const TLS_STORE_DIR: &str = "/stackable/tls";
 
 const DOCKER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -329,6 +331,11 @@ pub enum Error {
 
     #[snafu(display("failed to build service"))]
     BuildService { source: service::Error },
+
+    #[snafu(display("failed to build TLS volume"))]
+    TlsVolumeBuild {
+        source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -823,6 +830,8 @@ fn build_server_rolegroup_daemonset(
         &v1alpha1::Container::BundleBuilder,
     );
 
+    let opa_tls_config = opa.spec.cluster_config.tls.as_ref();
+
     cb_opa
         .image_from_product_image(resolved_product_image)
         .command(vec![
@@ -835,29 +844,50 @@ fn build_server_rolegroup_daemonset(
         .args(vec![build_opa_start_command(
             merged_config,
             &opa_container_name,
+            opa_tls_config,
         )])
         .add_env_vars(env)
         .add_env_var(
             "CONTAINERDEBUG_LOG_DIRECTORY",
             format!("{STACKABLE_LOG_DIR}/containerdebug"),
-        )
-        .add_container_port(APP_PORT_NAME, APP_PORT.into())
-        // If we also add a container port "metrics" pointing to the same port number, we get a
-        //
-        // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
-        //
-        // So we don't do that
+        );
+
+    // Add appropriate container port based on TLS configuration
+    // If we also add a container port "metrics" pointing to the same port number, we get a
+    //
+    // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
+    //
+    // So we don't do that
+    if opa_tls_config.is_some() {
+        cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
+        cb_opa
+            .add_volume_mount(TLS_VOLUME_NAME, TLS_STORE_DIR)
+            .context(AddVolumeMountSnafu)?;
+    } else {
+        cb_opa.add_container_port(APP_PORT_NAME, APP_PORT.into());
+    }
+
+    cb_opa
         .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
         .context(AddVolumeMountSnafu)?
-        .resources(merged_config.resources.to_owned().into())
+        .resources(merged_config.resources.to_owned().into());
+
+    let (probe_port_name, probe_scheme) = if opa_tls_config.is_some() {
+        (service::APP_TLS_PORT_NAME, Some("HTTPS".to_string()))
+    } else {
+        (APP_PORT_NAME, Some("HTTP".to_string()))
+    };
+
+    cb_opa
         .readiness_probe(Probe {
             initial_delay_seconds: Some(5),
             period_seconds: Some(10),
             failure_threshold: Some(5),
             http_get: Some(HTTPGetAction {
-                port: IntOrString::String(APP_PORT_NAME.to_string()),
+                port: IntOrString::String(probe_port_name.to_string()),
+                scheme: probe_scheme.clone(),
                 ..HTTPGetAction::default()
             }),
             ..Probe::default()
@@ -866,7 +896,8 @@ fn build_server_rolegroup_daemonset(
             initial_delay_seconds: Some(30),
             period_seconds: Some(10),
             http_get: Some(HTTPGetAction {
-                port: IntOrString::String(APP_PORT_NAME.to_string()),
+                port: IntOrString::String(probe_port_name.to_string()),
+                scheme: probe_scheme,
                 ..HTTPGetAction::default()
             }),
             ..Probe::default()
@@ -917,6 +948,22 @@ fn build_server_rolegroup_daemonset(
         .context(AddVolumeSnafu)?
         .service_account_name(service_account.name_any())
         .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
+
+    if let Some(tls) = opa_tls_config {
+        pb.add_volume(
+            VolumeBuilder::new(TLS_VOLUME_NAME)
+                .ephemeral(
+                    SecretOperatorVolumeSourceBuilder::new(&tls.server_secret_class)
+                        .with_service_scope(opa.server_role_service_name())
+                        .with_service_scope(rolegroup_ref.rolegroup_headless_service_name())
+                        .with_service_scope(rolegroup_ref.rolegroup_metrics_service_name())
+                        .build()
+                        .context(TlsVolumeBuildSnafu)?,
+                )
+                .build(),
+        )
+        .context(AddVolumeSnafu)?;
+    }
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         let mut cb_user_info_fetcher =
@@ -1146,7 +1193,11 @@ fn build_config_file(merged_config: &v1alpha1::OpaConfig) -> String {
     serde_json::to_string_pretty(&json!(config)).unwrap()
 }
 
-fn build_opa_start_command(merged_config: &v1alpha1::OpaConfig, container_name: &str) -> String {
+fn build_opa_start_command(
+    merged_config: &v1alpha1::OpaConfig,
+    container_name: &str,
+    tls_config: Option<&v1alpha1::OpaTls>,
+) -> String {
     let mut file_log_level = DEFAULT_FILE_LOG_LEVEL;
     let mut console_log_level = DEFAULT_CONSOLE_LOG_LEVEL;
     let mut server_log_level = DEFAULT_SERVER_LOG_LEVEL;
@@ -1187,6 +1238,17 @@ fn build_opa_start_command(merged_config: &v1alpha1::OpaConfig, container_name: 
         }
     }
 
+    let (bind_port, tls_flags) = if tls_config.is_some() {
+        (
+            service::APP_TLS_PORT,
+            format!(
+                "--tls-cert-file {TLS_STORE_DIR}/tls.crt --tls-private-key-file {TLS_STORE_DIR}/tls.key"
+            ),
+        )
+    } else {
+        (APP_PORT, String::new())
+    };
+
     // Redirects matter!
     // We need to watch out, that the following "$!" call returns the PID of the main (opa-bundle-builder) process,
     // and not some utility (e.g. multilog or tee) process.
@@ -1202,7 +1264,7 @@ fn build_opa_start_command(merged_config: &v1alpha1::OpaConfig, container_name: 
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
         containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
-        opa run -s -a 0.0.0.0:{APP_PORT} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {logging_redirects} &
+        opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",

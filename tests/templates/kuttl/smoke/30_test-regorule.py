@@ -20,14 +20,14 @@ if __name__ == "__main__":
     #     false
     # }
     # ---
-    # We need to query: http://<host>:<port>/v1/data/<package>/(<rule>)+
-    # In our case http://<host>:8081/v1/data/test
+    # We need to query: https://<host>:<port>/v1/data/<package>/(<rule>)+
+    # In our case https://<host>:8443/v1/data/test
     # --> {'result': {'hello': True}}
-    # or http://<host>:8081/v1/data/test/hello
+    # or https://<host>:8443/v1/data/test/hello
     # --> {'hello': True}
 
-    # url = 'http://test-opa-svc:8081/v1/data/test'
-    response = requests.post(args["url"], json={"input": {}}).json()
+    # url = 'https://test-opa-server.<namespace>.svc.cluster.local:8443/v1/data/test'
+    response = requests.post(args["url"], json={"input": {}}, verify="/tls/ca.crt").json()
 
     if (
         "result" in response

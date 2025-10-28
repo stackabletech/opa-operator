@@ -1,0 +1,71 @@
+= Enabling TLS Encryption
+:description: Learn how to enable TLS encryption for your OPA cluster to secure client connections.
+
+TLS encryption for securing connections between clients and the OPA server can be configured in the `OpaCluster` resource. When TLS is enabled, OPA will serve requests over HTTPS instead of HTTP.
+
+== Overview
+
+TLS encryption in OPA is disabled by default. To enable it, you need to:
+
+1. Create a `SecretClass` that provides TLS certificates
+2. Reference the `SecretClass` in your `OpaCluster` specification
+
+The operator integrates with the xref:secret-operator:index.adoc[Secret Operator] to automatically provision and mount TLS certificates to the OPA pods.
+
+== Configuration
+
+=== Creating a SecretClass
+
+First, create a `SecretClass` that will provide TLS certificates. Here's an example using xref:secret-operator:secretclass.adoc#backend-autotls[autoTls]:
+
+[source,yaml]
+----
+apiVersion: secrets.stackable.tech/v1alpha1
+kind: SecretClass
+metadata:
+  name: opa-tls
+spec:
+  backend:
+    autoTls:
+      ca:
+        autoGenerate: true
+        secret:
+          name: opa-tls-ca
+          namespace: default
+----
+
+This SecretClass uses the autoTls backend, which automatically generates a Certificate Authority (CA) and signs certificates for your OPA cluster.
+
+Similarly, you can also use xref:secret-operator:secretclass.adoc#backend[other backends] supported by Secret Operator.
+
+=== Enabling TLS in OpaCluster
+
+Once you have a SecretClass, enable TLS in your OpaCluster by setting the `.spec.clusterConfig.tls.serverSecretClass` field:
+
+[source,yaml]
+----
+kind: OpaCluster
+name: opa-with-tls
+spec:
+  clusterConfig:
+    tls:
+      serverSecretClass: opa-tls  # <1>
+----
+<1> Reference the SecretClass created above
+
+== Discovery ConfigMap
+
+The operator automatically creates a discovery ConfigMap, with the same name as the OPA cluster, that contains the connection URL for your cluster. When TLS is enabled, this ConfigMap will contain an HTTPS URL and the SecretClass name:
+
+[source,yaml]
+----
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opa-with-tls
+data:
+  OPA: "https://opa-with-tls.default.svc.cluster.local:8443/"
+  OPA_SECRET_CLASS: "opa-tls"
+----
+
+Applications can use this ConfigMap to discover and connect to the OPA cluster automatically.
