@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Bump stackable-operator to `0.100.1` ([#772]).
 - BREAKING: The per-rolegroup services now only serves the HTTP port and has a `-headless` suffix to better indicate their
   purpose and to be consistent with other operators ([#748]).
 - BREAKING: The per-role server service is now prefixed with `-server` to be consistent with other operators ([#748]).
@@ -39,6 +40,7 @@ All notable changes to this project will be documented in this file.
 [#765]: https://github.com/stackabletech/opa-operator/pull/765
 [#767]: https://github.com/stackabletech/opa-operator/pull/767
 [#771]: https://github.com/stackabletech/opa-operator/pull/771
+[#772]: https://github.com/stackabletech/opa-operator/pull/772
 
 ## [25.7.0] - 2025-07-23
 
