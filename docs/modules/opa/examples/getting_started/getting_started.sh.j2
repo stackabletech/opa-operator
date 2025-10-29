@@ -58,7 +58,7 @@ sleep 21
 
 echo "Starting port-forwarding of port 8081"
 # tag::port-forwarding[]
-kubectl port-forward svc/simple-opa 8081 > /dev/null 2>&1 &
+kubectl port-forward svc/simple-opa-server 8081 > /dev/null 2>&1 &
 # end::port-forwarding[]
 PORT_FORWARD_PID=$!
 # shellcheck disable=SC2064
