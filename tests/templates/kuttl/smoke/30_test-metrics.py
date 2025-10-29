@@ -5,7 +5,9 @@ import os
 
 if __name__ == "__main__":
     all_args = argparse.ArgumentParser()
-    all_args.add_argument("-n", "--namespace", required=True, help="Kubernetes namespace")
+    all_args.add_argument(
+        "-n", "--namespace", required=True, help="Kubernetes namespace"
+    )
     args = vars(all_args.parse_args())
 
     namespace = args["namespace"]

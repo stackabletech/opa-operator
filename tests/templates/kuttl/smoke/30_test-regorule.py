@@ -27,7 +27,9 @@ if __name__ == "__main__":
     # --> {'hello': True}
 
     # url = 'https://test-opa-server.<namespace>.svc.cluster.local:8443/v1/data/test'
-    response = requests.post(args["url"], json={"input": {}}, verify="/tls/ca.crt").json()
+    response = requests.post(
+        args["url"], json={"input": {}}, verify="/tls/ca.crt"
+    ).json()
 
     if (
         "result" in response
