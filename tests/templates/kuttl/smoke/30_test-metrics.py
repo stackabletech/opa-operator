@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import requests
 import argparse
-import os
 
 if __name__ == "__main__":
     all_args = argparse.ArgumentParser()

@@ -42,7 +42,7 @@ spec:
             spec:
               storageClassName: secrets.stackable.tech
               accessModes:
-                - ReadWriteOnce
+              - ReadWriteOnce
               resources:
                 requests:
                   storage: "1"

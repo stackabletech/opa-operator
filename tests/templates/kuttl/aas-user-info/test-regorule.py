@@ -26,9 +26,9 @@ def assertions(
     # todo: split out customAttribute assertions
     print(f"Testing for {username} with customAttributes {expected_attributes}")
     custom_attributes = result[opa_attribute]["customAttributes"]
-    assert (
-        custom_attributes == expected_attributes
-    ), f"got {custom_attributes}, expected: {expected_attributes}"
+    assert custom_attributes == expected_attributes, (
+        f"got {custom_attributes}, expected: {expected_attributes}"
+    )
 
 
 if __name__ == "__main__":
@@ -40,9 +40,9 @@ if __name__ == "__main__":
     def make_request(payload):
         response = requests.post(args["url"], data=json.dumps(payload), params=params)
         expected_status_code = 200
-        assert (
-            response.status_code == expected_status_code
-        ), f"got {response.status_code}, expected: {expected_status_code}"
+        assert response.status_code == expected_status_code, (
+            f"got {response.status_code}, expected: {expected_status_code}"
+        )
         return response.json()
 
     for subject_id in ["alice", "bob"]:
