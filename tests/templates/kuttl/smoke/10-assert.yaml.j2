@@ -2,12 +2,42 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 timeout: 300
 commands:
-  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 301s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa-https --timeout 301s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa-http --timeout 301s
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: test-opa-server-default
+  name: test-opa-https-server-default
+spec:
+  template:
+    spec:
+      containers:
+        - name: opa
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+        - name: bundle-builder
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}
+      terminationGracePeriodSeconds: 125 # 2 minutes + 5s safety buffer
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-http-server-default
 spec:
   template:
     spec:

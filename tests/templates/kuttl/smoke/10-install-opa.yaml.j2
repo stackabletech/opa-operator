@@ -20,7 +20,7 @@ data:
 apiVersion: opa.stackable.tech/v1alpha1
 kind: OpaCluster
 metadata:
-  name: test-opa
+  name: test-opa-https
 spec:
   image:
 {% if test_scenario['values']['opa'].find(",") > 0 %}
@@ -33,6 +33,34 @@ spec:
   clusterConfig:
     tls:
       serverSecretClass: opa-tls-$NAMESPACE
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+  servers:
+    config:
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+    envOverrides:
+      SERVER_ROLE_LEVEL_ENV_VAR: "SERVER_ROLE_LEVEL_ENV_VAR"
+    roleGroups:
+      default:
+        envOverrides:
+          SERVER_ROLE_GROUP_LEVEL_ENV_VAR: "SERVER_ROLE_GROUP_LEVEL_ENV_VAR"
+---
+apiVersion: opa.stackable.tech/v1alpha1
+kind: OpaCluster
+metadata:
+  name: test-opa-http
+spec:
+  image:
+{% if test_scenario['values']['opa'].find(",") > 0 %}
+    custom: "{{ test_scenario['values']['opa'].split(',')[1] }}"
+    productVersion: "{{ test_scenario['values']['opa'].split(',')[0] }}"
+{% else %}
+    productVersion: "{{ test_scenario['values']['opa'] }}"
+{% endif %}
+    pullPolicy: IfNotPresent
+  clusterConfig:
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
     vectorAggregatorConfigMapName: vector-aggregator-discovery
 {% endif %}
