@@ -1,7 +1,7 @@
 = Enabling TLS Encryption
 :description: Learn how to enable TLS encryption for your OPA cluster to secure client connections.
 
-TLS encryption for securing connections between clients and the OPA server can be configured in the `OpaCluster` resource. When TLS is enabled, OPA will serve requests over HTTPS instead of HTTP.
+TLS encryption for securing client connections to the OPA server can be configured in the `OpaCluster` resource. When enabled, OPA serves requests over HTTPS instead of HTTP.
 
 == Overview
 
