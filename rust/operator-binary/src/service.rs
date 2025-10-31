@@ -59,7 +59,7 @@ pub(crate) fn build_server_role_service(
 
     let service_spec = ServiceSpec {
         type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(data_service_ports(opa.spec.cluster_config.tls.is_some())),
+        ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
         selector: Some(service_selector_labels.into()),
         internal_traffic_policy: Some("Local".to_string()),
         ..ServiceSpec::default()
@@ -104,7 +104,7 @@ pub(crate) fn build_rolegroup_headless_service(
         // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
-        ports: Some(data_service_ports(opa.spec.cluster_config.tls.is_some())),
+        ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
         selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
         publish_not_ready_addresses: Some(true),
         ..ServiceSpec::default()
@@ -138,7 +138,7 @@ pub(crate) fn build_rolegroup_metrics_service(
         .context(ObjectMetaSnafu)?
         .with_labels(prometheus_labels())
         .with_annotations(prometheus_annotations(
-            opa.spec.cluster_config.tls.is_some(),
+            opa.spec.cluster_config.tls_enabled(),
         ))
         .build();
 
@@ -146,7 +146,7 @@ pub(crate) fn build_rolegroup_metrics_service(
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
         ports: Some(vec![metrics_service_port(
-            opa.spec.cluster_config.tls.is_some(),
+            opa.spec.cluster_config.tls_enabled(),
         )]),
         selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
         ..ServiceSpec::default()

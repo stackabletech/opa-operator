@@ -66,8 +66,7 @@ fn build_discovery_configmap(
     svc: &Service,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<ConfigMap, Error> {
-    let tls_config = opa.spec.cluster_config.tls.as_ref();
-    let (scheme, port) = if tls_config.is_some() {
+    let (scheme, port) = if opa.spec.cluster_config.tls_enabled() {
         ("https", APP_TLS_PORT)
     } else {
         ("http", APP_PORT)
@@ -104,7 +103,7 @@ fn build_discovery_configmap(
 
     cm_builder.metadata(metadata).add_data("OPA", url);
 
-    if let Some(tls) = tls_config {
+    if let Some(tls) = opa.spec.cluster_config.tls.as_ref() {
         cm_builder.add_data("OPA_SECRET_CLASS", &tls.server_secret_class);
     }
 

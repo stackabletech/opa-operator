@@ -830,8 +830,6 @@ fn build_server_rolegroup_daemonset(
         &v1alpha1::Container::BundleBuilder,
     );
 
-    let opa_tls_config = opa.spec.cluster_config.tls.as_ref();
-
     cb_opa
         .image_from_product_image(resolved_product_image)
         .command(vec![
@@ -844,7 +842,7 @@ fn build_server_rolegroup_daemonset(
         .args(vec![build_opa_start_command(
             merged_config,
             &opa_container_name,
-            opa_tls_config,
+            opa.spec.cluster_config.tls_enabled(),
         )])
         .add_env_vars(env)
         .add_env_var(
@@ -858,7 +856,7 @@ fn build_server_rolegroup_daemonset(
     // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
     //
     // So we don't do that
-    if opa_tls_config.is_some() {
+    if opa.spec.cluster_config.tls_enabled() {
         cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
         cb_opa
             .add_volume_mount(TLS_VOLUME_NAME, TLS_STORE_DIR)
@@ -874,7 +872,7 @@ fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
-    let (probe_port_name, probe_scheme) = if opa_tls_config.is_some() {
+    let (probe_port_name, probe_scheme) = if opa.spec.cluster_config.tls_enabled() {
         (service::APP_TLS_PORT_NAME, Some("HTTPS".to_string()))
     } else {
         (APP_PORT_NAME, Some("HTTP".to_string()))
@@ -949,7 +947,7 @@ fn build_server_rolegroup_daemonset(
         .service_account_name(service_account.name_any())
         .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
 
-    if let Some(tls) = opa_tls_config {
+    if let Some(tls) = &opa.spec.cluster_config.tls {
         pb.add_volume(
             VolumeBuilder::new(TLS_VOLUME_NAME)
                 .ephemeral(
@@ -1196,7 +1194,7 @@ fn build_config_file(merged_config: &v1alpha1::OpaConfig) -> String {
 fn build_opa_start_command(
     merged_config: &v1alpha1::OpaConfig,
     container_name: &str,
-    tls_config: Option<&v1alpha1::OpaTls>,
+    tls_enabled: bool,
 ) -> String {
     let mut file_log_level = DEFAULT_FILE_LOG_LEVEL;
     let mut console_log_level = DEFAULT_CONSOLE_LOG_LEVEL;
@@ -1238,7 +1236,7 @@ fn build_opa_start_command(
         }
     }
 
-    let (bind_port, tls_flags) = if tls_config.is_some() {
+    let (bind_port, tls_flags) = if tls_enabled {
         (
             service::APP_TLS_PORT,
             format!(
