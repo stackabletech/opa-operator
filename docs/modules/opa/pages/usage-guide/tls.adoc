@@ -10,7 +10,7 @@ TLS encryption in OPA is disabled by default. To enable it, you need to:
 1. Create a `SecretClass` that provides TLS certificates
 2. Reference the `SecretClass` in your `OpaCluster` custom resource
 
-The operator integrates with the xref:secret-operator:index.adoc[Secret Operator] to automatically provision and mount TLS certificates to the OPA pods.
+The operator integrates with the xref:secret-operator:index.adoc[Secret Operator] to automatically provision and mount TLS certificates into the OPA pods.
 
 == Configuration
 
