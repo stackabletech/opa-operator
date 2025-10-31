@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Helm: Allow Pod `priorityClassName` to be configured ([#762]).
 - Add support for OPA `1.8.0` ([#765]).
 - Add `prometheus.io/path|port|scheme` annotations to metrics service ([#767]).
+- Add support for TLS ([#774])
 
 ### Changed
 
@@ -41,6 +42,7 @@ All notable changes to this project will be documented in this file.
 [#767]: https://github.com/stackabletech/opa-operator/pull/767
 [#771]: https://github.com/stackabletech/opa-operator/pull/771
 [#772]: https://github.com/stackabletech/opa-operator/pull/772
+[#774]: https://github.com/stackabletech/opa-operator/pull/774
 
 ## [25.7.0] - 2025-07-23
 

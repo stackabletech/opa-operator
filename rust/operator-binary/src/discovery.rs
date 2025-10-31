@@ -8,7 +8,10 @@ use stackable_operator::{
     utils::cluster_info::KubernetesClusterInfo,
 };
 
-use crate::{controller::build_recommended_labels, service::APP_PORT};
+use crate::{
+    controller::build_recommended_labels,
+    service::{APP_PORT, APP_TLS_PORT},
+};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -63,8 +66,15 @@ fn build_discovery_configmap(
     svc: &Service,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<ConfigMap, Error> {
+    let tls_config = opa.spec.cluster_config.tls.as_ref();
+    let (scheme, port) = if tls_config.is_some() {
+        ("https", APP_TLS_PORT)
+    } else {
+        ("http", APP_PORT)
+    };
+
     let url = format!(
-        "http://{name}.{namespace}.svc.{cluster_domain}:{port}/",
+        "{scheme}://{name}.{namespace}.svc.{cluster_domain}:{port}/",
         name = svc.metadata.name.as_deref().context(NoNameSnafu)?,
         namespace = svc
             .metadata
@@ -72,7 +82,6 @@ fn build_discovery_configmap(
             .as_deref()
             .context(NoNamespaceSnafu)?,
         cluster_domain = cluster_info.cluster_domain,
-        port = APP_PORT
     );
 
     let metadata = ObjectMetaBuilder::new()
@@ -91,9 +100,13 @@ fn build_discovery_configmap(
         .context(ObjectMetaSnafu)?
         .build();
 
-    ConfigMapBuilder::new()
-        .metadata(metadata)
-        .add_data("OPA", url)
-        .build()
-        .context(BuildConfigMapSnafu)
+    let mut cm_builder = ConfigMapBuilder::new();
+
+    cm_builder.metadata(metadata).add_data("OPA", url);
+
+    if let Some(tls) = tls_config {
+        cm_builder.add_data("OPA_SECRET_CLASS", &tls.server_secret_class);
+    }
+
+    cm_builder.build().context(BuildConfigMapSnafu)
 }
