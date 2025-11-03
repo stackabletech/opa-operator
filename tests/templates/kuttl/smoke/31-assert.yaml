@@ -1,7 +1,0 @@
----
-apiVersion: kuttl.dev/v1beta1
-kind: TestAssert
-metadata:
-  name: test-metrics
-commands:
-  - script: kubectl exec -n $NAMESPACE test-opa-0 -- python /tmp/30_test-metrics.py

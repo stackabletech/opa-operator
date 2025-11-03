@@ -115,6 +115,18 @@ pub mod versioned {
         /// from an external directory service.
         #[serde(default)]
         pub user_info: Option<user_info_fetcher::v1alpha1::Config>,
+        /// TLS encryption settings for the OPA server.
+        /// When configured, OPA will use HTTPS (port 8443) instead of HTTP (port 8081).
+        /// Clients must connect using HTTPS and trust the certificates provided by the configured SecretClass.
+        #[serde(default)]
+        pub tls: Option<v1alpha1::OpaTls>,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct OpaTls {
+        /// Name of the SecretClass which will provide TLS certificates for the OPA server.
+        pub server_secret_class: String,
     }
 
     // TODO: Temporary solution until listener-operator is finished
@@ -236,6 +248,13 @@ impl v1alpha1::CurrentlySupportedListenerClasses {
                 "LoadBalancer".to_string()
             }
         }
+    }
+}
+
+impl v1alpha1::OpaClusterConfig {
+    /// Returns whether TLS encryption is enabled for the OPA server.
+    pub fn tls_enabled(&self) -> bool {
+        self.tls.is_some()
     }
 }
 

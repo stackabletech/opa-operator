@@ -17,11 +17,16 @@ dimensions:
   - name: openshift
     values:
       - "false"
+  - name: use-tls
+    values:
+      - "true"
+      - "false"
 tests:
   - name: smoke
     dimensions:
       - opa
       - openshift
+      - use-tls
   - name: resources
     dimensions:
       - opa-latest

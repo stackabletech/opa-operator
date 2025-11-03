@@ -11,7 +11,9 @@ use stackable_operator::{
 use crate::controller::build_recommended_labels;
 
 pub const APP_PORT: u16 = 8081;
+pub const APP_TLS_PORT: u16 = 8443;
 pub const APP_PORT_NAME: &str = "http";
+pub const APP_TLS_PORT_NAME: &str = "https";
 pub const METRICS_PORT_NAME: &str = "metrics";
 
 #[derive(Snafu, Debug)]
@@ -57,7 +59,7 @@ pub(crate) fn build_server_role_service(
 
     let service_spec = ServiceSpec {
         type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(data_service_ports()),
+        ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
         selector: Some(service_selector_labels.into()),
         internal_traffic_policy: Some("Local".to_string()),
         ..ServiceSpec::default()
@@ -102,7 +104,7 @@ pub(crate) fn build_rolegroup_headless_service(
         // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
-        ports: Some(data_service_ports()),
+        ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
         selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
         publish_not_ready_addresses: Some(true),
         ..ServiceSpec::default()
@@ -135,13 +137,17 @@ pub(crate) fn build_rolegroup_metrics_service(
         ))
         .context(ObjectMetaSnafu)?
         .with_labels(prometheus_labels())
-        .with_annotations(prometheus_annotations())
+        .with_annotations(prometheus_annotations(
+            opa.spec.cluster_config.tls_enabled(),
+        ))
         .build();
 
     let service_spec = ServiceSpec {
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
-        ports: Some(vec![metrics_service_port()]),
+        ports: Some(vec![metrics_service_port(
+            opa.spec.cluster_config.tls_enabled(),
+        )]),
         selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
         ..ServiceSpec::default()
     };
@@ -162,21 +168,28 @@ fn role_group_selector_labels(
         .context(BuildLabelSnafu)
 }
 
-fn data_service_ports() -> Vec<ServicePort> {
-    // Currently only HTTP is exposed
+fn data_service_ports(tls_enabled: bool) -> Vec<ServicePort> {
+    let (port_name, port) = if tls_enabled {
+        (APP_TLS_PORT_NAME, APP_TLS_PORT)
+    } else {
+        (APP_PORT_NAME, APP_PORT)
+    };
+
     vec![ServicePort {
-        name: Some(APP_PORT_NAME.to_string()),
-        port: APP_PORT.into(),
+        name: Some(port_name.to_string()),
+        port: port.into(),
         protocol: Some("TCP".to_string()),
         ..ServicePort::default()
     }]
 }
 
-fn metrics_service_port() -> ServicePort {
+fn metrics_service_port(tls_enabled: bool) -> ServicePort {
+    let port = if tls_enabled { APP_TLS_PORT } else { APP_PORT };
+
     ServicePort {
         name: Some(METRICS_PORT_NAME.to_string()),
-        // The metrics are served on the same port as the HTTP traffic
-        port: APP_PORT.into(),
+        // The metrics are served on the same port as the HTTP/HTTPS traffic
+        port: port.into(),
         protocol: Some("TCP".to_string()),
         ..ServicePort::default()
     }
@@ -192,11 +205,17 @@ fn prometheus_labels() -> Labels {
 /// These annotations can be used in a ServiceMonitor.
 ///
 /// see also <https://github.com/prometheus-community/helm-charts/blob/prometheus-27.32.0/charts/prometheus/values.yaml#L983-L1036>
-fn prometheus_annotations() -> Annotations {
+fn prometheus_annotations(tls_enabled: bool) -> Annotations {
+    let (port, scheme) = if tls_enabled {
+        (APP_TLS_PORT, "https")
+    } else {
+        (APP_PORT, "http")
+    };
+
     Annotations::try_from([
         ("prometheus.io/path".to_owned(), "/metrics".to_owned()),
-        ("prometheus.io/port".to_owned(), APP_PORT.to_string()),
-        ("prometheus.io/scheme".to_owned(), "http".to_owned()),
+        ("prometheus.io/port".to_owned(), port.to_string()),
+        ("prometheus.io/scheme".to_owned(), scheme.to_owned()),
         ("prometheus.io/scrape".to_owned(), "true".to_owned()),
     ])
     .expect("should be valid annotations")

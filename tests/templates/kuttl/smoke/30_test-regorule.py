@@ -20,25 +20,33 @@ if __name__ == "__main__":
     #     false
     # }
     # ---
-    # We need to query: http://<host>:<port>/v1/data/<package>/(<rule>)+
-    # In our case http://<host>:8081/v1/data/test
+    # We need to query: https://<host>:<port>/v1/data/<package>/(<rule>)+
+    # In our case https://<host>:8443/v1/data/test
     # --> {'result': {'hello': True}}
-    # or http://<host>:8081/v1/data/test/hello
+    # or https://<host>:8443/v1/data/test/hello
     # --> {'hello': True}
+    # For HTTP: http://<host>:8081/v1/data/test
 
-    # url = 'http://test-opa-svc:8081/v1/data/test'
-    response = requests.post(args["url"], json={"input": {}}).json()
+    # Determine verification setting based on whether TLS is used
+    if args["url"].startswith("http://"):
+        verify = False
+        protocol = "HTTP"
+    else:
+        verify = "/tls/ca.crt"
+        protocol = "HTTPS"
+
+    response = requests.post(args["url"], json={"input": {}}, verify=verify).json()
 
     if (
         "result" in response
         and "hello" in response["result"]
         and response["result"]["hello"]
     ):
-        print("Regorule test successful!")
+        print(f"Regorule test ({protocol}) successful!")
         exit(0)
     else:
         print(
-            "Error: received "
+            f"Error ({protocol}): received "
             + str(response)
             + " - expected: {'result': {'hello': True}}"
         )

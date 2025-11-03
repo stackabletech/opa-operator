@@ -1,0 +1,56 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      kubectl apply -n $NAMESPACE -f - <<EOF
+      ---
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: test-opa
+        labels:
+          app: test-opa
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: test-opa
+        template:
+          metadata:
+            labels:
+              app: test-opa
+          spec:
+            securityContext:
+              fsGroup: 1000
+            containers:
+            - name: test-opa
+              image: oci.stackable.tech/sdp/testing-tools:0.2.0-stackable0.0.0-dev
+              stdin: true
+              tty: true
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "512m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "1"
+{% if test_scenario['values']['use-tls'] == "true" %}
+              volumeMounts:
+              - name: tls
+                mountPath: /tls
+            volumes:
+            - name: tls
+              ephemeral:
+                volumeClaimTemplate:
+                  metadata:
+                    annotations:
+                      secrets.stackable.tech/class: opa-tls-$NAMESPACE
+                  spec:
+                    storageClassName: secrets.stackable.tech
+                    accessModes:
+                    - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: "1"
+{% endif %}
