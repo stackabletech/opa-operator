@@ -5,8 +5,5 @@ kind: TestAssert
 timeout: 600
 commands:
   - script: |
-      FIRST_OPA_POD=$(kubectl get -n $NAMESPACE pods --field-selector=status.phase=Running --selector app.kubernetes.io/instance=test-opa-https -o jsonpath='{.items[0].metadata.name}')
-      kubectl exec -n $NAMESPACE --container opa $FIRST_OPA_POD -- cat /stackable/log/containerdebug-state.json | jq --exit-status '"valid JSON"'
-  - script: |
-      FIRST_OPA_POD=$(kubectl get -n $NAMESPACE pods --field-selector=status.phase=Running --selector app.kubernetes.io/instance=test-opa-http -o jsonpath='{.items[0].metadata.name}')
+      FIRST_OPA_POD=$(kubectl get -n $NAMESPACE pods --field-selector=status.phase=Running --selector app.kubernetes.io/instance=test-opa -o jsonpath='{.items[0].metadata.name}')
       kubectl exec -n $NAMESPACE --container opa $FIRST_OPA_POD -- cat /stackable/log/containerdebug-state.json | jq --exit-status '"valid JSON"'
