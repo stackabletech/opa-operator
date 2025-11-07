@@ -1,1 +1,1 @@
-Installed opa=25.11.0-rc1 operator
+Installed opa=25.11.0 operator
