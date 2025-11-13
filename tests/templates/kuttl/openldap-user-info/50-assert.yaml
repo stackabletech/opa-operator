@@ -1,0 +1,9 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+metadata:
+  name: test-regorule
+commands:
+  - script: kubectl exec -n $NAMESPACE test-regorule-0 -- python /tmp/test-regorule.py -u 'http://test-opa-groupofnames-tls-server:8081/v1/data/test' -t groupofnames-tls
+  - script: kubectl exec -n $NAMESPACE test-regorule-0 -- python /tmp/test-regorule.py -u 'http://test-opa-groupofnames-notls-server:8081/v1/data/test' -t groupofnames-notls
+  - script: kubectl exec -n $NAMESPACE test-regorule-0 -- python /tmp/test-regorule.py -u 'http://test-opa-posixgroup-tls-server:8081/v1/data/test' -t posixgroup-tls

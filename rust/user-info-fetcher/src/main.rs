@@ -151,6 +151,10 @@ async fn main() -> Result<(), StartupError> {
             client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
             client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
         },
+        v1alpha1::Backend::OpenLdap(_) => Credentials {
+            client_id: "".to_string(),
+            client_secret: "".to_string(),
+        },
     });
 
     let mut client_builder = ClientBuilder::new();
@@ -272,6 +276,9 @@ enum GetUserInfoError {
 
     #[snafu(display("failed to get user information from Entra"))]
     Entra { source: backend::entra::Error },
+
+    #[snafu(display("failed to get user information from OpenLDAP"))]
+    OpenLdap { source: backend::openldap::Error },
 }
 
 impl http_error::Error for GetUserInfoError {
@@ -287,6 +294,7 @@ impl http_error::Error for GetUserInfoError {
             Self::ExperimentalXfscAas { source } => source.status_code(),
             Self::ActiveDirectory { source } => source.status_code(),
             Self::Entra { source } => source.status_code(),
+            Self::OpenLdap { source } => source.status_code(),
         }
     }
 }
@@ -351,6 +359,11 @@ async fn get_user_info(
                         backend::entra::get_user_info(&req, &http, &credentials, entra)
                             .await
                             .context(get_user_info_error::EntraSnafu)
+                    }
+                    v1alpha1::Backend::OpenLdap(openldap) => {
+                        backend::openldap::get_user_info(&req, openldap)
+                            .await
+                            .context(get_user_info_error::OpenLdapSnafu)
                     }
                 }
             })

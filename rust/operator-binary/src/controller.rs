@@ -33,6 +33,7 @@ use stackable_operator::{
         secret_class::{SecretClassVolume, SecretClassVolumeScope},
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
+    crd::authentication::ldap,
     k8s_openapi::{
         DeepMerge,
         api::{
@@ -312,6 +313,11 @@ pub enum Error {
         "failed to build volume or volume mount spec for the User Info Fetcher TLS config"
     ))]
     UserInfoFetcherTlsVolumeAndMounts { source: TlsClientDetailsError },
+
+    #[snafu(display(
+        "failed to build volume or volume mount spec for the User Info Fetcher LDAP config"
+    ))]
+    UserInfoFetcherLdapVolumeAndMounts { source: ldap::v1alpha1::Error },
 
     #[snafu(display("failed to configure logging"))]
     ConfigureLogging { source: LoggingError },
@@ -1071,6 +1077,12 @@ fn build_server_rolegroup_daemonset(
                 }
                 .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                 .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
+            }
+            user_info_fetcher::v1alpha1::Backend::OpenLdap(openldap) => {
+                openldap
+                    .to_ldap_provider()
+                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
+                    .context(UserInfoFetcherLdapVolumeAndMountsSnafu)?;
             }
         }
 

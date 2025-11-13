@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add support for OpenLDAP backend to user-info-fetcher ([#779]).
+
+[#779]: https://github.com/stackabletech/opa-operator/pull/779
+
 ## [25.11.0] - 2025-11-07
 
 ## [25.11.0-rc1] - 2025-11-06

@@ -1,0 +1,8 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      # Load group structure and memberships (use -c to continue on errors like "already exists")
+      kubectl exec -n $NAMESPACE test-openldap-0 -- \
+        ldapadd -c -x -H ldap://localhost:1389 -D "cn=ldapadmin,dc=example,dc=org" -w ldapadminpassword -f /tmp/ldifs/add-groups.ldif
