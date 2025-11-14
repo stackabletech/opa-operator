@@ -54,6 +54,7 @@ Currently the following backends are supported:
 * xref:#backend-keycloak[]
 * xref:#backend-activedirectory[]
 * xref:#backend-entra[]
+* xref:#backend-openldap[]
 
 [#backends]
 == Backends
@@ -206,6 +207,66 @@ spec:
 <2> The Entra tenant ID
 <3> A secret containing the `clientId` and `clientSecret` keys
 
+[#backend-openldap]
+=== OpenLDAP
+
+WARNING: The OpenLDAP backend is experimental, and subject to change.
+
+Fetches user attributes and groups over LDAP from OpenLDAP servers using simple bind authentication.
+
+OpenLDAP supports different group schemas:
+
+* *groupOfNames* (default): Groups contain a `member` attribute with full user DNs
+* *posixGroup*: Groups contain a `memberUid` attribute with usernames
+
+[source,yaml]
+----
+spec:
+  clusterConfig:
+    userInfo:
+      backend:
+        experimentalOpenLdap: # <1>
+          hostname: openldap.default.svc.cluster.local # <2>
+          port: 1636 # <3>
+          searchBase: dc=example,dc=org # <4>
+          bindCredentials: # <5>
+            secretClass: openldap-bind-credentials # <6>
+          userIdAttribute: entryUUID # <7>
+          userNameAttribute: uid # <8>
+          groupsSearchBase: ou=groups,dc=example,dc=org # <9>
+          groupMemberAttribute: member # <10>
+          customAttributeMappings: # <11>
+            email: mail
+            displayName: cn
+            givenName: givenName
+            surname: sn
+          tls: # <12>
+            verification:
+              server:
+                caCert:
+                  secretClass: openldap-tls # <13>
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
+----
+<1> Enables the OpenLDAP backend
+<2> The hostname of the LDAP server
+<3> The port of the LDAP server. Defaults to `636` for LDAPS, or `389` for plain LDAP
+<4> The base distinguished name to search. Users outside of this will not be seen
+<5> Configuration for LDAP bind credentials
+<6> The name of the SecretClass that provides the bind credentials. The secret must contain `user` and `password` keys
+<7> LDAP attribute used for the user's unique identifier. Defaults to `entryUUID`
+<8> LDAP attribute used for the username. Defaults to `uid`
+<9> LDAP search base for groups. If not specified, uses the main `searchBase`
+<10> LDAP attribute on group objects that contains member references. Use `member` for `groupOfNames` (default) or `memberUid` for `posixGroup`
+<11> Arbitrary LDAP attributes can be requested to be fetched and returned in the user info response. Use this to map custom LDAP attributes to custom attribute names in the response
+<12> Optional TLS configuration for secure LDAP connections
+<13> The name of the SecretClass that contains the LDAP server's root CA certificate(s)
+
+When retrieving user information from OpenLDAP, the user info fetcher first searches for the user by the `userNameAttribute` (defaults to `uid`) or `userIdAttribute` (defaults to `entryUUID`) depending on the request type. When a user is found, it searches for groups containing the user:
+
+* If `groupMemberAttribute` is `memberUid`: Searches for groups where `memberUid` equals the username (for `posixGroup`)
+* Otherwise (e.g. if `groupMemberAttribute` is `member`, which is the default): Searches for groups where `member` equals the user's full DN (for `groupOfNames`)
+
 == User info fetcher API
 
 User information can be retrieved from regorules using the functions `userInfoByUsername(username)` and `userInfoById(id)` in `data.stackable.opa.userinfo.v1`.
@@ -229,7 +290,7 @@ NOTE: The exact formats of `id` and `groups` will vary depending on the xref:#ba
 === Debug request
 
 To debug the user-info-fetcher you can `curl` it's API for a given user.
-To achieve this shell into the `user-info-fetcher` container and execute
+To achieve this shell into the `opa` container and execute
 
 [source,bash]
 ----

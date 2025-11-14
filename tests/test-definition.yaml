@@ -54,6 +54,10 @@ tests:
     dimensions:
       - opa-latest
       - openshift
+  - name: openldap-user-info
+    dimensions:
+      - opa-latest
+      - openshift
 suites:
   - name: nightly
     patch:

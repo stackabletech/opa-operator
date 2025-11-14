@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 use stackable_operator::{
     commons::{
         networking::HostName,
+        secret_class::SecretClassVolume,
         tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
     },
+    crd::authentication::ldap,
     schemars::{self, JsonSchema},
     shared::time::Duration,
     versioned::versioned,
@@ -45,6 +47,10 @@ pub mod versioned {
         /// Backend that fetches user information from Microsoft Entra
         #[serde(rename = "experimentalEntra")]
         Entra(v1alpha1::EntraBackend),
+
+        /// Backend that fetches user information from OpenLDAP
+        #[serde(rename = "experimentalOpenLdap")]
+        OpenLdap(v1alpha1::OpenLdapBackend),
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -152,6 +158,56 @@ pub mod versioned {
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
+    pub struct OpenLdapBackend {
+        /// Hostname of the LDAP server, e.g. `my.ldap.server`.
+        pub hostname: HostName,
+
+        /// Port of the LDAP server. If TLS is used defaults to `636`, otherwise to `389`.
+        pub port: Option<u16>,
+
+        /// LDAP search base, e.g. `ou=users,dc=example,dc=org`.
+        #[serde(default)]
+        pub search_base: String,
+
+        /// Credentials for binding to the LDAP server.
+        ///
+        /// The bind account is used to search for users and groups in the LDAP directory.
+        pub bind_credentials: SecretClassVolume,
+
+        /// Use a TLS connection. If not specified no TLS will be used.
+        #[serde(flatten)]
+        pub tls: TlsClientDetails,
+
+        /// LDAP attribute used for the user's unique identifier. Defaults to `entryUUID`.
+        #[serde(default = "openldap_default_user_id_attribute")]
+        pub user_id_attribute: String,
+
+        /// LDAP attribute used for the username. Defaults to `uid`.
+        #[serde(default = "openldap_default_user_name_attribute")]
+        pub user_name_attribute: String,
+
+        /// LDAP search base for groups, e.g. `ou=groups,dc=example,dc=org`.
+        ///
+        /// If not specified, uses the main `searchBase`.
+        pub groups_search_base: Option<String>,
+
+        /// LDAP attribute on group objects that contains member references.
+        ///
+        /// Common values:
+        /// - `member`: For `groupOfNames` objects (uses full DN)
+        /// - `memberUid`: For `posixGroup` objects (uses username)
+        ///
+        /// Defaults to `member`.
+        #[serde(default = "openldap_default_group_member_attribute")]
+        pub group_member_attribute: String,
+
+        /// Custom attributes, and their LDAP attribute names.
+        #[serde(default)]
+        pub custom_attribute_mappings: BTreeMap<String, String>,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct Cache {
         /// How long metadata about each user should be cached for.
         #[serde(default = "v1alpha1::Cache::default_entry_time_to_live")]
@@ -189,6 +245,18 @@ fn aas_default_port() -> u16 {
     5000
 }
 
+fn openldap_default_user_id_attribute() -> String {
+    "entryUUID".to_string()
+}
+
+fn openldap_default_user_name_attribute() -> String {
+    "uid".to_string()
+}
+
+fn openldap_default_group_member_attribute() -> String {
+    "member".to_string()
+}
+
 impl v1alpha1::Cache {
     const fn default_entry_time_to_live() -> Duration {
         Duration::from_minutes_unchecked(1)
@@ -199,6 +267,25 @@ impl Default for v1alpha1::Cache {
     fn default() -> Self {
         Self {
             entry_time_to_live: Self::default_entry_time_to_live(),
+        }
+    }
+}
+
+impl v1alpha1::OpenLdapBackend {
+    /// Returns an LDAP [`AuthenticationProvider`](ldap::v1alpha1::AuthenticationProvider) for
+    /// connecting to the OpenLDAP server.
+    ///
+    /// Converts this OpenLdap backend configuration into a standard LDAP authentication provider
+    /// that can be used by the user-info-fetcher to establish connections and query user data.
+    pub fn to_ldap_provider(&self) -> ldap::v1alpha1::AuthenticationProvider {
+        ldap::v1alpha1::AuthenticationProvider {
+            hostname: self.hostname.clone(),
+            port: self.port,
+            search_base: self.search_base.clone(),
+            search_filter: String::new(),
+            ldap_field_names: ldap::v1alpha1::FieldNames::default(),
+            bind_credentials: Some(self.bind_credentials.clone()),
+            tls: self.tls.clone(),
         }
     }
 }
