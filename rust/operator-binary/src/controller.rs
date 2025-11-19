@@ -1079,6 +1079,8 @@ fn build_server_rolegroup_daemonset(
                 .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
             user_info_fetcher::v1alpha1::Backend::OpenLdap(openldap) => {
+                // Reuse the logic from the LDAP `AuthenticationProvider` which handles
+                // volume mounting of TLS secrets and LDAP bind credentials
                 openldap
                     .to_ldap_provider()
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
