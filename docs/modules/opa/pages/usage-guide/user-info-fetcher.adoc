@@ -212,7 +212,7 @@ spec:
 
 WARNING: The OpenLDAP backend is experimental, and subject to change.
 
-Fetches user attributes and groups over LDAP from OpenLDAP servers using simple bind authentication.
+Fetch user attributes and groups over LDAP from OpenLDAP servers using simple bind authentication.
 
 OpenLDAP supports different group schemas:
 
