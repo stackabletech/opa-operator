@@ -9,13 +9,10 @@ use axum::{Json, Router, extract::State, routing::post};
 use clap::Parser;
 use futures::{FutureExt, future, pin_mut};
 use moka::future::Cache;
-use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
-use stackable_operator::{
-    cli::CommonOptions, commons::tls_verification::TlsClientDetails, telemetry::Tracing,
-};
+use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
 use tokio::net::TcpListener;
 
 mod backend;
@@ -42,16 +39,27 @@ pub struct Args {
 
 #[derive(Clone)]
 struct AppState {
-    config: Arc<v1alpha1::Config>,
-    http: reqwest::Client,
-    credentials: Arc<Credentials>,
+    backend: Arc<ResolvedBackend>,
     user_info_cache: Cache<UserInfoRequest, UserInfo>,
 }
 
-struct Credentials {
-    // TODO: Find a better way of sharing behavior between different backends
-    client_id: String,
-    client_secret: String,
+/// Backend with resolved credentials.
+///
+/// This enum wraps backend-specific implementations that have already loaded their credentials
+/// and initialized their HTTP clients.
+enum ResolvedBackend {
+    None,
+    Keycloak(backend::keycloak::ResolvedKeycloakBackend),
+    ExperimentalXfscAas(backend::xfsc_aas::ResolvedXfscAasBackend),
+    ActiveDirectory {
+        ldap_server: String,
+        tls: stackable_operator::commons::tls_verification::TlsClientDetails,
+        base_distinguished_name: String,
+        custom_attribute_mappings: std::collections::BTreeMap<String, String>,
+        additional_group_attribute_filters: std::collections::BTreeMap<String, String>,
+    },
+    Entra(backend::entra::ResolvedEntraBackend),
+    OpenLdap(backend::openldap::ResolvedOpenLdapBackend),
 }
 
 #[derive(Snafu, Debug)]
@@ -74,22 +82,72 @@ enum StartupError {
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
 
-    #[snafu(display("failed to construct http client"))]
-    ConstructHttpClient { source: reqwest::Error },
-
-    #[snafu(display("failed to configure TLS"))]
-    ConfigureTls { source: utils::tls::Error },
-
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit {
         source: stackable_operator::telemetry::tracing::Error,
     },
+
+    #[snafu(display("failed to resolve Keycloak backend"))]
+    ResolveKeycloakBackend { source: backend::keycloak::Error },
+
+    #[snafu(display("failed to resolve Entra backend"))]
+    ResolveEntraBackend { source: backend::entra::Error },
+
+    #[snafu(display("failed to resolve OpenLDAP backend"))]
+    ResolveOpenLdapBackend { source: backend::openldap::Error },
+
+    #[snafu(display("failed to resolve XFSC AAS backend"))]
+    ResolveXfscAasBackend { source: backend::xfsc_aas::Error },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
     tokio::fs::read_to_string(path)
         .await
         .context(ReadConfigFileSnafu { path })
+}
+
+/// Resolves a backend configuration by loading credentials and creating the appropriate backend implementation.
+///
+/// This function reads credentials from the filesystem once at startup and returns a backend that
+/// contains both the configuration and the resolved credentials.
+async fn resolve_backend(
+    backend: v1alpha1::Backend,
+    credentials_dir: &Path,
+) -> Result<ResolvedBackend, StartupError> {
+    match backend {
+        v1alpha1::Backend::None {} => Ok(ResolvedBackend::None),
+        v1alpha1::Backend::Keycloak(config) => {
+            let resolved =
+                backend::keycloak::ResolvedKeycloakBackend::resolve(config, credentials_dir)
+                    .await
+                    .context(ResolveKeycloakBackendSnafu)?;
+            Ok(ResolvedBackend::Keycloak(resolved))
+        }
+        v1alpha1::Backend::ExperimentalXfscAas(config) => {
+            let resolved = backend::xfsc_aas::ResolvedXfscAasBackend::resolve(config)
+                .context(ResolveXfscAasBackendSnafu)?;
+            Ok(ResolvedBackend::ExperimentalXfscAas(resolved))
+        }
+        v1alpha1::Backend::ActiveDirectory(config) => Ok(ResolvedBackend::ActiveDirectory {
+            ldap_server: config.ldap_server,
+            tls: config.tls,
+            base_distinguished_name: config.base_distinguished_name,
+            custom_attribute_mappings: config.custom_attribute_mappings,
+            additional_group_attribute_filters: config.additional_group_attribute_filters,
+        }),
+        v1alpha1::Backend::Entra(config) => {
+            let resolved = backend::entra::ResolvedEntraBackend::resolve(config, credentials_dir)
+                .await
+                .context(ResolveEntraBackendSnafu)?;
+            Ok(ResolvedBackend::Entra(resolved))
+        }
+        v1alpha1::Backend::OpenLdap(config) => {
+            let resolved = backend::openldap::ResolvedOpenLdapBackend::resolve(config)
+                .await
+                .context(ResolveOpenLdapBackendSnafu)?;
+            Ok(ResolvedBackend::OpenLdap(resolved))
+        }
+    }
 }
 
 #[tokio::main]
@@ -126,58 +184,10 @@ async fn main() -> Result<(), StartupError> {
         }
     };
 
-    let config = Arc::<v1alpha1::Config>::new(
-        serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?,
-    );
-    let credentials = Arc::new(match &config.backend {
-        // TODO: factor this out into each backend (e.g. when we add LDAP support)
-        v1alpha1::Backend::None {} => Credentials {
-            client_id: "".to_string(),
-            client_secret: "".to_string(),
-        },
-        v1alpha1::Backend::Keycloak(_) => Credentials {
-            client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
-            client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
-        },
-        v1alpha1::Backend::ExperimentalXfscAas(_) => Credentials {
-            client_id: "".to_string(),
-            client_secret: "".to_string(),
-        },
-        v1alpha1::Backend::ActiveDirectory(_) => Credentials {
-            client_id: "".to_string(),
-            client_secret: "".to_string(),
-        },
-        v1alpha1::Backend::Entra(_) => Credentials {
-            client_id: read_config_file(&args.credentials_dir.join("clientId")).await?,
-            client_secret: read_config_file(&args.credentials_dir.join("clientSecret")).await?,
-        },
-        v1alpha1::Backend::OpenLdap(_) => Credentials {
-            client_id: "".to_string(),
-            client_secret: "".to_string(),
-        },
-    });
+    let config: v1alpha1::Config =
+        serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?;
 
-    let mut client_builder = ClientBuilder::new();
-
-    // TODO: I'm not so sure we should be doing all this keycloak specific stuff here.
-    // We could factor it out in the provider specific implementation (e.g. when we add LDAP support).
-    // I know it is for setting up the client, but an idea: make a trait for implementing backends
-    // The trait can do all this for a genric client using an implementation on the trait (eg: get_http_client() which will call self.uses_tls())
-    if let v1alpha1::Backend::Keycloak(keycloak) = &config.backend {
-        client_builder = utils::tls::configure_reqwest(&keycloak.tls, client_builder)
-            .await
-            .context(ConfigureTlsSnafu)?;
-    } else if let v1alpha1::Backend::Entra(entra) = &config.backend {
-        client_builder = utils::tls::configure_reqwest(
-            &TlsClientDetails {
-                tls: entra.tls.clone(),
-            },
-            client_builder,
-        )
-        .await
-        .context(ConfigureTlsSnafu)?;
-    }
-    let http = client_builder.build().context(ConstructHttpClientSnafu)?;
+    let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
 
     let user_info_cache = {
         let v1alpha1::Cache { entry_time_to_live } = config.cache;
@@ -189,9 +199,7 @@ async fn main() -> Result<(), StartupError> {
     let app = Router::new()
         .route("/user", post(get_user_info))
         .with_state(AppState {
-            config,
-            http,
-            credentials,
+            backend,
             user_info_cache,
         });
     let listener = TcpListener::bind("127.0.0.1:9476")
@@ -304,16 +312,14 @@ async fn get_user_info(
     Json(req): Json<UserInfoRequest>,
 ) -> Result<Json<UserInfo>, http_error::JsonResponse<Arc<GetUserInfoError>>> {
     let AppState {
-        config,
-        http,
-        credentials,
+        backend,
         user_info_cache,
     } = state;
     Ok(Json(
         user_info_cache
             .try_get_with_by_ref(&req, async {
-                match &config.backend {
-                    v1alpha1::Backend::None {} => {
+                match backend.as_ref() {
+                    ResolvedBackend::None => {
                         let user_id = match &req {
                             UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
                                 Some(id)
@@ -333,38 +339,38 @@ async fn get_user_info(
                             custom_attributes: HashMap::new(),
                         })
                     }
-                    v1alpha1::Backend::Keycloak(keycloak) => {
-                        backend::keycloak::get_user_info(&req, &http, &credentials, keycloak)
-                            .await
-                            .context(get_user_info_error::KeycloakSnafu)
-                    }
-                    v1alpha1::Backend::ExperimentalXfscAas(aas) => {
-                        backend::xfsc_aas::get_user_info(&req, &http, aas)
-                            .await
-                            .context(get_user_info_error::ExperimentalXfscAasSnafu)
-                    }
-                    v1alpha1::Backend::ActiveDirectory(ad) => {
-                        backend::active_directory::get_user_info(
-                            &req,
-                            &ad.ldap_server,
-                            &ad.tls,
-                            &ad.base_distinguished_name,
-                            &ad.custom_attribute_mappings,
-                            &ad.additional_group_attribute_filters,
-                        )
+                    ResolvedBackend::Keycloak(keycloak) => keycloak
+                        .get_user_info(&req)
                         .await
-                        .context(get_user_info_error::ActiveDirectorySnafu)
-                    }
-                    v1alpha1::Backend::Entra(entra) => {
-                        backend::entra::get_user_info(&req, &http, &credentials, entra)
-                            .await
-                            .context(get_user_info_error::EntraSnafu)
-                    }
-                    v1alpha1::Backend::OpenLdap(openldap) => {
-                        backend::openldap::get_user_info(&req, openldap)
-                            .await
-                            .context(get_user_info_error::OpenLdapSnafu)
-                    }
+                        .context(get_user_info_error::KeycloakSnafu),
+                    ResolvedBackend::ExperimentalXfscAas(aas) => aas
+                        .get_user_info(&req)
+                        .await
+                        .context(get_user_info_error::ExperimentalXfscAasSnafu),
+                    ResolvedBackend::ActiveDirectory {
+                        ldap_server,
+                        tls,
+                        base_distinguished_name,
+                        custom_attribute_mappings,
+                        additional_group_attribute_filters,
+                    } => backend::active_directory::get_user_info(
+                        &req,
+                        ldap_server,
+                        tls,
+                        base_distinguished_name,
+                        custom_attribute_mappings,
+                        additional_group_attribute_filters,
+                    )
+                    .await
+                    .context(get_user_info_error::ActiveDirectorySnafu),
+                    ResolvedBackend::Entra(entra) => entra
+                        .get_user_info(&req)
+                        .await
+                        .context(get_user_info_error::EntraSnafu),
+                    ResolvedBackend::OpenLdap(openldap) => openldap
+                        .get_user_info(&req)
+                        .await
+                        .context(get_user_info_error::OpenLdapSnafu),
                 }
             })
             .await?,
