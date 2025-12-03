@@ -30,20 +30,20 @@ pub enum Error {
     #[snafu(display("failed to parse LDAP endpoint URL"))]
     ParseLdapEndpointUrl { source: ldap::v1alpha1::Error },
 
-    #[snafu(display("failed to read bind user file from {path:?}"))]
+    #[snafu(display("unable to get username attribute \"{attribute}\" from LDAP user"))]
+    MissingUsernameAttribute { attribute: String },
+
+    #[snafu(display("failed to read bind user from {path:?}"))]
     ReadBindUser {
         source: std::io::Error,
         path: String,
     },
 
-    #[snafu(display("failed to read bind password file from {path:?}"))]
+    #[snafu(display("failed to read bind password from {path:?}"))]
     ReadBindPassword {
         source: std::io::Error,
         path: String,
     },
-
-    #[snafu(display("unable to get username attribute \"{attribute}\" from LDAP user"))]
-    MissingUsernameAttribute { attribute: String },
 }
 
 impl http_error::Error for Error {
@@ -56,117 +56,138 @@ impl http_error::Error for Error {
             Error::FindUserLdap { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Error::UserNotFound { .. } => StatusCode::NOT_FOUND,
             Error::ParseLdapEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Error::ReadBindUser { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Error::ReadBindPassword { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Error::MissingUsernameAttribute { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::ReadBindUser { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            Error::ReadBindPassword { .. } => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 }
 
-#[tracing::instrument(skip(config))]
-pub(crate) async fn get_user_info(
-    request: &UserInfoRequest,
-    config: &stackable_opa_operator::crd::user_info_fetcher::v1alpha1::OpenLdapBackend,
-) -> Result<UserInfo, Error> {
-    // Construct the LDAP provider from the config
-    let ldap_provider = config.to_ldap_provider();
+/// OpenLDAP backend with resolved credentials.
+///
+/// This struct combines the CRD configuration with credentials loaded from the filesystem.
+/// Credentials are loaded once at startup and stored internally.
+pub struct ResolvedOpenLdapBackend {
+    config: stackable_opa_operator::crd::user_info_fetcher::v1alpha1::OpenLdapBackend,
+    bind_user: String,
+    bind_password: String,
+}
 
-    // Read bind credentials from mounted secret
-    // Bind credentials are guaranteed to be present because they are required in the CRD
-    let (user_path, password_path) = ldap_provider
-        .bind_credentials_mount_paths()
-        .expect("bind credentials must be configured for OpenLDAP backend");
+impl ResolvedOpenLdapBackend {
+    /// Resolves an OpenLDAP backend by loading credentials from the filesystem.
+    ///
+    /// Reads bind credentials from paths specified in the configuration.
+    pub async fn resolve(
+        config: stackable_opa_operator::crd::user_info_fetcher::v1alpha1::OpenLdapBackend,
+    ) -> Result<Self, Error> {
+        let ldap_provider = config.to_ldap_provider();
+        // Bind credentials are guaranteed to be present because they are required in the CRD
+        let (user_path, password_path) = ldap_provider
+            .bind_credentials_mount_paths()
+            .expect("bind credentials must be configured for OpenLDAP backend");
 
-    let bind_user = tokio::fs::read_to_string(&user_path)
-        .await
-        .context(ReadBindUserSnafu { path: user_path })?;
-    let bind_password =
-        tokio::fs::read_to_string(&password_path)
+        let bind_user = tokio::fs::read_to_string(&user_path)
             .await
-            .context(ReadBindPasswordSnafu {
-                path: password_path,
-            })?;
+            .context(ReadBindUserSnafu { path: user_path })?;
+        let bind_password =
+            tokio::fs::read_to_string(&password_path)
+                .await
+                .context(ReadBindPasswordSnafu {
+                    path: password_path,
+                })?;
 
-    let ldap_url = ldap_provider
-        .endpoint_url()
-        .context(ParseLdapEndpointUrlSnafu)?;
+        Ok(Self {
+            config,
+            bind_user,
+            bind_password,
+        })
+    }
 
-    let ldap_tls = utils::tls::configure_native_tls(&ldap_provider.tls)
+    #[tracing::instrument(skip(self))]
+    pub(crate) async fn get_user_info(&self, request: &UserInfoRequest) -> Result<UserInfo, Error> {
+        let ldap_provider = self.config.to_ldap_provider();
+
+        let ldap_url = ldap_provider
+            .endpoint_url()
+            .context(ParseLdapEndpointUrlSnafu)?;
+
+        let ldap_tls = utils::tls::configure_native_tls(&ldap_provider.tls)
+            .await
+            .context(ConfigureTlsSnafu)?;
+        let (ldap_conn, mut ldap) = LdapConnAsync::with_settings(
+            LdapConnSettings::new().set_connector(ldap_tls),
+            ldap_url.as_str(),
+        )
         .await
-        .context(ConfigureTlsSnafu)?;
-    let (ldap_conn, mut ldap) = LdapConnAsync::with_settings(
-        LdapConnSettings::new().set_connector(ldap_tls),
-        ldap_url.as_str(),
-    )
-    .await
-    .context(ConnectLdapSnafu)?;
-    ldap3::drive!(ldap_conn);
+        .context(ConnectLdapSnafu)?;
+        ldap3::drive!(ldap_conn);
 
-    ldap.simple_bind(&bind_user, &bind_password)
-        .await
-        .context(RequestLdapSnafu)?
-        .success()
-        .context(BindLdapSnafu)?;
+        ldap.simple_bind(&self.bind_user, &self.bind_password)
+            .await
+            .context(RequestLdapSnafu)?
+            .success()
+            .context(BindLdapSnafu)?;
 
-    let user_id_attribute = &config.user_id_attribute;
-    let user_name_attribute = &config.user_name_attribute;
-    let user_filter = match request {
-        UserInfoRequest::UserInfoRequestById(id) => {
-            format!("{}={}", ldap_escape(user_id_attribute), ldap_escape(&id.id))
-        }
-        UserInfoRequest::UserInfoRequestByName(username) => {
-            format!(
-                "{}={}",
-                ldap_escape(user_name_attribute),
-                ldap_escape(&username.username)
+        let user_id_attribute = &self.config.user_id_attribute;
+        let user_name_attribute = &self.config.user_name_attribute;
+        let user_filter = match request {
+            UserInfoRequest::UserInfoRequestById(id) => {
+                format!("{}={}", ldap_escape(user_id_attribute), ldap_escape(&id.id))
+            }
+            UserInfoRequest::UserInfoRequestByName(username) => {
+                format!(
+                    "{}={}",
+                    ldap_escape(user_name_attribute),
+                    ldap_escape(&username.username)
+                )
+            }
+        };
+
+        let user_search_dn = &ldap_provider.search_base;
+        let requested_user_attrs = [user_id_attribute.as_str(), user_name_attribute.as_str()]
+            .into_iter()
+            .chain(
+                self.config
+                    .custom_attribute_mappings
+                    .values()
+                    .map(String::as_str),
             )
-        }
-    };
+            .collect::<Vec<&str>>();
+        tracing::debug!(
+            user_filter,
+            ?requested_user_attrs,
+            "requesting user from LDAP"
+        );
+        let user = ldap
+            .search(
+                user_search_dn,
+                Scope::Subtree,
+                &user_filter,
+                requested_user_attrs,
+            )
+            .await
+            .context(RequestLdapSnafu)?
+            .success()
+            .context(FindUserLdapSnafu)?
+            .0
+            .into_iter()
+            .next()
+            .context(UserNotFoundSnafu { request })?;
+        let user = SearchEntry::construct(user);
+        tracing::debug!(?user, "got user from LDAP");
 
-    let user_search_dn = &ldap_provider.search_base;
-    let requested_user_attrs = [user_id_attribute.as_str(), user_name_attribute.as_str()]
-        .into_iter()
-        .chain(
-            config
-                .custom_attribute_mappings
-                .values()
-                .map(String::as_str),
-        )
-        .collect::<Vec<&str>>();
-    tracing::debug!(
-        user_filter,
-        ?requested_user_attrs,
-        "requesting user from LDAP"
-    );
-    let user = ldap
-        .search(
-            user_search_dn,
-            Scope::Subtree,
-            &user_filter,
-            requested_user_attrs,
+        // Search for groups that contain this user
+        let groups = search_user_groups(&mut ldap, &user, &self.config).await?;
+
+        user_attributes(
+            user_id_attribute,
+            user_name_attribute,
+            &user,
+            groups,
+            &self.config.custom_attribute_mappings,
         )
         .await
-        .context(RequestLdapSnafu)?
-        .success()
-        .context(FindUserLdapSnafu)?
-        .0
-        .into_iter()
-        .next()
-        .context(UserNotFoundSnafu { request })?;
-    let user = SearchEntry::construct(user);
-    tracing::debug!(?user, "got user from LDAP");
-
-    // Search for groups that contain this user
-    let groups = search_user_groups(&mut ldap, &user, config).await?;
-
-    user_attributes(
-        user_id_attribute,
-        user_name_attribute,
-        &user,
-        groups,
-        &config.custom_attribute_mappings,
-    )
-    .await
+    }
 }
 
 /// Searches for groups that contain the given user.

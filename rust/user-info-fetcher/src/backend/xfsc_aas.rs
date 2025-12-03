@@ -13,6 +13,7 @@
 use std::collections::HashMap;
 
 use hyper::StatusCode;
+use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
@@ -38,6 +39,9 @@ pub enum Error {
 
     #[snafu(display("the XFSC AAS does not support querying by username, only by user ID"))]
     UserInfoByUsernameNotSupported {},
+
+    #[snafu(display("failed to construct HTTP client"))]
+    ConstructHttpClient { source: reqwest::Error },
 }
 
 impl http_error::Error for Error {
@@ -46,6 +50,7 @@ impl http_error::Error for Error {
             Self::ParseAasEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Request { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UserInfoByUsernameNotSupported { .. } => StatusCode::NOT_IMPLEMENTED,
+            Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 }
@@ -77,35 +82,53 @@ impl TryFrom<UserClaims> for UserInfo {
 /// Endpoint definition:
 /// `<https://gitlab.eclipse.org/eclipse/xfsc/authenticationauthorization/-/blob/main/service/src/main/java/eu/xfsc/aas/controller/CipController.java>`
 ///
-/// Only `UserInfoRequestById` is supported because the enpoint has no username concept.
-pub(crate) async fn get_user_info(
-    req: &UserInfoRequest,
-    http: &reqwest::Client,
-    config: &v1alpha1::AasBackend,
-) -> Result<UserInfo, Error> {
-    let v1alpha1::AasBackend { hostname, port } = config;
+/// This struct combines the CRD configuration with an HTTP client initialized at startup.
+pub struct ResolvedXfscAasBackend {
+    config: v1alpha1::AasBackend,
+    http_client: reqwest::Client,
+}
 
-    let cip_endpoint_raw = format!("http://{hostname}:{port}{API_PATH}");
-    let cip_endpoint = Url::parse(&cip_endpoint_raw).context(ParseAasEndpointUrlSnafu {
-        url: cip_endpoint_raw,
-    })?;
+impl ResolvedXfscAasBackend {
+    /// Resolves an XFSC AAS backend by initializing the HTTP client.
+    pub fn resolve(config: v1alpha1::AasBackend) -> Result<Self, Error> {
+        let http_client = ClientBuilder::new()
+            .build()
+            .context(ConstructHttpClientSnafu)?;
 
-    let subject_id = match req {
-        UserInfoRequest::UserInfoRequestById(r) => &r.id,
-        UserInfoRequest::UserInfoRequestByName(_) => UserInfoByUsernameNotSupportedSnafu.fail()?,
+        Ok(Self {
+            config,
+            http_client,
+        })
     }
-    .as_ref();
 
-    let query_parameters: HashMap<&str, &str> = [
-        (SUB_CLAIM, subject_id),
-        (SCOPE_CLAIM, OPENID_SCOPE), // we only request the openid scope because that is the only scope that the AAS supports
-    ]
-    .into();
+    /// Only `UserInfoRequestById` is supported because the endpoint has no username concept.
+    pub(crate) async fn get_user_info(&self, req: &UserInfoRequest) -> Result<UserInfo, Error> {
+        let v1alpha1::AasBackend { hostname, port } = &self.config;
 
-    let user_claims: UserClaims =
-        send_json_request(http.get(cip_endpoint).query(&query_parameters))
-            .await
-            .context(RequestSnafu)?;
+        let cip_endpoint_raw = format!("http://{hostname}:{port}{API_PATH}");
+        let cip_endpoint = Url::parse(&cip_endpoint_raw).context(ParseAasEndpointUrlSnafu {
+            url: cip_endpoint_raw,
+        })?;
 
-    user_claims.try_into()
+        let subject_id = match req {
+            UserInfoRequest::UserInfoRequestById(r) => &r.id,
+            UserInfoRequest::UserInfoRequestByName(_) => {
+                UserInfoByUsernameNotSupportedSnafu.fail()?
+            }
+        }
+        .as_ref();
+
+        let query_parameters: HashMap<&str, &str> = [
+            (SUB_CLAIM, subject_id),
+            (SCOPE_CLAIM, OPENID_SCOPE), // we only request the openid scope because that is the only scope that the AAS supports
+        ]
+        .into();
+
+        let user_claims: UserClaims =
+            send_json_request(self.http_client.get(cip_endpoint).query(&query_parameters))
+                .await
+                .context(RequestSnafu)?;
+
+        user_claims.try_into()
+    }
 }
