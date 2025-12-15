@@ -8,7 +8,12 @@ All notable changes to this project will be documented in this file.
 
 - Add support for OpenLDAP backend to user-info-fetcher ([#779]).
 
+### Changed
+
+- user-info-fetcher: Move backend initialization and credential resolution into backend-specific implementations ([#782]).
+
 [#779]: https://github.com/stackabletech/opa-operator/pull/779
+[#782]: https://github.com/stackabletech/opa-operator/pull/782
 
 ## [25.11.0] - 2025-11-07
 
