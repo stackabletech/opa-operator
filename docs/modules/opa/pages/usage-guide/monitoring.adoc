@@ -3,3 +3,9 @@
 
 The managed OPA instances are automatically configured to export Prometheus metrics.
 See xref:operators:monitoring.adoc[] for more details.
+
+You can read the list of exported metrics in the https://www.openpolicyagent.org/docs/monitoring#prometheus[OPA monitoring documentation].
+
+Especially worth mentioning are the https://www.openpolicyagent.org/docs/monitoring#status-metrics[Status metrics], which contain e.g. `opa_info`, `bundle_loaded_counter` and `bundle_failed_load_counter`.
+You can use these to create a dashboard to see any bundle loading problems at a glance.
+You can also set up alerts to get notified proactively.
