@@ -72,7 +72,7 @@ spec:
           spec:
             initContainers:
               - name: create-opa-log-dir
-                image: oci.stackable.tech/sdp/testing-tools:0.2.0-stackable0.0.0-dev
+                image: oci.stackable.tech/sdp/testing-tools:0.3.0-stackable0.0.0-dev
                 # Create the log directory for the opa container upfront
                 # to avoid a race condition between the opa and the
                 # vector container. If the vector container is
