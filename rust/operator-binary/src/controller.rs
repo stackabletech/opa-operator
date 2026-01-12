@@ -451,6 +451,7 @@ pub async fn reconcile_opa(
         OPA_CONTROLLER_NAME,
         &opa.object_ref(&()),
         ClusterResourceApplyStrategy::from(&opa.spec.cluster_operation),
+        &opa.spec.object_overrides,
     )
     .context(FailedToCreateClusterResourcesSnafu)?;
 
