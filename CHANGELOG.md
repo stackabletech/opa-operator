@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Add support for OpenLDAP backend to user-info-fetcher ([#779]).
 - Bump testing-tools to `0.3.0-stackable0.0.0-dev` ([#793]).
+- Support objectOverrides using `.spec.objectOverrides`.
+  See [objectOverrides concepts page](https://docs.stackable.tech/home/nightly/concepts/overrides/#object-overrides) for details ([#795]).
 
 ### Changed
 
@@ -16,6 +18,7 @@ All notable changes to this project will be documented in this file.
 [#779]: https://github.com/stackabletech/opa-operator/pull/779
 [#782]: https://github.com/stackabletech/opa-operator/pull/782
 [#793]: https://github.com/stackabletech/opa-operator/pull/793
+[#795]: https://github.com/stackabletech/opa-operator/pull/795
 
 ## [25.11.0] - 2025-11-07
 

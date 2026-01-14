@@ -16,6 +16,7 @@ use stackable_operator::{
         fragment::{self, Fragment, ValidationError},
         merge::Merge,
     },
+    deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::{CustomResource, ResourceExt},
     product_config_utils::Configuration,
@@ -82,11 +83,18 @@ pub mod versioned {
         /// Global OPA cluster configuration that applies to all roles and role groups.
         #[serde(default)]
         pub cluster_config: v1alpha1::OpaClusterConfig,
+
         /// Cluster operations like pause reconciliation or cluster stop.
         #[serde(default)]
         pub cluster_operation: ClusterOperation,
+
+        // Docs are on the ObjectOverrides struct
+        #[serde(default)]
+        pub object_overrides: ObjectOverrides,
+
         /// OPA server configuration.
         pub servers: Role<OpaConfigFragment, EmptyRoleConfig>,
+
         /// The OPA image to use
         pub image: ProductImage,
     }
