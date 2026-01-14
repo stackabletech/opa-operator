@@ -1,5 +1,6 @@
 use std::{io::Cursor, path::Path};
 
+use rustls_pki_types::{CertificateDer, pem::PemObject};
 use snafu::{ResultExt as _, Snafu};
 use stackable_operator::commons::tls_verification::TlsClientDetails;
 use tokio::{fs::File, io::AsyncReadExt};
@@ -13,7 +14,9 @@ pub enum Error {
     ParseCaBundleReqwest { source: reqwest::Error },
 
     #[snafu(display("failed to split ca certificate bundle"))]
-    SplitCaBundle { source: std::io::Error },
+    SplitCaBundle {
+        source: rustls_pki_types::pem::Error,
+    },
 
     #[snafu(display("failed to parse ca certificate (via native_tls)"))]
     ParseCaCertNativeTls { source: native_tls::Error },
@@ -58,11 +61,12 @@ pub async fn configure_native_tls(
     } else if let Some(tls_ca_cert_mount_path) = tls.tls_ca_cert_mount_path() {
         builder.disable_built_in_roots(true);
         // native-tls doesn't support parsing CA *bundles*, so split them using rustls first
-        for ca_cert in rustls_pemfile::certs(&mut Cursor::new(
+        let mut pem_bytes = Cursor::new(
             read_file(&tls_ca_cert_mount_path)
                 .await
                 .context(ReadCaBundleSnafu)?,
-        )) {
+        );
+        for ca_cert in CertificateDer::pem_reader_iter(&mut pem_bytes) {
             builder.add_root_certificate(
                 native_tls::Certificate::from_der(&ca_cert.context(SplitCaBundleSnafu)?)
                     .context(ParseCaCertNativeTlsSnafu)?,
