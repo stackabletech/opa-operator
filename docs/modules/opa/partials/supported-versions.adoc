@@ -2,5 +2,5 @@
 // This is a separate file, since it is used by both the direct OPA documentation, and the overarching
 // Stackable Platform documentation.
 
-* 1.8.0
-* 1.4.2 (deprecated)
+* 1.12.2
+* 1.8.0 (deprecated)
