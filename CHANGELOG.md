@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fix services for status reporting ([#799]).
+- Prevent unnecessary warning messages in the OPA logs caused by setting a service for the Prometheus status ([#799]).
 
 ### Removed
 
