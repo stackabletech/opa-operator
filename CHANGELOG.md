@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - Deprecate OPA 1.8.0 ([#797]).
 - user-info-fetcher: Move backend initialization and credential resolution into backend-specific implementations ([#782]).
 
+### Fixed
+
+- Prevent unnecessary warning messages in the OPA logs caused by setting a service for the Prometheus status ([#799]).
+
 ### Removed
 
 - Remove support for OPA 1.4.2 ([#797]).
@@ -26,6 +30,7 @@ All notable changes to this project will be documented in this file.
 [#793]: https://github.com/stackabletech/opa-operator/pull/793
 [#795]: https://github.com/stackabletech/opa-operator/pull/795
 [#797]: https://github.com/stackabletech/opa-operator/pull/797
+[#799]: https://github.com/stackabletech/opa-operator/pull/799
 
 ## [25.11.0] - 2025-11-07
 
