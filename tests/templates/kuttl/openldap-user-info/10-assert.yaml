@@ -2,5 +2,11 @@
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 timeout: 300
-commands:
-  - script: kubectl wait --for=condition=ready pod/test-openldap-0 -n $NAMESPACE --timeout=300s
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-openldap
+status:
+  readyReplicas: 1
+  replicas: 1

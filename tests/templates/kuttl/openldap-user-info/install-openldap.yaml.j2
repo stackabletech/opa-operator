@@ -1,0 +1,212 @@
+---
+apiVersion: secrets.stackable.tech/v1alpha1
+kind: SecretClass
+metadata:
+  name: ldap-tls-test-$NAMESPACE
+spec:
+  backend:
+    autoTls:
+      ca:
+        autoGenerate: true
+        secret:
+          name: ldap-tls-test-ca
+          namespace: $NAMESPACE
+---
+apiVersion: secrets.stackable.tech/v1alpha1
+kind: SecretClass
+metadata:
+  name: ldap-bind-test-$NAMESPACE
+spec:
+  backend:
+    k8sSearch:
+      searchNamespace:
+        pod: {}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: test-openldap
+  namespace: $NAMESPACE
+  labels:
+    app.kubernetes.io/name: test-openldap
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: test-openldap
+  serviceName: test-openldap
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: test-openldap
+    spec:
+      serviceAccountName: "ldap-sa"
+      containers:
+        - name: openldap
+          image: docker.io/bitnamilegacy/openldap:2.6
+          env:
+            - name: LDAP_ADMIN_USERNAME
+              value: ldapadmin
+            - name: LDAP_ADMIN_PASSWORD
+              value: ldapadminpassword
+            - name: LDAP_USERS
+              value: alice,bob
+            - name: LDAP_PASSWORDS
+              value: alice,bob
+            - name: LDAP_ALLOW_ANON_BINDING
+              value: \"no\"
+            - name: LDAP_ENABLE_TLS
+              value: \"yes\"
+            - name: LDAP_TLS_CERT_FILE
+              value: /tls/tls.crt
+            - name: LDAP_TLS_KEY_FILE
+              value: /tls/tls.key
+            - name: LDAP_TLS_CA_FILE
+              value: /tls/ca.crt
+          ports:
+            - name: ldap
+              containerPort: 1389
+            - name: tls-ldap
+              containerPort: 1636
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+            - name: ldif-data
+              mountPath: /tmp/ldifs
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          startupProbe:
+            tcpSocket:
+              port: 1389
+          readinessProbe:
+            tcpSocket:
+              port: 1389
+          # See https://github.com/bitnami/containers/issues/40841#issuecomment-1649977191
+          securityContext:
+            capabilities:
+              drop:
+              - ALL
+              add:
+              - NET_BIND_SERVICE
+      volumes:
+        - name: ldif-data
+          configMap:
+            name: openldap-ldif-data
+        - name: tls
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                annotations:
+                  secrets.stackable.tech/class: ldap-tls-test-$NAMESPACE
+                  secrets.stackable.tech/scope: pod
+              spec:
+                storageClassName: secrets.stackable.tech
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-openldap
+  namespace: $NAMESPACE
+  labels:
+    app.kubernetes.io/name: test-openldap
+spec:
+  type: ClusterIP
+  ports:
+    - name: ldap
+      port: 1389
+      targetPort: ldap
+    - name: tls-ldap
+      port: 1636
+      targetPort: tls-ldap
+  selector:
+    app.kubernetes.io/name: test-openldap
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openldap-bind-credentials
+  namespace: $NAMESPACE
+  labels:
+    secrets.stackable.tech/class: ldap-bind-test-$NAMESPACE
+stringData:
+  user: cn=ldapadmin,dc=example,dc=org
+  password: ldapadminpassword
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ldap-sa
+  namespace: $NAMESPACE
+{% if test_scenario['values']['openshift'] == 'true' %}
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: use-integration-tests-scc
+  namespace: $NAMESPACE
+rules:
+- apiGroups: ["security.openshift.io"]
+  resources: ["securitycontextconstraints"]
+  resourceNames: ["privileged"]
+  verbs: ["use"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: use-integration-tests-scc
+  namespace: $NAMESPACE
+subjects:
+  - kind: ServiceAccount
+    name: ldap-sa
+roleRef:
+  kind: Role
+  name: use-integration-tests-scc
+  apiGroup: rbac.authorization.k8s.io
+{% endif %}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openldap-ldif-data
+  namespace: $NAMESPACE
+data:
+  add-groups.ldif: |
+    dn: ou=posixgroups,dc=example,dc=org
+    objectClass: organizationalUnit
+    ou: posixgroups
+
+    # Create groupOfNames groups (DN-based membership)
+    dn: cn=admins,ou=groups,dc=example,dc=org
+    objectClass: groupOfNames
+    cn: admins
+    member: cn=alice,ou=users,dc=example,dc=org
+
+    dn: cn=developers,ou=groups,dc=example,dc=org
+    objectClass: groupOfNames
+    cn: developers
+    member: cn=alice,ou=users,dc=example,dc=org
+    member: cn=bob,ou=users,dc=example,dc=org
+
+    # Create posixGroup groups (username-based membership)
+    dn: cn=posix-admins,ou=posixgroups,dc=example,dc=org
+    objectClass: posixGroup
+    cn: posix-admins
+    gidNumber: 5001
+    memberUid: alice
+
+    dn: cn=posix-developers,ou=posixgroups,dc=example,dc=org
+    objectClass: posixGroup
+    cn: posix-developers
+    gidNumber: 5002
+    memberUid: alice
+    memberUid: bob
