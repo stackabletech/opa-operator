@@ -36,6 +36,7 @@ pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";
+pub const FIELD_MANAGER: &str = "opa-operator";
 
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
 /// Safety puffer to guarantee the graceful shutdown works every time.
