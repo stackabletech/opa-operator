@@ -591,6 +591,20 @@ spec:
                       nullable: true
                       type: string
                   type: object
+                objectOverrides:
+                  default: []
+                  description: |-
+                    A list of generic Kubernetes objects, which are merged into the objects that the operator
+                    creates.
+
+                    List entries are arbitrary YAML objects, which need to be valid Kubernetes objects.
+
+                    Read the [Object overrides documentation](https://docs.stackable.tech/home/nightly/concepts/overrides#object-overrides)
+                    for more information.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
                 servers:
                   description: OPA server configuration.
                   properties:
@@ -668,12 +682,11 @@ spec:
                                           - ERROR
                                           - FATAL
                                           - NONE
-                                          - null
                                         nullable: true
                                         type: string
                                     type: object
                                   custom:
-                                    description: Custom log configuration provided in a ConfigMap
+                                    description: Log configuration provided in a ConfigMap
                                     properties:
                                       configMap:
                                         description: ConfigMap containing the log configuration files
@@ -696,7 +709,6 @@ spec:
                                           - ERROR
                                           - FATAL
                                           - NONE
-                                          - null
                                         nullable: true
                                         type: string
                                     type: object
@@ -716,7 +728,6 @@ spec:
                                             - ERROR
                                             - FATAL
                                             - NONE
-                                            - null
                                           nullable: true
                                           type: string
                                       type: object
@@ -905,12 +916,11 @@ spec:
                                                 - ERROR
                                                 - FATAL
                                                 - NONE
-                                                - null
                                               nullable: true
                                               type: string
                                           type: object
                                         custom:
-                                          description: Custom log configuration provided in a ConfigMap
+                                          description: Log configuration provided in a ConfigMap
                                           properties:
                                             configMap:
                                               description: ConfigMap containing the log configuration files
@@ -933,7 +943,6 @@ spec:
                                                 - ERROR
                                                 - FATAL
                                                 - NONE
-                                                - null
                                               nullable: true
                                               type: string
                                           type: object
@@ -953,7 +962,6 @@ spec:
                                                   - ERROR
                                                   - FATAL
                                                   - NONE
-                                                  - null
                                                 nullable: true
                                                 type: string
                                             type: object
@@ -1699,6 +1707,20 @@ spec:
                       nullable: true
                       type: string
                   type: object
+                objectOverrides:
+                  default: []
+                  description: |-
+                    A list of generic Kubernetes objects, which are merged into the objects that the operator
+                    creates.
+
+                    List entries are arbitrary YAML objects, which need to be valid Kubernetes objects.
+
+                    Read the [Object overrides documentation](https://docs.stackable.tech/home/nightly/concepts/overrides#object-overrides)
+                    for more information.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  type: array
                 servers:
                   description: OPA server configuration.
                   properties:
@@ -1776,12 +1798,11 @@ spec:
                                           - ERROR
                                           - FATAL
                                           - NONE
-                                          - null
                                         nullable: true
                                         type: string
                                     type: object
                                   custom:
-                                    description: Custom log configuration provided in a ConfigMap
+                                    description: Log configuration provided in a ConfigMap
                                     properties:
                                       configMap:
                                         description: ConfigMap containing the log configuration files
@@ -1804,7 +1825,6 @@ spec:
                                           - ERROR
                                           - FATAL
                                           - NONE
-                                          - null
                                         nullable: true
                                         type: string
                                     type: object
@@ -1824,7 +1844,6 @@ spec:
                                             - ERROR
                                             - FATAL
                                             - NONE
-                                            - null
                                           nullable: true
                                           type: string
                                       type: object
@@ -2013,12 +2032,11 @@ spec:
                                                 - ERROR
                                                 - FATAL
                                                 - NONE
-                                                - null
                                               nullable: true
                                               type: string
                                           type: object
                                         custom:
-                                          description: Custom log configuration provided in a ConfigMap
+                                          description: Log configuration provided in a ConfigMap
                                           properties:
                                             configMap:
                                               description: ConfigMap containing the log configuration files
@@ -2041,7 +2059,6 @@ spec:
                                                 - ERROR
                                                 - FATAL
                                                 - NONE
-                                                - null
                                               nullable: true
                                               type: string
                                           type: object
@@ -2061,7 +2078,6 @@ spec:
                                                   - ERROR
                                                   - FATAL
                                                   - NONE
-                                                  - null
                                                 nullable: true
                                                 type: string
                                             type: object

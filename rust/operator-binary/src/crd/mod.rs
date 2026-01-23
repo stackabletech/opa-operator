@@ -16,6 +16,7 @@ use stackable_operator::{
         fragment::{self, Fragment, ValidationError},
         merge::Merge,
     },
+    deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::{CustomResource, ResourceExt},
     product_config_utils::Configuration,
@@ -86,6 +87,10 @@ pub mod versioned {
         /// Cluster operations like pause reconciliation or cluster stop.
         #[serde(default)]
         pub cluster_operation: ClusterOperation,
+
+        // Docs are on the ObjectOverrides struct
+        #[serde(default)]
+        pub object_overrides: ObjectOverrides,
 
         /// OPA server configuration.
         // #[versioned(hint(role))]
