@@ -11,7 +11,7 @@ use futures::{FutureExt, future, pin_mut};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
 use tokio::net::TcpListener;
 
@@ -111,37 +111,37 @@ async fn read_config_file(path: &Path) -> Result<String, StartupError> {
 /// This function reads credentials from the filesystem once at startup and returns a backend that
 /// contains both the configuration and the resolved credentials.
 async fn resolve_backend(
-    backend: v1alpha1::Backend,
+    backend: v1alpha2::Backend,
     credentials_dir: &Path,
 ) -> Result<ResolvedBackend, StartupError> {
     match backend {
-        v1alpha1::Backend::None {} => Ok(ResolvedBackend::None),
-        v1alpha1::Backend::Keycloak(config) => {
+        v1alpha2::Backend::None {} => Ok(ResolvedBackend::None),
+        v1alpha2::Backend::Keycloak(config) => {
             let resolved =
                 backend::keycloak::ResolvedKeycloakBackend::resolve(config, credentials_dir)
                     .await
                     .context(ResolveKeycloakBackendSnafu)?;
             Ok(ResolvedBackend::Keycloak(resolved))
         }
-        v1alpha1::Backend::ExperimentalXfscAas(config) => {
+        v1alpha2::Backend::ExperimentalXfscAas(config) => {
             let resolved = backend::xfsc_aas::ResolvedXfscAasBackend::resolve(config)
                 .context(ResolveXfscAasBackendSnafu)?;
             Ok(ResolvedBackend::ExperimentalXfscAas(resolved))
         }
-        v1alpha1::Backend::ActiveDirectory(config) => Ok(ResolvedBackend::ActiveDirectory {
+        v1alpha2::Backend::ActiveDirectory(config) => Ok(ResolvedBackend::ActiveDirectory {
             ldap_server: config.ldap_server,
             tls: config.tls,
             base_distinguished_name: config.base_distinguished_name,
             custom_attribute_mappings: config.custom_attribute_mappings,
             additional_group_attribute_filters: config.additional_group_attribute_filters,
         }),
-        v1alpha1::Backend::Entra(config) => {
+        v1alpha2::Backend::Entra(config) => {
             let resolved = backend::entra::ResolvedEntraBackend::resolve(config, credentials_dir)
                 .await
                 .context(ResolveEntraBackendSnafu)?;
             Ok(ResolvedBackend::Entra(resolved))
         }
-        v1alpha1::Backend::OpenLdap(config) => {
+        v1alpha2::Backend::OpenLdap(config) => {
             let resolved = backend::openldap::ResolvedOpenLdapBackend::resolve(config)
                 .await
                 .context(ResolveOpenLdapBackendSnafu)?;
@@ -184,13 +184,13 @@ async fn main() -> Result<(), StartupError> {
         }
     };
 
-    let config: v1alpha1::Config =
+    let config: v1alpha2::Config =
         serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?;
 
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
 
     let user_info_cache = {
-        let v1alpha1::Cache { entry_time_to_live } = config.cache;
+        let v1alpha2::Cache { entry_time_to_live } = config.cache;
         Cache::builder()
             .name("user-info")
             .time_to_live(*entry_time_to_live)

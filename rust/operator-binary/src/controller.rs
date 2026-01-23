@@ -10,9 +10,6 @@ use product_config::{ProductConfigManager, types::PropertyNameKind};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_operator::crd::{
-    APP_NAME, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME, user_info_fetcher, v1alpha1,
-};
 use stackable_operator::{
     builder::{
         self,
@@ -75,6 +72,10 @@ use stackable_operator::{
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
+    crd::{
+        APP_NAME, Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
+        OpaClusterStatus, OpaConfig, OpaRole, user_info_fetcher, v1alpha2,
+    },
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
     product_logging::{BundleBuilderLogLevel, extend_role_group_config_map},
@@ -172,9 +173,7 @@ pub enum Error {
     NoName,
 
     #[snafu(display("internal operator failure"))]
-    InternalOperatorFailure {
-        source: stackable_opa_operator::crd::Error,
-    },
+    InternalOperatorFailure { source: crate::crd::Error },
 
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
@@ -184,31 +183,31 @@ pub enum Error {
     #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
         source: stackable_operator::cluster_resources::Error,
-        rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
+        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
     },
 
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
         source: stackable_operator::builder::configmap::Error,
-        rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
+        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
     },
 
     #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
         source: stackable_operator::cluster_resources::Error,
-        rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
+        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
     },
 
     #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::cluster_resources::Error,
-        rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
+        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
     },
 
     #[snafu(display("failed to apply patch for DaemonSet for [{rolegroup}]"))]
     ApplyPatchRoleGroupDaemonSet {
         source: stackable_operator::client::Error,
-        rolegroup: RoleGroupRef<v1alpha1::OpaCluster>,
+        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
     },
 
     #[snafu(display("failed to patch service account"))]
@@ -250,9 +249,7 @@ pub enum Error {
     },
 
     #[snafu(display("failed to resolve and merge config for role and role group"))]
-    FailedToResolveConfig {
-        source: stackable_opa_operator::crd::Error,
-    },
+    FailedToResolveConfig { source: crate::crd::Error },
 
     #[snafu(display("illegal container name"))]
     IllegalContainerName {
@@ -426,7 +423,7 @@ struct OpaClusterConfigStatus {
 }
 
 pub async fn reconcile_opa(
-    opa: Arc<DeserializeGuard<v1alpha1::OpaCluster>>,
+    opa: Arc<DeserializeGuard<v1alpha2::OpaCluster>>,
     ctx: Arc<Ctx>,
 ) -> Result<Action> {
     tracing::info!("Starting reconcile");
@@ -443,7 +440,7 @@ pub async fn reconcile_opa(
         .image
         .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION)
         .context(ResolveProductImageSnafu)?;
-    let opa_role = v1alpha1::OpaRole::Server;
+    let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
         APP_NAME,
@@ -610,7 +607,7 @@ pub async fn reconcile_opa(
     let cluster_operation_cond_builder =
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
-    let status = v1alpha1::OpaClusterStatus {
+    let status = OpaClusterStatus {
         conditions: compute_conditions(opa, &[&ds_cond_builder, &cluster_operation_cond_builder]),
     };
 
@@ -629,10 +626,10 @@ pub async fn reconcile_opa(
 
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the administrator
 fn build_server_rolegroup_config_map(
-    opa: &v1alpha1::OpaCluster,
+    opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
-    merged_config: &v1alpha1::OpaConfig,
+    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
+    merged_config: &OpaConfig,
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
@@ -681,7 +678,7 @@ fn add_stackable_rust_cli_env_vars(
     container_builder: &mut ContainerBuilder,
     cluster_info: &KubernetesClusterInfo,
     log_level: impl Into<String>,
-    container: &v1alpha1::Container,
+    container: &Container,
 ) {
     let log_level = log_level.into();
     container_builder
@@ -721,12 +718,12 @@ fn add_stackable_rust_cli_env_vars(
 /// policy queries (which are often chained in serial, and block other tasks in the products).
 #[allow(clippy::too_many_arguments)]
 fn build_server_rolegroup_daemonset(
-    opa: &v1alpha1::OpaCluster,
+    opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    opa_role: &v1alpha1::OpaRole,
-    rolegroup_ref: &RoleGroupRef<v1alpha1::OpaCluster>,
+    opa_role: &OpaRole,
+    rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
-    merged_config: &v1alpha1::OpaConfig,
+    merged_config: &OpaConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
@@ -751,15 +748,15 @@ fn build_server_rolegroup_daemonset(
 
     let mut pb = PodBuilder::new();
 
-    let prepare_container_name = v1alpha1::Container::Prepare.to_string();
+    let prepare_container_name = Container::Prepare.to_string();
     let mut cb_prepare =
         ContainerBuilder::new(&prepare_container_name).context(IllegalContainerNameSnafu)?;
 
-    let bundle_builder_container_name = v1alpha1::Container::BundleBuilder.to_string();
+    let bundle_builder_container_name = Container::BundleBuilder.to_string();
     let mut cb_bundle_builder =
         ContainerBuilder::new(&bundle_builder_container_name).context(IllegalContainerNameSnafu)?;
 
-    let opa_container_name = v1alpha1::Container::Opa.to_string();
+    let opa_container_name = Container::Opa.to_string();
     let mut cb_opa =
         ContainerBuilder::new(&opa_container_name).context(IllegalContainerNameSnafu)?;
 
@@ -832,8 +829,8 @@ fn build_server_rolegroup_daemonset(
     add_stackable_rust_cli_env_vars(
         &mut cb_bundle_builder,
         cluster_info,
-        sidecar_container_log_level(merged_config, &v1alpha1::Container::BundleBuilder).to_string(),
-        &v1alpha1::Container::BundleBuilder,
+        sidecar_container_log_level(merged_config, &Container::BundleBuilder).to_string(),
+        &Container::BundleBuilder,
     );
 
     cb_opa
@@ -992,15 +989,14 @@ fn build_server_rolegroup_daemonset(
         add_stackable_rust_cli_env_vars(
             &mut cb_user_info_fetcher,
             cluster_info,
-            sidecar_container_log_level(merged_config, &v1alpha1::Container::UserInfoFetcher)
-                .to_string(),
-            &v1alpha1::Container::UserInfoFetcher,
+            sidecar_container_log_level(merged_config, &Container::UserInfoFetcher).to_string(),
+            &Container::UserInfoFetcher,
         );
 
         match &user_info.backend {
-            user_info_fetcher::v1alpha1::Backend::None {} => {}
-            user_info_fetcher::v1alpha1::Backend::ExperimentalXfscAas(_) => {}
-            user_info_fetcher::v1alpha1::Backend::ActiveDirectory(ad) => {
+            user_info_fetcher::v1alpha2::Backend::None {} => {}
+            user_info_fetcher::v1alpha2::Backend::ExperimentalXfscAas(_) => {}
+            user_info_fetcher::v1alpha2::Backend::ActiveDirectory(ad) => {
                 pb.add_volume(
                     SecretClassVolume::new(
                         ad.kerberos_secret_class_name.clone(),
@@ -1034,7 +1030,7 @@ fn build_server_rolegroup_daemonset(
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                     .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
-            user_info_fetcher::v1alpha1::Backend::Keycloak(keycloak) => {
+            user_info_fetcher::v1alpha2::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
                         .secret(SecretVolumeSource {
@@ -1055,7 +1051,7 @@ fn build_server_rolegroup_daemonset(
                     .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                     .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
-            user_info_fetcher::v1alpha1::Backend::Entra(entra) => {
+            user_info_fetcher::v1alpha2::Backend::Entra(entra) => {
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
                         .secret(SecretVolumeSource {
@@ -1078,7 +1074,7 @@ fn build_server_rolegroup_daemonset(
                 .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
                 .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
             }
-            user_info_fetcher::v1alpha1::Backend::OpenLdap(openldap) => {
+            user_info_fetcher::v1alpha2::Backend::OpenLdap(openldap) => {
                 // Reuse the logic from the LDAP `AuthenticationProvider` which handles
                 // volume mounting of TLS secrets and LDAP bind credentials
                 openldap
@@ -1099,10 +1095,7 @@ fn build_server_rolegroup_daemonset(
                         resolved_product_image,
                         CONFIG_VOLUME_NAME,
                         LOG_VOLUME_NAME,
-                        merged_config
-                            .logging
-                            .containers
-                            .get(&v1alpha1::Container::Vector),
+                        merged_config.logging.containers.get(&Container::Vector),
                         ResourceRequirementsBuilder::new()
                             .with_cpu_request("250m")
                             .with_cpu_limit("500m")
@@ -1165,7 +1158,7 @@ fn build_server_rolegroup_daemonset(
 }
 
 pub fn error_policy(
-    _obj: Arc<DeserializeGuard<v1alpha1::OpaCluster>>,
+    _obj: Arc<DeserializeGuard<v1alpha2::OpaCluster>>,
     error: &Error,
     _ctx: Arc<Ctx>,
 ) -> Action {
@@ -1177,15 +1170,12 @@ pub fn error_policy(
     }
 }
 
-fn build_config_file(merged_config: &v1alpha1::OpaConfig) -> String {
+fn build_config_file(merged_config: &OpaConfig) -> String {
     let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config
-        .logging
-        .containers
-        .get(&v1alpha1::Container::Opa)
+    }) = merged_config.logging.containers.get(&Container::Opa)
     {
         if let Some(config) = log_config.loggers.get("decision") {
             decision_logging_enabled = config.level != LogLevel::NONE;
@@ -1206,7 +1196,7 @@ fn build_config_file(merged_config: &v1alpha1::OpaConfig) -> String {
 }
 
 fn build_opa_start_command(
-    merged_config: &v1alpha1::OpaConfig,
+    merged_config: &OpaConfig,
     container_name: &str,
     tls_enabled: bool,
 ) -> String {
@@ -1217,10 +1207,7 @@ fn build_opa_start_command(
 
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config
-        .logging
-        .containers
-        .get(&v1alpha1::Container::Opa)
+    }) = merged_config.logging.containers.get(&Container::Opa)
     {
         if let Some(AppenderConfig {
             level: Some(log_level),
@@ -1289,10 +1276,7 @@ fn build_opa_start_command(
     }
 }
 
-fn build_bundle_builder_start_command(
-    merged_config: &v1alpha1::OpaConfig,
-    container_name: &str,
-) -> String {
+fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
     let mut console_logging_off = false;
 
     // We need to check if the console logging is deactivated (NONE)
@@ -1302,7 +1286,7 @@ fn build_bundle_builder_start_command(
     }) = merged_config
         .logging
         .containers
-        .get(&v1alpha1::Container::BundleBuilder)
+        .get(&Container::BundleBuilder)
     {
         if let Some(AppenderConfig {
             level: Some(log_level),
@@ -1357,8 +1341,8 @@ fn build_bundle_builder_start_command(
 ///
 /// Context: https://docs.stackable.tech/home/stable/concepts/logging/
 fn sidecar_container_log_level(
-    merged_config: &v1alpha1::OpaConfig,
-    sidecar_container: &v1alpha1::Container,
+    merged_config: &OpaConfig,
+    sidecar_container: &Container,
 ) -> BundleBuilderLogLevel {
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
@@ -1375,17 +1359,11 @@ fn sidecar_container_log_level(
     BundleBuilderLogLevel::Info
 }
 
-fn build_prepare_start_command(
-    merged_config: &v1alpha1::OpaConfig,
-    container_name: &str,
-) -> Vec<String> {
+fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) -> Vec<String> {
     let mut prepare_container_args = vec![];
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config
-        .logging
-        .containers
-        .get(&v1alpha1::Container::Prepare)
+    }) = merged_config.logging.containers.get(&Container::Prepare)
     {
         prepare_container_args.push(product_logging::framework::capture_shell_output(
             STACKABLE_LOG_DIR,
