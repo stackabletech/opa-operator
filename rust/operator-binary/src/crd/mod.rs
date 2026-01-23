@@ -60,33 +60,37 @@ pub enum Error {
 
 #[versioned(
     version(name = "v1alpha1"),
+    version(name = "v1alpha2"),
     crates(
         kube_core = "stackable_operator::kube::core",
         kube_client = "stackable_operator::kube::client",
         k8s_openapi = "stackable_operator::k8s_openapi",
         schemars = "stackable_operator::schemars",
         versioned = "stackable_operator::versioned"
-    ),
-    skip(from)
+    )
 )]
 pub mod versioned {
     #[versioned(crd(
         group = "opa.stackable.tech",
         status = "OpaClusterStatus",
-        namespaced,
         shortname = "opa",
+        namespaced,
     ))]
     #[derive(Clone, Debug, Deserialize, CustomResource, JsonSchema, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct OpaClusterSpec {
         /// Global OPA cluster configuration that applies to all roles and role groups.
         #[serde(default)]
-        pub cluster_config: v1alpha1::OpaClusterConfig,
+        pub cluster_config: OpaClusterConfig,
+
         /// Cluster operations like pause reconciliation or cluster stop.
         #[serde(default)]
         pub cluster_operation: ClusterOperation,
+
         /// OPA server configuration.
+        // #[versioned(hint(role))]
         pub servers: Role<OpaConfigFragment, EmptyRoleConfig>,
+
         /// The OPA image to use
         pub image: ProductImage,
     }
@@ -98,6 +102,7 @@ pub mod versioned {
         /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
         #[serde(skip_serializing_if = "Option::is_none")]
         pub vector_aggregator_config_map_name: Option<String>,
+
         /// This field controls which type of Service the operator creates for this OpaCluster:
         ///
         /// * cluster-internal: Use a ClusterIP service
@@ -110,16 +115,26 @@ pub mod versioned {
         /// In the future, this setting will control which ListenerClass <https://docs.stackable.tech/home/stable/listener-operator/listenerclass.html>
         /// will be used to expose the service, and ListenerClass names will stay the same, allowing for a non-breaking change.
         #[serde(default)]
-        pub listener_class: v1alpha1::CurrentlySupportedListenerClasses,
+        pub listener_class: CurrentlySupportedListenerClasses,
+
         /// Configures how to fetch additional metadata about users (such as group memberships)
         /// from an external directory service.
+        #[versioned(
+            changed(
+                since = "v1alpha2",
+                from_type = "Option<user_info_fetcher::v1alpha1::Config>"
+            ),
+            hint(option)
+        )]
         #[serde(default)]
-        pub user_info: Option<user_info_fetcher::v1alpha1::Config>,
+        pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
+
         /// TLS encryption settings for the OPA server.
         /// When configured, OPA will use HTTPS (port 8443) instead of HTTP (port 8081).
         /// Clients must connect using HTTPS and trust the certificates provided by the configured SecretClass.
         #[serde(default)]
-        pub tls: Option<v1alpha1::OpaTls>,
+        #[versioned(hint(option))]
+        pub tls: Option<OpaTls>,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -141,126 +156,129 @@ pub mod versioned {
         #[serde(rename = "external-stable")]
         ExternalStable,
     }
-
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
-    #[fragment_attrs(
-        allow(clippy::derive_partial_eq_without_eq),
-        derive(
-            Clone,
-            Debug,
-            Default,
-            Deserialize,
-            Merge,
-            JsonSchema,
-            PartialEq,
-            Serialize
-        ),
-        serde(rename_all = "camelCase")
-    )]
-    pub struct OpaStorageConfig {}
-
-    #[derive(
-        Clone,
-        Debug,
-        Deserialize,
-        Display,
-        Eq,
-        EnumIter,
-        JsonSchema,
-        Ord,
-        PartialEq,
-        PartialOrd,
-        Serialize,
-    )]
-    #[serde(rename_all = "kebab-case")]
-    #[strum(serialize_all = "kebab-case")]
-    pub enum Container {
-        Prepare,
-        Vector,
-        BundleBuilder,
-        Opa,
-        UserInfoFetcher,
-    }
-
-    #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
-    #[fragment_attrs(
-        derive(
-            Clone,
-            Debug,
-            Default,
-            Deserialize,
-            Merge,
-            JsonSchema,
-            PartialEq,
-            Serialize
-        ),
-        serde(rename_all = "camelCase")
-    )]
-    pub struct OpaConfig {
-        #[fragment_attrs(serde(default))]
-        pub resources: Resources<v1alpha1::OpaStorageConfig, NoRuntimeLimits>,
-
-        #[fragment_attrs(serde(default))]
-        pub logging: Logging<v1alpha1::Container>,
-
-        #[fragment_attrs(serde(default))]
-        pub affinity: StackableAffinity,
-
-        /// Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.
-        #[fragment_attrs(serde(default))]
-        pub graceful_shutdown_timeout: Option<Duration>,
-    }
-
-    #[derive(
-        EnumIter,
-        Clone,
-        Debug,
-        Hash,
-        Deserialize,
-        Eq,
-        JsonSchema,
-        PartialEq,
-        Serialize,
-        Display,
-        EnumString,
-    )]
-    pub enum OpaRole {
-        #[serde(rename = "server")]
-        #[strum(serialize = "server")]
-        Server,
-    }
-
-    #[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-    #[serde(rename_all = "camelCase")]
-    pub struct OpaClusterStatus {
-        #[serde(default)]
-        pub conditions: Vec<ClusterCondition>,
-    }
 }
 
-impl v1alpha1::CurrentlySupportedListenerClasses {
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
+#[fragment_attrs(
+    allow(clippy::derive_partial_eq_without_eq),
+    derive(
+        Clone,
+        Debug,
+        Default,
+        Deserialize,
+        Merge,
+        JsonSchema,
+        PartialEq,
+        Serialize
+    ),
+    serde(rename_all = "camelCase")
+)]
+pub struct OpaStorageConfig {}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    EnumIter,
+    JsonSchema,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum Container {
+    Prepare,
+    Vector,
+    BundleBuilder,
+    Opa,
+    UserInfoFetcher,
+}
+
+// NOTE (@Techassi): This struct can currently NOT be versioned because it is used via Role which
+// makes it incredible hard to implement the From trait for conversions.
+#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
+#[fragment_attrs(
+    derive(
+        Clone,
+        Debug,
+        Default,
+        Deserialize,
+        Merge,
+        JsonSchema,
+        PartialEq,
+        Serialize
+    ),
+    serde(rename_all = "camelCase")
+)]
+pub struct OpaConfig {
+    #[fragment_attrs(serde(default))]
+    pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
+
+    #[fragment_attrs(serde(default))]
+    pub logging: Logging<Container>,
+
+    #[fragment_attrs(serde(default))]
+    pub affinity: StackableAffinity,
+
+    /// Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.
+    #[fragment_attrs(serde(default))]
+    pub graceful_shutdown_timeout: Option<Duration>,
+}
+
+#[derive(
+    EnumIter,
+    Clone,
+    Debug,
+    Hash,
+    Deserialize,
+    Eq,
+    JsonSchema,
+    PartialEq,
+    Serialize,
+    Display,
+    EnumString,
+)]
+pub enum OpaRole {
+    #[serde(rename = "server")]
+    #[strum(serialize = "server")]
+    Server,
+}
+
+// TODO (@Techassi): Support versioned status
+#[derive(Clone, Default, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaClusterStatus {
+    #[serde(default)]
+    pub conditions: Vec<ClusterCondition>,
+}
+
+impl v1alpha2::CurrentlySupportedListenerClasses {
     pub fn k8s_service_type(&self) -> String {
         match self {
-            v1alpha1::CurrentlySupportedListenerClasses::ClusterInternal => "ClusterIP".to_string(),
-            v1alpha1::CurrentlySupportedListenerClasses::ExternalUnstable => "NodePort".to_string(),
-            v1alpha1::CurrentlySupportedListenerClasses::ExternalStable => {
+            v1alpha2::CurrentlySupportedListenerClasses::ClusterInternal => "ClusterIP".to_string(),
+            v1alpha2::CurrentlySupportedListenerClasses::ExternalUnstable => "NodePort".to_string(),
+            v1alpha2::CurrentlySupportedListenerClasses::ExternalStable => {
                 "LoadBalancer".to_string()
             }
         }
     }
 }
 
-impl v1alpha1::OpaClusterConfig {
+impl v1alpha2::OpaClusterConfig {
     /// Returns whether TLS encryption is enabled for the OPA server.
     pub fn tls_enabled(&self) -> bool {
         self.tls.is_some()
     }
 }
 
-impl v1alpha1::OpaConfig {
-    fn default_config() -> v1alpha1::OpaConfigFragment {
-        v1alpha1::OpaConfigFragment {
+impl OpaConfig {
+    fn default_config() -> OpaConfigFragment {
+        OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
                 cpu: CpuLimitsFragment {
@@ -271,7 +289,7 @@ impl v1alpha1::OpaConfig {
                     limit: Some(Quantity("256Mi".to_owned())),
                     runtime_limits: NoRuntimeLimitsFragment {},
                 },
-                storage: v1alpha1::OpaStorageConfigFragment {},
+                storage: OpaStorageConfigFragment {},
             },
             // There is no point in having a default affinity, as exactly one OPA Pods should run on every node.
             // We only have the affinity configurable to let users limit the nodes the OPA Pods run on.
@@ -281,8 +299,8 @@ impl v1alpha1::OpaConfig {
     }
 }
 
-impl Configuration for v1alpha1::OpaConfigFragment {
-    type Configurable = v1alpha1::OpaCluster;
+impl Configuration for OpaConfigFragment {
+    type Configurable = v1alpha2::OpaCluster;
 
     fn compute_env(
         &self,
@@ -313,28 +331,23 @@ impl Configuration for v1alpha1::OpaConfigFragment {
     }
 }
 
-impl v1alpha1::OpaCluster {
+impl v1alpha2::OpaCluster {
     /// Returns a reference to the role.
-    pub fn role(
-        &self,
-        role_variant: &v1alpha1::OpaRole,
-    ) -> &Role<v1alpha1::OpaConfigFragment, EmptyRoleConfig> {
+    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment, EmptyRoleConfig> {
         match role_variant {
-            v1alpha1::OpaRole::Server => &self.spec.servers,
+            OpaRole::Server => &self.spec.servers,
         }
     }
 
     /// Returns a reference to the role group. Raises an error if the role or role group are not defined.
     pub fn rolegroup(
         &self,
-        rolegroup_ref: &RoleGroupRef<v1alpha1::OpaCluster>,
-    ) -> Result<&RoleGroup<v1alpha1::OpaConfigFragment, GenericProductSpecificCommonConfig>, Error>
-    {
-        let role_variant = v1alpha1::OpaRole::from_str(&rolegroup_ref.role).with_context(|_| {
-            UnknownOpaRoleSnafu {
+        rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
+    ) -> Result<&RoleGroup<OpaConfigFragment, GenericProductSpecificCommonConfig>, Error> {
+        let role_variant =
+            OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
                 role: rolegroup_ref.role.to_owned(),
-            }
-        })?;
+            })?;
         let role = self.role(&role_variant);
         role.role_groups
             .get(&rolegroup_ref.role_group)
@@ -348,7 +361,7 @@ impl v1alpha1::OpaCluster {
         format!(
             "{cluster_name}-{role}",
             cluster_name = self.name_any(),
-            role = v1alpha1::OpaRole::Server
+            role = OpaRole::Server
         )
     }
 
@@ -365,14 +378,14 @@ impl v1alpha1::OpaCluster {
     /// Retrieve and merge resource configs for role and role groups
     pub fn merged_config(
         &self,
-        role: &v1alpha1::OpaRole,
-        rolegroup_ref: &RoleGroupRef<v1alpha1::OpaCluster>,
-    ) -> Result<v1alpha1::OpaConfig, Error> {
+        role: &OpaRole,
+        rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
+    ) -> Result<OpaConfig, Error> {
         // Initialize the result with all default values as baseline
-        let conf_defaults = v1alpha1::OpaConfig::default_config();
+        let conf_defaults = OpaConfig::default_config();
 
         let opa_role = match role {
-            v1alpha1::OpaRole::Server => &self.spec.servers,
+            OpaRole::Server => &self.spec.servers,
         };
 
         let mut conf_role = opa_role.config.config.to_owned();
@@ -401,7 +414,7 @@ impl v1alpha1::OpaCluster {
     }
 }
 
-impl HasStatusCondition for v1alpha1::OpaCluster {
+impl HasStatusCondition for v1alpha2::OpaCluster {
     fn conditions(&self) -> Vec<ClusterCondition> {
         match &self.status {
             Some(status) => status.conditions.clone(),
