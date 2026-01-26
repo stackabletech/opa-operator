@@ -187,7 +187,7 @@ The above is to accommodate for different Active Directory user management strat
 [#backend-entra]
 === Entra
 
-WARNING: The Entra backend is experimental, and subject to change.
+NOTE: The Entra backend was marked as non-experimental in SDP 26.3.0.
 
 Fetch groups but not roles for a user from Entra.
 
@@ -199,7 +199,7 @@ spec:
   clusterConfig:
     userInfo:
       backend:
-        experimentalEntra: # <1>
+        entra: # <1>
           tenantId: 00000000-0000-0000-0000-000000000000 # <2>
           clientCredentialsSecret: user-info-fetcher-client-credentials # <3>
 ----
