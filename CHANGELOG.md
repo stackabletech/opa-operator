@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Bump testing-tools to `0.3.0-stackable0.0.0-dev` ([#793]).
 - Support objectOverrides using `.spec.objectOverrides`.
   See [objectOverrides concepts page](https://docs.stackable.tech/home/nightly/concepts/overrides/#object-overrides) for details ([#795]).
+- Support `cliOverrides` to allow customization of OPA command-line arguments at role and rolegroup levels ([#803]).
 
 ### Changed
 
@@ -31,6 +32,7 @@ All notable changes to this project will be documented in this file.
 [#795]: https://github.com/stackabletech/opa-operator/pull/795
 [#797]: https://github.com/stackabletech/opa-operator/pull/797
 [#799]: https://github.com/stackabletech/opa-operator/pull/799
+[#803]: https://github.com/stackabletech/opa-operator/pull/803
 
 ## [25.11.0] - 2025-11-07
 
