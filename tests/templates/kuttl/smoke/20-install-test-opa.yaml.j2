@@ -21,6 +21,13 @@ commands:
             labels:
               app: test-opa
           spec:
+            # This needs to be excluded for Openshift.
+            # But as it is needed on some Kubernetes distributions (e.g. k3s), retain everywhere except
+            # for Openshift.
+{% if test_scenario['values']['openshift'] == 'false' %}
+            securityContext:
+              fsGroup: 1000
+{% endif %}
             containers:
             - name: test-opa
               image: oci.stackable.tech/sdp/testing-tools:0.3.0-stackable0.0.0-dev
