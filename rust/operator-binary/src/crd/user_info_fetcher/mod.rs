@@ -7,24 +7,26 @@ use stackable_operator::{
         secret_class::SecretClassVolume,
         tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
     },
-    crd::authentication::ldap,
     schemars::{self, JsonSchema},
     shared::time::Duration,
     versioned::versioned,
 };
 
-#[versioned(version(name = "v1alpha1"))]
+mod v1alpha1_impl;
+mod v1alpha2_impl;
+
+#[versioned(version(name = "v1alpha1"), version(name = "v1alpha2"))]
 pub mod versioned {
     #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Config {
         /// The backend directory service to use.
         #[serde(default)]
-        pub backend: v1alpha1::Backend,
+        pub backend: Backend,
 
         /// Caching configuration.
         #[serde(default)]
-        pub cache: v1alpha1::Cache,
+        pub cache: Cache,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -34,23 +36,23 @@ pub mod versioned {
         None {},
 
         /// Backend that fetches user information from Keycloak.
-        Keycloak(v1alpha1::KeycloakBackend),
+        Keycloak(KeycloakBackend),
 
         /// Backend that fetches user information from the Gaia-X
         /// Cross Federation Services Components (XFSC) Authentication & Authorization Service.
-        ExperimentalXfscAas(v1alpha1::AasBackend),
+        ExperimentalXfscAas(AasBackend),
 
         /// Backend that fetches user information from Active Directory
         #[serde(rename = "experimentalActiveDirectory")]
-        ActiveDirectory(v1alpha1::ActiveDirectoryBackend),
+        ActiveDirectory(ActiveDirectoryBackend),
 
         /// Backend that fetches user information from Microsoft Entra
-        #[serde(rename = "experimentalEntra")]
-        Entra(v1alpha1::EntraBackend),
+        #[versioned(changed(since = "v1alpha2", from_name = "ExperimentalEntra"))]
+        Entra(EntraBackend),
 
         /// Backend that fetches user information from OpenLDAP
         #[serde(rename = "experimentalOpenLdap")]
-        OpenLdap(v1alpha1::OpenLdapBackend),
+        OpenLdap(OpenLdapBackend),
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -210,15 +212,13 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct Cache {
         /// How long metadata about each user should be cached for.
-        #[serde(default = "v1alpha1::Cache::default_entry_time_to_live")]
+        #[serde(default = "default_entry_time_to_live")]
         pub entry_time_to_live: Duration,
     }
 }
 
-impl Default for v1alpha1::Backend {
-    fn default() -> Self {
-        Self::None {}
-    }
+const fn default_entry_time_to_live() -> Duration {
+    Duration::from_minutes_unchecked(1)
 }
 
 fn default_root_path() -> String {
@@ -255,37 +255,4 @@ fn openldap_default_user_name_attribute() -> String {
 
 fn openldap_default_group_member_attribute() -> String {
     "member".to_string()
-}
-
-impl v1alpha1::Cache {
-    const fn default_entry_time_to_live() -> Duration {
-        Duration::from_minutes_unchecked(1)
-    }
-}
-
-impl Default for v1alpha1::Cache {
-    fn default() -> Self {
-        Self {
-            entry_time_to_live: Self::default_entry_time_to_live(),
-        }
-    }
-}
-
-impl v1alpha1::OpenLdapBackend {
-    /// Returns an LDAP [`AuthenticationProvider`](ldap::v1alpha1::AuthenticationProvider) for
-    /// connecting to the OpenLDAP server.
-    ///
-    /// Converts this OpenLdap backend configuration into a standard LDAP authentication provider
-    /// that can be used by the user-info-fetcher to establish connections and query user data.
-    pub fn to_ldap_provider(&self) -> ldap::v1alpha1::AuthenticationProvider {
-        ldap::v1alpha1::AuthenticationProvider {
-            hostname: self.hostname.clone(),
-            port: self.port,
-            search_base: self.search_base.clone(),
-            search_filter: String::new(),
-            ldap_field_names: ldap::v1alpha1::FieldNames::default(),
-            bind_credentials: Some(self.bind_credentials.clone()),
-            tls: self.tls.clone(),
-        }
-    }
 }

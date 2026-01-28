@@ -1,5 +1,4 @@
 use snafu::Snafu;
-use stackable_opa_operator::crd::v1alpha1;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder,
     product_logging::{
@@ -8,6 +7,8 @@ use stackable_operator::{
     },
     role_utils::RoleGroupRef,
 };
+
+use crate::crd::{Container, v1alpha2};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -53,13 +54,13 @@ impl From<LogLevel> for BundleBuilderLogLevel {
 
 /// Extend the role group ConfigMap with logging and Vector configurations
 pub fn extend_role_group_config_map(
-    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
-    logging: &Logging<v1alpha1::Container>,
+    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
+    logging: &Logging<Container>,
     cm_builder: &mut ConfigMapBuilder,
 ) -> Result<()> {
     let vector_log_config = if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = logging.containers.get(&v1alpha1::Container::Vector)
+    }) = logging.containers.get(&Container::Vector)
     {
         Some(log_config)
     } else {
