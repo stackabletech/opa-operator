@@ -18,7 +18,7 @@ Given the following OPA cluster:
 
 [source,yaml,subs="normal,callouts"]
 ----
-apiVersion: opa.stackable.tech/v1alpha1
+apiVersion: opa.stackable.tech/v1alpha2
 kind: OpaCluster
 metadata:
   name: {clusterName} # <1>

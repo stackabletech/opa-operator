@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Introduce `v1alpha2` OpaCluster and mark UIF Entra backend as non-experimental ([#801]).
 - Deprecate OPA 1.8.0 ([#797]).
 - user-info-fetcher: Move backend initialization and credential resolution into backend-specific implementations ([#782]).
 
@@ -32,6 +33,7 @@ All notable changes to this project will be documented in this file.
 [#795]: https://github.com/stackabletech/opa-operator/pull/795
 [#797]: https://github.com/stackabletech/opa-operator/pull/797
 [#799]: https://github.com/stackabletech/opa-operator/pull/799
+[#801]: https://github.com/stackabletech/opa-operator/pull/801
 [#803]: https://github.com/stackabletech/opa-operator/pull/803
 
 ## [25.11.0] - 2025-11-07

@@ -3,10 +3,10 @@
 #![allow(clippy::result_large_err)]
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use clap::Parser;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use product_config::ProductConfigManager;
-use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha1};
 use stackable_operator::{
     YamlSchema,
     cli::{Command, RunArguments},
@@ -32,13 +32,19 @@ use stackable_operator::{
     utils::cluster_info::KubernetesClusterInfo,
 };
 
-use crate::controller::OPA_FULL_CONTROLLER_NAME;
+use crate::{
+    controller::OPA_FULL_CONTROLLER_NAME,
+    crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2},
+    webhooks::conversion::create_webhook_server,
+};
 
 mod controller;
+mod crd;
 mod discovery;
 mod operations;
 mod product_logging;
 mod service;
+mod webhooks;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -66,14 +72,14 @@ async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
     match opts.cmd {
         Command::Crd => {
-            OpaCluster::merged_crd(OpaClusterVersion::V1Alpha1)?
+            OpaCluster::merged_crd(OpaClusterVersion::V1Alpha2)?
                 .print_yaml_schema(built_info::PKG_VERSION, SerializeOptions::default())?;
         }
         Command::Run(OpaRun {
             operator_image,
             common:
                 RunArguments {
-                    operator_environment: _,
+                    operator_environment,
                     watch_namespace,
                     product_config,
                     maintenance,
@@ -99,7 +105,8 @@ async fn main() -> anyhow::Result<()> {
 
             let eos_checker =
                 EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, maintenance.end_of_support)?
-                    .run();
+                    .run()
+                    .map(anyhow::Ok);
 
             let product_config = product_config.load(&[
                 "deploy/config-spec/properties.yaml",
@@ -112,6 +119,17 @@ async fn main() -> anyhow::Result<()> {
 
             let kubernetes_cluster_info = client.kubernetes_cluster_info.clone();
 
+            let webhook_server = create_webhook_server(
+                &operator_environment,
+                maintenance.disable_crd_maintenance,
+                client.as_kube_client(),
+            )
+            .await?;
+
+            let webhook_server = webhook_server
+                .run()
+                .map_err(|err| anyhow!(err).context("failed to run webhook server"));
+
             let controller = create_controller(
                 client,
                 product_config,
@@ -119,9 +137,10 @@ async fn main() -> anyhow::Result<()> {
                 operator_image.clone(),
                 operator_image,
                 kubernetes_cluster_info,
-            );
+            )
+            .map(anyhow::Ok);
 
-            futures::join!(controller, eos_checker);
+            futures::try_join!(controller, webhook_server, eos_checker)?;
         }
     };
 
@@ -139,7 +158,7 @@ async fn create_controller(
     user_info_fetcher_image: String,
     cluster_info: KubernetesClusterInfo,
 ) {
-    let opa_api: Api<DeserializeGuard<v1alpha1::OpaCluster>> = watch_namespace.get_api(&client);
+    let opa_api: Api<DeserializeGuard<v1alpha2::OpaCluster>> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
     let configmaps_api: Api<DeserializeGuard<ConfigMap>> = watch_namespace.get_api(&client);
     let services_api: Api<DeserializeGuard<Service>> = watch_namespace.get_api(&client);

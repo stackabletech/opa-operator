@@ -16,7 +16,7 @@ use hyper::StatusCode;
 use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use url::Url;
 
 use crate::{UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
@@ -84,13 +84,13 @@ impl TryFrom<UserClaims> for UserInfo {
 ///
 /// This struct combines the CRD configuration with an HTTP client initialized at startup.
 pub struct ResolvedXfscAasBackend {
-    config: v1alpha1::AasBackend,
+    config: v1alpha2::AasBackend,
     http_client: reqwest::Client,
 }
 
 impl ResolvedXfscAasBackend {
     /// Resolves an XFSC AAS backend by initializing the HTTP client.
-    pub fn resolve(config: v1alpha1::AasBackend) -> Result<Self, Error> {
+    pub fn resolve(config: v1alpha2::AasBackend) -> Result<Self, Error> {
         let http_client = ClientBuilder::new()
             .build()
             .context(ConstructHttpClientSnafu)?;
@@ -103,7 +103,7 @@ impl ResolvedXfscAasBackend {
 
     /// Only `UserInfoRequestById` is supported because the endpoint has no username concept.
     pub(crate) async fn get_user_info(&self, req: &UserInfoRequest) -> Result<UserInfo, Error> {
-        let v1alpha1::AasBackend { hostname, port } = &self.config;
+        let v1alpha2::AasBackend { hostname, port } = &self.config;
 
         let cip_endpoint_raw = format!("http://{hostname}:{port}{API_PATH}");
         let cip_endpoint = Url::parse(&cip_endpoint_raw).context(ParseAasEndpointUrlSnafu {
