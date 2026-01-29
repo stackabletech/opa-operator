@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
 use url::Url;
 
@@ -111,7 +111,7 @@ struct GroupMembership {
 /// This struct combines the CRD configuration with credentials loaded from the filesystem.
 /// Credentials and the HTTP client are initialized once at startup and stored internally.
 pub struct ResolvedEntraBackend {
-    config: v1alpha1::EntraBackend,
+    config: v1alpha2::EntraBackend,
     client_id: String,
     client_secret: String,
     http_client: reqwest::Client,
@@ -123,7 +123,7 @@ impl ResolvedEntraBackend {
     /// Reads `clientId` and `clientSecret` from the credentials directory and initializes
     /// the HTTP client with appropriate TLS configuration.
     pub async fn resolve(
-        config: v1alpha1::EntraBackend,
+        config: v1alpha2::EntraBackend,
         credentials_dir: &Path,
     ) -> Result<Self, Error> {
         let client_id_path = credentials_dir.join("clientId");
@@ -161,7 +161,7 @@ impl ResolvedEntraBackend {
     }
 
     pub(crate) async fn get_user_info(&self, req: &UserInfoRequest) -> Result<UserInfo, Error> {
-        let v1alpha1::EntraBackend {
+        let v1alpha2::EntraBackend {
             client_credentials_secret: _,
             token_hostname,
             user_info_hostname,

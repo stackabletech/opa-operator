@@ -4,7 +4,7 @@ use hyper::StatusCode;
 use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_operator::crd::user_info_fetcher::v1alpha1;
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::crd::authentication::oidc;
 
 use crate::{
@@ -117,7 +117,7 @@ struct GroupMembership {
 /// This struct combines the CRD configuration with credentials loaded from the filesystem.
 /// Credentials and the HTTP client are initialized once at startup and stored internally.
 pub struct ResolvedKeycloakBackend {
-    config: v1alpha1::KeycloakBackend,
+    config: v1alpha2::KeycloakBackend,
     client_id: String,
     client_secret: String,
     http_client: reqwest::Client,
@@ -129,7 +129,7 @@ impl ResolvedKeycloakBackend {
     /// Reads `clientId` and `clientSecret` from the credentials directory and initializes
     /// the HTTP client with appropriate TLS configuration.
     pub async fn resolve(
-        config: v1alpha1::KeycloakBackend,
+        config: v1alpha2::KeycloakBackend,
         credentials_dir: &Path,
     ) -> Result<Self, Error> {
         let client_id_path = credentials_dir.join("clientId");
@@ -162,7 +162,7 @@ impl ResolvedKeycloakBackend {
     }
 
     pub(crate) async fn get_user_info(&self, req: &UserInfoRequest) -> Result<UserInfo, Error> {
-        let v1alpha1::KeycloakBackend {
+        let v1alpha2::KeycloakBackend {
             client_credentials_secret: _,
             admin_realm,
             user_realm,

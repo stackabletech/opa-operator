@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use hyper::StatusCode;
 use ldap3::{LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
+use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::crd::authentication::ldap;
 
 use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error, utils};
@@ -68,7 +69,7 @@ impl http_error::Error for Error {
 /// This struct combines the CRD configuration with credentials loaded from the filesystem.
 /// Credentials are loaded once at startup and stored internally.
 pub struct ResolvedOpenLdapBackend {
-    config: stackable_opa_operator::crd::user_info_fetcher::v1alpha1::OpenLdapBackend,
+    config: v1alpha2::OpenLdapBackend,
     bind_user: String,
     bind_password: String,
 }
@@ -77,9 +78,7 @@ impl ResolvedOpenLdapBackend {
     /// Resolves an OpenLDAP backend by loading credentials from the filesystem.
     ///
     /// Reads bind credentials from paths specified in the configuration.
-    pub async fn resolve(
-        config: stackable_opa_operator::crd::user_info_fetcher::v1alpha1::OpenLdapBackend,
-    ) -> Result<Self, Error> {
+    pub async fn resolve(config: v1alpha2::OpenLdapBackend) -> Result<Self, Error> {
         let ldap_provider = config.to_ldap_provider();
         // Bind credentials are guaranteed to be present because they are required in the CRD
         let (user_path, password_path) = ldap_provider
@@ -201,7 +200,7 @@ impl ResolvedOpenLdapBackend {
 async fn search_user_groups(
     ldap: &mut ldap3::Ldap,
     user: &SearchEntry,
-    config: &stackable_opa_operator::crd::user_info_fetcher::v1alpha1::OpenLdapBackend,
+    config: &v1alpha2::OpenLdapBackend,
 ) -> Result<Vec<String>, Error> {
     let group_member_attribute = &config.group_member_attribute;
     let groups_search_base = config

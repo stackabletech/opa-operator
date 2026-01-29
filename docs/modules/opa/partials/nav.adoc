@@ -18,7 +18,7 @@
 *** xref:opa:usage-guide/operations/graceful-shutdown.adoc[]
 * xref:opa:reference/index.adoc[]
 ** xref:opa:reference/crds.adoc[]
-*** {crd-docs}/opa.stackable.tech/opacluster/v1alpha1/[OpaCluster {external-link-icon}^]
+*** {crd-docs}/opa.stackable.tech/opacluster/v1alpha2/[OpaCluster {external-link-icon}^]
 ** xref:opa:reference/discovery.adoc[]
 ** xref:opa:reference/commandline-parameters.adoc[]
 ** xref:opa:reference/environment-variables.adoc[]

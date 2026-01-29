@@ -20,7 +20,7 @@ First, create a `SecretClass` that will provide TLS certificates. Here's an exam
 
 [source,yaml]
 ----
-apiVersion: secrets.stackable.tech/v1alpha1
+apiVersion: secrets.stackable.tech/v1alpha2
 kind: SecretClass
 metadata:
   name: opa-tls

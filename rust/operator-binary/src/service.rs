@@ -1,5 +1,4 @@
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::{APP_NAME, v1alpha1};
 use stackable_operator::{
     builder::meta::ObjectMetaBuilder,
     commons::product_image_selection::ResolvedProductImage,
@@ -8,7 +7,10 @@ use stackable_operator::{
     role_utils::RoleGroupRef,
 };
 
-use crate::controller::build_recommended_labels;
+use crate::{
+    controller::build_recommended_labels,
+    crd::{APP_NAME, OpaRole, v1alpha2},
+};
 
 pub const APP_PORT: u16 = 8081;
 pub const APP_TLS_PORT: u16 = 8443;
@@ -35,10 +37,10 @@ pub enum Error {
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
 pub(crate) fn build_server_role_service(
-    opa: &v1alpha1::OpaCluster,
+    opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
 ) -> Result<Service, Error> {
-    let role_name = v1alpha1::OpaRole::Server.to_string();
+    let role_name = OpaRole::Server.to_string();
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
@@ -76,9 +78,9 @@ pub(crate) fn build_server_role_service(
 ///
 /// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
 pub(crate) fn build_rolegroup_headless_service(
-    opa: &v1alpha1::OpaCluster,
+    opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
+    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
 ) -> Result<Service, Error> {
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
@@ -120,9 +122,9 @@ pub(crate) fn build_rolegroup_headless_service(
 /// The rolegroup metrics [`Service`] is a service that exposes metrics and has the
 /// prometheus.io/scrape label.
 pub(crate) fn build_rolegroup_metrics_service(
-    opa: &v1alpha1::OpaCluster,
+    opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
+    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
 ) -> Result<Service, Error> {
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
@@ -161,8 +163,8 @@ pub(crate) fn build_rolegroup_metrics_service(
 
 /// Returns the [`Labels`] that can be used to select all Pods that are part of the roleGroup.
 fn role_group_selector_labels(
-    opa: &v1alpha1::OpaCluster,
-    rolegroup: &RoleGroupRef<v1alpha1::OpaCluster>,
+    opa: &v1alpha2::OpaCluster,
+    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
 ) -> Result<Labels, Error> {
     Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
         .context(BuildLabelSnafu)
