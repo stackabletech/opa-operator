@@ -732,6 +732,14 @@ fn build_server_rolegroup_daemonset(
         .rolegroup(rolegroup_ref)
         .context(InternalOperatorFailureSnafu)?;
 
+    let merged_cli_overrides = {
+        let role_cli_overrides: &BTreeMap<String, String> = &role.config.cli_overrides;
+        let rolegroup_cli_overrides: &BTreeMap<String, String> = &role_group.config.cli_overrides;
+        let mut merged = role_cli_overrides.clone();
+        merged.extend(rolegroup_cli_overrides.clone());
+        merged
+    };
+
     let env = server_config
         .get(&PropertyNameKind::Env)
         .iter()
@@ -843,6 +851,7 @@ fn build_server_rolegroup_daemonset(
             merged_config,
             &opa_container_name,
             opa.spec.cluster_config.tls_enabled(),
+            &merged_cli_overrides,
         )])
         .add_env_vars(env)
         .add_env_var(
@@ -1196,6 +1205,7 @@ fn build_opa_start_command(
     merged_config: &OpaConfig,
     container_name: &str,
     tls_enabled: bool,
+    cli_overrides: &BTreeMap<String, String>,
 ) -> String {
     let mut file_log_level = DEFAULT_FILE_LOG_LEVEL;
     let mut console_log_level = DEFAULT_CONSOLE_LOG_LEVEL;
@@ -1254,13 +1264,19 @@ fn build_opa_start_command(
         "&> >(CONSOLE_LEVEL={console_log_level} FILE_LEVEL={file_log_level} DECISION_LEVEL={decision_log_level} SERVER_LEVEL={server_log_level} OPA_ROLLING_LOG_FILE_SIZE_BYTES={OPA_ROLLING_LOG_FILE_SIZE_BYTES} OPA_ROLLING_LOG_FILES={OPA_ROLLING_LOG_FILES} STACKABLE_LOG_DIR={STACKABLE_LOG_DIR} CONTAINER_NAME={container_name} process-logs)"
     );
 
+    let extra_cli_args = cli_overrides
+        .iter()
+        .map(|(key, value)| format!("{key} {value}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
         containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
-        opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {logging_redirects} &
+        opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",
@@ -1269,7 +1285,8 @@ fn build_opa_start_command(
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
-        opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal()
+        opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal(),
+        extra_cli_args = extra_cli_args
     }
 }
 

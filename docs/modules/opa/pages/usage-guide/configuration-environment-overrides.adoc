@@ -38,6 +38,39 @@ servers:
       config: {}
 ----
 
+== CLI overrides
+
+The OPA operator supports overriding command-line arguments passed to the OPA binary via the `cliOverrides` property.
+This allows you to customize OPA's behavior by passing additional or overriding existing command-line flags.
+
+CLI overrides can be specified at both the role and rolegroup level, with rolegroup overrides taking precedence over role overrides.
+
+For example, per rolegroup:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      cliOverrides:
+        --log-format: json-pretty
+        --diagnostic-addr: "0.0.0.0:8282"
+----
+
+or per role:
+
+[source,yaml]
+----
+servers:
+  cliOverrides:
+    --log-format: json
+    --diagnostic-addr: "0.0.0.0:8282"
+  roleGroups:
+    default: {}
+----
+
+For a complete list of available flags, refer to the https://www.openpolicyagent.org/docs/latest/cli/#run[OPA documentation].
+
 == Pod overrides
 
 The OPA operator also supports Pod overrides, allowing you to override any property that you can set on a Kubernetes Pod.
