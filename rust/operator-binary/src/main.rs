@@ -1,7 +1,7 @@
 // TODO: Look into how to properly resolve `clippy::result_large_err`.
 // This will need changes in our and upstream error types.
 #![allow(clippy::result_large_err)]
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use anyhow::anyhow;
 use clap::Parser;
@@ -29,7 +29,7 @@ use stackable_operator::{
     namespace::WatchNamespace,
     shared::yaml::SerializeOptions,
     telemetry::Tracing,
-    utils::cluster_info::KubernetesClusterInfo,
+    utils::{cluster_info::KubernetesClusterInfo, signal::SignalWatcher},
 };
 
 use crate::{
@@ -103,9 +103,13 @@ async fn main() -> anyhow::Result<()> {
                 description = built_info::PKG_DESCRIPTION
             );
 
+            // Watches for the SIGTERM signal and sends a signal to all receivers, which gracefully
+            // shuts down all concurrent tasks below (EoS checker, controller).
+            let sigterm_watcher = SignalWatcher::sigterm()?;
+
             let eos_checker =
                 EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, maintenance.end_of_support)?
-                    .run()
+                    .run(sigterm_watcher.handle())
                     .map(anyhow::Ok);
 
             let product_config = product_config.load(&[
@@ -127,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
             let webhook_server = webhook_server
-                .run()
+                .run(sigterm_watcher.handle())
                 .map_err(|err| anyhow!(err).context("failed to run webhook server"));
 
             let controller = create_controller(
@@ -137,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
                 operator_image.clone(),
                 operator_image,
                 kubernetes_cluster_info,
+                sigterm_watcher.handle(),
             )
             .map(anyhow::Ok);
 
@@ -150,14 +155,17 @@ async fn main() -> anyhow::Result<()> {
 /// This creates an instance of a [`Controller`] which waits for incoming events and reconciles them.
 ///
 /// This is an async method and the returned future needs to be consumed to make progress.
-async fn create_controller(
+async fn create_controller<F>(
     client: Client,
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
     cluster_info: KubernetesClusterInfo,
-) {
+    shutdown_signal: F,
+) where
+    F: Future<Output = ()> + Send + Sync + 'static,
+{
     let opa_api: Api<DeserializeGuard<v1alpha2::OpaCluster>> = watch_namespace.get_api(&client);
     let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
     let configmaps_api: Api<DeserializeGuard<ConfigMap>> = watch_namespace.get_api(&client);
@@ -176,6 +184,7 @@ async fn create_controller(
         },
     ));
     controller
+        .graceful_shutdown_on(shutdown_signal)
         .run(
             controller::reconcile_opa,
             controller::error_policy,
