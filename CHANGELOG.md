@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Add support for OPA 1.12.2 ([#797]).
+- Add support for OPA 1.12.3 ([#797], [#805]).
 - Add support for OpenLDAP backend to user-info-fetcher ([#779]).
 - Bump testing-tools to `0.3.0-stackable0.0.0-dev` ([#793]).
 - Support objectOverrides using `.spec.objectOverrides`.
@@ -37,6 +37,7 @@ All notable changes to this project will be documented in this file.
 [#801]: https://github.com/stackabletech/opa-operator/pull/801
 [#803]: https://github.com/stackabletech/opa-operator/pull/803
 [#804]: https://github.com/stackabletech/opa-operator/pull/804
+[#805]: https://github.com/stackabletech/opa-operator/pull/805
 
 ## [25.11.0] - 2025-11-07
 
