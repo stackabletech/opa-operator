@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Gracefully shutdown all concurrent tasks by forwarding the SIGTERM signal ([#804]).
 - Introduce `v1alpha2` OpaCluster and mark UIF Entra backend as non-experimental ([#801]).
 - Deprecate OPA 1.8.0 ([#797]).
 - user-info-fetcher: Move backend initialization and credential resolution into backend-specific implementations ([#782]).
@@ -35,6 +36,7 @@ All notable changes to this project will be documented in this file.
 [#799]: https://github.com/stackabletech/opa-operator/pull/799
 [#801]: https://github.com/stackabletech/opa-operator/pull/801
 [#803]: https://github.com/stackabletech/opa-operator/pull/803
+[#804]: https://github.com/stackabletech/opa-operator/pull/804
 
 ## [25.11.0] - 2025-11-07
 
