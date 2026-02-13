@@ -45,8 +45,8 @@ config:
 	fi
 
 crds:
-	mkdir -p extra
-	cargo run --bin stackable-"${OPERATOR_NAME}" -- crd > extra/crds.yaml
+	mkdir -p deploy/helm/"${OPERATOR_NAME}"/crds
+	cargo run --bin stackable-"${OPERATOR_NAME}" -- crd | yq eval '.metadata.annotations["helm.sh/resource-policy"]="keep"' - > "deploy/helm/${OPERATOR_NAME}/crds/crds.yaml"
 
 chart-lint: compile-chart
 	docker run -it -v $(shell pwd):/build/helm-charts -w /build/helm-charts quay.io/helmpack/chart-testing:v3.5.0  ct lint --config deploy/helm/ct.yaml
