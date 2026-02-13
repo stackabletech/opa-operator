@@ -35,12 +35,18 @@ helm_values = settings.get('helm_values', None)
 
 helm_override_image_repository = 'image.repository=' + registry + '/' + operator_name
 
-k8s_yaml(helm(
-   'deploy/helm/' + operator_name,
-   name=operator_name,
-   namespace="stackable-operators",
-   set=[
-      helm_override_image_repository,
-   ],
-   values=helm_values,
-))
+# Exclude stale CRDs from Helm chart, and apply the rest
+helm_crds, helm_non_crds = filter_yaml(
+   helm(
+      'deploy/helm/' + operator_name,
+      name=operator_name,
+      namespace="stackable-operators",
+      set=[
+         helm_override_image_repository,
+      ],
+      values=helm_values,
+   ),
+   api_version = "^apiextensions\\.k8s\\.io/.*$",
+   kind = "^CustomResourceDefinition$",
+)
+k8s_yaml(helm_non_crds)
