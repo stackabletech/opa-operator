@@ -34,17 +34,13 @@ pub async fn configure_reqwest(
     Ok(if tls.uses_tls() && !tls.uses_tls_verification() {
         builder.danger_accept_invalid_certs(true)
     } else if let Some(tls_ca_cert_mount_path) = tls.tls_ca_cert_mount_path() {
-        reqwest::Certificate::from_pem_bundle(
+        let ca_certs = reqwest::Certificate::from_pem_bundle(
             &read_file(&tls_ca_cert_mount_path)
                 .await
                 .context(ReadCaBundleSnafu)?,
         )
-        .context(ParseCaBundleReqwestSnafu)?
-        .into_iter()
-        .fold(
-            builder.tls_built_in_root_certs(false),
-            reqwest::ClientBuilder::add_root_certificate,
-        )
+        .context(ParseCaBundleReqwestSnafu)?;
+        builder.tls_certs_only(ca_certs)
     } else {
         builder
     })
