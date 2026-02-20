@@ -34,7 +34,7 @@ ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
 moka = { version = "0.12", features = ["future"] }
 native-tls = "0.2.12"
 pin-project = "1.1"
-reqwest = { version = "0.13", features = ["json", "form", "query"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "query", "rustls-no-provider"] }
 rustls-pki-types = "1.13"
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
