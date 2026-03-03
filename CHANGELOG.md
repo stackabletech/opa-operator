@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Bump stackable-operator to 0.106.2 and strum to 0.28 ([#810]).
 - Gracefully shutdown all concurrent tasks by forwarding the SIGTERM signal ([#804]).
 - Introduce `v1alpha2` OpaCluster and mark UIF Entra backend as non-experimental ([#801]).
 - Deprecate OPA 1.8.0 ([#797]).
@@ -38,6 +39,7 @@ All notable changes to this project will be documented in this file.
 [#803]: https://github.com/stackabletech/opa-operator/pull/803
 [#804]: https://github.com/stackabletech/opa-operator/pull/804
 [#805]: https://github.com/stackabletech/opa-operator/pull/805
+[#810]: https://github.com/stackabletech/opa-operator/pull/810
 
 ## [25.11.0] - 2025-11-07
 
