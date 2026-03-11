@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Prevent unnecessary warning messages in the OPA logs caused by setting a service for the Prometheus status ([#799]).
+- Fix "404 page not found" error for the initial object list ([#812]).
 
 ### Removed
 

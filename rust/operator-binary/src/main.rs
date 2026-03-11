@@ -17,7 +17,7 @@ use stackable_operator::{
         core::v1::{ConfigMap, Service},
     },
     kube::{
-        Api,
+        Api, CustomResourceExt as _,
         core::DeserializeGuard,
         runtime::{
             Controller,
@@ -29,7 +29,10 @@ use stackable_operator::{
     namespace::WatchNamespace,
     shared::yaml::SerializeOptions,
     telemetry::Tracing,
-    utils::{cluster_info::KubernetesClusterInfo, signal::SignalWatcher},
+    utils::{
+        cluster_info::KubernetesClusterInfo,
+        signal::{self, SignalWatcher},
+    },
 };
 
 use crate::{
@@ -142,7 +145,7 @@ async fn main() -> anyhow::Result<()> {
                 .map_err(|err| anyhow!(err).context("failed to run webhook server"));
 
             let controller = create_controller(
-                client,
+                client.clone(),
                 product_config,
                 watch_namespace,
                 operator_image.clone(),
@@ -152,7 +155,12 @@ async fn main() -> anyhow::Result<()> {
             )
             .map(anyhow::Ok);
 
-            futures::try_join!(controller, webhook_server, eos_checker)?;
+            let delayed_controller = async {
+                signal::crd_established(&client, v1alpha2::OpaCluster::crd_name(), None).await?;
+                controller.await
+            };
+
+            futures::try_join!(delayed_controller, webhook_server, eos_checker)?;
         }
     };
 
