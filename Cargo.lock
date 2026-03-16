@@ -3453,7 +3453,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-bundle-builder"
-version = "26.3.0-rc1"
+version = "26.3.0"
 dependencies = [
  "axum",
  "built",
@@ -3472,7 +3472,7 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-operator"
-version = "26.3.0-rc1"
+version = "26.3.0"
 dependencies = [
  "anyhow",
  "built",
@@ -3496,11 +3496,11 @@ dependencies = [
 
 [[package]]
 name = "stackable-opa-regorule-library"
-version = "26.3.0-rc1"
+version = "26.3.0"
 
 [[package]]
 name = "stackable-opa-user-info-fetcher"
-version = "26.3.0-rc1"
+version = "26.3.0"
 dependencies = [
  "axum",
  "base64",

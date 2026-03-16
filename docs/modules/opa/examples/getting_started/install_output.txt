@@ -1,1 +1,1 @@
-Installed opa=26.3.0-rc1 operator
+Installed opa=26.3.0 operator
