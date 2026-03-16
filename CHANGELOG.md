@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [26.3.0-rc1] - 2026-03-16
+
 ### Added
 
 - Add support for OPA 1.12.3 ([#797], [#805]).
