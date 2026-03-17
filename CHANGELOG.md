@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [26.3.0] - 2026-03-16
+
+## [26.3.0-rc1] - 2026-03-16
+
 ### Added
 
 - Add support for OPA 1.12.3 ([#797], [#805]).
@@ -15,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Bump stackable-operator to 0.108.0 and strum to 0.28 ([#810], [#812]).
 - Gracefully shutdown all concurrent tasks by forwarding the SIGTERM signal ([#804]).
 - Introduce `v1alpha2` OpaCluster and mark UIF Entra backend as non-experimental ([#801]).
 - Deprecate OPA 1.8.0 ([#797]).
@@ -23,6 +28,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Prevent unnecessary warning messages in the OPA logs caused by setting a service for the Prometheus status ([#799]).
+- Fix "404 page not found" error for the initial object list ([#812]).
 
 ### Removed
 
@@ -38,6 +44,8 @@ All notable changes to this project will be documented in this file.
 [#803]: https://github.com/stackabletech/opa-operator/pull/803
 [#804]: https://github.com/stackabletech/opa-operator/pull/804
 [#805]: https://github.com/stackabletech/opa-operator/pull/805
+[#810]: https://github.com/stackabletech/opa-operator/pull/810
+[#812]: https://github.com/stackabletech/opa-operator/pull/812
 
 ## [25.11.0] - 2025-11-07
 

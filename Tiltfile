@@ -17,11 +17,6 @@ custom_build(
     outputs_image_ref_to='result/ref',
 )
 
-# Load the latest CRDs from Nix
-watch_file('result')
-if os.path.exists('result'):
-   k8s_yaml('result/crds.yaml')
-
 # We need to set the correct image annotation on the operator Deployment to use e.g.
 # oci.stackable.tech/sandbox/opa-operator:7y19m3d8clwxlv34v5q2x4p7v536s00g instead of
 # oci.stackable.tech/sandbox/opa-operator:0.0.0-dev (which does not exist)

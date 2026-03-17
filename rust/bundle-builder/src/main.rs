@@ -85,6 +85,13 @@ enum StartupError {
 async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
 
+    // As stackable-operator pulls in ring and reqwest >= 0.13 pulls in aws_lc_rs, we need
+    // to explicitly tell rustls what provider to use. As other operators use ring, we use
+    // that for consistency reasons here as well.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install ring rustls provider");
+
     // NOTE (@NickLarsenNZ): Before stackable-telemetry was used:
     // - The console log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
     // - The file log level was set by `OPA_BUNDLE_BUILDER_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).

@@ -44,6 +44,8 @@ config:
 		cp -r deploy/config-spec/* "deploy/helm/${OPERATOR_NAME}/configs";\
 	fi
 
+# We generate a crds.yaml, so that the effect of code changes are visible.
+# The operator will take care of the CRD rollout itself.
 crds:
 	mkdir -p deploy/helm/"${OPERATOR_NAME}"/crds
 	cargo run --bin stackable-"${OPERATOR_NAME}" -- crd | yq eval '.metadata.annotations["helm.sh/resource-policy"]="keep"' - > "deploy/helm/${OPERATOR_NAME}/crds/crds.yaml"

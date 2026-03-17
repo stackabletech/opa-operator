@@ -19,6 +19,7 @@ clap.workspace = true
 flate2.workspace = true
 futures.workspace = true
 hyper.workspace = true
+rustls.workspace = true
 snafu.workspace = true
 tar.workspace = true
 tokio.workspace = true
