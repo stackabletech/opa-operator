@@ -34,7 +34,9 @@ use stackable_operator::{
     k8s_openapi::{
         DeepMerge,
         api::{
-            apps::v1::{DaemonSet, DaemonSetSpec},
+            apps::v1::{
+                DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet,
+            },
             core::v1::{
                 ConfigMap, EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction,
                 ObjectFieldSelector, Probe, SecretVolumeSource, ServiceAccount,
@@ -1153,6 +1155,13 @@ fn build_server_rolegroup_daemonset(
             ..LabelSelector::default()
         },
         template: pod_template,
+        update_strategy: Some(DaemonSetUpdateStrategy {
+            type_: Some("RollingUpdate".to_string()),
+            rolling_update: Some(RollingUpdateDaemonSet {
+                max_surge: Some(IntOrString::Int(1)),
+                max_unavailable: Some(IntOrString::Int(0)),
+            }),
+        }),
         ..DaemonSetSpec::default()
     };
 
