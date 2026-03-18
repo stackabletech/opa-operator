@@ -1,0 +1,63 @@
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 300
+commands:
+  # Wait for OPA cluster to be available
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 301s
+
+  # Wait for test pod to be ready
+  - script: kubectl -n $NAMESPACE wait --for=condition=ready pod/test-pod-0 --timeout 60s
+
+  # Verify configOverrides are applied correctly via OPA Config API
+  - script: |
+      # Fetch the actual running config from OPA's /v1/config endpoint
+      CONFIG_JSON=$(kubectl exec -n $NAMESPACE test-pod-0 -- curl -s http://test-opa-server:8081/v1/config | jq -r '.result')
+
+      # Check min_delay_seconds is 3 (from role level)
+      MIN_DELAY=$(echo "$CONFIG_JSON" | jq -r '.bundles.stackable.polling.min_delay_seconds')
+      if [ "$MIN_DELAY" != "3" ]; then
+        echo "ERROR: Expected min_delay_seconds=3 (from role configOverrides), got $MIN_DELAY"
+        exit 1
+      fi
+      echo "OK: min_delay_seconds=3 (role level override)"
+
+      # Check max_delay_seconds is 5 (rolegroup level overrides role level)
+      MAX_DELAY=$(echo "$CONFIG_JSON" | jq -r '.bundles.stackable.polling.max_delay_seconds')
+      if [ "$MAX_DELAY" != "5" ]; then
+        echo "ERROR: Expected max_delay_seconds=5 (rolegroup override), got $MAX_DELAY"
+        exit 1
+      fi
+      echo "OK: max_delay_seconds=5 (rolegroup level override takes precedence)"
+
+      # Check default_decision is set (from role level)
+      DEFAULT_DECISION=$(echo "$CONFIG_JSON" | jq -r '.default_decision')
+      if [ "$DEFAULT_DECISION" != "test/hello" ]; then
+        echo "ERROR: Expected default_decision='test/hello', got $DEFAULT_DECISION"
+        exit 1
+      fi
+      echo "OK: default_decision=test/hello (role level override)"
+
+      # Check labels.rolegroup is set (from rolegroup level)
+      ROLEGROUP_LABEL=$(echo "$CONFIG_JSON" | jq -r '.labels.rolegroup')
+      if [ "$ROLEGROUP_LABEL" != "default" ]; then
+        echo "ERROR: Expected labels.rolegroup='default', got $ROLEGROUP_LABEL"
+        exit 1
+      fi
+      echo "OK: labels.rolegroup=default (rolegroup level override)"
+
+      # Verify original values are still present
+      SERVICE_URL=$(echo "$CONFIG_JSON" | jq -r '.services[0].url')
+      if [ "$SERVICE_URL" != "http://localhost:3030/opa/v1" ]; then
+        echo "ERROR: Original service URL was overwritten, got $SERVICE_URL"
+        exit 1
+      fi
+      echo "OK: Original service URL preserved"
+
+      echo "All configOverrides tests passed!"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+status:
+  numberReady: 1

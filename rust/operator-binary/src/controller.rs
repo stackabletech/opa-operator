@@ -30,6 +30,7 @@ use stackable_operator::{
         secret_class::{SecretClassVolume, SecretClassVolumeScope},
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
+    config_overrides,
     crd::authentication::ldap,
     k8s_openapi::{
         DeepMerge,
@@ -339,6 +340,19 @@ pub enum Error {
     TlsVolumeBuild {
         source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
     },
+
+    #[snafu(display("failed to apply config overrides to {file}"))]
+    ApplyConfigOverrides {
+        source: config_overrides::Error,
+        file: String,
+    },
+
+    #[snafu(display("failed to serialize config file {file}"))]
+    SerializeConfigFile {
+        source: serde_json::Error,
+        file: String,
+    },
+
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -630,6 +644,17 @@ fn build_server_rolegroup_config_map(
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
+    // Collect config overrides from role and rolegroup levels.
+    // Both are applied in order: role-level first, then rolegroup-level on top,
+    // so rolegroup overrides take precedence.
+    let role_config_override = opa.spec.servers.config.config_overrides.config_json.as_ref();
+    let rolegroup_config_override = opa
+        .spec
+        .servers
+        .role_groups
+        .get(&rolegroup.role_group)
+        .and_then(|rg| rg.config.config_overrides.config_json.as_ref());
+
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
         .name(rolegroup.object_name())
@@ -644,9 +669,14 @@ fn build_server_rolegroup_config_map(
         .context(ObjectMetaSnafu)?
         .build();
 
-    cm_builder
-        .metadata(metadata)
-        .add_data(CONFIG_FILE, build_config_file(merged_config));
+    cm_builder.metadata(metadata).add_data(
+        CONFIG_FILE,
+        build_config_file(
+            merged_config,
+            role_config_override,
+            rolegroup_config_override,
+        )?,
+    );
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         cm_builder.add_data(
@@ -1183,7 +1213,11 @@ pub fn error_policy(
     }
 }
 
-fn build_config_file(merged_config: &OpaConfig) -> String {
+fn build_config_file(
+    merged_config: &OpaConfig,
+    role_config_override: Option<&config_overrides::JsonConfigOverrides>,
+    rolegroup_config_override: Option<&config_overrides::JsonConfigOverrides>,
+) -> Result<String> {
     let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
 
     if let Some(ContainerLogConfig {
@@ -1203,9 +1237,24 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
 
     let config = OpaClusterConfigFile::new(decision_logging);
 
-    // The unwrap() shouldn't panic under any circumstances because Rusts type checker takes care of the OpaClusterConfigFile
-    // and serde + serde_json therefore serialize/deserialize a valid struct
-    serde_json::to_string_pretty(&json!(config)).unwrap()
+    let mut config_value = serde_json::to_value(&config).context(SerializeConfigFileSnafu {
+        file: CONFIG_FILE.to_string(),
+    })?;
+
+    // Apply role-level overrides first, then rolegroup-level on top.
+    // This way rolegroup settings take precedence over role settings.
+    for overrides in [role_config_override, rolegroup_config_override]
+        .into_iter()
+        .flatten()
+    {
+        config_value = overrides.apply(&config_value).context(ApplyConfigOverridesSnafu {
+            file: CONFIG_FILE.to_string(),
+        })?;
+    }
+
+    serde_json::to_string_pretty(&config_value).context(SerializeConfigFileSnafu {
+        file: CONFIG_FILE.to_string(),
+    })
 }
 
 fn build_opa_start_command(
