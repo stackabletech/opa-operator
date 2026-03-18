@@ -39,6 +39,10 @@ tests:
     dimensions:
       - opa-latest
       - openshift
+  - name: config-overrides
+    dimensions:
+      - opa-latest
+      - openshift
   - name: keycloak-user-info
     dimensions:
       - opa-latest

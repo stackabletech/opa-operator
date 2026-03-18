@@ -8,7 +8,37 @@ This will lead to faulty installations.
 
 == Configuration properties
 
-Currently, not supported for `config.json`.
+OPA's `config.json` can be overridden using `configOverrides`, the supported override strategies are `jsonMergePatch` (RFC 7396) and `jsonPatches` (RFC 6902).
+
+For example per role group:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      configOverrides:
+        config.json:
+          jsonMergePatch:
+            distributed_tracing:
+              address: jaeger-collector.default.svc.cluster.local:4317
+              type: grpc
+----
+
+or per role:
+
+[source,yaml]
+----
+servers:
+  configOverrides:
+    config.json:
+      jsonPatches:
+        - '{"op": "replace", "path": "/bundles/stackable/polling/min_delay_seconds", "value": 3}'
+        - '{"op": "add", "path": "/default_decision", "value": "allow"}'
+  roleGroups:
+    default:
+      config: {}
+----
 
 == Environment variables
 

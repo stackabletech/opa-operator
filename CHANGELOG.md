@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Support `configOverrides` for `config.json` (#818).
+
+[#818]: https://github.com/stackabletech/opa-operator/pull/818
+
 ## [26.3.0] - 2026-03-16
 
 ## [26.3.0-rc1] - 2026-03-16
