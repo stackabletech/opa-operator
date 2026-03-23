@@ -34,9 +34,7 @@ use stackable_operator::{
     k8s_openapi::{
         DeepMerge,
         api::{
-            apps::v1::{
-                DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet,
-            },
+            apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
                 ConfigMap, EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction,
                 ObjectFieldSelector, Probe, SecretVolumeSource, ServiceAccount,
