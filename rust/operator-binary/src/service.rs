@@ -63,6 +63,12 @@ pub(crate) fn build_server_role_service(
         type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
         ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
         selector: Some(service_selector_labels.into()),
+        // This ensures that products (e.g. Trino) on a node always talk to the OPA pod on the
+        // same node, avoiding cross-node latency. The downside is that if the local OPA pod is
+        // unavailable, requests fail instead of falling back to another node.
+        // TODO: Once our minimum supported Kubernetes version is 1.35, use
+        // `trafficDistribution: PreferSameNode` instead, which prefers the local node but
+        // gracefully falls back to other nodes if the local pod is unavailable.
         internal_traffic_policy: Some("Local".to_string()),
         ..ServiceSpec::default()
     };

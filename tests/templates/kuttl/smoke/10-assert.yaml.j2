@@ -9,6 +9,11 @@ kind: DaemonSet
 metadata:
   name: test-opa-server-default
 spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     spec:
       containers:
