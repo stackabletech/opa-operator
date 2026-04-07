@@ -341,7 +341,7 @@ pub enum Error {
         source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
     },
 
-    #[snafu(display("failed to apply config overrides to {file}"))]
+    #[snafu(display("failed to apply config overrides to the file {file:?}"))]
     ApplyConfigOverrides {
         source: config_overrides::Error,
         file: String,
