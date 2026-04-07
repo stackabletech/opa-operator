@@ -347,7 +347,7 @@ pub enum Error {
         file: String,
     },
 
-    #[snafu(display("failed to serialize config file {file}"))]
+    #[snafu(display("failed to serialize config file {file:?}"))]
     SerializeConfigFile {
         source: serde_json::Error,
         file: String,
