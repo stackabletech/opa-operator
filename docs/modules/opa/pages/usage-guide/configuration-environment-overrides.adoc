@@ -11,22 +11,7 @@ This will lead to faulty installations.
 OPA's `config.json` can be overridden using `configOverrides`.
 For details on the supported override strategies, see the xref:concepts:overrides.adoc#config-overrides[config overrides documentation].
 
-For example per role group:
-
-[source,yaml]
-----
-servers:
-  roleGroups:
-    default:
-      configOverrides:
-        config.json:
-          jsonMergePatch:
-            distributed_tracing:
-              address: jaeger-collector.default.svc.cluster.local:4317
-              type: grpc
-----
-
-or per role:
+For example per role:
 
 [source,yaml]
 ----
@@ -41,23 +26,26 @@ servers:
       config: {}
 ----
 
-== Environment variables
-
-Environment variables can be (over)written by adding the `envOverrides` property.
-
-For example per role group:
+or per role group:
 
 [source,yaml]
 ----
 servers:
   roleGroups:
     default:
-      config: {}
-      envOverrides:
-        MY_ENV_VAR: "MY_VALUE"
+      configOverrides:
+        config.json:
+          jsonMergePatch:
+            distributed_tracing:
+              address: jaeger-collector.default.svc.cluster.local:4317
+              type: grpc
 ----
 
-or per role:
+== Environment variables
+
+Environment variables can be (over)written by adding the `envOverrides` property.
+
+For example per role:
 
 [source,yaml]
 ----
@@ -69,6 +57,18 @@ servers:
       config: {}
 ----
 
+or per role group:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      config: {}
+      envOverrides:
+        MY_ENV_VAR: "MY_VALUE"
+----
+
 == CLI overrides
 
 The OPA operator supports overriding command-line arguments passed to the OPA binary via the `cliOverrides` property.
@@ -76,19 +76,7 @@ This allows you to customize OPA's behavior by passing additional or overriding 
 
 CLI overrides can be specified at both the role and rolegroup level, with rolegroup overrides taking precedence over role overrides.
 
-For example, per rolegroup:
-
-[source,yaml]
-----
-servers:
-  roleGroups:
-    default:
-      cliOverrides:
-        --log-format: json-pretty
-        --diagnostic-addr: "0.0.0.0:8282"
-----
-
-or per role:
+For example, per role:
 
 [source,yaml]
 ----
@@ -98,6 +86,18 @@ servers:
     --diagnostic-addr: "0.0.0.0:8282"
   roleGroups:
     default: {}
+----
+
+or per rolegroup:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      cliOverrides:
+        --log-format: json-pretty
+        --diagnostic-addr: "0.0.0.0:8282"
 ----
 
 For a complete list of available flags, refer to the https://www.openpolicyagent.org/docs/latest/cli/#run[OPA documentation].
