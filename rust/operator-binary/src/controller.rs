@@ -1237,9 +1237,10 @@ fn build_config_file(
 
     let config = OpaClusterConfigFile::new(decision_logging);
 
-    let mut config_value = serde_json::to_value(&config).context(SerializeConfigFileSnafu {
-        file: CONFIG_FILE.to_string(),
-    })?;
+    let mut config_value =
+        serde_json::to_value(&config).with_context(|_| SerializeConfigFileSnafu {
+            file: CONFIG_FILE.to_string(),
+        })?;
 
     // Apply role-level overrides first, then rolegroup-level on top.
     // This way rolegroup settings take precedence over role settings.
@@ -1247,12 +1248,15 @@ fn build_config_file(
         .into_iter()
         .flatten()
     {
-        config_value = overrides.apply(&config_value).context(ApplyConfigOverridesSnafu {
-            file: CONFIG_FILE.to_string(),
-        })?;
+        config_value =
+            overrides
+                .apply(&config_value)
+                .with_context(|_| ApplyConfigOverridesSnafu {
+                    file: CONFIG_FILE.to_string(),
+                })?;
     }
 
-    serde_json::to_string_pretty(&config_value).context(SerializeConfigFileSnafu {
+    serde_json::to_string_pretty(&config_value).with_context(|_| SerializeConfigFileSnafu {
         file: CONFIG_FILE.to_string(),
     })
 }
