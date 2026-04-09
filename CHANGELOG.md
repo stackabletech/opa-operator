@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - Set `maxSurge=1` and `maxUnavailable=0` on the OPA DaemonSet rolling update strategy to eliminate
   availability gaps during rolling updates ([#819]).
-- Helm deployed RBAC permissions documented, with unnecessary permissions removed ([#820]).
+- Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
 
 [#819]: https://github.com/stackabletech/opa-operator/pull/819
 [#820]: https://github.com/stackabletech/opa-operator/pull/820
