@@ -86,7 +86,6 @@ rules:
     resources:
       - customresourcedefinitions
     verbs:
-      - get
       {{- if .Values.maintenance.customResourceDefinitions.maintain }}
       - create
       - patch
