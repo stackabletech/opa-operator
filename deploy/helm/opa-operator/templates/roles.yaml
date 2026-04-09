@@ -81,10 +81,10 @@ rules:
       {{- if .Values.maintenance.customResourceDefinitions.maintain }}
       - create
       - patch
+      {{- end }}
       # Required for startup condition
       - list
       - watch
-      {{- end }}
   # For publishing Kubernetes events from the controller reconciliation loop
   - apiGroups:
       - events.k8s.io
