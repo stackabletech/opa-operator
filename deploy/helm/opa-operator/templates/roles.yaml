@@ -121,14 +121,6 @@ metadata:
   labels:
   {{- include "operator.labels" . | nindent 4 }}
 rules:
-  # OPA workload pods publish Kubernetes events (e.g. from the user-info-fetcher sidecar)
-  - apiGroups:
-      - events.k8s.io
-    resources:
-      - events
-    verbs:
-      - create
-      - patch
 {{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
   # Required on OpenShift to allow the OPA pods to run as a non-root user.
   - apiGroups:
