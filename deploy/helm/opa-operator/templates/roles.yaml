@@ -127,18 +127,6 @@ metadata:
   labels:
   {{- include "operator.labels" . | nindent 4 }}
 rules:
-  # OPA workload pods read ConfigMaps (bundle ConfigMaps, product config) and Secrets
-  # (TLS credentials) and ServiceAccounts (for token projection) at runtime.
-  - apiGroups:
-      - ""
-    resources:
-      - configmaps
-      - secrets
-      - serviceaccounts
-    verbs:
-      - get
-      - list
-      - watch
   # OPA workload pods publish Kubernetes events (e.g. from the user-info-fetcher sidecar)
   - apiGroups:
       - events.k8s.io
