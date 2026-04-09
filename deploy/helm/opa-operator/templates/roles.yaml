@@ -15,12 +15,7 @@ rules:
       - get
   # Manage core workload resources created per OpaCluster.
   # All resources are applied via Server-Side Apply (create + patch) and tracked for
-  # orphan cleanup (list + delete). The get verb is required by the ReconciliationPaused
-  # strategy (which calls client.get() instead of apply_patch() when paused).
-  # Resources watched by the controller also need watch.
-  # - configmaps: role-group configs and discovery ConfigMaps; watched via .owns()
-  # - services: role service, per-rolegroup headless and metrics services; watched via .owns()
-  # - serviceaccounts: per-cluster ServiceAccount for the product workload pods
+  # orphan cleanup (list + delete).
   - apiGroups:
       - ""
     resources:
@@ -33,8 +28,8 @@ rules:
       - list
       - patch
       - watch
-  # Per-cluster ServiceAccount for the product workload pods; applied via SSA
-  # and tracked for orphan cleanup.
+  # ServiceAccount created per OpaCluster for workload pod identity.
+  # Applied via SSA and tracked for orphan cleanup.
   - apiGroups:
       - ""
     resources:
@@ -45,8 +40,8 @@ rules:
       - get
       - list
       - patch
-  # Per-cluster RoleBinding binding the product ClusterRole to the workload ServiceAccount;
-  # applied via SSA and tracked for orphan cleanup; not watched by the controller.
+  # RoleBinding created per OpaCluster to bind the product ClusterRole to the workload
+  # ServiceAccount. Applied via SSA and tracked for orphan cleanup.
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -57,8 +52,8 @@ rules:
       - get
       - list
       - patch
-  # Per-rolegroup DaemonSet for OPA server pods; applied via SSA, tracked for orphan
-  # cleanup, and watched via .owns().
+  # DaemonSet created per role group. Applied via SSA, tracked for orphan cleanup, and
+  # owned by the controller.
   - apiGroups:
       - apps
     resources:
@@ -70,9 +65,8 @@ rules:
       - list
       - patch
       - watch
-  # Read the CRD at startup to confirm it is established before starting the controller.
-  # With maintenance enabled the operator also creates, patches, lists and watches CRDs
-  # to maintain the CRD (e.g. entering generated certificates into the conversion webhook).
+  # Required for maintaining the CRDs within the operator (including the conversion webhook info).
+  # Also for the startup condition check before the controller can run.
   - apiGroups:
       - apiextensions.k8s.io
     resources:
@@ -85,7 +79,7 @@ rules:
       # Required for startup condition
       - list
       - watch
-  # For publishing Kubernetes events from the controller reconciliation loop
+  # Required to report reconciliation results and warnings back to the OpaCluster object.
   - apiGroups:
       - events.k8s.io
     resources:
@@ -93,7 +87,7 @@ rules:
     verbs:
       - create
       - patch
-  # Watch and read OpaCluster resources to drive reconciliation
+  # Primary CRD: watched by the controller and read during reconciliation.
   - apiGroups:
       - {{ include "operator.name" . }}.stackable.tech
     resources:
@@ -102,14 +96,14 @@ rules:
       - get
       - list
       - watch
-  # Patch OpaCluster status to report conditions back to the user
+  # Status subresource: updated at the end of every reconciliation.
   - apiGroups:
       - {{ include "operator.name" . }}.stackable.tech
     resources:
       - {{ include "operator.name" . }}clusters/status
     verbs:
       - patch
-  # Allow binding the product ClusterRole to per-cluster ServiceAccounts
+  # Required to bind the product ClusterRole to the per-cluster ServiceAccount.
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -136,7 +130,7 @@ rules:
       - create
       - patch
 {{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
-  # Allow the workload pods to use the nonroot-v2 SCC on OpenShift
+  # Required on OpenShift to allow the OPA pods to run as a non-root user.
   - apiGroups:
       - security.openshift.io
     resources:
