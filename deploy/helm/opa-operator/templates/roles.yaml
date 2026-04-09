@@ -41,6 +41,8 @@ rules:
       - list
       - patch
       - watch
+  # Per-cluster ServiceAccount for the product workload pods; applied via SSA
+  # and tracked for orphan cleanup.
   - apiGroups:
       - ""
     resources:
