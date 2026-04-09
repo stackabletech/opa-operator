@@ -1,6 +1,11 @@
 ---
 # This ClusterRole is for the OPA bundle builder sidecar, which reads
 # Rego rules from ConfigMaps and compiles them into bundles for OPA.
+#
+# NOTE: This ClusterRole is currently not bound to any ServiceAccount. The
+# bundle-builder sidecar relies on the product ClusterRole for ConfigMap access
+# instead. The operator should be updated to bind this ClusterRole to the
+# product ServiceAccount via a separate RoleBinding.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
