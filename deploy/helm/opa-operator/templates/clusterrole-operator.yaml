@@ -1,4 +1,6 @@
 ---
+# Operator ClusterRole: bound (via ClusterRoleBinding) to the operator's own ServiceAccount.
+# Grants permissions needed by the controller to reconcile OpaCluster resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
