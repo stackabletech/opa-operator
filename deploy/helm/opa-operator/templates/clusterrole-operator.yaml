@@ -1,4 +1,6 @@
 ---
+# Operator ClusterRole: bound (via ClusterRoleBinding) to the operator's own ServiceAccount.
+# Grants permissions needed by the controller to reconcile OpaCluster resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -6,13 +8,6 @@ metadata:
   labels:
   {{- include "operator.labels" . | nindent 4 }}
 rules:
-  - apiGroups:
-      - ""
-    resources:
-      - nodes
-    verbs:
-      - list
-      - watch
   # For automatic cluster domain detection
   - apiGroups:
       - ""
@@ -20,14 +15,26 @@ rules:
       - nodes/proxy
     verbs:
       - get
+  # Manage core workload resources created per OpaCluster.
+  # All resources are applied via Server-Side Apply (create + patch) and tracked for
+  # orphan cleanup (list + delete).
   - apiGroups:
       - ""
     resources:
-      - pods
       - configmaps
-      - secrets
       - services
-      - endpoints
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - watch
+  # ServiceAccount created per OpaCluster for workload pod identity.
+  # Applied via SSA and tracked for orphan cleanup.
+  - apiGroups:
+      - ""
+    resources:
       - serviceaccounts
     verbs:
       - create
@@ -35,8 +42,8 @@ rules:
       - get
       - list
       - patch
-      - update
-      - watch
+  # RoleBinding created per OpaCluster to bind the product ClusterRole to the workload
+  # ServiceAccount. Applied via SSA and tracked for orphan cleanup.
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -47,68 +54,7 @@ rules:
       - get
       - list
       - patch
-      - update
-      - watch
-  - apiGroups:
-      - apps
-    resources:
-      - daemonsets
-    verbs:
-      - get
-      - create
-      - delete
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - batch
-    resources:
-      - jobs
-    verbs:
-      - create
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - apiextensions.k8s.io
-    resources:
-      - customresourcedefinitions
-    verbs:
-      - get
-      # Required to maintain the CRD. The operator needs to do this, as it needs to enter e.g. it's
-      # generated certificate in the conversion webhook.
-      {{- if .Values.maintenance.customResourceDefinitions.maintain }}
-      - create
-      - patch
-      # Required for startup condition
-      - list
-      - watch
-      {{- end }}
-  - apiGroups:
-      - events.k8s.io
-    resources:
-      - events
-    verbs:
-      - create
-      - patch
-  - apiGroups:
-      - {{ include "operator.name" . }}.stackable.tech
-    resources:
-      - {{ include "operator.name" . }}clusters
-    verbs:
-      - get
-      - list
-      - patch
-      - watch
-  - apiGroups:
-      - {{ include "operator.name" . }}.stackable.tech
-    resources:
-      - {{ include "operator.name" . }}clusters/status
-    verbs:
-      - patch
+  # Required to bind the product ClusterRole to the per-cluster ServiceAccount.
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
@@ -117,25 +63,36 @@ rules:
       - bind
     resourceNames:
       - {{ include "operator.name" . }}-clusterrole
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "operator.name" . }}-clusterrole
-  labels:
-  {{- include "operator.labels" . | nindent 4 }}
-rules:
+  # DaemonSet created per role group. Applied via SSA, tracked for orphan cleanup, and
+  # owned by the controller.
   - apiGroups:
-      - ""
+      - apps
     resources:
-      - configmaps
-      - secrets
-      - serviceaccounts
+      - daemonsets
     verbs:
+      - create
+      - delete
       - get
       - list
+      - patch
       - watch
+  # Required for maintaining the CRDs within the operator (including the conversion webhook info).
+  # Also for the startup condition check before the controller can run.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      # Required to maintain the CRD. The operator needs to do this, as it needs to enter e.g. it's
+      # generated certificate in the conversion webhook.
+      {{- if .Values.maintenance.customResourceDefinitions.maintain }}
+      - create
+      - patch
+      {{- end }}
+      # Required for startup condition
+      - list
+      - watch
+  # Required to report reconciliation results and warnings back to the OpaCluster object.
   - apiGroups:
       - events.k8s.io
     resources:
@@ -143,13 +100,19 @@ rules:
     verbs:
       - create
       - patch
-{{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
+  # Primary CRD: watched by the controller and read during reconciliation.
   - apiGroups:
-      - security.openshift.io
+      - {{ include "operator.name" . }}.stackable.tech
     resources:
-      - securitycontextconstraints
-    resourceNames:
-      - nonroot-v2
+      - {{ include "operator.name" . }}clusters
     verbs:
-      - use
-{{ end }}
+      - get
+      - list
+      - watch
+  # Status subresource: updated at the end of every reconciliation.
+  - apiGroups:
+      - {{ include "operator.name" . }}.stackable.tech
+    resources:
+      - {{ include "operator.name" . }}clusters/status
+    verbs:
+      - patch

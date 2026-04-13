@@ -1,0 +1,33 @@
+---
+# This ClusterRole is for the OPA bundle builder sidecar, which reads
+# Rego rules from ConfigMaps and compiles them into bundles for OPA.
+#
+# NOTE: This ClusterRole is currently not bound to any ServiceAccount. The
+# bundle-builder sidecar relies on the product ClusterRole for ConfigMap access
+# instead. The operator should be updated to bind this ClusterRole to the
+# product ServiceAccount via a separate RoleBinding.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-opa-bundle-builder-clusterrole
+rules:
+  # Read and watch ConfigMaps containing Rego rules used to build bundles
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+{{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
+  # Allow the bundle builder pods to use the opa-scc SCC on OpenShift
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    resourceNames:
+      - opa-scc
+    verbs:
+      - use
+{{ end }}

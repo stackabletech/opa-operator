@@ -1,0 +1,32 @@
+---
+# Product ClusterRole: bound (via per OpaCluster RoleBinding) to the ServiceAccount that OPA
+# workload pods run as.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "operator.name" . }}-clusterrole
+  labels:
+  {{- include "operator.labels" . | nindent 4 }}
+rules:
+  # The bundle-builder sidecar lists and watches ConfigMaps labeled opa.stackable.tech/bundle
+  # to compile Rego rules into bundles. It shares this ServiceAccount because the bundle-builder
+  # ClusterRole (clusterrole-opa-builder.yaml) is not yet bound to the product ServiceAccount.
+  # TODO: Wire up the bundle-builder ClusterRole binding in the operator and remove this rule.
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - list
+      - watch
+{{ if .Capabilities.APIVersions.Has "security.openshift.io/v1" }}
+  # Required on OpenShift to allow the OPA pods to run as a non-root user.
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    resourceNames:
+      - nonroot-v2
+    verbs:
+      - use
+{{ end }}
