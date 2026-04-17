@@ -997,9 +997,9 @@ fn build_server_rolegroup_daemonset(
         pb.add_volume(
             VolumeBuilder::new(TLS_VOLUME_NAME)
                 .ephemeral(
-                    // OPA needs the full TLS keypair (public cert + private key) to serve HTTPS.
                     SecretOperatorVolumeSourceBuilder::new(
                         &tls.server_secret_class,
+                        // OPA needs the full TLS keypair (public cert + private key) to serve HTTPS.
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
                     .with_service_scope(opa.server_role_service_name())
@@ -1054,9 +1054,9 @@ fn build_server_rolegroup_daemonset(
                             listener_volumes: Vec::new(),
                         }),
                     )
-                    // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
                     .to_volume(
                         USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
                     .unwrap(),
