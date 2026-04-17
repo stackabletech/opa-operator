@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     match opts.cmd {
         Command::Crd => {
             OpaCluster::merged_crd(OpaClusterVersion::V1Alpha2)?
-                .print_yaml_schema(built_info::PKG_VERSION, SerializeOptions::default())?;
+                .print_yaml_schema(built_info::PKG_VERSION, &SerializeOptions::default())?;
         }
         Command::Run(OpaRun {
             operator_image,
@@ -118,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
             let sigterm_watcher = SignalWatcher::sigterm()?;
 
             let eos_checker =
-                EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, maintenance.end_of_support)?
+                EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, &maintenance.end_of_support)?
                     .run(sigterm_watcher.handle())
                     .map(anyhow::Ok);
 

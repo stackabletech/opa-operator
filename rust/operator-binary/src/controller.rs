@@ -27,7 +27,9 @@ use stackable_operator::{
     commons::{
         product_image_selection::{self, ResolvedProductImage},
         rbac::build_rbac_resources,
-        secret_class::{SecretClassVolume, SecretClassVolumeScope},
+        secret_class::{
+            SecretClassVolume, SecretClassVolumeProvisionParts, SecretClassVolumeScope,
+        },
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
     config_overrides,
@@ -352,7 +354,6 @@ pub enum Error {
         source: serde_json::Error,
         file: String,
     },
-
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -466,7 +467,7 @@ pub async fn reconcile_opa(
         &resolved_product_image.product_version,
         &transform_all_roles_to_config(
             opa,
-            [(
+            &[(
                 opa_role.to_string(),
                 (
                     vec![
@@ -647,7 +648,13 @@ fn build_server_rolegroup_config_map(
     // Collect config overrides from role and rolegroup levels.
     // Both are applied in order: role-level first, then rolegroup-level on top,
     // so rolegroup overrides take precedence.
-    let role_config_override = opa.spec.servers.config.config_overrides.config_json.as_ref();
+    let role_config_override = opa
+        .spec
+        .servers
+        .config
+        .config_overrides
+        .config_json
+        .as_ref();
     let rolegroup_config_override = opa
         .spec
         .servers
@@ -660,7 +667,7 @@ fn build_server_rolegroup_config_map(
         .name(rolegroup.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &rolegroup.role,
@@ -827,7 +834,7 @@ fn build_server_rolegroup_daemonset(
             merged_config,
             &bundle_builder_container_name,
         )])
-        .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
+        .add_env_var_from_field_path("WATCH_NAMESPACE", &FieldPathEnvVar::Namespace)
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -941,7 +948,7 @@ fn build_server_rolegroup_daemonset(
         });
 
     let pb_metadata = ObjectMetaBuilder::new()
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &rolegroup_ref.role,
@@ -990,12 +997,16 @@ fn build_server_rolegroup_daemonset(
         pb.add_volume(
             VolumeBuilder::new(TLS_VOLUME_NAME)
                 .ephemeral(
-                    SecretOperatorVolumeSourceBuilder::new(&tls.server_secret_class)
-                        .with_service_scope(opa.server_role_service_name())
-                        .with_service_scope(rolegroup_ref.rolegroup_headless_service_name())
-                        .with_service_scope(rolegroup_ref.rolegroup_metrics_service_name())
-                        .build()
-                        .context(TlsVolumeBuildSnafu)?,
+                    // OPA needs the full TLS keypair (public cert + private key) to serve HTTPS.
+                    SecretOperatorVolumeSourceBuilder::new(
+                        &tls.server_secret_class,
+                        SecretClassVolumeProvisionParts::PublicPrivate,
+                    )
+                    .with_service_scope(opa.server_role_service_name())
+                    .with_service_scope(rolegroup_ref.rolegroup_headless_service_name())
+                    .with_service_scope(rolegroup_ref.rolegroup_metrics_service_name())
+                    .build()
+                    .context(TlsVolumeBuildSnafu)?,
                 )
                 .build(),
         )
@@ -1043,7 +1054,11 @@ fn build_server_rolegroup_daemonset(
                             listener_volumes: Vec::new(),
                         }),
                     )
-                    .to_volume(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME)
+                    // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
+                    .to_volume(
+                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        SecretClassVolumeProvisionParts::PublicPrivate,
+                    )
                     .unwrap(),
                 )
                 .context(UserInfoFetcherKerberosVolumeSnafu)?;
@@ -1160,7 +1175,7 @@ fn build_server_rolegroup_daemonset(
         .name(rolegroup_ref.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &rolegroup_ref.role,

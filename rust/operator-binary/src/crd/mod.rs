@@ -22,9 +22,7 @@ use stackable_operator::{
     kube::{CustomResource, ResourceExt},
     product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
-    role_utils::{
-        EmptyRoleConfig, GenericProductSpecificCommonConfig, Role, RoleGroup, RoleGroupRef,
-    },
+    role_utils::{EmptyRoleConfig, GenericCommonConfig, Role, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
@@ -42,6 +40,10 @@ pub const FIELD_MANAGER: &str = "opa-operator";
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
 /// Safety puffer to guarantee the graceful shutdown works every time.
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
+
+pub type OpaRoleType = Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig>;
+
+pub type OpaRoleGroupType = RoleGroup<OpaConfigFragment, GenericCommonConfig, OpaConfigOverrides>;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -96,7 +98,7 @@ pub mod versioned {
 
         /// OPA server configuration.
         // #[versioned(hint(role))]
-        pub servers: Role<OpaConfigFragment, EmptyRoleConfig, GenericProductSpecificCommonConfig, OpaConfigOverrides>,
+        pub servers: super::OpaRoleType,
 
         /// The OPA image to use
         pub image: ProductImage,
@@ -174,7 +176,11 @@ pub mod versioned {
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfigOverrides {
     /// Overrides for the OPA `config.json` file.
-    #[serde(default, rename = "config.json", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "config.json",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub config_json: Option<JsonConfigOverrides>,
 }
 
@@ -359,7 +365,7 @@ impl Configuration for OpaConfigFragment {
 
 impl v1alpha2::OpaCluster {
     /// Returns a reference to the role.
-    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment, EmptyRoleConfig, GenericProductSpecificCommonConfig, OpaConfigOverrides> {
+    pub fn role(&self, role_variant: &OpaRole) -> &OpaRoleType {
         match role_variant {
             OpaRole::Server => &self.spec.servers,
         }
@@ -369,7 +375,7 @@ impl v1alpha2::OpaCluster {
     pub fn rolegroup(
         &self,
         rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    ) -> Result<&RoleGroup<OpaConfigFragment, GenericProductSpecificCommonConfig, OpaConfigOverrides>, Error> {
+    ) -> Result<&OpaRoleGroupType, Error> {
         let role_variant =
             OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
                 role: rolegroup_ref.role.to_owned(),

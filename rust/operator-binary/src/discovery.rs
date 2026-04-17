@@ -90,7 +90,7 @@ fn build_discovery_configmap(
         .with_context(|_| ObjectMissingMetadataForOwnerRefSnafu {
             opa: ObjectRef::from_obj(opa),
         })?
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &OpaRole::Server.to_string(),
