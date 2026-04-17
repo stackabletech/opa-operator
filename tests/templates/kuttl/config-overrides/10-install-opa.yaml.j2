@@ -1,0 +1,65 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      kubectl apply -n $NAMESPACE -f - <<EOF
+      ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: test
+        labels:
+          opa.stackable.tech/bundle: "true"
+      data:
+        test.rego: |
+          package test
+
+          hello if {
+            true
+          }
+      ---
+      apiVersion: opa.stackable.tech/v1alpha1
+      kind: OpaCluster
+      metadata:
+        name: test-opa
+      spec:
+        image:
+{% if test_scenario['values']['opa-latest'].find(",") > 0 %}
+          custom: "{{ test_scenario['values']['opa-latest'].split(',')[1] }}"
+          productVersion: "{{ test_scenario['values']['opa-latest'].split(',')[0] }}"
+{% else %}
+          productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+{% endif %}
+          pullPolicy: IfNotPresent
+        clusterConfig:
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+          vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+        servers:
+          config:
+            logging:
+              enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+          # Role-level configOverrides using JSON merge patch (RFC 7396)
+          configOverrides:
+            config.json:
+              jsonMergePatch:
+                bundles:
+                  stackable:
+                    polling:
+                      min_delay_seconds: 3
+                      max_delay_seconds: 7
+                default_decision: test/hello
+          roleGroups:
+            default:
+              # Rolegroup-level configOverrides (takes precedence over role level)
+              configOverrides:
+                config.json:
+                  jsonMergePatch:
+                    bundles:
+                      stackable:
+                        polling:
+                          max_delay_seconds: 5
+                    labels:
+                      rolegroup: default
+      EOF

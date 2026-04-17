@@ -16,14 +16,13 @@ use stackable_operator::{
         fragment::{self, Fragment, ValidationError},
         merge::Merge,
     },
+    config_overrides::{JsonConfigOverrides, KeyValueOverridesProvider},
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::{CustomResource, ResourceExt},
     product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
-    role_utils::{
-        EmptyRoleConfig, GenericProductSpecificCommonConfig, Role, RoleGroup, RoleGroupRef,
-    },
+    role_utils::{EmptyRoleConfig, GenericCommonConfig, Role, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
@@ -41,6 +40,10 @@ pub const FIELD_MANAGER: &str = "opa-operator";
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
 /// Safety puffer to guarantee the graceful shutdown works every time.
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
+
+pub type OpaRoleType = Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig>;
+
+pub type OpaRoleGroupType = RoleGroup<OpaConfigFragment, GenericCommonConfig, OpaConfigOverrides>;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -95,7 +98,7 @@ pub mod versioned {
 
         /// OPA server configuration.
         // #[versioned(hint(role))]
-        pub servers: Role<OpaConfigFragment, EmptyRoleConfig>,
+        pub servers: super::OpaRoleType,
 
         /// The OPA image to use
         pub image: ProductImage,
@@ -163,6 +166,29 @@ pub mod versioned {
         ExternalStable,
     }
 }
+
+/// Typed config override strategies for OPA config files.
+///
+/// OPA only has one config file (`config.json`), which is JSON-formatted.
+/// Users can override it using JSON merge patch (RFC 7396), JSON patch (RFC 6902),
+/// or by providing the full file content.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpaConfigOverrides {
+    /// Overrides for the OPA `config.json` file.
+    #[serde(
+        default,
+        rename = "config.json",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub config_json: Option<JsonConfigOverrides>,
+}
+
+// OPA has no key-value config files, all overrides go through JsonConfigOverrides.
+// This impl is still required because the shared product config pipeline
+// (`transform_all_roles_to_config`) requires the `KeyValueOverridesProvider` bound
+// at compile time. The default implementation returns an empty map.
+impl KeyValueOverridesProvider for OpaConfigOverrides {}
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
@@ -339,7 +365,7 @@ impl Configuration for OpaConfigFragment {
 
 impl v1alpha2::OpaCluster {
     /// Returns a reference to the role.
-    pub fn role(&self, role_variant: &OpaRole) -> &Role<OpaConfigFragment, EmptyRoleConfig> {
+    pub fn role(&self, role_variant: &OpaRole) -> &OpaRoleType {
         match role_variant {
             OpaRole::Server => &self.spec.servers,
         }
@@ -349,7 +375,7 @@ impl v1alpha2::OpaCluster {
     pub fn rolegroup(
         &self,
         rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    ) -> Result<&RoleGroup<OpaConfigFragment, GenericProductSpecificCommonConfig>, Error> {
+    ) -> Result<&OpaRoleGroupType, Error> {
         let role_variant =
             OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
                 role: rolegroup_ref.role.to_owned(),

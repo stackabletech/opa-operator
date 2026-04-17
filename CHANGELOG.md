@@ -4,12 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Support `configOverrides` for `config.json` ([#818]).
+
 ### Changed
 
+- Bump `stackable-operator` to 0.110.1 and `snafu` to 0.9 ([#818]).
 - Set `maxSurge=1` and `maxUnavailable=0` on the OPA DaemonSet rolling update strategy to eliminate
   availability gaps during rolling updates ([#819]).
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
 
+[#818]: https://github.com/stackabletech/opa-operator/pull/818
 [#819]: https://github.com/stackabletech/opa-operator/pull/819
 [#820]: https://github.com/stackabletech/opa-operator/pull/820
 

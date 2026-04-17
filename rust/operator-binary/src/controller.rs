@@ -27,9 +27,12 @@ use stackable_operator::{
     commons::{
         product_image_selection::{self, ResolvedProductImage},
         rbac::build_rbac_resources,
-        secret_class::{SecretClassVolume, SecretClassVolumeScope},
+        secret_class::{
+            SecretClassVolume, SecretClassVolumeProvisionParts, SecretClassVolumeScope,
+        },
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
+    config_overrides,
     crd::authentication::ldap,
     k8s_openapi::{
         DeepMerge,
@@ -339,6 +342,18 @@ pub enum Error {
     TlsVolumeBuild {
         source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
     },
+
+    #[snafu(display("failed to apply config overrides to the file {file:?}"))]
+    ApplyConfigOverrides {
+        source: config_overrides::Error,
+        file: String,
+    },
+
+    #[snafu(display("failed to serialize config file {file:?}"))]
+    SerializeConfigFile {
+        source: serde_json::Error,
+        file: String,
+    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -452,7 +467,7 @@ pub async fn reconcile_opa(
         &resolved_product_image.product_version,
         &transform_all_roles_to_config(
             opa,
-            [(
+            &[(
                 opa_role.to_string(),
                 (
                     vec![
@@ -630,12 +645,29 @@ fn build_server_rolegroup_config_map(
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
+    // Collect config overrides from role and rolegroup levels.
+    // Both are applied in order: role-level first, then rolegroup-level on top,
+    // so rolegroup overrides take precedence.
+    let role_config_override = opa
+        .spec
+        .servers
+        .config
+        .config_overrides
+        .config_json
+        .as_ref();
+    let rolegroup_config_override = opa
+        .spec
+        .servers
+        .role_groups
+        .get(&rolegroup.role_group)
+        .and_then(|rg| rg.config.config_overrides.config_json.as_ref());
+
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
         .name(rolegroup.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &rolegroup.role,
@@ -644,9 +676,14 @@ fn build_server_rolegroup_config_map(
         .context(ObjectMetaSnafu)?
         .build();
 
-    cm_builder
-        .metadata(metadata)
-        .add_data(CONFIG_FILE, build_config_file(merged_config));
+    cm_builder.metadata(metadata).add_data(
+        CONFIG_FILE,
+        build_config_file(
+            merged_config,
+            role_config_override,
+            rolegroup_config_override,
+        )?,
+    );
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
         cm_builder.add_data(
@@ -797,7 +834,7 @@ fn build_server_rolegroup_daemonset(
             merged_config,
             &bundle_builder_container_name,
         )])
-        .add_env_var_from_field_path("WATCH_NAMESPACE", FieldPathEnvVar::Namespace)
+        .add_env_var_from_field_path("WATCH_NAMESPACE", &FieldPathEnvVar::Namespace)
         .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
@@ -911,7 +948,7 @@ fn build_server_rolegroup_daemonset(
         });
 
     let pb_metadata = ObjectMetaBuilder::new()
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &rolegroup_ref.role,
@@ -960,12 +997,16 @@ fn build_server_rolegroup_daemonset(
         pb.add_volume(
             VolumeBuilder::new(TLS_VOLUME_NAME)
                 .ephemeral(
-                    SecretOperatorVolumeSourceBuilder::new(&tls.server_secret_class)
-                        .with_service_scope(opa.server_role_service_name())
-                        .with_service_scope(rolegroup_ref.rolegroup_headless_service_name())
-                        .with_service_scope(rolegroup_ref.rolegroup_metrics_service_name())
-                        .build()
-                        .context(TlsVolumeBuildSnafu)?,
+                    SecretOperatorVolumeSourceBuilder::new(
+                        &tls.server_secret_class,
+                        // OPA needs the full TLS keypair (public cert + private key) to serve HTTPS.
+                        SecretClassVolumeProvisionParts::PublicPrivate,
+                    )
+                    .with_service_scope(opa.server_role_service_name())
+                    .with_service_scope(rolegroup_ref.rolegroup_headless_service_name())
+                    .with_service_scope(rolegroup_ref.rolegroup_metrics_service_name())
+                    .build()
+                    .context(TlsVolumeBuildSnafu)?,
                 )
                 .build(),
         )
@@ -1013,7 +1054,11 @@ fn build_server_rolegroup_daemonset(
                             listener_volumes: Vec::new(),
                         }),
                     )
-                    .to_volume(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME)
+                    .to_volume(
+                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
+                        SecretClassVolumeProvisionParts::PublicPrivate,
+                    )
                     .unwrap(),
                 )
                 .context(UserInfoFetcherKerberosVolumeSnafu)?;
@@ -1130,7 +1175,7 @@ fn build_server_rolegroup_daemonset(
         .name(rolegroup_ref.object_name())
         .ownerreference_from_resource(opa, None, Some(true))
         .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(build_recommended_labels(
+        .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
             &rolegroup_ref.role,
@@ -1183,7 +1228,11 @@ pub fn error_policy(
     }
 }
 
-fn build_config_file(merged_config: &OpaConfig) -> String {
+fn build_config_file(
+    merged_config: &OpaConfig,
+    role_config_override: Option<&config_overrides::JsonConfigOverrides>,
+    rolegroup_config_override: Option<&config_overrides::JsonConfigOverrides>,
+) -> Result<String> {
     let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
 
     if let Some(ContainerLogConfig {
@@ -1203,9 +1252,28 @@ fn build_config_file(merged_config: &OpaConfig) -> String {
 
     let config = OpaClusterConfigFile::new(decision_logging);
 
-    // The unwrap() shouldn't panic under any circumstances because Rusts type checker takes care of the OpaClusterConfigFile
-    // and serde + serde_json therefore serialize/deserialize a valid struct
-    serde_json::to_string_pretty(&json!(config)).unwrap()
+    let mut config_value =
+        serde_json::to_value(&config).with_context(|_| SerializeConfigFileSnafu {
+            file: CONFIG_FILE.to_string(),
+        })?;
+
+    // Apply role-level overrides first, then rolegroup-level on top.
+    // This way rolegroup settings take precedence over role settings.
+    for overrides in [role_config_override, rolegroup_config_override]
+        .into_iter()
+        .flatten()
+    {
+        config_value =
+            overrides
+                .apply(&config_value)
+                .with_context(|_| ApplyConfigOverridesSnafu {
+                    file: CONFIG_FILE.to_string(),
+                })?;
+    }
+
+    serde_json::to_string_pretty(&config_value).with_context(|_| SerializeConfigFileSnafu {
+        file: CONFIG_FILE.to_string(),
+    })
 }
 
 fn build_opa_start_command(
