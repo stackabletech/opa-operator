@@ -4,6 +4,9 @@ pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
+mod http_error;
+mod utils;
+
 pub const APP_NAME: &str = "opa-resource-info-fetcher";
 
 #[derive(Snafu, Debug)]
