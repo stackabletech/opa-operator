@@ -139,6 +139,14 @@ pub mod versioned {
         #[serde(default)]
         pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
 
+        /// Configures how to fetch resource metadata (e.g. dataset tags, owners,
+        /// domain) from an external data catalog such as DataHub or OpenMetadata.
+        /// When set, the operator injects a resource-info-fetcher sidecar into
+        /// each OPA pod alongside the user-info-fetcher.
+        #[versioned(hint(option))]
+        #[serde(default)]
+        pub resource_info: Option<resource_info_fetcher::v1alpha1::Config>,
+
         /// TLS encryption settings for the OPA server.
         /// When configured, OPA will use HTTPS (port 8443) instead of HTTP (port 8081).
         /// Clients must connect using HTTPS and trust the certificates provided by the configured SecretClass.
