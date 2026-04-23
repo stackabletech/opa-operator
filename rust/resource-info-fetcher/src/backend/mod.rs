@@ -1,3 +1,5 @@
+pub mod datahub;
+
 use snafu::Snafu;
 
 use crate::{ResourceInfo, ResourceInfoRequest};

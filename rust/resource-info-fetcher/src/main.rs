@@ -117,6 +117,7 @@ async fn resolve_backend(
 ) -> Result<backend::ResolvedBackend, StartupError> {
     match backend_config {
         v1alpha1::Backend::None {} => Ok(backend::ResolvedBackend::None),
+        v1alpha1::Backend::DataHub(_) => todo!("DataHub backend not yet implemented"),
     }
 }
 
