@@ -4,7 +4,7 @@
 :opa: https://www.openpolicyagent.org/
 :github: https://github.com/stackabletech/opa-operator/
 :crd: {crd-docs-base-url}/opa-operator/{crd-docs-version}/
-:crd-opacluster: {crd-docs}/opa.stackable.tech/opacluster/v1alpha1/
+:crd-opacluster: {crd-docs}/opa.stackable.tech/opacluster/v1alpha2/
 :feature-tracker: https://features.stackable.tech/unified
 :rego: https://www.openpolicyagent.org/docs/latest/policy-language/
 
