@@ -1,0 +1,65 @@
+{
+  "data": {
+    "dataset": {
+      "tags": {
+        "tags": [
+          { "tag": { "urn": "urn:li:tag:pii" } },
+          { "tag": { "urn": "urn:li:tag:gdpr" } }
+        ]
+      },
+      "glossaryTerms": {
+        "terms": [
+          { "term": { "urn": "urn:li:glossaryTerm:CustomerPII" } }
+        ]
+      },
+      "ownership": {
+        "owners": [
+          { "owner": { "__typename": "CorpUser", "urn": "urn:li:corpuser:alice",
+                       "properties": { "email": "alice@example.com" } } },
+          { "owner": { "__typename": "CorpGroup", "urn": "urn:li:corpGroup:data-platform-team",
+                       "properties": { "displayName": "data-platform-team" } } }
+        ]
+      },
+      "domain": {
+        "domain": {
+          "properties": { "name": "Finance" }
+        }
+      },
+      "dataProducts": {
+        "dataProducts": [
+          { "properties": { "name": "Customer360" } }
+        ]
+      },
+      "properties": {
+        "customProperties": [
+          { "key": "sensitivityLevel", "value": "High" },
+          { "key": "retentionYears", "value": "7" }
+        ]
+      },
+      "editableSchemaMetadata": {
+        "editableSchemaFieldInfo": [
+          { "fieldPath": "customer_id",
+            "tags": { "tags": [ { "tag": { "urn": "urn:li:tag:pii" } } ] },
+            "glossaryTerms": { "terms": [
+              { "term": { "urn": "urn:li:glossaryTerm:CustomerIdentifier" } }
+            ] }
+          }
+        ]
+      },
+      "schemaMetadata": {
+        "fields": [
+          { "fieldPath": "customer_id",
+            "type": "STRING",
+            "globalTags": { "tags": [] },
+            "glossaryTerms": { "terms": [] }
+          },
+          { "fieldPath": "signup_ts",
+            "type": "TIMESTAMP",
+            "globalTags": { "tags": [] },
+            "glossaryTerms": { "terms": [] }
+          }
+        ]
+      }
+    }
+  }
+}
