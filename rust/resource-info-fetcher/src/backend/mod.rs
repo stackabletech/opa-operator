@@ -3,6 +3,7 @@ use snafu::{ResultExt, Snafu};
 use crate::{ResourceInfo, ResourceInfoRequest};
 
 pub mod datahub;
+pub mod openmetadata;
 
 #[derive(Debug, Snafu)]
 #[snafu(module)]
