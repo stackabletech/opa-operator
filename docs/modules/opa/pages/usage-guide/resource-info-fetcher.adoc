@@ -1,0 +1,117 @@
+= Resource Info Fetcher
+:description: How to configure the ResourceInfoFetcher sidecar to resolve dataset metadata from DataHub or OpenMetadata for use in OPA policies.
+
+The _Resource info fetcher_ is an optional sidecar that runs alongside each OPA
+pod and resolves dataset metadata (tags, glossary terms, owners, domain, data
+products, per-field type and tags) from a data catalog.
+OPA policies invoke it via the `stackable.opa.resourceinfo.v1` rego library.
+Responses are cached per pod with a configurable TTL.
+
+== Backends
+
+Two backends are supported:
+
+* xref:#backend-datahub[DataHub] (GraphQL) — `spec.resourceInfo.backend.dataHub`
+* xref:#backend-openmetadata[OpenMetadata] (REST) — `spec.resourceInfo.backend.openMetadata`
+
+[#backends]
+== Backend configuration
+
+[#backend-datahub]
+=== DataHub
+
+[source,yaml]
+----
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: opa
+spec:
+  image:
+    productVersion: "1.0.0"
+  resourceInfo:
+    backend:
+      dataHub:
+        graphqlEndpoint: "http://datahub-gms:8080/api/graphql"
+        credentialsSecret: "datahub-creds"
+    cache:
+      entryTimeToLive: 60s # optional, defaults to 60s
+  servers:
+    roleGroups:
+      default:
+        replicas: 1
+----
+
+The Secret referenced by `credentialsSecret` must contain one of the following sets of keys:
+
+* `username` and `password` (Basic auth)
+* `token` and `actor` (PAT Bearer)
+
+If both sets of keys are present, Basic auth is used.
+
+[#backend-openmetadata]
+=== OpenMetadata
+
+[source,yaml]
+----
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: opa
+spec:
+  image:
+    productVersion: "1.0.0"
+  resourceInfo:
+    backend:
+      openMetadata:
+        endpoint: "http://openmetadata:8585"
+        credentialsSecret: "openmetadata-bot"
+    cache:
+      entryTimeToLive: 60s # optional, defaults to 60s
+  servers:
+    roleGroups:
+      default:
+        replicas: 1
+----
+
+The Secret referenced by `credentialsSecret` must contain a `token` key with the JWT bearer token.
+
+== Using the resource info fetcher from rego
+
+The resource info fetcher exposes a rego library under `data.stackable.opa.resourceinfo.v1`.
+The `resourceInfo` function accepts the entity type, entity ID, and an optional context map:
+
+[source,rego]
+----
+package policy.access
+import rego.v1
+import data.stackable.opa.resourceinfo.v1
+
+allow if {
+  info := v1.resourceInfo("dataset", input.resource.id, {
+    "platform":    "trino",
+    "environment": "PROD",
+  })
+  not "pii" in info.tags
+}
+----
+
+== Response shape
+
+The library returns a JSON object with the following fields:
+
+[source,json]
+----
+{
+  "tags": ["pii"],
+  "glossaryTerms": ["CustomerPII"],
+  "owners": ["user:alice@example.com", "group:data-platform-team"],
+  "domain": "Finance",
+  "dataProducts": ["Customer360"],
+  "customProperties": {"sensitivityLevel": "High"},
+  "customAttributes": {},
+  "fields": {
+    "customer_id": {"type": "STRING", "tags": ["pii"], "glossaryTerms": []}
+  }
+}
+----
