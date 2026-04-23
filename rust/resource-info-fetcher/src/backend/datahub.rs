@@ -353,6 +353,218 @@ mod graphql_tests {
     }
 }
 
+use std::collections::BTreeMap;
+
+use crate::{FieldInfo, ResourceInfo};
+
+const TAG_URN_PREFIX: &str = "urn:li:tag:";
+const GLOSSARY_URN_PREFIX: &str = "urn:li:glossaryTerm:";
+const CORP_GROUP_URN_PREFIX: &str = "urn:li:corpGroup:";
+
+fn strip(urn: &str, prefix: &str) -> String {
+    urn.strip_prefix(prefix).unwrap_or(urn).to_owned()
+}
+
+fn tags_to_names(container: Option<&TagContainer>) -> Vec<String> {
+    container
+        .map(|c| {
+            c.tags
+                .iter()
+                .map(|t| strip(&t.tag.urn, TAG_URN_PREFIX))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn glossary_to_names(container: Option<&GlossaryTermContainer>) -> Vec<String> {
+    container
+        .map(|c| {
+            c.terms
+                .iter()
+                .map(|t| strip(&t.term.urn, GLOSSARY_URN_PREFIX))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+impl DatasetResponse {
+    pub fn into_resource_info(self) -> ResourceInfo {
+        // Dataset-level tags + glossary.
+        let tags = tags_to_names(self.tags.as_ref());
+        let glossary_terms = glossary_to_names(self.glossary_terms.as_ref());
+
+        // Owners with user:/group: prefixes.
+        let owners = self
+            .ownership
+            .as_ref()
+            .map(|o| {
+                o.owners
+                    .iter()
+                    .filter_map(|assoc| match &assoc.owner {
+                        OwnerRef::CorpUser { urn, properties } => {
+                            let id = properties
+                                .as_ref()
+                                .and_then(|p| p.email.as_deref())
+                                .unwrap_or_else(|| urn.rsplit(':').next().unwrap_or(urn));
+                            Some(format!("user:{id}"))
+                        }
+                        OwnerRef::CorpGroup { urn, properties } => {
+                            let id = properties
+                                .as_ref()
+                                .and_then(|p| p.display_name.as_deref())
+                                .unwrap_or_else(|| {
+                                    urn.strip_prefix(CORP_GROUP_URN_PREFIX).unwrap_or(urn)
+                                });
+                            Some(format!("group:{id}"))
+                        }
+                        OwnerRef::Other => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Domain (first non-null).
+        let domain = self
+            .domain
+            .and_then(|d| d.domain)
+            .map(|inner| inner.properties.name);
+
+        // Data products.
+        let data_products = self
+            .data_products
+            .map(|dp| {
+                dp.data_products
+                    .into_iter()
+                    .map(|p| p.properties.name)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Custom properties flat KV -> JSON strings.
+        let custom_properties: BTreeMap<String, serde_json::Value> = self
+            .properties
+            .map(|p| {
+                p.custom_properties
+                    .into_iter()
+                    .map(|cp| (cp.key, serde_json::Value::String(cp.value)))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Field-level: merge ingested (schemaMetadata) with editable (editableSchemaMetadata).
+        let editable_by_path: BTreeMap<String, EditableSchemaFieldInfo> = self
+            .editable_schema_metadata
+            .map(|esm| {
+                esm.editable_schema_field_info
+                    .into_iter()
+                    .map(|info| (info.field_path.clone(), info))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let fields: BTreeMap<String, FieldInfo> = self
+            .schema_metadata
+            .map(|sm| {
+                sm.fields
+                    .into_iter()
+                    .map(|f| {
+                        let mut tag_set: std::collections::BTreeSet<String> = f
+                            .global_tags
+                            .as_ref()
+                            .into_iter()
+                            .flat_map(|c| c.tags.iter().map(|t| strip(&t.tag.urn, TAG_URN_PREFIX)))
+                            .collect();
+                        let mut gloss_set: std::collections::BTreeSet<String> = f
+                            .glossary_terms
+                            .as_ref()
+                            .into_iter()
+                            .flat_map(|c| {
+                                c.terms.iter().map(|t| strip(&t.term.urn, GLOSSARY_URN_PREFIX))
+                            })
+                            .collect();
+                        if let Some(ed) = editable_by_path.get(&f.field_path) {
+                            if let Some(tc) = &ed.tags {
+                                for t in &tc.tags {
+                                    tag_set.insert(strip(&t.tag.urn, TAG_URN_PREFIX));
+                                }
+                            }
+                            if let Some(gc) = &ed.glossary_terms {
+                                for t in &gc.terms {
+                                    gloss_set.insert(strip(&t.term.urn, GLOSSARY_URN_PREFIX));
+                                }
+                            }
+                        }
+                        (
+                            f.field_path,
+                            FieldInfo {
+                                type_: f.type_,
+                                tags: tag_set.into_iter().collect(),
+                                glossary_terms: gloss_set.into_iter().collect(),
+                            },
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        ResourceInfo {
+            tags,
+            glossary_terms,
+            owners,
+            domain,
+            data_products,
+            custom_properties,
+            custom_attributes: BTreeMap::new(),
+            fields,
+        }
+    }
+}
+
+#[cfg(test)]
+mod transform_tests {
+    use super::*;
+    use crate::{FieldInfo, ResourceInfo};
+
+    const FIXTURE: &str = include_str!("fixtures/datahub_dataset.json");
+
+    #[test]
+    fn fixture_transforms_to_expected_resource_info() {
+        let envelope: GraphqlResponse = serde_json::from_str(FIXTURE).unwrap();
+        let ds = envelope.data.dataset.expect("dataset present");
+        let info: ResourceInfo = ds.into_resource_info();
+
+        assert_eq!(info.tags, vec!["pii", "gdpr"]);
+        assert_eq!(info.glossary_terms, vec!["CustomerPII"]);
+        assert_eq!(
+            info.owners,
+            vec![
+                "user:alice@example.com",
+                "group:data-platform-team"
+            ]
+        );
+        assert_eq!(info.domain.as_deref(), Some("Finance"));
+        assert_eq!(info.data_products, vec!["Customer360"]);
+        assert_eq!(
+            info.custom_properties.get("sensitivityLevel"),
+            Some(&serde_json::Value::String("High".to_owned()))
+        );
+        assert_eq!(info.custom_properties.get("retentionYears"),
+            Some(&serde_json::Value::String("7".to_owned())));
+        assert!(info.custom_attributes.is_empty());
+
+        // Fields
+        let cid = info.fields.get("customer_id").expect("customer_id present");
+        assert_eq!(cid.type_, "STRING");
+        assert_eq!(cid.tags, vec!["pii"]);
+        assert_eq!(cid.glossary_terms, vec!["CustomerIdentifier"]);
+
+        let sts = info.fields.get("signup_ts").expect("signup_ts present");
+        assert_eq!(sts.type_, "TIMESTAMP");
+        assert!(sts.tags.is_empty());
+        assert!(sts.glossary_terms.is_empty());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
