@@ -127,6 +127,7 @@ async fn resolve_backend(
                     .context(ResolveDataHubBackendSnafu)?;
             Ok(backend::ResolvedBackend::DataHub(resolved))
         }
+        v1alpha1::Backend::OpenMetadata(_) => todo!("OpenMetadata backend not yet implemented"),
     }
 }
 

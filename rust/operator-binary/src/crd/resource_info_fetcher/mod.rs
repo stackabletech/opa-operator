@@ -30,6 +30,9 @@ pub mod versioned {
 
         /// Backend that fetches dataset metadata from a DataHub instance via GraphQL.
         DataHub(DataHubBackend),
+
+        /// Backend that fetches table metadata from an OpenMetadata instance via REST.
+        OpenMetadata(OpenMetadataBackend),
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -48,6 +51,23 @@ pub mod versioned {
 
         /// Optional TLS configuration for the GraphQL endpoint. Defaults to WebPki
         /// verification when TLS is in use.
+        #[serde(default = "default_tls_web_pki")]
+        pub tls: Option<Tls>,
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct OpenMetadataBackend {
+        /// Base URL of the OpenMetadata server, e.g. `http://openmetadata:8585`.
+        /// The fetcher appends `/api/v1/…` paths internally.
+        pub endpoint: String,
+
+        /// Name of a Secret containing OpenMetadata bot credentials.
+        ///
+        /// Must contain a `token` key with the JWT bearer token.
+        pub credentials_secret: String,
+
+        /// Optional TLS configuration. Defaults to WebPki verification when TLS is in use.
         #[serde(default = "default_tls_web_pki")]
         pub tls: Option<Tls>,
     }
@@ -112,5 +132,23 @@ mod tests {
         };
         assert_eq!(dh.graphql_endpoint, "http://datahub-gms:8080/api/graphql");
         assert_eq!(dh.credentials_secret, "datahub-creds");
+    }
+
+    #[test]
+    fn config_with_openmetadata_backend_parses() {
+        let json = serde_json::json!({
+            "backend": {
+                "openMetadata": {
+                    "endpoint": "http://openmetadata:8585",
+                    "credentialsSecret": "om-bot"
+                }
+            }
+        });
+        let cfg: v1alpha1::Config = serde_json::from_value(json).unwrap();
+        let v1alpha1::Backend::OpenMetadata(om) = cfg.backend else {
+            panic!("expected OpenMetadata backend");
+        };
+        assert_eq!(om.endpoint, "http://openmetadata:8585");
+        assert_eq!(om.credentials_secret, "om-bot");
     }
 }
