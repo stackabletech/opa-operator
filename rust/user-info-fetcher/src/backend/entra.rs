@@ -39,6 +39,23 @@ pub enum Error {
         user_id: String,
     },
 
+    #[snafu(display(
+        "failed to request appRoles catalog for service principal {service_principal_id:?}"
+    ))]
+    RequestAppRoleCatalog {
+        source: crate::utils::http::Error,
+        service_principal_id: String,
+    },
+
+    #[snafu(display(
+        "failed to request appRoleAssignments for user {user_id:?} on service principal {service_principal_id:?}"
+    ))]
+    RequestAppRoleAssignments {
+        source: crate::utils::http::Error,
+        user_id: String,
+        service_principal_id: String,
+    },
+
     #[snafu(display("failed to to build entra endpoint for {endpoint}"))]
     BuildEntraEndpointFailed {
         source: url::ParseError,
@@ -71,6 +88,8 @@ impl http_error::Error for Error {
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
+            Self::RequestAppRoleCatalog { .. } => StatusCode::BAD_GATEWAY,
+            Self::RequestAppRoleAssignments { .. } => StatusCode::BAD_GATEWAY,
             Self::BuildEntraEndpointFailed { .. } => StatusCode::BAD_REQUEST,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -104,6 +123,32 @@ struct GroupMembershipResponse {
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
     display_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppRolesCatalogResponse {
+    #[serde(default)]
+    app_roles: Vec<AppRoleDefinition>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppRoleDefinition {
+    id: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppRoleAssignmentsResponse {
+    value: Vec<AppRoleAssignment>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppRoleAssignment {
+    app_role_id: String,
 }
 
 /// Entra backend with resolved credentials.
@@ -168,6 +213,7 @@ impl ResolvedEntraBackend {
             port,
             tenant_id,
             tls,
+            service_principal_id,
         } = &self.config;
 
         let entra_backend = EntraBackend::try_new(
@@ -227,11 +273,55 @@ impl ResolvedEntraBackend {
         })?
         .value;
 
+        let mut custom_attributes = user_info.attributes;
+
+        if let Some(sp_id) = service_principal_id {
+            let catalog = send_json_request::<AppRolesCatalogResponse>(
+                self.http_client
+                    .get(entra_backend.service_principal_app_roles(sp_id))
+                    .bearer_auth(&authn.access_token),
+            )
+            .await
+            .with_context(|_| RequestAppRoleCatalogSnafu {
+                service_principal_id: sp_id.clone(),
+            })?;
+
+            let role_value_by_id: HashMap<String, String> = catalog
+                .app_roles
+                .into_iter()
+                .map(|r| (r.id, r.value))
+                .collect();
+
+            let assignments = send_json_request::<AppRoleAssignmentsResponse>(
+                self.http_client
+                    .get(entra_backend.user_app_role_assignments(&user_info.id, sp_id))
+                    .bearer_auth(&authn.access_token),
+            )
+            .await
+            .with_context(|_| RequestAppRoleAssignmentsSnafu {
+                user_id: user_info.id.clone(),
+                service_principal_id: sp_id.clone(),
+            })?;
+
+            let app_roles: Vec<String> = assignments
+                .value
+                .into_iter()
+                .filter_map(|a| role_value_by_id.get(&a.app_role_id).cloned())
+                .collect();
+
+            custom_attributes.insert(
+                "appRoles".to_owned(),
+                serde_json::Value::Array(
+                    app_roles.into_iter().map(serde_json::Value::String).collect(),
+                ),
+            );
+        }
+
         Ok(UserInfo {
             id: Some(user_info.id),
             username: Some(user_info.user_principal_name),
             groups: groups.into_iter().filter_map(|g| g.display_name).collect(),
-            custom_attributes: user_info.attributes,
+            custom_attributes,
         })
     }
 }
@@ -286,6 +376,23 @@ impl EntraBackend {
         let mut user_info_url = self.user_info_endpoint_url.clone();
         user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
         user_info_url
+    }
+
+    pub fn service_principal_app_roles(&self, service_principal_id: &str) -> Url {
+        let mut url = self.user_info_endpoint_url.clone();
+        url.set_path(&format!(
+            "/v1.0/servicePrincipals/{service_principal_id}"
+        ));
+        url.query_pairs_mut().append_pair("$select", "appRoles");
+        url
+    }
+
+    pub fn user_app_role_assignments(&self, user: &str, service_principal_id: &str) -> Url {
+        let mut url = self.user_info_endpoint_url.clone();
+        url.set_path(&format!("/v1.0/users/{user}/appRoleAssignments"));
+        url.query_pairs_mut()
+            .append_pair("$filter", &format!("resourceId eq {service_principal_id}"));
+        url
     }
 }
 
@@ -358,6 +465,38 @@ mod tests {
             entra.group_info(user),
             Url::parse(&format!(
                 "http://graph.mock.com:8080/v1.0/users/{user}/memberOf"
+            ))
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_entra_app_role_urls() {
+        let tenant_id = "1234-5678-1234-5678";
+        let user = "user-guid";
+        let sp = "sp-guid";
+
+        let entra = EntraBackend::try_new(
+            &HostName::from_str("login.microsoft.com").unwrap(),
+            &HostName::from_str("graph.microsoft.com").unwrap(),
+            None,
+            tenant_id,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(
+            entra.service_principal_app_roles(sp),
+            Url::parse(&format!(
+                "https://graph.microsoft.com/v1.0/servicePrincipals/{sp}?%24select=appRoles"
+            ))
+            .unwrap()
+        );
+
+        assert_eq!(
+            entra.user_app_role_assignments(user, sp),
+            Url::parse(&format!(
+                "https://graph.microsoft.com/v1.0/users/{user}/appRoleAssignments?%24filter=resourceId+eq+{sp}"
             ))
             .unwrap()
         );

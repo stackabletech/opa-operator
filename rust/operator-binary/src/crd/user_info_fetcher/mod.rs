@@ -156,6 +156,20 @@ pub mod versioned {
         ///
         /// Must contain the fields `clientId` and `clientSecret`.
         pub client_credentials_secret: String,
+
+        /// Object ID of the Service Principal whose `appRoles` should be resolved for
+        /// each user. This is the tenant-local object ID of the enterprise application
+        /// (Entra portal: Enterprise Applications → {app} → Overview → Object ID), not
+        /// the Application (client) ID.
+        ///
+        /// When set, the user's `appRoleAssignments` for this Service Principal are
+        /// fetched, resolved against the SP's `appRoles` catalog, and surfaced as a
+        /// list of role `value`s under `customAttributes.appRoles`. When unset, no
+        /// appRole resolution is performed.
+        ///
+        /// Requires the additional Graph permission `Application.Read.All`.
+        #[serde(default)]
+        pub service_principal_id: Option<String>,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
