@@ -87,7 +87,10 @@ pub struct FieldInfo {
 #[derive(Snafu, Debug)]
 enum StartupError {
     #[snafu(display("unable to read config file from {path:?}"))]
-    ReadConfigFile { source: std::io::Error, path: PathBuf },
+    ReadConfigFile {
+        source: std::io::Error,
+        path: PathBuf,
+    },
 
     #[snafu(display("failed to parse config file"))]
     ParseConfig { source: serde_json::Error },
@@ -102,13 +105,17 @@ enum StartupError {
     RunServer { source: std::io::Error },
 
     #[snafu(display("failed to initialize stackable-telemetry"))]
-    TracingInit { source: stackable_operator::telemetry::tracing::Error },
+    TracingInit {
+        source: stackable_operator::telemetry::tracing::Error,
+    },
 
     #[snafu(display("failed to resolve DataHub backend"))]
     ResolveDataHubBackend { source: backend::datahub::Error },
 
     #[snafu(display("failed to resolve OpenMetadata backend"))]
-    ResolveOpenMetadataBackend { source: backend::openmetadata::Error },
+    ResolveOpenMetadataBackend {
+        source: backend::openmetadata::Error,
+    },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -131,10 +138,12 @@ async fn resolve_backend(
             Ok(backend::ResolvedBackend::DataHub(resolved))
         }
         v1alpha1::Backend::OpenMetadata(config) => {
-            let resolved =
-                backend::openmetadata::ResolvedOpenMetadataBackend::resolve(config, credentials_dir)
-                    .await
-                    .context(ResolveOpenMetadataBackendSnafu)?;
+            let resolved = backend::openmetadata::ResolvedOpenMetadataBackend::resolve(
+                config,
+                credentials_dir,
+            )
+            .await
+            .context(ResolveOpenMetadataBackendSnafu)?;
             Ok(backend::ResolvedBackend::OpenMetadata(resolved))
         }
     }
@@ -212,9 +221,7 @@ async fn get_resource_info(
     let AppState { backend, cache } = state;
     Ok(Json(
         cache
-            .try_get_with_by_ref(&req, async {
-                backend.get_resource_info(&req).await
-            })
+            .try_get_with_by_ref(&req, async { backend.get_resource_info(&req).await })
             .await?,
     ))
 }
@@ -233,7 +240,10 @@ mod tests {
         let req: ResourceInfoRequest = serde_json::from_value(json).unwrap();
         assert_eq!(req.kind, "dataset");
         assert_eq!(req.id, "hive.db.table");
-        assert_eq!(req.attributes.get("platform").map(String::as_str), Some("trino"));
+        assert_eq!(
+            req.attributes.get("platform").map(String::as_str),
+            Some("trino")
+        );
     }
 
     #[test]
@@ -251,8 +261,14 @@ mod tests {
         );
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["tags"], serde_json::json!(["pii"]));
-        assert_eq!(json["owners"], serde_json::json!(["user:alice@example.com"]));
-        assert_eq!(json["fields"]["customer_id"]["type"], serde_json::json!("STRING"));
+        assert_eq!(
+            json["owners"],
+            serde_json::json!(["user:alice@example.com"])
+        );
+        assert_eq!(
+            json["fields"]["customer_id"]["type"],
+            serde_json::json!("STRING")
+        );
     }
 
     use axum::body::Body;
@@ -289,7 +305,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let info: ResourceInfo = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(info, ResourceInfo::default());
     }

@@ -11,8 +11,8 @@ Responses are cached per pod with a configurable TTL.
 
 Two backends are supported:
 
-* xref:#backend-datahub[DataHub] (GraphQL) — `spec.resourceInfo.backend.dataHub`
-* xref:#backend-openmetadata[OpenMetadata] (REST) — `spec.resourceInfo.backend.openMetadata`
+* xref:#backend-datahub[DataHub] (GraphQL) — `spec.clusterConfig.resourceInfo.backend.dataHub`
+* xref:#backend-openmetadata[OpenMetadata] (REST) — `spec.clusterConfig.resourceInfo.backend.openMetadata`
 
 [#backends]
 == Backend configuration
@@ -29,13 +29,14 @@ metadata:
 spec:
   image:
     productVersion: "1.0.0"
-  resourceInfo:
-    backend:
-      dataHub:
-        graphqlEndpoint: "http://datahub-gms:8080/api/graphql"
-        credentialsSecret: "datahub-creds"
-    cache:
-      entryTimeToLive: 60s # optional, defaults to 60s
+  clusterConfig:
+    resourceInfo:
+      backend:
+        dataHub:
+          graphqlEndpoint: "http://datahub-gms:8080/api/graphql"
+          credentialsSecret: "datahub-creds"
+      cache:
+        entryTimeToLive: 60s # optional, defaults to 60s
   servers:
     roleGroups:
       default:
@@ -61,13 +62,14 @@ metadata:
 spec:
   image:
     productVersion: "1.0.0"
-  resourceInfo:
-    backend:
-      openMetadata:
-        endpoint: "http://openmetadata:8585"
-        credentialsSecret: "openmetadata-bot"
-    cache:
-      entryTimeToLive: 60s # optional, defaults to 60s
+  clusterConfig:
+    resourceInfo:
+      backend:
+        openMetadata:
+          endpoint: "http://openmetadata:8585"
+          credentialsSecret: "openmetadata-bot"
+      cache:
+        entryTimeToLive: 60s # optional, defaults to 60s
   servers:
     roleGroups:
       default:

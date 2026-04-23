@@ -31,8 +31,8 @@ use stackable_operator::{
 };
 use strum::{Display, EnumIter, EnumString};
 
-pub mod user_info_fetcher;
 pub mod resource_info_fetcher;
+pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";
 pub const OPERATOR_NAME: &str = "opa.stackable.tech";

@@ -112,7 +112,9 @@ impl ResolvedOpenMetadataBackend {
             Err(e) => {
                 if let crate::utils::http::Error::HttpErrorResponse { status, .. } = &e {
                     if *status == hyper::StatusCode::NOT_FOUND {
-                        return Err(Error::TableNotFound { fqn: req.id.clone() });
+                        return Err(Error::TableNotFound {
+                            fqn: req.id.clone(),
+                        });
                     }
                 }
                 return Err(e).context(RequestSnafu);
@@ -148,7 +150,6 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TableResponse {
-    pub fully_qualified_name: String,
     #[serde(default)]
     pub tags: Vec<TagLabel>,
     #[serde(default)]
@@ -183,7 +184,6 @@ pub(crate) struct Owner {
     #[serde(rename = "type")]
     pub type_: String, // "user" | "team"
     pub name: String,
-    pub display_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -272,7 +272,9 @@ mod error_tests {
 
     #[test]
     fn table_not_found_maps_to_404() {
-        let err = Error::TableNotFound { fqn: "svc.db.sch.missing".to_owned() };
+        let err = Error::TableNotFound {
+            fqn: "svc.db.sch.missing".to_owned(),
+        };
         assert_eq!(err.status_code(), hyper::StatusCode::NOT_FOUND);
     }
 }
@@ -286,7 +288,6 @@ mod response_tests {
     #[test]
     fn deserialize_full_fixture() {
         let t: TableResponse = serde_json::from_str(FIXTURE).unwrap();
-        assert_eq!(t.fully_qualified_name, "mysql.mydb.public.orders");
         assert_eq!(t.tags.len(), 2);
         assert_eq!(t.glossary_terms.len(), 1);
         assert_eq!(t.owners.len(), 2);
@@ -311,10 +312,7 @@ mod transform_tests_om {
 
         assert_eq!(info.tags, vec!["PII.Sensitive", "GDPR.Personal"]);
         assert_eq!(info.glossary_terms, vec!["CustomerPII"]);
-        assert_eq!(
-            info.owners,
-            vec!["user:alice", "group:data-platform-team"]
-        );
+        assert_eq!(info.owners, vec!["user:alice", "group:data-platform-team"]);
         assert_eq!(info.domain.as_deref(), Some("Finance"));
         assert_eq!(info.data_products, vec!["Customer360"]);
         assert_eq!(

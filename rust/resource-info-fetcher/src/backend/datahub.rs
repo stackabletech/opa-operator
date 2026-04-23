@@ -1,8 +1,6 @@
 use std::path::Path;
 
 use snafu::{ResultExt, Snafu};
-use url::Url;
-
 /// DataHub auth method resolved from the mounted credentials directory.
 #[derive(Clone, PartialEq, Eq)]
 pub enum DataHubAuthMethod {
@@ -68,9 +66,9 @@ impl crate::http_error::Error for Error {
         match self {
             Self::ReadCredential { .. } | Self::NoCredentials => StatusCode::SERVICE_UNAVAILABLE,
             Self::MissingAttribute { .. } => StatusCode::BAD_REQUEST,
-            Self::BuildHttpClient { .. } | Self::ConfigureTls { .. } | Self::ParseEndpoint { .. } => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            Self::BuildHttpClient { .. }
+            | Self::ConfigureTls { .. }
+            | Self::ParseEndpoint { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::GraphqlRequest { .. } | Self::GraphqlErrors { .. } => StatusCode::BAD_GATEWAY,
             Self::DatasetNotFound { .. } => StatusCode::NOT_FOUND,
         }
@@ -116,11 +114,6 @@ pub fn build_dataset_urn(platform: &str, id: &str, environment: &str) -> String 
     format!("urn:li:dataset:(urn:li:dataPlatform:{platform},{id},{environment})")
 }
 
-/// Parses and returns the GraphQL endpoint URL configured for the backend.
-pub fn parse_graphql_endpoint(endpoint: &str) -> Result<Url, url::ParseError> {
-    Url::parse(endpoint)
-}
-
 #[cfg(test)]
 mod cred_tests {
     use super::*;
@@ -130,8 +123,12 @@ mod cred_tests {
     #[tokio::test]
     async fn detects_basic_auth() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("username"), "sys_user").await.unwrap();
-        fs::write(dir.path().join("password"), "s3cret").await.unwrap();
+        fs::write(dir.path().join("username"), "sys_user")
+            .await
+            .unwrap();
+        fs::write(dir.path().join("password"), "s3cret")
+            .await
+            .unwrap();
 
         let auth = detect_auth_method(dir.path()).await.unwrap();
         match auth {
@@ -147,7 +144,9 @@ mod cred_tests {
     async fn detects_bearer_auth() {
         let dir = tempdir().unwrap();
         fs::write(dir.path().join("token"), "tok123").await.unwrap();
-        fs::write(dir.path().join("actor"), "bot_account").await.unwrap();
+        fs::write(dir.path().join("actor"), "bot_account")
+            .await
+            .unwrap();
 
         let auth = detect_auth_method(dir.path()).await.unwrap();
         match auth {
@@ -223,6 +222,7 @@ query Dataset($urn: String!) {
 }
 "#;
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 pub(crate) struct GraphqlResponse {
     pub data: GraphqlData,
@@ -289,8 +289,14 @@ pub(crate) struct OwnerAssociation {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "__typename")]
 pub(crate) enum OwnerRef {
-    CorpUser { urn: String, properties: Option<CorpUserProperties> },
-    CorpGroup { urn: String, properties: Option<CorpGroupProperties> },
+    CorpUser {
+        urn: String,
+        properties: Option<CorpUserProperties>,
+    },
+    CorpGroup {
+        urn: String,
+        properties: Option<CorpGroupProperties>,
+    },
     #[serde(other)]
     Other,
 }
@@ -394,14 +400,14 @@ mod graphql_tests {
         assert_eq!(ds.glossary_terms.as_ref().unwrap().terms.len(), 1);
         assert_eq!(ds.ownership.as_ref().unwrap().owners.len(), 2);
         assert_eq!(
-            ds.domain.as_ref().and_then(|d| d.domain.as_ref()).map(|d| d.properties.name.as_str()),
+            ds.domain
+                .as_ref()
+                .and_then(|d| d.domain.as_ref())
+                .map(|d| d.properties.name.as_str()),
             Some("Finance")
         );
         assert_eq!(ds.data_products.as_ref().unwrap().data_products.len(), 1);
-        assert_eq!(
-            ds.properties.as_ref().unwrap().custom_properties.len(),
-            2
-        );
+        assert_eq!(ds.properties.as_ref().unwrap().custom_properties.len(), 2);
         assert_eq!(ds.schema_metadata.as_ref().unwrap().fields.len(), 2);
     }
 }
@@ -532,7 +538,9 @@ impl DatasetResponse {
                             .as_ref()
                             .into_iter()
                             .flat_map(|c| {
-                                c.terms.iter().map(|t| strip(&t.term.urn, GLOSSARY_URN_PREFIX))
+                                c.terms
+                                    .iter()
+                                    .map(|t| strip(&t.term.urn, GLOSSARY_URN_PREFIX))
                             })
                             .collect();
                         if let Some(ed) = editable_by_path.get(&f.field_path) {
@@ -576,7 +584,7 @@ impl DatasetResponse {
 #[cfg(test)]
 mod transform_tests {
     use super::*;
-    use crate::{FieldInfo, ResourceInfo};
+    use crate::ResourceInfo;
 
     const FIXTURE: &str = include_str!("fixtures/datahub_dataset.json");
 
@@ -590,10 +598,7 @@ mod transform_tests {
         assert_eq!(info.glossary_terms, vec!["CustomerPII"]);
         assert_eq!(
             info.owners,
-            vec![
-                "user:alice@example.com",
-                "group:data-platform-team"
-            ]
+            vec!["user:alice@example.com", "group:data-platform-team"]
         );
         assert_eq!(info.domain.as_deref(), Some("Finance"));
         assert_eq!(info.data_products, vec!["Customer360"]);
@@ -601,8 +606,10 @@ mod transform_tests {
             info.custom_properties.get("sensitivityLevel"),
             Some(&serde_json::Value::String("High".to_owned()))
         );
-        assert_eq!(info.custom_properties.get("retentionYears"),
-            Some(&serde_json::Value::String("7".to_owned())));
+        assert_eq!(
+            info.custom_properties.get("retentionYears"),
+            Some(&serde_json::Value::String("7".to_owned()))
+        );
         assert!(info.custom_attributes.is_empty());
 
         // Fields
@@ -639,13 +646,6 @@ mod tests {
             "urn:li:dataset:(urn:li:dataPlatform:hive,my_catalog.my_schema.my_table,DEV)"
         );
     }
-
-    #[test]
-    fn graphql_endpoint_parse_ok() {
-        let url = parse_graphql_endpoint("http://datahub-gms:8080/api/graphql").unwrap();
-        assert_eq!(url.host_str(), Some("datahub-gms"));
-        assert_eq!(url.path(), "/api/graphql");
-    }
 }
 
 use reqwest::ClientBuilder;
@@ -670,7 +670,9 @@ impl ResolvedDataHubBackend {
 
         let mut builder = ClientBuilder::new();
         builder = utils::tls::configure_reqwest(
-            &TlsClientDetails { tls: config.tls.clone() },
+            &TlsClientDetails {
+                tls: config.tls.clone(),
+            },
             builder,
         )
         .await
@@ -679,10 +681,17 @@ impl ResolvedDataHubBackend {
 
         let endpoint = url::Url::parse(&config.graphql_endpoint).context(ParseEndpointSnafu)?;
 
-        Ok(Self { endpoint, http_client, auth })
+        Ok(Self {
+            endpoint,
+            http_client,
+            auth,
+        })
     }
 
-    pub async fn get_resource_info(&self, req: &ResourceInfoRequest) -> Result<ResourceInfo, Error> {
+    pub async fn get_resource_info(
+        &self,
+        req: &ResourceInfoRequest,
+    ) -> Result<ResourceInfo, Error> {
         let platform = req
             .attributes
             .get("platform")
@@ -699,10 +708,7 @@ impl ResolvedDataHubBackend {
             "variables": { "urn": &urn },
         });
 
-        let mut request = self
-            .http_client
-            .post(self.endpoint.clone())
-            .json(&body);
+        let mut request = self.http_client.post(self.endpoint.clone()).json(&body);
 
         // X-DataHub-Actor mirrors DataHub's expectation that system calls
         // identify the acting principal, regardless of auth method.
@@ -730,7 +736,9 @@ impl ResolvedDataHubBackend {
             message: String,
         }
 
-        let envelope: Envelope = send_json_request(request).await.context(GraphqlRequestSnafu)?;
+        let envelope: Envelope = send_json_request(request)
+            .await
+            .context(GraphqlRequestSnafu)?;
 
         if !envelope.errors.is_empty() {
             return Err(Error::GraphqlErrors {

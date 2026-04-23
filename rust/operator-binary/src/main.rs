@@ -62,7 +62,8 @@ struct Opts {
 
 #[derive(clap::Parser)]
 struct OpaRun {
-    /// The full image tag of the operator, used to deploy the user_info_fetcher.
+    /// The full image tag of the operator, used to deploy the sidecar fetchers
+    /// (user-info-fetcher and resource-info-fetcher).
     #[clap(long, env)]
     operator_image: String,
 
@@ -175,7 +176,7 @@ async fn create_controller<F>(
     product_config: ProductConfigManager,
     watch_namespace: WatchNamespace,
     opa_bundle_builder_image: String,
-    user_info_fetcher_image: String,
+    operator_image: String,
     cluster_info: KubernetesClusterInfo,
     shutdown_signal: F,
 ) where
@@ -207,7 +208,7 @@ async fn create_controller<F>(
                 client: client.clone(),
                 product_config,
                 opa_bundle_builder_image,
-                user_info_fetcher_image,
+                operator_image,
                 cluster_info,
             }),
         )

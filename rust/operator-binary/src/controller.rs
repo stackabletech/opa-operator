@@ -164,7 +164,7 @@ pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub product_config: ProductConfigManager,
     pub opa_bundle_builder_image: String,
-    pub user_info_fetcher_image: String,
+    pub operator_image: String,
     pub cluster_info: KubernetesClusterInfo,
 }
 
@@ -560,7 +560,7 @@ pub async fn reconcile_opa(
             rolegroup_config,
             &merged_config,
             &ctx.opa_bundle_builder_image,
-            &ctx.user_info_fetcher_image,
+            &ctx.operator_image,
             &rbac_sa,
             &ctx.cluster_info,
         )?;
@@ -825,7 +825,7 @@ fn build_server_rolegroup_daemonset(
     server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
     opa_bundle_builder_image: &str,
-    user_info_fetcher_image: &str,
+    operator_image: &str,
     service_account: &ServiceAccount,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
@@ -1085,7 +1085,7 @@ fn build_server_rolegroup_daemonset(
 
         cb_user_info_fetcher
             .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
-            .image(user_info_fetcher_image) // ...override the image
+            .image(operator_image) // ...override the image
             .command(vec!["stackable-opa-user-info-fetcher".to_string()])
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
@@ -1210,13 +1210,11 @@ fn build_server_rolegroup_daemonset(
 
         cb_resource_info_fetcher
             .image_from_product_image(resolved_product_image) // inherit pull policy and pull secrets, then...
-            .image(user_info_fetcher_image) // ...override with the operator image that ships the binary
+            .image(operator_image) // ...override with the operator image that ships the binary
             .command(vec!["stackable-opa-resource-info-fetcher".to_string()])
             .add_env_var(
                 "CONFIG",
-                format!(
-                    "{RESOURCE_INFO_FETCHER_CONFIG_DIR}/{RESOURCE_INFO_FETCHER_CONFIG_FILE}"
-                ),
+                format!("{RESOURCE_INFO_FETCHER_CONFIG_DIR}/{RESOURCE_INFO_FETCHER_CONFIG_FILE}"),
             )
             .add_env_var("CREDENTIALS_DIR", RESOURCE_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(
