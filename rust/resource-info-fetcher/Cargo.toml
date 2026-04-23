@@ -1,0 +1,31 @@
+[package]
+name = "stackable-opa-resource-info-fetcher"
+description = "Fetches resource metadata (tags, owners, glossary terms, …) from data catalogs"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+stackable-opa-operator = { path = "../operator-binary" }
+stackable-operator.workspace = true
+
+axum.workspace = true
+clap.workspace = true
+futures.workspace = true
+hyper.workspace = true
+moka.workspace = true
+reqwest.workspace = true
+rustls-pki-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+snafu.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+native-tls.workspace = true
+
+[build-dependencies]
+built.workspace = true

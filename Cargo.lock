@@ -3560,6 +3560,29 @@ name = "stackable-opa-regorule-library"
 version = "0.0.0-dev"
 
 [[package]]
+name = "stackable-opa-resource-info-fetcher"
+version = "0.0.0-dev"
+dependencies = [
+ "axum",
+ "built",
+ "clap",
+ "futures",
+ "hyper",
+ "moka",
+ "native-tls",
+ "reqwest 0.13.2",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "snafu 0.9.0",
+ "stackable-opa-operator",
+ "stackable-operator",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "stackable-opa-user-info-fetcher"
 version = "0.0.0-dev"
 dependencies = [
