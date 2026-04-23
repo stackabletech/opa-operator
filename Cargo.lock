@@ -3578,6 +3578,7 @@ dependencies = [
  "stackable-opa-operator",
  "stackable-operator",
  "tokio",
+ "tower",
  "tracing",
  "url",
 ]
