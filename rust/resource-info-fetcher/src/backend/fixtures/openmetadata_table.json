@@ -1,0 +1,38 @@
+{
+  "id": "uuid-1234",
+  "name": "orders",
+  "fullyQualifiedName": "mysql.mydb.public.orders",
+  "tags": [
+    { "tagFQN": "PII.Sensitive", "source": "Classification" },
+    { "tagFQN": "GDPR.Personal",   "source": "Classification" }
+  ],
+  "glossaryTerms": [
+    { "name": "CustomerPII", "fullyQualifiedName": "BusinessGlossary.CustomerPII" }
+  ],
+  "owners": [
+    { "type": "user", "name": "alice", "fullyQualifiedName": "alice",
+      "displayName": "Alice Example" },
+    { "type": "team", "name": "data-platform-team", "fullyQualifiedName": "data-platform-team",
+      "displayName": "Data Platform" }
+  ],
+  "domain": { "fullyQualifiedName": "Finance", "name": "Finance" },
+  "dataProducts": [
+    { "name": "Customer360", "fullyQualifiedName": "Customer360" }
+  ],
+  "extension": {
+    "sensitivityLevel": "High",
+    "linkedEntity": { "type": "table", "fqn": "mysql.other.db.lookup" }
+  },
+  "columns": [
+    { "name": "customer_id", "dataType": "VARCHAR",
+      "tags": [{ "tagFQN": "PII.Sensitive", "source": "Classification" }],
+      "glossaryTerms": [
+        { "name": "CustomerIdentifier", "fullyQualifiedName": "BusinessGlossary.CustomerIdentifier" }
+      ]
+    },
+    { "name": "signup_ts", "dataType": "TIMESTAMP",
+      "tags": [],
+      "glossaryTerms": []
+    }
+  ]
+}

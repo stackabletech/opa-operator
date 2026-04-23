@@ -21,6 +21,92 @@ pub fn build_table_by_fqn_url(endpoint: &Url, fqn: &str) -> Url {
     url
 }
 
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TableResponse {
+    pub fully_qualified_name: String,
+    #[serde(default)]
+    pub tags: Vec<TagLabel>,
+    #[serde(default)]
+    pub glossary_terms: Vec<GlossaryTermLabel>,
+    #[serde(default)]
+    pub owners: Vec<Owner>,
+    pub domain: Option<DomainRef>,
+    #[serde(default)]
+    pub data_products: Vec<DataProductRef>,
+    #[serde(default)]
+    pub extension: Option<serde_json::Value>,
+    #[serde(default)]
+    pub columns: Vec<ColumnResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TagLabel {
+    #[serde(rename = "tagFQN")]
+    pub tag_fqn: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GlossaryTermLabel {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct Owner {
+    #[serde(rename = "type")]
+    pub type_: String, // "user" | "team"
+    pub name: String,
+    pub display_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DomainRef {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DataProductRef {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ColumnResponse {
+    pub name: String,
+    pub data_type: String,
+    #[serde(default)]
+    pub tags: Vec<TagLabel>,
+    #[serde(default)]
+    pub glossary_terms: Vec<GlossaryTermLabel>,
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::*;
+
+    const FIXTURE: &str = include_str!("fixtures/openmetadata_table.json");
+
+    #[test]
+    fn deserialize_full_fixture() {
+        let t: TableResponse = serde_json::from_str(FIXTURE).unwrap();
+        assert_eq!(t.fully_qualified_name, "mysql.mydb.public.orders");
+        assert_eq!(t.tags.len(), 2);
+        assert_eq!(t.glossary_terms.len(), 1);
+        assert_eq!(t.owners.len(), 2);
+        assert_eq!(t.domain.as_ref().unwrap().name, "Finance");
+        assert_eq!(t.data_products.len(), 1);
+        assert!(t.extension.as_ref().is_some());
+        assert_eq!(t.columns.len(), 2);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
