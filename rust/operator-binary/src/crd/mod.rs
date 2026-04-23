@@ -238,6 +238,7 @@ pub enum Container {
     BundleBuilder,
     Opa,
     UserInfoFetcher,
+    ResourceInfoFetcher,
 }
 
 // NOTE (@Techassi): This struct can currently NOT be versioned because it is used via Role which

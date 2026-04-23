@@ -77,7 +77,7 @@ use strum::{EnumDiscriminants, IntoStaticStr};
 use crate::{
     crd::{
         APP_NAME, Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
-        OpaClusterStatus, OpaConfig, OpaRole, user_info_fetcher, v1alpha2,
+        OpaClusterStatus, OpaConfig, OpaRole, resource_info_fetcher, user_info_fetcher, v1alpha2,
     },
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
@@ -109,6 +109,11 @@ const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 const USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: &str = "kerberos";
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
+const RESOURCE_INFO_FETCHER_CONFIG_VOLUME_NAME: &str = "resource-info-fetcher-config";
+const RESOURCE_INFO_FETCHER_CONFIG_DIR: &str = "/etc/resource-info-fetcher";
+const RESOURCE_INFO_FETCHER_CONFIG_FILE: &str = "config.json";
+const RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "resource-info-fetcher-credentials";
+const RESOURCE_INFO_FETCHER_CREDENTIALS_DIR: &str = "/etc/resource-info-fetcher/credentials";
 const TLS_VOLUME_NAME: &str = "tls";
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
@@ -290,6 +295,14 @@ pub enum Error {
 
     #[snafu(display("failed to serialize user info fetcher configuration"))]
     SerializeUserInfoFetcherConfig { source: serde_json::Error },
+
+    #[snafu(display("failed to serialize resource info fetcher configuration"))]
+    SerializeResourceInfoFetcherConfig { source: serde_json::Error },
+
+    #[snafu(display("failed to build resource-info-fetcher ConfigMap"))]
+    BuildResourceInfoFetcherConfig {
+        source: stackable_operator::builder::configmap::Error,
+    },
 
     #[snafu(display("failed to build label"))]
     BuildLabel { source: LabelError },
@@ -558,6 +571,21 @@ pub async fn reconcile_opa(
             .with_context(|_| ApplyRoleGroupConfigSnafu {
                 rolegroup: rolegroup.clone(),
             })?;
+
+        if let Some(resource_info) = &opa.spec.cluster_config.resource_info {
+            let rif_configmap = build_resource_info_fetcher_config_map(
+                opa,
+                &resolved_product_image,
+                resource_info,
+            )?;
+            cluster_resources
+                .add(client, rif_configmap)
+                .await
+                .with_context(|_| ApplyRoleGroupConfigSnafu {
+                    rolegroup: rolegroup.clone(),
+                })?;
+        }
+
         cluster_resources
             .add(client, rg_service)
             .await
@@ -703,6 +731,44 @@ fn build_server_rolegroup_config_map(
         .with_context(|_| BuildRoleGroupConfigSnafu {
             rolegroup: rolegroup.clone(),
         })
+}
+
+/// Builds the dedicated [`ConfigMap`] that holds the resource-info-fetcher JSON config.
+///
+/// The name is `{opa-cluster-name}-resource-info-fetcher-config`. It is mounted into the
+/// sidecar container as a separate volume so that the sidecar binary can read its own config
+/// independently of the shared OPA rolegroup ConfigMap.
+fn build_resource_info_fetcher_config_map(
+    opa: &v1alpha2::OpaCluster,
+    resolved_product_image: &ResolvedProductImage,
+    resource_info: &resource_info_fetcher::v1alpha1::Config,
+) -> Result<ConfigMap> {
+    let opa_name = opa.metadata.name.as_deref().context(NoNameSnafu)?;
+    let cm_name = format!("{opa_name}-resource-info-fetcher-config");
+
+    let metadata = ObjectMetaBuilder::new()
+        .name_and_namespace(opa)
+        .name(&cm_name)
+        .ownerreference_from_resource(opa, None, Some(true))
+        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .with_recommended_labels(&build_recommended_labels(
+            opa,
+            &resolved_product_image.app_version_label_value,
+            "server",
+            "resource-info-fetcher",
+        ))
+        .context(ObjectMetaSnafu)?
+        .build();
+
+    ConfigMapBuilder::new()
+        .metadata(metadata)
+        .add_data(
+            RESOURCE_INFO_FETCHER_CONFIG_FILE,
+            serde_json::to_string_pretty(resource_info)
+                .context(SerializeResourceInfoFetcherConfigSnafu)?,
+        )
+        .build()
+        .context(BuildResourceInfoFetcherConfigSnafu)
 }
 
 /// Env variables that are need to run stackable Rust binaries, such as
@@ -1136,6 +1202,80 @@ fn build_server_rolegroup_daemonset(
         }
 
         pb.add_container(cb_user_info_fetcher.build());
+    }
+
+    if let Some(resource_info) = &opa.spec.cluster_config.resource_info {
+        let mut cb_resource_info_fetcher =
+            ContainerBuilder::new("resource-info-fetcher").context(IllegalContainerNameSnafu)?;
+
+        cb_resource_info_fetcher
+            .image_from_product_image(resolved_product_image) // inherit pull policy and pull secrets, then...
+            .image(user_info_fetcher_image) // ...override with the operator image that ships the binary
+            .command(vec!["stackable-opa-resource-info-fetcher".to_string()])
+            .add_env_var(
+                "CONFIG",
+                format!(
+                    "{RESOURCE_INFO_FETCHER_CONFIG_DIR}/{RESOURCE_INFO_FETCHER_CONFIG_FILE}"
+                ),
+            )
+            .add_env_var("CREDENTIALS_DIR", RESOURCE_INFO_FETCHER_CREDENTIALS_DIR)
+            .add_volume_mount(
+                RESOURCE_INFO_FETCHER_CONFIG_VOLUME_NAME,
+                RESOURCE_INFO_FETCHER_CONFIG_DIR,
+            )
+            .context(AddVolumeMountSnafu)?
+            .resources(
+                ResourceRequirementsBuilder::new()
+                    .with_cpu_request("100m")
+                    .with_cpu_limit("200m")
+                    .with_memory_request("128Mi")
+                    .with_memory_limit("128Mi")
+                    .build(),
+            );
+        add_stackable_rust_cli_env_vars(
+            &mut cb_resource_info_fetcher,
+            cluster_info,
+            sidecar_container_log_level(merged_config, &Container::ResourceInfoFetcher).to_string(),
+            &Container::ResourceInfoFetcher,
+        );
+
+        // Add the dedicated ConfigMap volume for the resource-info-fetcher config.
+        pb.add_volume(
+            VolumeBuilder::new(RESOURCE_INFO_FETCHER_CONFIG_VOLUME_NAME)
+                .with_config_map(format!("{opa_name}-resource-info-fetcher-config"))
+                .build(),
+        )
+        .context(AddVolumeSnafu)?;
+
+        // Add the credentials Secret volume when the backend requires one.
+        let secret_name = match &resource_info.backend {
+            resource_info_fetcher::v1alpha1::Backend::None {} => None,
+            resource_info_fetcher::v1alpha1::Backend::DataHub(b) => {
+                Some(b.credentials_secret.clone())
+            }
+            resource_info_fetcher::v1alpha1::Backend::OpenMetadata(b) => {
+                Some(b.credentials_secret.clone())
+            }
+        };
+        if let Some(secret_name) = secret_name {
+            pb.add_volume(
+                VolumeBuilder::new(RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                    .secret(SecretVolumeSource {
+                        secret_name: Some(secret_name),
+                        ..Default::default()
+                    })
+                    .build(),
+            )
+            .context(AddVolumeSnafu)?;
+            cb_resource_info_fetcher
+                .add_volume_mount(
+                    RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                    RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
+                )
+                .context(AddVolumeMountSnafu)?;
+        }
+
+        pb.add_container(cb_resource_info_fetcher.build());
     }
 
     if merged_config.logging.enable_vector_agent {
