@@ -34,6 +34,9 @@ pub enum Error {
 
     #[snafu(display("OpenMetadata request failed"))]
     Request { source: crate::utils::http::Error },
+
+    #[snafu(display("table not found at FQN {fqn}"))]
+    TableNotFound { fqn: String },
 }
 
 impl crate::http_error::Error for Error {
@@ -45,6 +48,7 @@ impl crate::http_error::Error for Error {
             | Self::ConfigureTls { .. }
             | Self::ParseEndpoint { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::Request { .. } => StatusCode::BAD_GATEWAY,
+            Self::TableNotFound { .. } => StatusCode::NOT_FOUND,
         }
     }
 }
@@ -103,7 +107,17 @@ impl ResolvedOpenMetadataBackend {
             .get(url)
             .header(header::AUTHORIZATION, format!("Bearer {}", self.token));
 
-        let table: TableResponse = send_json_request(request).await.context(RequestSnafu)?;
+        let table: TableResponse = match send_json_request(request).await {
+            Ok(t) => t,
+            Err(e) => {
+                if let crate::utils::http::Error::HttpErrorResponse { status, .. } = &e {
+                    if *status == hyper::StatusCode::NOT_FOUND {
+                        return Err(Error::TableNotFound { fqn: req.id.clone() });
+                    }
+                }
+                return Err(e).context(RequestSnafu);
+            }
+        };
         Ok(table.into_resource_info())
     }
 }
@@ -248,6 +262,18 @@ impl TableResponse {
             custom_attributes: BTreeMap::new(),
             fields,
         }
+    }
+}
+
+#[cfg(test)]
+mod error_tests {
+    use super::*;
+    use crate::http_error::Error as HttpError;
+
+    #[test]
+    fn table_not_found_maps_to_404() {
+        let err = Error::TableNotFound { fqn: "svc.db.sch.missing".to_owned() };
+        assert_eq!(err.status_code(), hyper::StatusCode::NOT_FOUND);
     }
 }
 
