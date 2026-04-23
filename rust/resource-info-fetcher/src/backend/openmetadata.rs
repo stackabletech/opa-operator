@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use url::Url;
 
 /// Builds the OpenMetadata "get table by FQN" URL for a given server endpoint
@@ -87,6 +89,62 @@ pub(crate) struct ColumnResponse {
     pub glossary_terms: Vec<GlossaryTermLabel>,
 }
 
+use crate::{FieldInfo, ResourceInfo};
+
+impl TableResponse {
+    pub fn into_resource_info(self) -> ResourceInfo {
+        let tags = self.tags.into_iter().map(|t| t.tag_fqn).collect();
+        let glossary_terms = self.glossary_terms.into_iter().map(|g| g.name).collect();
+
+        let owners = self
+            .owners
+            .into_iter()
+            .map(|o| {
+                let prefix = match o.type_.as_str() {
+                    "user" => "user",
+                    "team" => "group",
+                    other => other,
+                };
+                format!("{prefix}:{}", o.name)
+            })
+            .collect();
+
+        let domain = self.domain.map(|d| d.name);
+        let data_products = self.data_products.into_iter().map(|dp| dp.name).collect();
+
+        let custom_properties: BTreeMap<String, serde_json::Value> = match self.extension {
+            Some(serde_json::Value::Object(map)) => map.into_iter().collect(),
+            _ => BTreeMap::new(),
+        };
+
+        let fields = self
+            .columns
+            .into_iter()
+            .map(|c| {
+                (
+                    c.name,
+                    FieldInfo {
+                        type_: c.data_type,
+                        tags: c.tags.into_iter().map(|t| t.tag_fqn).collect(),
+                        glossary_terms: c.glossary_terms.into_iter().map(|g| g.name).collect(),
+                    },
+                )
+            })
+            .collect();
+
+        ResourceInfo {
+            tags,
+            glossary_terms,
+            owners,
+            domain,
+            data_products,
+            custom_properties,
+            custom_attributes: BTreeMap::new(),
+            fields,
+        }
+    }
+}
+
 #[cfg(test)]
 mod response_tests {
     use super::*;
@@ -104,6 +162,44 @@ mod response_tests {
         assert_eq!(t.data_products.len(), 1);
         assert!(t.extension.as_ref().is_some());
         assert_eq!(t.columns.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod transform_tests_om {
+    use super::*;
+    use crate::ResourceInfo;
+
+    const FIXTURE: &str = include_str!("fixtures/openmetadata_table.json");
+
+    #[test]
+    fn fixture_transforms_to_expected_resource_info() {
+        let t: TableResponse = serde_json::from_str(FIXTURE).unwrap();
+        let info: ResourceInfo = t.into_resource_info();
+
+        assert_eq!(info.tags, vec!["PII.Sensitive", "GDPR.Personal"]);
+        assert_eq!(info.glossary_terms, vec!["CustomerPII"]);
+        assert_eq!(
+            info.owners,
+            vec!["user:alice", "group:data-platform-team"]
+        );
+        assert_eq!(info.domain.as_deref(), Some("Finance"));
+        assert_eq!(info.data_products, vec!["Customer360"]);
+        assert_eq!(
+            info.custom_properties.get("sensitivityLevel"),
+            Some(&serde_json::Value::String("High".to_owned()))
+        );
+        // linkedEntity preserved as native JSON object
+        assert!(info.custom_properties["linkedEntity"].is_object());
+
+        let cid = info.fields.get("customer_id").unwrap();
+        assert_eq!(cid.type_, "VARCHAR");
+        assert_eq!(cid.tags, vec!["PII.Sensitive"]);
+        assert_eq!(cid.glossary_terms, vec!["CustomerIdentifier"]);
+
+        let sts = info.fields.get("signup_ts").unwrap();
+        assert_eq!(sts.type_, "TIMESTAMP");
+        assert!(sts.tags.is_empty());
     }
 }
 
