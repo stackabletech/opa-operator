@@ -1,6 +1,112 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
+use reqwest::{ClientBuilder, header};
+use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
+use stackable_operator::commons::tls_verification::TlsClientDetails;
 use url::Url;
+
+use crate::{
+    ResourceInfoRequest,
+    utils::{self, http::send_json_request},
+};
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("failed to read credential file {path:?}"))]
+    ReadCredential {
+        source: std::io::Error,
+        path: std::path::PathBuf,
+    },
+
+    #[snafu(display("credentials secret must contain a `token` key"))]
+    MissingToken,
+
+    #[snafu(display("failed to build HTTP client"))]
+    BuildHttpClient { source: reqwest::Error },
+
+    #[snafu(display("failed to configure TLS"))]
+    ConfigureTls { source: crate::utils::tls::Error },
+
+    #[snafu(display("failed to parse OpenMetadata endpoint URL"))]
+    ParseEndpoint { source: url::ParseError },
+
+    #[snafu(display("OpenMetadata request failed"))]
+    Request { source: crate::utils::http::Error },
+}
+
+impl crate::http_error::Error for Error {
+    fn status_code(&self) -> hyper::StatusCode {
+        use hyper::StatusCode;
+        match self {
+            Self::ReadCredential { .. } | Self::MissingToken => StatusCode::SERVICE_UNAVAILABLE,
+            Self::BuildHttpClient { .. }
+            | Self::ConfigureTls { .. }
+            | Self::ParseEndpoint { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Request { .. } => StatusCode::BAD_GATEWAY,
+        }
+    }
+}
+
+pub struct ResolvedOpenMetadataBackend {
+    endpoint: url::Url,
+    http_client: reqwest::Client,
+    token: String,
+}
+
+impl ResolvedOpenMetadataBackend {
+    pub async fn resolve(
+        config: v1alpha1::OpenMetadataBackend,
+        credentials_dir: &Path,
+    ) -> Result<Self, Error> {
+        let token_path = credentials_dir.join("token");
+        if !token_path.exists() {
+            return Err(Error::MissingToken);
+        }
+        let token = tokio::fs::read_to_string(&token_path)
+            .await
+            .with_context(|_| ReadCredentialSnafu {
+                path: token_path.clone(),
+            })?
+            .trim()
+            .to_owned();
+
+        let mut builder = ClientBuilder::new();
+        builder = utils::tls::configure_reqwest(
+            &TlsClientDetails {
+                tls: config.tls.clone(),
+            },
+            builder,
+        )
+        .await
+        .context(ConfigureTlsSnafu)?;
+        let http_client = builder.build().context(BuildHttpClientSnafu)?;
+
+        let endpoint = url::Url::parse(&config.endpoint).context(ParseEndpointSnafu)?;
+
+        Ok(Self {
+            endpoint,
+            http_client,
+            token,
+        })
+    }
+
+    pub async fn get_resource_info(
+        &self,
+        req: &ResourceInfoRequest,
+    ) -> Result<crate::ResourceInfo, Error> {
+        let url = build_table_by_fqn_url(&self.endpoint, &req.id);
+
+        let request = self
+            .http_client
+            .get(url)
+            .header(header::AUTHORIZATION, format!("Bearer {}", self.token));
+
+        let table: TableResponse = send_json_request(request).await.context(RequestSnafu)?;
+        Ok(table.into_resource_info())
+    }
+}
 
 /// Builds the OpenMetadata "get table by FQN" URL for a given server endpoint
 /// and fully-qualified table name. The FQN is URL-encoded into the path so

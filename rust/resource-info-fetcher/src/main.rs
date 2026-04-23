@@ -106,6 +106,9 @@ enum StartupError {
 
     #[snafu(display("failed to resolve DataHub backend"))]
     ResolveDataHubBackend { source: backend::datahub::Error },
+
+    #[snafu(display("failed to resolve OpenMetadata backend"))]
+    ResolveOpenMetadataBackend { source: backend::openmetadata::Error },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -127,7 +130,13 @@ async fn resolve_backend(
                     .context(ResolveDataHubBackendSnafu)?;
             Ok(backend::ResolvedBackend::DataHub(resolved))
         }
-        v1alpha1::Backend::OpenMetadata(_) => todo!("OpenMetadata backend not yet implemented"),
+        v1alpha1::Backend::OpenMetadata(config) => {
+            let resolved =
+                backend::openmetadata::ResolvedOpenMetadataBackend::resolve(config, credentials_dir)
+                    .await
+                    .context(ResolveOpenMetadataBackendSnafu)?;
+            Ok(backend::ResolvedBackend::OpenMetadata(resolved))
+        }
     }
 }
 

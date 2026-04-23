@@ -13,6 +13,9 @@ pub enum GetResourceInfoError {
 
     #[snafu(display("failed to get resource info from DataHub"))]
     DataHub { source: datahub::Error },
+
+    #[snafu(display("failed to get resource info from OpenMetadata"))]
+    OpenMetadata { source: openmetadata::Error },
 }
 
 impl crate::http_error::Error for GetResourceInfoError {
@@ -24,6 +27,7 @@ impl crate::http_error::Error for GetResourceInfoError {
         match self {
             Self::UnsupportedKind { .. } => hyper::StatusCode::BAD_REQUEST,
             Self::DataHub { source } => crate::http_error::Error::status_code(source),
+            Self::OpenMetadata { source } => crate::http_error::Error::status_code(source),
         }
     }
 }
@@ -31,6 +35,7 @@ impl crate::http_error::Error for GetResourceInfoError {
 pub enum ResolvedBackend {
     None,
     DataHub(datahub::ResolvedDataHubBackend),
+    OpenMetadata(openmetadata::ResolvedOpenMetadataBackend),
 }
 
 impl ResolvedBackend {
@@ -44,6 +49,10 @@ impl ResolvedBackend {
                 .get_resource_info(req)
                 .await
                 .context(get_resource_info_error::DataHubSnafu),
+            Self::OpenMetadata(b) => b
+                .get_resource_info(req)
+                .await
+                .context(get_resource_info_error::OpenMetadataSnafu),
         }
     }
 }
