@@ -103,8 +103,15 @@ struct GroupMembershipResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct GroupMembership {
+    /// Microsoft Graph directory object discriminator, e.g. `#microsoft.graph.group`
+    /// for group memberships or `#microsoft.graph.directoryRole` for role memberships.
+    /// Used to filter directory roles out of the groups list.
+    #[serde(rename = "@odata.type")]
+    odata_type: Option<String>,
     display_name: Option<String>,
 }
+
+const GROUP_ODATA_TYPE: &str = "#microsoft.graph.group";
 
 /// Entra backend with resolved credentials.
 ///
@@ -168,6 +175,7 @@ impl ResolvedEntraBackend {
             port,
             tenant_id,
             tls,
+            transitive_group_memberships,
         } = &self.config;
 
         let entra_backend = EntraBackend::try_new(
@@ -215,9 +223,9 @@ impl ResolvedEntraBackend {
             }
         };
 
-        let groups = send_json_request::<GroupMembershipResponse>(
+        let memberships = send_json_request::<GroupMembershipResponse>(
             self.http_client
-                .get(entra_backend.group_info(&user_info.id))
+                .get(entra_backend.group_info(&user_info.id, *transitive_group_memberships))
                 .bearer_auth(&authn.access_token),
         )
         .await
@@ -227,10 +235,16 @@ impl ResolvedEntraBackend {
         })?
         .value;
 
+        let groups = memberships
+            .into_iter()
+            .filter(|m| m.odata_type.as_deref() == Some(GROUP_ODATA_TYPE))
+            .filter_map(|m| m.display_name)
+            .collect();
+
         Ok(UserInfo {
             id: Some(user_info.id),
             username: Some(user_info.user_principal_name),
-            groups: groups.into_iter().filter_map(|g| g.display_name).collect(),
+            groups,
             custom_attributes: user_info.attributes,
         })
     }
@@ -282,9 +296,14 @@ impl EntraBackend {
         user_info_url
     }
 
-    pub fn group_info(&self, user: &str) -> Url {
+    pub fn group_info(&self, user: &str, transitive: bool) -> Url {
         let mut user_info_url = self.user_info_endpoint_url.clone();
-        user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
+        let endpoint = if transitive {
+            "transitiveMemberOf"
+        } else {
+            "memberOf"
+        };
+        user_info_url.set_path(&format!("/v1.0/users/{user}/{endpoint}"));
         user_info_url
     }
 }
@@ -321,9 +340,16 @@ mod tests {
             Url::parse(&format!("https://graph.microsoft.com/v1.0/users/{user}")).unwrap()
         );
         assert_eq!(
-            entra.group_info(user),
+            entra.group_info(user, false),
             Url::parse(&format!(
                 "https://graph.microsoft.com/v1.0/users/{user}/memberOf"
+            ))
+            .unwrap()
+        );
+        assert_eq!(
+            entra.group_info(user, true),
+            Url::parse(&format!(
+                "https://graph.microsoft.com/v1.0/users/{user}/transitiveMemberOf"
             ))
             .unwrap()
         );
@@ -355,11 +381,50 @@ mod tests {
             Url::parse(&format!("http://graph.mock.com:8080/v1.0/users/{user}")).unwrap()
         );
         assert_eq!(
-            entra.group_info(user),
+            entra.group_info(user, false),
             Url::parse(&format!(
                 "http://graph.mock.com:8080/v1.0/users/{user}/memberOf"
             ))
             .unwrap()
         );
+        assert_eq!(
+            entra.group_info(user, true),
+            Url::parse(&format!(
+                "http://graph.mock.com:8080/v1.0/users/{user}/transitiveMemberOf"
+            ))
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_group_membership_deserialize_and_filter() {
+        // Mix of a group and a directory role, as Entra's memberOf response returns them.
+        let payload = serde_json::json!({
+            "value": [
+                {
+                    "@odata.type": "#microsoft.graph.group",
+                    "displayName": "data-engineers"
+                },
+                {
+                    "@odata.type": "#microsoft.graph.directoryRole",
+                    "displayName": "Global Administrator"
+                },
+                {
+                    "@odata.type": "#microsoft.graph.group",
+                    "displayName": "analysts"
+                }
+            ]
+        });
+
+        let parsed: GroupMembershipResponse = serde_json::from_value(payload).unwrap();
+
+        let filtered: Vec<String> = parsed
+            .value
+            .into_iter()
+            .filter(|m| m.odata_type.as_deref() == Some(GROUP_ODATA_TYPE))
+            .filter_map(|m| m.display_name)
+            .collect();
+
+        assert_eq!(filtered, vec!["data-engineers", "analysts"]);
     }
 }

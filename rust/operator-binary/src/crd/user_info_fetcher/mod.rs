@@ -156,6 +156,18 @@ pub mod versioned {
         ///
         /// Must contain the fields `clientId` and `clientSecret`.
         pub client_credentials_secret: String,
+
+        /// When `true`, resolves nested group memberships via Microsoft Graph's
+        /// `transitiveMemberOf` endpoint instead of the default `memberOf` (which
+        /// returns only direct memberships). Recommended when your policies rely
+        /// on groups-of-groups.
+        ///
+        /// Note: `transitiveMemberOf` can be noticeably slower than `memberOf` for
+        /// users in deeply nested group structures.
+        ///
+        /// Defaults to `false` to preserve existing behaviour.
+        #[serde(default)]
+        pub transitive_group_memberships: bool,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
