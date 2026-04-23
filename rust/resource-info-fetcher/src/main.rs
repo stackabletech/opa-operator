@@ -103,6 +103,9 @@ enum StartupError {
 
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit { source: stackable_operator::telemetry::tracing::Error },
+
+    #[snafu(display("failed to resolve DataHub backend"))]
+    ResolveDataHubBackend { source: backend::datahub::Error },
 }
 
 async fn read_config_file(path: &Path) -> Result<String, StartupError> {
@@ -113,11 +116,17 @@ async fn read_config_file(path: &Path) -> Result<String, StartupError> {
 
 async fn resolve_backend(
     backend_config: v1alpha1::Backend,
-    _credentials_dir: &Path,
+    credentials_dir: &Path,
 ) -> Result<backend::ResolvedBackend, StartupError> {
     match backend_config {
         v1alpha1::Backend::None {} => Ok(backend::ResolvedBackend::None),
-        v1alpha1::Backend::DataHub(_) => todo!("DataHub backend not yet implemented"),
+        v1alpha1::Backend::DataHub(config) => {
+            let resolved =
+                backend::datahub::ResolvedDataHubBackend::resolve(config, credentials_dir)
+                    .await
+                    .context(ResolveDataHubBackendSnafu)?;
+            Ok(backend::ResolvedBackend::DataHub(resolved))
+        }
     }
 }
 

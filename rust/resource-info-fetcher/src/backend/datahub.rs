@@ -4,10 +4,27 @@ use snafu::{ResultExt, Snafu};
 use url::Url;
 
 /// DataHub auth method resolved from the mounted credentials directory.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum DataHubAuthMethod {
     Basic { username: String, password: String },
     Bearer { token: String, actor: String },
+}
+
+impl std::fmt::Debug for DataHubAuthMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Basic { username, .. } => f
+                .debug_struct("DataHubAuthMethod::Basic")
+                .field("username", username)
+                .field("password", &"<redacted>")
+                .finish(),
+            Self::Bearer { actor, .. } => f
+                .debug_struct("DataHubAuthMethod::Bearer")
+                .field("token", &"<redacted>")
+                .field("actor", actor)
+                .finish(),
+        }
+    }
 }
 
 #[derive(Debug, Snafu)]
@@ -22,6 +39,42 @@ pub enum Error {
         "credentials secret must contain either `username`+`password` or `token`+`actor`"
     ))]
     NoCredentials,
+
+    #[snafu(display("request is missing required attribute {key:?} for the DataHub backend"))]
+    MissingAttribute { key: &'static str },
+
+    #[snafu(display("failed to build HTTP client"))]
+    BuildHttpClient { source: reqwest::Error },
+
+    #[snafu(display("failed to configure TLS"))]
+    ConfigureTls { source: crate::utils::tls::Error },
+
+    #[snafu(display("failed to parse GraphQL endpoint URL"))]
+    ParseEndpoint { source: url::ParseError },
+
+    #[snafu(display("GraphQL request failed"))]
+    GraphqlRequest { source: crate::utils::http::Error },
+
+    #[snafu(display("GraphQL response contained errors"))]
+    GraphqlErrors { messages: Vec<String> },
+
+    #[snafu(display("dataset not found for urn {urn}"))]
+    DatasetNotFound { urn: String },
+}
+
+impl crate::http_error::Error for Error {
+    fn status_code(&self) -> hyper::StatusCode {
+        use hyper::StatusCode;
+        match self {
+            Self::ReadCredential { .. } | Self::NoCredentials => StatusCode::SERVICE_UNAVAILABLE,
+            Self::MissingAttribute { .. } => StatusCode::BAD_REQUEST,
+            Self::BuildHttpClient { .. } | Self::ConfigureTls { .. } | Self::ParseEndpoint { .. } => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
+            Self::GraphqlRequest { .. } | Self::GraphqlErrors { .. } => StatusCode::BAD_GATEWAY,
+            Self::DatasetNotFound { .. } => StatusCode::NOT_FOUND,
+        }
+    }
 }
 
 /// Inspects `credentials_dir` for credential files and returns the resolved auth method.
@@ -355,7 +408,7 @@ mod graphql_tests {
 
 use std::collections::BTreeMap;
 
-use crate::{FieldInfo, ResourceInfo};
+use crate::{FieldInfo, ResourceInfo, ResourceInfoRequest};
 
 const TAG_URN_PREFIX: &str = "urn:li:tag:";
 const GLOSSARY_URN_PREFIX: &str = "urn:li:glossaryTerm:";
@@ -592,5 +645,104 @@ mod tests {
         let url = parse_graphql_endpoint("http://datahub-gms:8080/api/graphql").unwrap();
         assert_eq!(url.host_str(), Some("datahub-gms"));
         assert_eq!(url.path(), "/api/graphql");
+    }
+}
+
+use reqwest::ClientBuilder;
+use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
+use stackable_operator::commons::tls_verification::TlsClientDetails;
+
+use crate::utils::{self, http::send_json_request};
+
+/// DataHub backend with resolved credentials and pre-built HTTP client.
+pub struct ResolvedDataHubBackend {
+    endpoint: url::Url,
+    http_client: reqwest::Client,
+    auth: DataHubAuthMethod,
+}
+
+impl ResolvedDataHubBackend {
+    pub async fn resolve(
+        config: v1alpha1::DataHubBackend,
+        credentials_dir: &std::path::Path,
+    ) -> Result<Self, Error> {
+        let auth = detect_auth_method(credentials_dir).await?;
+
+        let mut builder = ClientBuilder::new();
+        builder = utils::tls::configure_reqwest(
+            &TlsClientDetails { tls: config.tls.clone() },
+            builder,
+        )
+        .await
+        .context(ConfigureTlsSnafu)?;
+        let http_client = builder.build().context(BuildHttpClientSnafu)?;
+
+        let endpoint = url::Url::parse(&config.graphql_endpoint).context(ParseEndpointSnafu)?;
+
+        Ok(Self { endpoint, http_client, auth })
+    }
+
+    pub async fn get_resource_info(&self, req: &ResourceInfoRequest) -> Result<ResourceInfo, Error> {
+        let platform = req
+            .attributes
+            .get("platform")
+            .ok_or(Error::MissingAttribute { key: "platform" })?;
+        let environment = req
+            .attributes
+            .get("environment")
+            .ok_or(Error::MissingAttribute { key: "environment" })?;
+
+        let urn = build_dataset_urn(platform, &req.id, environment);
+
+        let body = serde_json::json!({
+            "query": DATASET_QUERY,
+            "variables": { "urn": &urn },
+        });
+
+        let mut request = self
+            .http_client
+            .post(self.endpoint.clone())
+            .json(&body);
+
+        // X-DataHub-Actor mirrors DataHub's expectation that system calls
+        // identify the acting principal, regardless of auth method.
+        let actor_urn = match &self.auth {
+            DataHubAuthMethod::Basic { username, password } => {
+                request = request.basic_auth(username, Some(password));
+                format!("urn:li:corpuser:{username}")
+            }
+            DataHubAuthMethod::Bearer { token, actor } => {
+                request = request.bearer_auth(token);
+                format!("urn:li:corpuser:{actor}")
+            }
+        };
+        request = request.header("X-DataHub-Actor", actor_urn);
+
+        #[derive(Debug, Deserialize)]
+        struct Envelope {
+            data: Option<GraphqlData>,
+            #[serde(default)]
+            errors: Vec<GraphqlError>,
+        }
+
+        #[derive(Debug, Deserialize)]
+        struct GraphqlError {
+            message: String,
+        }
+
+        let envelope: Envelope = send_json_request(request).await.context(GraphqlRequestSnafu)?;
+
+        if !envelope.errors.is_empty() {
+            return Err(Error::GraphqlErrors {
+                messages: envelope.errors.into_iter().map(|e| e.message).collect(),
+            });
+        }
+
+        let dataset = envelope
+            .data
+            .and_then(|d| d.dataset)
+            .ok_or(Error::DatasetNotFound { urn: urn.clone() })?;
+
+        Ok(dataset.into_resource_info())
     }
 }
