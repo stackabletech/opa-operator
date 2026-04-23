@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
-    commons::tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
+    commons::tls_verification::{CaCert, Tls, TlsServerVerification, TlsVerification},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     versioned::versioned,
@@ -27,6 +27,29 @@ pub mod versioned {
     pub enum Backend {
         /// Dummy backend that returns empty `ResourceInfo` for every request.
         None {},
+
+        /// Backend that fetches dataset metadata from a DataHub instance via GraphQL.
+        DataHub(DataHubBackend),
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DataHubBackend {
+        /// Full GraphQL endpoint URL, e.g. `http://datahub-gms:8080/api/graphql`.
+        pub graphql_endpoint: String,
+
+        /// Name of a Secret containing DataHub credentials.
+        ///
+        /// The Secret must contain EITHER (a) keys `username` + `password` (Basic
+        /// auth; X-DataHub-Actor is set to `urn:li:corpuser:{username}`) OR (b) keys
+        /// `token` + `actor` (Bearer auth; X-DataHub-Actor is set to
+        /// `urn:li:corpuser:{actor}`). If both sets are present, Basic wins.
+        pub credentials_secret: String,
+
+        /// Optional TLS configuration for the GraphQL endpoint. Defaults to WebPki
+        /// verification when TLS is in use.
+        #[serde(default = "default_tls_web_pki")]
+        pub tls: Option<Tls>,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -41,6 +64,14 @@ pub mod versioned {
 
 const fn default_entry_time_to_live() -> Duration {
     Duration::from_minutes_unchecked(1)
+}
+
+fn default_tls_web_pki() -> Option<Tls> {
+    Some(Tls {
+        verification: TlsVerification::Server(TlsServerVerification {
+            ca_cert: CaCert::WebPki {},
+        }),
+    })
 }
 
 #[cfg(test)]
@@ -63,5 +94,23 @@ mod tests {
         });
         let cfg: v1alpha1::Config = serde_json::from_value(json).unwrap();
         assert!(matches!(cfg.backend, v1alpha1::Backend::None {}));
+    }
+
+    #[test]
+    fn config_with_datahub_backend_parses() {
+        let json = serde_json::json!({
+            "backend": {
+                "dataHub": {
+                    "graphqlEndpoint": "http://datahub-gms:8080/api/graphql",
+                    "credentialsSecret": "datahub-creds"
+                }
+            }
+        });
+        let cfg: v1alpha1::Config = serde_json::from_value(json).unwrap();
+        let v1alpha1::Backend::DataHub(dh) = cfg.backend else {
+            panic!("expected DataHub backend");
+        };
+        assert_eq!(dh.graphql_endpoint, "http://datahub-gms:8080/api/graphql");
+        assert_eq!(dh.credentials_secret, "datahub-creds");
     }
 }
