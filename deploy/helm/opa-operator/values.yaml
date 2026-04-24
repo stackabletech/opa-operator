@@ -1,7 +1,6 @@
 # Default values for opa-operator.
 ---
 image:
-  repository: oci.stackable.tech/sdp/opa-operator
   pullPolicy: IfNotPresent
   pullSecrets: []
 
