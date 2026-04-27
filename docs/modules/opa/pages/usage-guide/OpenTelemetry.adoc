@@ -1,6 +1,6 @@
 = OpenTelemetry
 :description: Ship OPA traces and logs to OpenTelemetry
-:opa-docs: https://v1-4-2--opa-docs.netlify.app/configuration/#distributed-tracing
+:opa-docs: https://www.openpolicyagent.org/docs/configuration/#distributed-tracing
 
 Opa supports sending OpenTelemetry traces as stated in {opa-docs}[the documentation].
 
