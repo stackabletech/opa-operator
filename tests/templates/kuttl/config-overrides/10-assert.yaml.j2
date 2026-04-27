@@ -60,4 +60,5 @@ kind: DaemonSet
 metadata:
   name: test-opa-server-default
 status:
-  numberReady: 1
+  # This has to be independent of the number of nodes on the cluster
+  numberMisscheduled: 0
