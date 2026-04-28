@@ -1,23 +1,22 @@
 // TODO: Look into how to properly resolve `clippy::result_large_err`.
 // This will need changes in our and upstream error types.
 #![allow(clippy::result_large_err)]
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use clap::Parser;
 use futures::{FutureExt, StreamExt, TryFutureExt};
-use product_config::ProductConfigManager;
 use stackable_operator::{
     YamlSchema,
-    cli::{Command, OperatorEnvironmentOptions, RunArguments},
-    client::{self, Client},
+    cli::{Command, RunArguments},
+    client,
     eos::EndOfSupportChecker,
     k8s_openapi::api::{
         apps::v1::DaemonSet,
         core::v1::{ConfigMap, Service},
     },
     kube::{
-        Api, CustomResourceExt as _,
+        CustomResourceExt as _,
         core::DeserializeGuard,
         runtime::{
             Controller,
@@ -26,13 +25,9 @@ use stackable_operator::{
         },
     },
     logging::controller::report_controller_reconciled,
-    namespace::WatchNamespace,
     shared::yaml::SerializeOptions,
     telemetry::Tracing,
-    utils::{
-        cluster_info::KubernetesClusterInfo,
-        signal::{self, SignalWatcher},
-    },
+    utils::signal::{self, SignalWatcher},
 };
 
 use crate::{
@@ -144,17 +139,63 @@ async fn main() -> anyhow::Result<()> {
                 .run(sigterm_watcher.handle())
                 .map_err(|err| anyhow!(err).context("failed to run webhook server"));
 
-            let controller = create_controller(
-                client.clone(),
-                product_config,
-                watch_namespace,
-                operator_image.clone(),
-                operator_image,
-                kubernetes_cluster_info,
-                operator_environment,
-                sigterm_watcher.handle(),
-            )
-            .map(anyhow::Ok);
+            let event_recorder = Arc::new(Recorder::new(
+                client.as_kube_client(),
+                Reporter {
+                    controller: OPA_FULL_CONTROLLER_NAME.to_string(),
+                    instance: None,
+                },
+            ));
+
+            let controller = Controller::new(
+                watch_namespace.get_api::<DeserializeGuard<v1alpha2::OpaCluster>>(&client),
+                watcher::Config::default(),
+            );
+
+            let controller = controller
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<DaemonSet>>(&client),
+                    watcher::Config::default(),
+                )
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<ConfigMap>>(&client),
+                    watcher::Config::default(),
+                )
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<Service>>(&client),
+                    watcher::Config::default(),
+                )
+                .graceful_shutdown_on(sigterm_watcher.handle())
+                .run(
+                    controller::reconcile_opa,
+                    controller::error_policy,
+                    Arc::new(controller::Ctx {
+                        client: client.clone(),
+                        product_config,
+                        opa_bundle_builder_image: operator_image.clone(),
+                        user_info_fetcher_image: operator_image,
+                        operator_environment,
+                        cluster_info: kubernetes_cluster_info,
+                    }),
+                )
+                // We can let the reporting happen in the background
+                .for_each_concurrent(
+                    16, // concurrency limit
+                    |result| {
+                        // The event_recorder needs to be shared across all invocations, so that
+                        // events are correctly aggregated
+                        let event_recorder = event_recorder.clone();
+                        async move {
+                            report_controller_reconciled(
+                                &event_recorder,
+                                OPA_FULL_CONTROLLER_NAME,
+                                &result,
+                            )
+                            .await;
+                        }
+                    },
+                )
+                .map(anyhow::Ok);
 
             let delayed_controller = async {
                 signal::crd_established(&client, v1alpha2::OpaCluster::crd_name(), None).await?;
@@ -166,70 +207,4 @@ async fn main() -> anyhow::Result<()> {
     };
 
     Ok(())
-}
-
-/// This creates an instance of a [`Controller`] which waits for incoming events and reconciles them.
-///
-/// This is an async method and the returned future needs to be consumed to make progress.
-async fn create_controller<F>(
-    client: Client,
-    product_config: ProductConfigManager,
-    watch_namespace: WatchNamespace,
-    opa_bundle_builder_image: String,
-    user_info_fetcher_image: String,
-    cluster_info: KubernetesClusterInfo,
-    operator_environment: OperatorEnvironmentOptions,
-    shutdown_signal: F,
-) where
-    F: Future<Output = ()> + Send + Sync + 'static,
-{
-    let opa_api: Api<DeserializeGuard<v1alpha2::OpaCluster>> = watch_namespace.get_api(&client);
-    let daemonsets_api: Api<DeserializeGuard<DaemonSet>> = watch_namespace.get_api(&client);
-    let configmaps_api: Api<DeserializeGuard<ConfigMap>> = watch_namespace.get_api(&client);
-    let services_api: Api<DeserializeGuard<Service>> = watch_namespace.get_api(&client);
-
-    let controller = Controller::new(opa_api, watcher::Config::default())
-        .owns(daemonsets_api, watcher::Config::default())
-        .owns(configmaps_api, watcher::Config::default())
-        .owns(services_api, watcher::Config::default());
-
-    let event_recorder = Arc::new(Recorder::new(
-        client.as_kube_client(),
-        Reporter {
-            controller: OPA_FULL_CONTROLLER_NAME.to_string(),
-            instance: None,
-        },
-    ));
-    controller
-        .graceful_shutdown_on(shutdown_signal)
-        .run(
-            controller::reconcile_opa,
-            controller::error_policy,
-            Arc::new(controller::Ctx {
-                client: client.clone(),
-                product_config,
-                opa_bundle_builder_image,
-                user_info_fetcher_image,
-                operator_environment,
-                cluster_info,
-            }),
-        )
-        // We can let the reporting happen in the background
-        .for_each_concurrent(
-            16, // concurrency limit
-            |result| {
-                // The event_recorder needs to be shared across all invocations, so that
-                // events are correctly aggregated
-                let event_recorder = event_recorder.clone();
-                async move {
-                    report_controller_reconciled(
-                        &event_recorder,
-                        OPA_FULL_CONTROLLER_NAME,
-                        &result,
-                    )
-                    .await;
-                }
-            },
-        )
-        .await;
 }
