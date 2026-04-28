@@ -9,7 +9,7 @@ use futures::{FutureExt, StreamExt, TryFutureExt};
 use product_config::ProductConfigManager;
 use stackable_operator::{
     YamlSchema,
-    cli::{Command, RunArguments},
+    cli::{Command, OperatorEnvironmentOptions, RunArguments},
     client::{self, Client},
     eos::EndOfSupportChecker,
     k8s_openapi::api::{
@@ -151,6 +151,7 @@ async fn main() -> anyhow::Result<()> {
                 operator_image.clone(),
                 operator_image,
                 kubernetes_cluster_info,
+                operator_environment,
                 sigterm_watcher.handle(),
             )
             .map(anyhow::Ok);
@@ -177,6 +178,7 @@ async fn create_controller<F>(
     opa_bundle_builder_image: String,
     user_info_fetcher_image: String,
     cluster_info: KubernetesClusterInfo,
+    operator_environment: OperatorEnvironmentOptions,
     shutdown_signal: F,
 ) where
     F: Future<Output = ()> + Send + Sync + 'static,
@@ -208,6 +210,7 @@ async fn create_controller<F>(
                 product_config,
                 opa_bundle_builder_image,
                 user_info_fetcher_image,
+                operator_environment,
                 cluster_info,
             }),
         )
