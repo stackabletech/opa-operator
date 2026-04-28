@@ -454,3 +454,22 @@ impl HasStatusCondition for v1alpha2::OpaCluster {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use stackable_operator::versioned::test_utils::RoundtripTestData;
+
+    use super::{v1alpha1, v1alpha2};
+
+    impl RoundtripTestData for v1alpha1::OpaClusterSpec {
+        fn roundtrip_test_data() -> Vec<Self> {
+            vec![]
+        }
+    }
+
+    impl RoundtripTestData for v1alpha2::OpaClusterSpec {
+        fn roundtrip_test_data() -> Vec<Self> {
+            vec![]
+        }
+    }
+}
