@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- BREAKING: Add required CLI argument and env var to set the image repository used to construct final product image names: `IMAGE_REPOSITORY` (`--image-repository`), eg. `oci.example.org/my/namespace` ([#830]).
 - Support `configOverrides` for `config.json` ([#818]).
 
 ### Changed
@@ -18,6 +19,7 @@ All notable changes to this project will be documented in this file.
 [#818]: https://github.com/stackabletech/opa-operator/pull/818
 [#819]: https://github.com/stackabletech/opa-operator/pull/819
 [#820]: https://github.com/stackabletech/opa-operator/pull/820
+[#830]: https://github.com/stackabletech/opa-operator/pull/830
 
 ## [26.3.0] - 2026-03-16
 
