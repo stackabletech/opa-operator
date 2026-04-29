@@ -316,7 +316,7 @@ rec {
         dependencies = [
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_System_Console" "Win32_Foundation" ];
           }
@@ -341,7 +341,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_System_Console" "Win32_Foundation" ];
           }
@@ -2824,7 +2824,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Foundation" "Win32_System_Diagnostics_Debug" ];
           }
@@ -5167,7 +5167,6 @@ rec {
           "default" = [ "use_std" ];
           "use_std" = [ "use_alloc" "either/use_std" ];
         };
-        resolvedDefaultFeatures = [ "default" "use_alloc" "use_std" ];
       };
       "itertools 0.14.0" = rec {
         crateName = "itertools";
@@ -5278,7 +5277,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             optional = true;
             usesDefaultFeatures = false;
             target = { target, features }: (target."windows" or false);
@@ -5712,7 +5711,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "k8s_version";
@@ -7157,7 +7156,7 @@ rec {
         dependencies = [
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             rename = "windows";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Foundation" "Win32_System_Console" "Win32_Storage_FileSystem" "Win32_Security" ];
@@ -8726,7 +8725,7 @@ rec {
           }
           {
             name = "itertools";
-            packageId = "itertools 0.13.0";
+            packageId = "itertools 0.14.0";
           }
           {
             name = "proc-macro2";
@@ -10241,7 +10240,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Foundation" "Win32_Networking_WinSock" ];
           }
@@ -10513,7 +10512,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             usesDefaultFeatures = false;
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Foundation" "Win32_Security_Cryptography" ];
@@ -10551,9 +10550,9 @@ rec {
       };
       "rustls-webpki" = rec {
         crateName = "rustls-webpki";
-        version = "0.103.12";
+        version = "0.103.13";
         edition = "2021";
-        sha256 = "01nxzkfd1l96jzp04svc7iznlkarzx3wb9p63a0i17rc4y2vnyc2";
+        sha256 = "0vkm7z9pnxz5qz66p2kmyy2pwx0g4jnsbqk5xzfhs4czcjl2ki31";
         libName = "webpki";
         dependencies = [
           {
@@ -11659,7 +11658,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Foundation" "Win32_Networking_WinSock" "Win32_System_IO" "Win32_System_Threading" "Win32_System_WindowsProgramming" ];
           }
@@ -11745,7 +11744,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "stackable_certs";
@@ -12153,12 +12152,12 @@ rec {
       };
       "stackable-operator" = rec {
         crateName = "stackable-operator";
-        version = "0.110.1";
+        version = "0.111.0";
         edition = "2024";
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "stackable_operator";
@@ -12338,7 +12337,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         procMacro = true;
@@ -12373,7 +12372,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "stackable_shared";
@@ -12454,7 +12453,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "stackable_telemetry";
@@ -12559,12 +12558,12 @@ rec {
       };
       "stackable-versioned" = rec {
         crateName = "stackable-versioned";
-        version = "0.9.0";
+        version = "0.10.0";
         edition = "2024";
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "stackable_versioned";
@@ -12572,6 +12571,12 @@ rec {
           "Stackable GmbH <info@stackable.de>"
         ];
         dependencies = [
+          {
+            name = "kube";
+            packageId = "kube";
+            usesDefaultFeatures = false;
+            features = [ "client" "jsonpatch" "runtime" "derive" "admission" "rustls-tls" "ring" ];
+          }
           {
             name = "schemars";
             packageId = "schemars";
@@ -12603,12 +12608,12 @@ rec {
       };
       "stackable-versioned-macros" = rec {
         crateName = "stackable-versioned-macros";
-        version = "0.9.0";
+        version = "0.10.0";
         edition = "2024";
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         procMacro = true;
@@ -12676,7 +12681,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech/operator-rs.git";
-          rev = "96f42571ea185a3cd76fedde351fcabbeefcae16";
+          rev = "b7c8a3a5483b4d35d0abfa11f6db6c153bda8a51";
           sha256 = "1fgc7i8rhq1nl9m4s69sbfiywy2jx4narpynvm3g54vd5yd4c6m2";
         };
         libName = "stackable_webhook";
@@ -13124,7 +13129,7 @@ rec {
           }
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Storage_FileSystem" "Win32_Foundation" ];
           }
@@ -15828,7 +15833,7 @@ rec {
         dependencies = [
           {
             name = "windows-sys";
-            packageId = "windows-sys 0.60.2";
+            packageId = "windows-sys 0.61.2";
             target = { target, features }: (target."windows" or false);
             features = [ "Win32_Foundation" "Win32_Storage_FileSystem" "Win32_System_Console" "Win32_System_SystemInformation" ];
           }
@@ -17691,7 +17696,7 @@ rec {
           "Win32_Web" = [ "Win32" ];
           "Win32_Web_InternetExplorer" = [ "Win32_Web" ];
         };
-        resolvedDefaultFeatures = [ "Win32" "Win32_Foundation" "Win32_Networking" "Win32_Networking_WinSock" "Win32_Security" "Win32_Security_Cryptography" "Win32_Storage" "Win32_Storage_FileSystem" "Win32_System" "Win32_System_Console" "Win32_System_Diagnostics" "Win32_System_Diagnostics_Debug" "Win32_System_IO" "Win32_System_SystemInformation" "Win32_System_Threading" "Win32_System_Time" "Win32_System_WindowsProgramming" "default" ];
+        resolvedDefaultFeatures = [ "Win32" "Win32_Foundation" "Win32_Networking" "Win32_Networking_WinSock" "Win32_System" "Win32_System_IO" "default" ];
       };
       "windows-sys 0.61.2" = rec {
         crateName = "windows-sys";
@@ -17953,7 +17958,7 @@ rec {
           "Win32_Web" = [ "Win32" ];
           "Win32_Web_InternetExplorer" = [ "Win32_Web" ];
         };
-        resolvedDefaultFeatures = [ "Wdk" "Wdk_Foundation" "Wdk_Storage" "Wdk_Storage_FileSystem" "Wdk_System" "Wdk_System_IO" "Win32" "Win32_Foundation" "Win32_Networking" "Win32_Networking_WinSock" "Win32_Security" "Win32_Security_Authentication" "Win32_Security_Authentication_Identity" "Win32_Security_Credentials" "Win32_Security_Cryptography" "Win32_Storage" "Win32_Storage_FileSystem" "Win32_System" "Win32_System_Console" "Win32_System_IO" "Win32_System_LibraryLoader" "Win32_System_Memory" "Win32_System_Pipes" "Win32_System_SystemInformation" "Win32_System_SystemServices" "Win32_System_Threading" "Win32_System_WindowsProgramming" "default" ];
+        resolvedDefaultFeatures = [ "Wdk" "Wdk_Foundation" "Wdk_Storage" "Wdk_Storage_FileSystem" "Wdk_System" "Wdk_System_IO" "Win32" "Win32_Foundation" "Win32_Networking" "Win32_Networking_WinSock" "Win32_Security" "Win32_Security_Authentication" "Win32_Security_Authentication_Identity" "Win32_Security_Credentials" "Win32_Security_Cryptography" "Win32_Storage" "Win32_Storage_FileSystem" "Win32_System" "Win32_System_Console" "Win32_System_Diagnostics" "Win32_System_Diagnostics_Debug" "Win32_System_IO" "Win32_System_LibraryLoader" "Win32_System_Memory" "Win32_System_Pipes" "Win32_System_SystemInformation" "Win32_System_SystemServices" "Win32_System_Threading" "Win32_System_Time" "Win32_System_WindowsProgramming" "default" ];
       };
       "windows-targets 0.42.2" = rec {
         crateName = "windows-targets";

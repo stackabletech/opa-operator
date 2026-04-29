@@ -23,6 +23,7 @@ use stackable_operator::{
             volume::{SecretOperatorVolumeSourceBuilder, VolumeBuilder},
         },
     },
+    cli::OperatorEnvironmentOptions,
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
         product_image_selection::{self, ResolvedProductImage},
@@ -112,7 +113,7 @@ const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
 const TLS_VOLUME_NAME: &str = "tls";
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
-const DOCKER_IMAGE_BASE_NAME: &str = "opa";
+const CONTAINER_IMAGE_BASE_NAME: &str = "opa";
 
 const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
 const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
@@ -161,6 +162,7 @@ pub struct Ctx {
     pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
     pub cluster_info: KubernetesClusterInfo,
+    pub operator_environment: OperatorEnvironmentOptions,
 }
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -449,7 +451,11 @@ pub async fn reconcile_opa(
     let resolved_product_image = opa
         .spec
         .image
-        .resolve(DOCKER_IMAGE_BASE_NAME, crate::built_info::PKG_VERSION)
+        .resolve(
+            CONTAINER_IMAGE_BASE_NAME,
+            &ctx.operator_environment.image_repository,
+            crate::built_info::PKG_VERSION,
+        )
         .context(ResolveProductImageSnafu)?;
     let opa_role = OpaRole::Server;
 
