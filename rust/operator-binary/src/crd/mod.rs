@@ -457,19 +457,225 @@ impl HasStatusCondition for v1alpha2::OpaCluster {
 
 #[cfg(test)]
 mod tests {
+    use indoc::formatdoc;
     use stackable_operator::versioned::test_utils::RoundtripTestData;
 
     use super::{v1alpha1, v1alpha2};
 
     impl RoundtripTestData for v1alpha1::OpaClusterSpec {
         fn roundtrip_test_data() -> Vec<Self> {
-            vec![]
+            let user_info_fetcher_sections = vec![
+                r#"
+  userInfo:
+    backend:
+      experimentalXfscAas:
+        hostname: aas.default.svc.cluster.local
+        port: 5000
+    "#,
+                r#"
+  userInfo:
+    backend:
+      experimentalActiveDirectory:
+        ldapServer: sble-addc.sble.test
+        baseDistinguishedName: DC=sble,DC=test
+        customAttributeMappings:
+          country: c
+        kerberosSecretClassName: kerberos-ad
+        tls:
+          verification:
+            server:
+              caCert:
+                secretClass: tls-ad
+    cache:
+      entryTimeToLive: 60s
+    "#,
+                r#"
+  userInfo:
+    backend:
+      keycloak:
+        hostname: keycloak.default.svc.cluster.local
+        port: 8443
+        tls:
+          verification:
+            server:
+              caCert:
+                secretClass: keycloak-tls
+        clientCredentialsSecret: user-info-fetcher-client-credentials
+        adminRealm: my-dataspace
+        userRealm: my-dataspace
+    "#,
+                r#"
+  userInfo:
+    backend:
+      experimentalOpenLdap:
+        hostname: test-openldap.default.svc.cluster.local
+        port: 1636
+        searchBase: ou=users,dc=example,dc=org
+        bindCredentials:
+          secretClass: ldap-bind-test
+        groupsSearchBase: ou=groups,dc=example,dc=org
+        customAttributeMappings:
+          hdir: homeDirectory
+          displayName: cn
+          surname: sn
+        tls:
+          verification:
+            server:
+              caCert:
+                secretClass: ldap-tls-test
+    cache:
+      entryTimeToLive: 60s
+    "#,
+                r#"
+  userInfo:
+    backend:
+      # Note the experimentalEntra vs entra here!
+      experimentalEntra:
+        tenantId: 00000000-0000-0000-0000-000000000000
+        clientCredentialsSecret: user-info-fetcher-client-credentials
+    "#,
+            ];
+            user_info_fetcher_sections
+                .into_iter()
+                .map(test_opa_cluster_yaml)
+                .map(|yaml| {
+                    println!("{}", &yaml);
+                    stackable_operator::utils::yaml_from_str_singleton_map(&yaml)
+                        .expect("Failed to parse OpaClusterSpec YAML")
+                })
+                .collect()
         }
     }
 
     impl RoundtripTestData for v1alpha2::OpaClusterSpec {
         fn roundtrip_test_data() -> Vec<Self> {
-            vec![]
+            let user_info_fetcher_sections = vec![
+                r#"
+  userInfo:
+    backend:
+      experimentalXfscAas:
+        hostname: aas.default.svc.cluster.local
+        port: 5000
+    "#,
+                r#"
+  userInfo:
+    backend:
+      experimentalActiveDirectory:
+        ldapServer: sble-addc.sble.test
+        baseDistinguishedName: DC=sble,DC=test
+        customAttributeMappings:
+          country: c
+        kerberosSecretClassName: kerberos-ad
+        tls:
+          verification:
+            server:
+              caCert:
+                secretClass: tls-ad
+    cache:
+      entryTimeToLive: 60s
+    "#,
+                r#"
+  userInfo:
+    backend:
+      keycloak:
+        hostname: keycloak.default.svc.cluster.local
+        port: 8443
+        tls:
+          verification:
+            server:
+              caCert:
+                secretClass: keycloak-tls
+        clientCredentialsSecret: user-info-fetcher-client-credentials
+        adminRealm: my-dataspace
+        userRealm: my-dataspace
+    "#,
+                r#"
+  userInfo:
+    backend:
+      experimentalOpenLdap:
+        hostname: test-openldap.default.svc.cluster.local
+        port: 1636
+        searchBase: ou=users,dc=example,dc=org
+        bindCredentials:
+          secretClass: ldap-bind-test
+        groupsSearchBase: ou=groups,dc=example,dc=org
+        customAttributeMappings:
+          hdir: homeDirectory
+          displayName: cn
+          surname: sn
+        tls:
+          verification:
+            server:
+              caCert:
+                secretClass: ldap-tls-test
+    cache:
+      entryTimeToLive: 60s
+    "#,
+                r#"
+  userInfo:
+    backend:
+      # Note the experimentalEntra vs entra here!
+      entra:
+        tenantId: 00000000-0000-0000-0000-000000000000
+        clientCredentialsSecret: user-info-fetcher-client-credentials
+    "#,
+            ];
+            user_info_fetcher_sections
+                .into_iter()
+                .map(test_opa_cluster_yaml)
+                .map(|yaml| {
+                    println!("{}", &yaml);
+                    stackable_operator::utils::yaml_from_str_singleton_map(&yaml)
+                        .expect("Failed to parse OpaClusterSpec YAML")
+                })
+                .collect()
+        }
+    }
+
+    fn test_opa_cluster_yaml(user_info_fetcher_section: &str) -> String {
+        formatdoc! {
+          r#"
+            image:
+              productVersion: 1.2.3
+              pullPolicy: IfNotPresent
+            clusterOperation:
+              stopped: false
+              reconciliationPaused: false
+            clusterConfig:
+              tls:
+                serverSecretClass: my-tls
+              vectorAggregatorConfigMapName: vector-aggregator-discovery
+              {user_info_fetcher_section}
+            servers:
+              config:
+                logging:
+                  enableVectorAgent: true
+              configOverrides:
+                config.json:
+                  jsonMergePatch:
+                    bundles:
+                      stackable:
+                        polling:
+                          min_delay_seconds: 3
+                          max_delay_seconds: 7
+                    default_decision: test/hello
+              envOverrides:
+                SERVER_ROLE_LEVEL_ENV_VAR: SERVER_ROLE_LEVEL_ENV_VAR
+              roleGroups:
+                default:
+                  configOverrides:
+                    config.json:
+                      jsonMergePatch:
+                        bundles:
+                          stackable:
+                            polling:
+                              max_delay_seconds: 5
+                        labels:
+                          rolegroup: default
+                  envOverrides:
+                    SERVER_ROLE_GROUP_LEVEL_ENV_VAR: SERVER_ROLE_GROUP_LEVEL_ENV_VAR
+                  replicas: 1
+              "#
         }
     }
 }
