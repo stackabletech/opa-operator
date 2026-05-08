@@ -1170,8 +1170,34 @@ spec:
                               type: string
                             type: array
                           userProvided:
-                            description: Override the entire config file with the specified String.
-                            type: string
+                            description: |-
+                              Override the entire config file with the specified JSON document.
+
+                              Please note that you can in-line JSON into YAML as follows:
+
+                              ```yaml
+                              # ... other YAML content
+                              userProvided: {
+                                "myString": "test",
+                                "myList": ["test"],
+                                "myBool": true,
+                                "my": {"nested.field.with.dots": 42}
+                              }
+                              ```
+
+                              As an alternative you can also stick to YAML:
+
+                              ```yaml
+                              # ... other YAML content
+                              userProvided:
+                                myString: test
+                                myList: [test]
+                                myBool: true
+                                my:
+                                  nested.field.with.dots: 42
+                              ```
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                         type: object
                     type: object
                   envOverrides:
@@ -1763,8 +1789,34 @@ spec:
                                     type: string
                                   type: array
                                 userProvided:
-                                  description: Override the entire config file with the specified String.
-                                  type: string
+                                  description: |-
+                                    Override the entire config file with the specified JSON document.
+
+                                    Please note that you can in-line JSON into YAML as follows:
+
+                                    ```yaml
+                                    # ... other YAML content
+                                    userProvided: {
+                                      "myString": "test",
+                                      "myList": ["test"],
+                                      "myBool": true,
+                                      "my": {"nested.field.with.dots": 42}
+                                    }
+                                    ```
+
+                                    As an alternative you can also stick to YAML:
+
+                                    ```yaml
+                                    # ... other YAML content
+                                    userProvided:
+                                      myString: test
+                                      myList: [test]
+                                      myBool: true
+                                      my:
+                                        nested.field.with.dots: 42
+                                    ```
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                               type: object
                           type: object
                         envOverrides:
@@ -3011,8 +3063,34 @@ spec:
                               type: string
                             type: array
                           userProvided:
-                            description: Override the entire config file with the specified String.
-                            type: string
+                            description: |-
+                              Override the entire config file with the specified JSON document.
+
+                              Please note that you can in-line JSON into YAML as follows:
+
+                              ```yaml
+                              # ... other YAML content
+                              userProvided: {
+                                "myString": "test",
+                                "myList": ["test"],
+                                "myBool": true,
+                                "my": {"nested.field.with.dots": 42}
+                              }
+                              ```
+
+                              As an alternative you can also stick to YAML:
+
+                              ```yaml
+                              # ... other YAML content
+                              userProvided:
+                                myString: test
+                                myList: [test]
+                                myBool: true
+                                my:
+                                  nested.field.with.dots: 42
+                              ```
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                         type: object
                     type: object
                   envOverrides:
@@ -3604,8 +3682,34 @@ spec:
                                     type: string
                                   type: array
                                 userProvided:
-                                  description: Override the entire config file with the specified String.
-                                  type: string
+                                  description: |-
+                                    Override the entire config file with the specified JSON document.
+
+                                    Please note that you can in-line JSON into YAML as follows:
+
+                                    ```yaml
+                                    # ... other YAML content
+                                    userProvided: {
+                                      "myString": "test",
+                                      "myList": ["test"],
+                                      "myBool": true,
+                                      "my": {"nested.field.with.dots": 42}
+                                    }
+                                    ```
+
+                                    As an alternative you can also stick to YAML:
+
+                                    ```yaml
+                                    # ... other YAML content
+                                    userProvided:
+                                      myString: test
+                                      myList: [test]
+                                      myBool: true
+                                      my:
+                                        nested.field.with.dots: 42
+                                    ```
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                               type: object
                           type: object
                         envOverrides:
