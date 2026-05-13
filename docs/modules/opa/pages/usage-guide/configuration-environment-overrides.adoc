@@ -9,7 +9,7 @@ This will lead to faulty installations.
 == Configuration properties
 
 OPA's `config.json` can be overridden using `configOverrides`.
-For details on the supported override strategies, see the xref:concepts:overrides.adoc#config-overrides[config overrides documentation].
+For details on the supported override strategies, see the xref:concepts:overrides.adoc#json-config-overrides[config overrides documentation].
 
 For example per role:
 
