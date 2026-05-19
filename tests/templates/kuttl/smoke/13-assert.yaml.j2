@@ -1,0 +1,75 @@
+---
+# Snapshot the full `.data` of each operator-managed ConfigMap. Any code change
+# that alters rendered config values will fail these diffs.
+#
+# Both sides are normalized to canonical JSON via `jq -S` (sort-keys), and
+# string-compared. Uses `jq` rather than `yq` because the local snap `yq` is
+# broken and `yq` is not available in the test-opa pod either.
+#
+# The heredoc carrying the multi-line OPA config is quoted (`<<'CONFEOF'`) so
+# shell substitution is disabled. Values that depend on the kuttl-randomized
+# namespace are passed in via `--arg` rather than `sed`.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 60
+commands:
+  # ConfigMap test-opa-server-default — bundle-builder + server config.json.
+  # Content is identical between TLS and non-TLS (URL points at localhost:3030).
+  - script: |
+      expected_config=$(cat <<'CONFEOF'
+      {
+        "bundles": {
+          "stackable": {
+            "persist": true,
+            "polling": {
+              "max_delay_seconds": 20,
+              "min_delay_seconds": 10
+            },
+            "resource": "opa/bundle.tar.gz",
+            "service": "stackable"
+          }
+        },
+        "services": [
+          {
+            "name": "stackable",
+            "url": "http://localhost:3030/opa/v1"
+          }
+        ],
+        "status": {
+          "prometheus": true
+        }
+      }
+      CONFEOF
+      )
+      expected=$(jq -Sn --arg cfg "$expected_config" '{"config.json": $cfg}')
+      actual=$(kubectl -n $NAMESPACE get cm test-opa-server-default -o json | jq -S '.data')
+      if [ "$expected" != "$actual" ]; then
+        echo "ERROR: ConfigMap test-opa-server-default data drifted from snapshot."
+        echo "=== expected ==="
+        printf '%s\n' "$expected"
+        echo "=== actual ==="
+        printf '%s\n' "$actual"
+        exit 1
+      fi
+  # ConfigMap test-opa — discovery CM. URL scheme/port flip by TLS, and
+  # OPA_SECRET_CLASS only appears when TLS is on.
+  - script: |
+{% if test_scenario['values']['use-tls'] == "true" %}
+      expected=$(jq -Sn --arg ns "$NAMESPACE" '{
+        OPA: "https://test-opa-server.\($ns).svc.cluster.local:8443/",
+        OPA_SECRET_CLASS: "opa-tls-\($ns)"
+      }')
+{% else %}
+      expected=$(jq -Sn --arg ns "$NAMESPACE" '{
+        OPA: "http://test-opa-server.\($ns).svc.cluster.local:8081/"
+      }')
+{% endif %}
+      actual=$(kubectl -n $NAMESPACE get cm test-opa -o json | jq -S '.data')
+      if [ "$expected" != "$actual" ]; then
+        echo "ERROR: ConfigMap test-opa data drifted from snapshot."
+        echo "=== expected ==="
+        printf '%s\n' "$expected"
+        echo "=== actual ==="
+        printf '%s\n' "$actual"
+        exit 1
+      fi
