@@ -15,12 +15,14 @@ All notable changes to this project will be documented in this file.
 - Set `maxSurge=1` and `maxUnavailable=0` on the OPA DaemonSet rolling update strategy to eliminate
   availability gaps during rolling updates ([#819]).
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
+- Internal operator refactoring: introduce dereference() and validate() steps in the reconciler ([#836]).
 
 [#818]: https://github.com/stackabletech/opa-operator/pull/818
 [#819]: https://github.com/stackabletech/opa-operator/pull/819
 [#820]: https://github.com/stackabletech/opa-operator/pull/820
 [#830]: https://github.com/stackabletech/opa-operator/pull/830
 [#831]: https://github.com/stackabletech/opa-operator/pull/831
+[#836]: https://github.com/stackabletech/opa-operator/pull/836
 
 ## [26.3.0] - 2026-03-16
 

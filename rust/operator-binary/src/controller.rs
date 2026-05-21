@@ -26,7 +26,7 @@ use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
     commons::{
-        product_image_selection::{self, ResolvedProductImage},
+        product_image_selection::ResolvedProductImage,
         rbac::build_rbac_resources,
         secret_class::{
             SecretClassVolume, SecretClassVolumeProvisionParts, SecretClassVolumeScope,
@@ -54,7 +54,6 @@ use stackable_operator::{
     kvp::{LabelError, Labels, ObjectLabels},
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
-    product_config_utils::{transform_all_roles_to_config, validate_all_roles_and_groups_config},
     product_logging::{
         self,
         framework::{
@@ -88,6 +87,8 @@ use crate::{
         build_rolegroup_metrics_service, build_server_role_service,
     },
 };
+
+mod validate;
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 pub const OPA_FULL_CONTROLLER_NAME: &str = concatcp!(OPA_CONTROLLER_NAME, '.', OPERATOR_NAME);
@@ -230,11 +231,6 @@ pub enum Error {
         source: stackable_operator::client::Error,
     },
 
-    #[snafu(display("invalid product config"))]
-    InvalidProductConfig {
-        source: stackable_operator::product_config_utils::Error,
-    },
-
     #[snafu(display("object is missing metadata to build owner reference"))]
     ObjectMissingMetadataForOwnerRef {
         source: stackable_operator::builder::meta::Error,
@@ -246,11 +242,6 @@ pub enum Error {
     #[snafu(display("failed to apply discovery ConfigMap"))]
     ApplyDiscoveryConfig {
         source: stackable_operator::cluster_resources::Error,
-    },
-
-    #[snafu(display("failed to transform configs"))]
-    ProductConfigTransform {
-        source: stackable_operator::product_config_utils::Error,
     },
 
     #[snafu(display("failed to resolve and merge config for role and role group"))]
@@ -332,13 +323,11 @@ pub enum Error {
         source: builder::pod::container::Error,
     },
 
-    #[snafu(display("failed to resolve product image"))]
-    ResolveProductImage {
-        source: product_image_selection::Error,
-    },
-
     #[snafu(display("failed to build service"))]
     BuildService { source: service::Error },
+
+    #[snafu(display("failed to validate cluster"))]
+    ValidateCluster { source: validate::Error },
 
     #[snafu(display("failed to build TLS volume"))]
     TlsVolumeBuild {
@@ -448,15 +437,12 @@ pub async fn reconcile_opa(
     let opa_ref = ObjectRef::from_obj(opa);
 
     let client = &ctx.client;
-    let resolved_product_image = opa
-        .spec
-        .image
-        .resolve(
-            CONTAINER_IMAGE_BASE_NAME,
-            &ctx.operator_environment.image_repository,
-            crate::built_info::PKG_VERSION,
-        )
-        .context(ResolveProductImageSnafu)?;
+
+    // NOTE(@maltesander): There currently is no dereference (client required) step for OPA.
+    // validate (no client required)
+    let validated = validate::validate(opa, &ctx.operator_environment, &ctx.product_config)
+        .context(ValidateClusterSnafu)?;
+
     let opa_role = OpaRole::Server;
 
     let mut cluster_resources = ClusterResources::new(
@@ -469,36 +455,14 @@ pub async fn reconcile_opa(
     )
     .context(FailedToCreateClusterResourcesSnafu)?;
 
-    let validated_config = validate_all_roles_and_groups_config(
-        &resolved_product_image.product_version,
-        &transform_all_roles_to_config(
-            opa,
-            &[(
-                opa_role.to_string(),
-                (
-                    vec![
-                        PropertyNameKind::File(CONFIG_FILE.to_string()),
-                        PropertyNameKind::Env,
-                        PropertyNameKind::Cli,
-                    ],
-                    opa.spec.servers.clone(),
-                ),
-            )]
-            .into(),
-        )
-        .context(ProductConfigTransformSnafu)?,
-        &ctx.product_config,
-        false,
-        false,
-    )
-    .context(InvalidProductConfigSnafu)?;
-    let role_server_config = validated_config
+    let role_server_config = validated
+        .validated_role_config
         .get(&opa_role.to_string())
         .map(Cow::Borrowed)
         .unwrap_or_default();
 
     let server_role_service =
-        build_server_role_service(opa, &resolved_product_image).context(BuildServiceSnafu)?;
+        build_server_role_service(opa, &validated.image).context(BuildServiceSnafu)?;
     // required for discovery config map later
     let server_role_service = cluster_resources
         .add(client, server_role_service)
@@ -534,20 +498,15 @@ pub async fn reconcile_opa(
             .merged_config(&opa_role, &rolegroup)
             .context(FailedToResolveConfigSnafu)?;
 
-        let rg_configmap = build_server_rolegroup_config_map(
-            opa,
-            &resolved_product_image,
-            &rolegroup,
-            &merged_config,
-        )?;
-        let rg_service = build_rolegroup_headless_service(opa, &resolved_product_image, &rolegroup)
+        let rg_configmap =
+            build_server_rolegroup_config_map(opa, &validated.image, &rolegroup, &merged_config)?;
+        let rg_service = build_rolegroup_headless_service(opa, &validated.image, &rolegroup)
             .context(BuildServiceSnafu)?;
-        let rg_metrics_service =
-            build_rolegroup_metrics_service(opa, &resolved_product_image, &rolegroup)
-                .context(BuildServiceSnafu)?;
+        let rg_metrics_service = build_rolegroup_metrics_service(opa, &validated.image, &rolegroup)
+            .context(BuildServiceSnafu)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
             opa,
-            &resolved_product_image,
+            &validated.image,
             &opa_role,
             &rolegroup,
             rolegroup_config,
@@ -610,7 +569,7 @@ pub async fn reconcile_opa(
     for discovery_cm in build_discovery_configmaps(
         opa,
         opa,
-        &resolved_product_image,
+        &validated.image,
         &server_role_service,
         &client.kubernetes_cluster_info,
     )

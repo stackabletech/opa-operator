@@ -1,0 +1,281 @@
+{%- set use_tls = test_scenario['values']['use-tls'] == "true" -%}
+{%- set port_name = "https" if use_tls else "http" -%}
+{%- set port_number = 8443 if use_tls else 8081 -%}
+{%- set port_scheme = "HTTPS" if use_tls else "HTTP" -%}
+---
+# Resource-level fingerprint of everything the OPA operator creates for the
+# `test-opa` OpaCluster: DaemonSet, three Services, two ConfigMaps (existence
+# only here — `.data` is asserted in 13-assert), ServiceAccount, RoleBinding.
+#
+# Catches drift in labels, owner references, selectors, ports, probe schemes,
+# update strategy, container resources and TLS-dependent fields. The operator
+# does not create a PodDisruptionBudget for OPA, so none is asserted here.
+#
+# `app.kubernetes.io/version` is intentionally omitted from label matchers so
+# that product-version bumps in test-definition.yaml don't force snapshot
+# updates everywhere.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 60
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: default
+    stackable.tech/vendor: Stackable
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/instance: test-opa
+      app.kubernetes.io/name: opa
+      app.kubernetes.io/role-group: default
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/instance: test-opa
+        app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+        app.kubernetes.io/name: opa
+        app.kubernetes.io/role-group: default
+        stackable.tech/vendor: Stackable
+    spec:
+      serviceAccount: test-opa-serviceaccount
+      serviceAccountName: test-opa-serviceaccount
+      terminationGracePeriodSeconds: 125
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: opa
+          ports:
+            - containerPort: {{ port_number }}
+              name: {{ port_name }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ port_name }}
+              scheme: {{ port_scheme }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ port_name }}
+              scheme: {{ port_scheme }}
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+        - name: bundle-builder
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 3030
+              scheme: HTTP
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 3030
+              scheme: HTTP
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+        - name: vector
+{% endif %}
+      initContainers:
+        - name: prepare
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: global
+    stackable.tech/vendor: Stackable
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+spec:
+  internalTrafficPolicy: Local
+  ports:
+    - name: {{ port_name }}
+      port: {{ port_number }}
+      protocol: TCP
+      targetPort: {{ port_number }}
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/name: opa
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server-default-headless
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: default
+    stackable.tech/vendor: Stackable
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: {{ port_name }}
+      port: {{ port_number }}
+      protocol: TCP
+      targetPort: {{ port_number }}
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: default
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server-default-metrics
+  annotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: "{{ port_number }}"
+    prometheus.io/scheme: {{ port_name }}
+    prometheus.io/scrape: "true"
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: default
+    prometheus.io/scrape: "true"
+    stackable.tech/vendor: Stackable
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+spec:
+  clusterIP: None
+  ports:
+    - name: metrics
+      port: {{ port_number }}
+      protocol: TCP
+      targetPort: {{ port_number }}
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: default
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-opa-server-default
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: default
+    stackable.tech/vendor: Stackable
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-opa
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+    app.kubernetes.io/role-group: discovery
+    stackable.tech/vendor: Stackable
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-opa-serviceaccount
+  labels:
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: test-opa-rolebinding
+  labels:
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/managed-by: opa.stackable.tech_opacluster
+    app.kubernetes.io/name: opa
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opa-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: test-opa-serviceaccount
