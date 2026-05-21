@@ -14,10 +14,7 @@ use stackable_operator::{
     },
 };
 
-use crate::{
-    controller::dereference::DereferencedObjects,
-    crd::{OpaRole, v1alpha2},
-};
+use crate::crd::{OpaRole, v1alpha2};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -48,7 +45,6 @@ pub struct ValidatedInputs {
 /// Validates the cluster spec and the dereferenced inputs.
 pub fn validate(
     opa: &v1alpha2::OpaCluster,
-    _dereferenced_objects: &DereferencedObjects,
     operator_environment: &OperatorEnvironmentOptions,
     product_config: &ProductConfigManager,
 ) -> Result<ValidatedInputs> {

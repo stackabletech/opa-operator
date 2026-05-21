@@ -88,7 +88,6 @@ use crate::{
     },
 };
 
-mod dereference;
 mod validate;
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
@@ -327,9 +326,6 @@ pub enum Error {
     #[snafu(display("failed to build service"))]
     BuildService { source: service::Error },
 
-    #[snafu(display("failed to dereference resources"))]
-    Dereference { source: dereference::Error },
-
     #[snafu(display("failed to validate cluster"))]
     ValidateCluster { source: validate::Error },
 
@@ -442,19 +438,10 @@ pub async fn reconcile_opa(
 
     let client = &ctx.client;
 
-    // dereference (client required)
-    let dereferenced_objects = dereference::dereference(client, opa)
-        .await
-        .context(DereferenceSnafu)?;
-
+    // NOTE(@maltesander): There currently is no dereference (client required) step for OPA.
     // validate (no client required)
-    let validated = validate::validate(
-        opa,
-        &dereferenced_objects,
-        &ctx.operator_environment,
-        &ctx.product_config,
-    )
-    .context(ValidateClusterSnafu)?;
+    let validated = validate::validate(opa, &ctx.operator_environment, &ctx.product_config)
+        .context(ValidateClusterSnafu)?;
 
     let opa_role = OpaRole::Server;
 
