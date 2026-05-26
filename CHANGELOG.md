@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Added support for OPA `1.16.2`. `1.12.3` is now deprecated ([#XXX]).
+- Added support for OPA `1.16.2`. `1.12.3` is now deprecated ([#838]).
 - BREAKING: Add required CLI argument and env var to set the image repository used to construct final product image names: `IMAGE_REPOSITORY` (`--image-repository`), eg. `oci.example.org/my/namespace` ([#830]).
 - Support `configOverrides` for `config.json` ([#818], [#831]).
 
@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 
-- BREAKING: Removed support for OPA `1.8.0` ([#XXX]).
+- BREAKING: Removed support for OPA `1.8.0` ([#838]).
 
 [#818]: https://github.com/stackabletech/opa-operator/pull/818
 [#819]: https://github.com/stackabletech/opa-operator/pull/819
@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
 [#830]: https://github.com/stackabletech/opa-operator/pull/830
 [#831]: https://github.com/stackabletech/opa-operator/pull/831
 [#836]: https://github.com/stackabletech/opa-operator/pull/836
-[#XXX]: https://github.com/stackabletech/opa-operator/pull/XXX
+[#838]: https://github.com/stackabletech/opa-operator/pull/838
 
 ## [26.3.0] - 2026-03-16
 
