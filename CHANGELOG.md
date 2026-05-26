@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added support for OPA `1.16.2`. `1.12.3` is now deprecated ([#XXX]).
 - BREAKING: Add required CLI argument and env var to set the image repository used to construct final product image names: `IMAGE_REPOSITORY` (`--image-repository`), eg. `oci.example.org/my/namespace` ([#830]).
 - Support `configOverrides` for `config.json` ([#818], [#831]).
 
@@ -17,12 +18,17 @@ All notable changes to this project will be documented in this file.
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
 - Internal operator refactoring: introduce dereference() and validate() steps in the reconciler ([#836]).
 
+### Removed
+
+- BREAKING: Removed support for OPA `1.8.0` ([#XXX]).
+
 [#818]: https://github.com/stackabletech/opa-operator/pull/818
 [#819]: https://github.com/stackabletech/opa-operator/pull/819
 [#820]: https://github.com/stackabletech/opa-operator/pull/820
 [#830]: https://github.com/stackabletech/opa-operator/pull/830
 [#831]: https://github.com/stackabletech/opa-operator/pull/831
 [#836]: https://github.com/stackabletech/opa-operator/pull/836
+[#XXX]: https://github.com/stackabletech/opa-operator/pull/XXX
 
 ## [26.3.0] - 2026-03-16
 
