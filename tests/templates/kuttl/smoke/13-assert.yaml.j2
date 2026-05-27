@@ -41,8 +41,8 @@ commands:
       }
       CONFEOF
       )
-      expected=$(jq -Sn --arg cfg "$expected_config" '{"config.json": $cfg}')
-      actual=$(kubectl -n $NAMESPACE get cm test-opa-server-default -o json | jq -S '.data')
+      expected=$(jq -Sn --arg cfg "$expected_config" '$cfg')
+      actual=$(kubectl -n $NAMESPACE get cm test-opa-server-default -o json | jq -S '.data."config.json"')
       if [ "$expected" != "$actual" ]; then
         echo "ERROR: ConfigMap test-opa-server-default data drifted from snapshot."
         echo "=== expected ==="
