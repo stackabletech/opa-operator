@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
   availability gaps during rolling updates ([#819]).
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
 - Internal operator refactoring: introduce dereference() and validate() steps in the reconciler ([#836]).
+- test: Bump vector-aggregator to 0.55.0, replace /graphql call with gRPC call ([#840]).
 
 ### Removed
 
@@ -29,6 +30,7 @@ All notable changes to this project will be documented in this file.
 [#831]: https://github.com/stackabletech/opa-operator/pull/831
 [#836]: https://github.com/stackabletech/opa-operator/pull/836
 [#838]: https://github.com/stackabletech/opa-operator/pull/838
+[#840]: https://github.com/stackabletech/opa-operator/pull/840
 
 ## [26.3.0] - 2026-03-16
 
