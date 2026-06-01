@@ -178,14 +178,15 @@ impl ResolvedOpenLdapBackend {
         // Search for groups that contain this user
         let groups = search_user_groups(&mut ldap, &user, &self.config).await?;
 
-        user_attributes(
+        let attrs = user_attributes(
             user_id_attribute,
             user_name_attribute,
             &user,
             groups,
             &self.config.custom_attribute_mappings,
         )
-        .await
+        .await?;
+        Ok(attrs)
     }
 }
 

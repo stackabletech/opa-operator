@@ -209,7 +209,8 @@ async fn main() -> Result<(), StartupError> {
     axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(shutdown_requested)
         .await
-        .context(RunServerSnafu)
+        .context(RunServerSnafu)?;
+    Ok(())
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -315,64 +316,64 @@ async fn get_user_info(
         backend,
         user_info_cache,
     } = state;
-    Ok(Json(
-        user_info_cache
-            .try_get_with_by_ref(&req, async {
-                match backend.as_ref() {
-                    ResolvedBackend::None => {
-                        let user_id = match &req {
-                            UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
-                                Some(id)
-                            }
-                            _ => None,
-                        };
-                        let username = match &req {
-                            UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
-                                username,
-                            }) => Some(username),
-                            _ => None,
-                        };
-                        Ok(UserInfo {
-                            id: user_id.cloned(),
-                            username: username.cloned(),
-                            groups: vec![],
-                            custom_attributes: HashMap::new(),
-                        })
-                    }
-                    ResolvedBackend::Keycloak(keycloak) => keycloak
-                        .get_user_info(&req)
-                        .await
-                        .context(get_user_info_error::KeycloakSnafu),
-                    ResolvedBackend::ExperimentalXfscAas(aas) => aas
-                        .get_user_info(&req)
-                        .await
-                        .context(get_user_info_error::ExperimentalXfscAasSnafu),
-                    ResolvedBackend::ActiveDirectory {
-                        ldap_server,
-                        tls,
-                        base_distinguished_name,
-                        custom_attribute_mappings,
-                        additional_group_attribute_filters,
-                    } => backend::active_directory::get_user_info(
-                        &req,
-                        ldap_server,
-                        tls,
-                        base_distinguished_name,
-                        custom_attribute_mappings,
-                        additional_group_attribute_filters,
-                    )
-                    .await
-                    .context(get_user_info_error::ActiveDirectorySnafu),
-                    ResolvedBackend::Entra(entra) => entra
-                        .get_user_info(&req)
-                        .await
-                        .context(get_user_info_error::EntraSnafu),
-                    ResolvedBackend::OpenLdap(openldap) => openldap
-                        .get_user_info(&req)
-                        .await
-                        .context(get_user_info_error::OpenLdapSnafu),
+    let user_info = user_info_cache
+        .try_get_with_by_ref(&req, async {
+            match backend.as_ref() {
+                ResolvedBackend::None => {
+                    let user_id = match &req {
+                        UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
+                            Some(id)
+                        }
+                        _ => None,
+                    };
+                    let username = match &req {
+                        UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
+                            username,
+                        }) => Some(username),
+                        _ => None,
+                    };
+                    Ok(UserInfo {
+                        id: user_id.cloned(),
+                        username: username.cloned(),
+                        groups: vec![],
+                        custom_attributes: HashMap::new(),
+                    })
                 }
-            })
-            .await?,
-    ))
+                ResolvedBackend::Keycloak(keycloak) => keycloak
+                    .get_user_info(&req)
+                    .await
+                    .context(get_user_info_error::KeycloakSnafu),
+                ResolvedBackend::ExperimentalXfscAas(aas) => aas
+                    .get_user_info(&req)
+                    .await
+                    .context(get_user_info_error::ExperimentalXfscAasSnafu),
+                ResolvedBackend::ActiveDirectory {
+                    ldap_server,
+                    tls,
+                    base_distinguished_name,
+                    custom_attribute_mappings,
+                    additional_group_attribute_filters,
+                } => backend::active_directory::get_user_info(
+                    &req,
+                    ldap_server,
+                    tls,
+                    base_distinguished_name,
+                    custom_attribute_mappings,
+                    additional_group_attribute_filters,
+                )
+                .await
+                .context(get_user_info_error::ActiveDirectorySnafu),
+                ResolvedBackend::Entra(entra) => entra
+                    .get_user_info(&req)
+                    .await
+                    .context(get_user_info_error::EntraSnafu),
+                ResolvedBackend::OpenLdap(openldap) => openldap
+                    .get_user_info(&req)
+                    .await
+                    .context(get_user_info_error::OpenLdapSnafu),
+            }
+        })
+        .await?;
+
+    Ok(Json(user_info))
 }
