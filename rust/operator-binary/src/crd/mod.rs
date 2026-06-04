@@ -16,7 +16,7 @@ use stackable_operator::{
         fragment::{self, Fragment, ValidationError},
         merge::Merge,
     },
-    config_overrides::{JsonConfigOverrides, KeyValueOverridesProvider},
+    config_overrides::KeyValueOverridesProvider,
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::{CustomResource, ResourceExt},
@@ -27,6 +27,7 @@ use stackable_operator::{
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
     utils::cluster_info::KubernetesClusterInfo,
+    v2::config_overrides::JsonOrKeyValueConfigOverrides,
     versioned::versioned,
 };
 use strum::{Display, EnumIter, EnumString};
@@ -170,18 +171,14 @@ pub mod versioned {
 /// Typed config override strategies for OPA config files.
 ///
 /// OPA only has one config file (`config.json`), which is JSON-formatted.
-/// Users can override it using JSON merge patch (RFC 7396), JSON patch (RFC 6902),
-/// or by providing the full file content.
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+/// Users can override it using key-value pairs, JSON merge patch (RFC 7396),
+/// JSON patch (RFC 6902), or by providing the full file content.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, Merge, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfigOverrides {
     /// Overrides for the OPA `config.json` file.
-    #[serde(
-        default,
-        rename = "config.json",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub config_json: Option<JsonConfigOverrides>,
+    #[serde(default, rename = "config.json")]
+    pub config_json: JsonOrKeyValueConfigOverrides,
 }
 
 // OPA has no key-value config files, all overrides go through JsonConfigOverrides.

@@ -1,0 +1,4 @@
+//! Build steps that turn the [`ValidatedCluster`](super::validate::ValidatedCluster) into
+//! Kubernetes resource specifications.
+
+pub mod config_map;

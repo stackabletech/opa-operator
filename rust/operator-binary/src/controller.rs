@@ -2,13 +2,11 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use const_format::concatcp;
 use indoc::formatdoc;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     builder::{
         self,
-        configmap::ConfigMapBuilder,
         meta::ObjectMetaBuilder,
         pod::{
             PodBuilder,
@@ -28,15 +26,14 @@ use stackable_operator::{
         },
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
-    config_overrides,
     crd::authentication::ldap,
     k8s_openapi::{
         DeepMerge,
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
-                ConfigMap, EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction,
-                ObjectFieldSelector, Probe, SecretVolumeSource, ServiceAccount,
+                EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector,
+                Probe, SecretVolumeSource, ServiceAccount,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -76,13 +73,14 @@ use crate::{
     },
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
-    product_logging::{BundleBuilderLogLevel, extend_role_group_config_map},
+    product_logging::BundleBuilderLogLevel,
     service::{
         self, APP_PORT, APP_PORT_NAME, build_rolegroup_headless_service,
         build_rolegroup_metrics_service, build_server_role_service,
     },
 };
 
+mod build;
 mod validate;
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
@@ -118,7 +116,6 @@ const KUBERNETES_NODE_NAME_ENV: &str = "KUBERNETES_NODE_NAME";
 const KUBERNETES_CLUSTER_DOMAIN_ENV: &str = "KUBERNETES_CLUSTER_DOMAIN";
 
 // logging defaults
-const DEFAULT_DECISION_LOGGING_ENABLED: bool = false;
 const DEFAULT_FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_CONSOLE_LOG_LEVEL: LogLevel = LogLevel::INFO;
 const DEFAULT_SERVER_LOG_LEVEL: LogLevel = LogLevel::INFO;
@@ -188,7 +185,7 @@ pub enum Error {
 
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
-        source: stackable_operator::builder::configmap::Error,
+        source: build::config_map::Error,
         rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
     },
 
@@ -246,12 +243,6 @@ pub enum Error {
     #[snafu(display("vector agent is enabled but vector aggregator ConfigMap is missing"))]
     VectorAggregatorConfigMapMissing,
 
-    #[snafu(display("failed to add the logging configuration to the ConfigMap [{cm_name}]"))]
-    InvalidLoggingConfig {
-        source: crate::product_logging::Error,
-        cm_name: String,
-    },
-
     #[snafu(display("failed to create cluster resources"))]
     FailedToCreateClusterResources {
         source: stackable_operator::cluster_resources::Error,
@@ -271,9 +262,6 @@ pub enum Error {
     GracefulShutdown {
         source: crate::operations::graceful_shutdown::Error,
     },
-
-    #[snafu(display("failed to serialize user info fetcher configuration"))]
-    SerializeUserInfoFetcherConfig { source: serde_json::Error },
 
     #[snafu(display("failed to build label"))]
     BuildLabel { source: LabelError },
@@ -324,18 +312,6 @@ pub enum Error {
     TlsVolumeBuild {
         source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
     },
-
-    #[snafu(display("failed to apply config overrides to the file {file:?}"))]
-    ApplyConfigOverrides {
-        source: config_overrides::Error,
-        file: String,
-    },
-
-    #[snafu(display("failed to serialize config file {file:?}"))]
-    SerializeConfigFile {
-        source: serde_json::Error,
-        file: String,
-    },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -343,76 +319,6 @@ impl ReconcilerError for Error {
     fn category(&self) -> &'static str {
         ErrorDiscriminants::from(self).into()
     }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct OpaClusterConfigFile {
-    services: Vec<OpaClusterConfigService>,
-    bundles: OpaClusterBundle,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    decision_logs: Option<OpaClusterConfigDecisionLog>,
-    status: Option<OpaClusterConfigStatus>,
-}
-
-impl OpaClusterConfigFile {
-    pub fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
-        Self {
-            services: vec![OpaClusterConfigService {
-                name: OPA_STACKABLE_SERVICE_NAME.to_owned(),
-                url: "http://localhost:3030/opa/v1".to_owned(),
-            }],
-            bundles: OpaClusterBundle {
-                stackable: OpaClusterBundleConfig {
-                    service: OPA_STACKABLE_SERVICE_NAME.to_owned(),
-                    resource: "opa/bundle.tar.gz".to_owned(),
-                    persist: true,
-                    polling: OpaClusterBundleConfigPolling {
-                        min_delay_seconds: 10,
-                        max_delay_seconds: 20,
-                    },
-                },
-            },
-            decision_logs: decision_logging,
-            // Enable more Prometheus metrics, such as bundle loads
-            // See https://www.openpolicyagent.org/docs/monitoring#status-metrics
-            status: Some(OpaClusterConfigStatus { prometheus: true }),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct OpaClusterConfigService {
-    name: String,
-    url: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OpaClusterBundle {
-    stackable: OpaClusterBundleConfig,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OpaClusterBundleConfig {
-    service: String,
-    resource: String,
-    persist: bool,
-    polling: OpaClusterBundleConfigPolling,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OpaClusterBundleConfigPolling {
-    min_delay_seconds: i32,
-    max_delay_seconds: i32,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct OpaClusterConfigDecisionLog {
-    console: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OpaClusterConfigStatus {
-    prometheus: bool,
 }
 
 pub async fn reconcile_opa(
@@ -486,8 +392,22 @@ pub async fn reconcile_opa(
 
         let merged_config = &rolegroup_config.merged_config;
 
-        let rg_configmap =
-            build_server_rolegroup_config_map(opa, &validated.image, &rolegroup, merged_config)?;
+        let recommended_labels = build_recommended_labels(
+            opa,
+            &validated.image.app_version_label_value,
+            &rolegroup.role,
+            &rolegroup.role_group,
+        );
+        let rg_configmap = build::config_map::build_rolegroup_config_map(
+            &validated,
+            rolegroup_config,
+            &rolegroup,
+            &recommended_labels,
+            opa,
+        )
+        .with_context(|_| BuildRoleGroupConfigSnafu {
+            rolegroup: rolegroup.clone(),
+        })?;
         let rg_service = build_rolegroup_headless_service(opa, &validated.image, &rolegroup)
             .context(BuildServiceSnafu)?;
         let rg_metrics_service = build_rolegroup_metrics_service(opa, &validated.image, &rolegroup)
@@ -586,75 +506,6 @@ pub async fn reconcile_opa(
         .context(DeleteOrphansSnafu)?;
 
     Ok(Action::await_change())
-}
-
-/// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the administrator
-fn build_server_rolegroup_config_map(
-    opa: &v1alpha2::OpaCluster,
-    resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
-    merged_config: &OpaConfig,
-) -> Result<ConfigMap> {
-    let mut cm_builder = ConfigMapBuilder::new();
-
-    // Collect config overrides from role and rolegroup levels.
-    // Both are applied in order: role-level first, then rolegroup-level on top,
-    // so rolegroup overrides take precedence.
-    let role_config_override = opa
-        .spec
-        .servers
-        .config
-        .config_overrides
-        .config_json
-        .as_ref();
-    let rolegroup_config_override = opa
-        .spec
-        .servers
-        .role_groups
-        .get(&rolegroup.role_group)
-        .and_then(|rg| rg.config.config_overrides.config_json.as_ref());
-
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(rolegroup.object_name())
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(&build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label_value,
-            &rolegroup.role,
-            &rolegroup.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
-        .build();
-
-    cm_builder.metadata(metadata).add_data(
-        CONFIG_FILE,
-        build_config_file(
-            merged_config,
-            role_config_override,
-            rolegroup_config_override,
-        )?,
-    );
-
-    if let Some(user_info) = &opa.spec.cluster_config.user_info {
-        cm_builder.add_data(
-            "user-info-fetcher.json",
-            serde_json::to_string_pretty(user_info).context(SerializeUserInfoFetcherConfigSnafu)?,
-        );
-    }
-
-    extend_role_group_config_map(rolegroup, &merged_config.logging, &mut cm_builder).context(
-        InvalidLoggingConfigSnafu {
-            cm_name: rolegroup.object_name(),
-        },
-    )?;
-
-    cm_builder
-        .build()
-        .with_context(|_| BuildRoleGroupConfigSnafu {
-            rolegroup: rolegroup.clone(),
-        })
 }
 
 /// Env variables that are need to run stackable Rust binaries, such as
@@ -1184,54 +1035,6 @@ pub fn error_policy(
 
         _ => Action::requeue(*Duration::from_secs(10)),
     }
-}
-
-fn build_config_file(
-    merged_config: &OpaConfig,
-    role_config_override: Option<&config_overrides::JsonConfigOverrides>,
-    rolegroup_config_override: Option<&config_overrides::JsonConfigOverrides>,
-) -> Result<String> {
-    let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
-
-    if let Some(ContainerLogConfig {
-        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config.logging.containers.get(&Container::Opa)
-    {
-        if let Some(config) = log_config.loggers.get("decision") {
-            decision_logging_enabled = config.level != LogLevel::NONE;
-        }
-    }
-
-    let decision_logging = if decision_logging_enabled {
-        Some(OpaClusterConfigDecisionLog { console: true })
-    } else {
-        None
-    };
-
-    let config = OpaClusterConfigFile::new(decision_logging);
-
-    let mut config_value =
-        serde_json::to_value(&config).with_context(|_| SerializeConfigFileSnafu {
-            file: CONFIG_FILE.to_string(),
-        })?;
-
-    // Apply role-level overrides first, then rolegroup-level on top.
-    // This way rolegroup settings take precedence over role settings.
-    for overrides in [role_config_override, rolegroup_config_override]
-        .into_iter()
-        .flatten()
-    {
-        config_value =
-            overrides
-                .apply(&config_value)
-                .with_context(|_| ApplyConfigOverridesSnafu {
-                    file: CONFIG_FILE.to_string(),
-                })?;
-    }
-
-    serde_json::to_string_pretty(&config_value).with_context(|_| SerializeConfigFileSnafu {
-        file: CONFIG_FILE.to_string(),
-    })
 }
 
 fn build_opa_start_command(
