@@ -38,7 +38,6 @@ use crate::{
 
 mod controller;
 mod crd;
-mod discovery;
 mod operations;
 mod service;
 mod webhooks;

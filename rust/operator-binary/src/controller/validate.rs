@@ -17,7 +17,10 @@ use stackable_operator::{
 };
 use strum::IntoEnumIterator;
 
-use crate::crd::{OpaConfig, OpaConfigOverrides, OpaRole, user_info_fetcher, v1alpha2};
+use crate::crd::{
+    OpaConfig, OpaConfigOverrides, OpaRole, user_info_fetcher,
+    v1alpha2::{self, OpaTls},
+};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -43,8 +46,6 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 /// for every role group, ready to be turned into Kubernetes resources without touching the raw
 /// `OpaCluster` spec again (except for owner references).
 pub struct ValidatedCluster {
-    // TODO: consumed by the Service / StatefulSet build steps in the follow-up PR.
-    #[allow(dead_code)]
     pub name: ClusterName,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
@@ -55,6 +56,7 @@ pub struct ValidatedCluster {
 /// raw `OpaCluster` to render config (except for owner references).
 pub struct ValidatedClusterConfig {
     pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
+    pub tls: Option<OpaTls>,
 }
 
 /// The validated configuration of a single role group.
@@ -118,6 +120,7 @@ pub fn validate(
         image,
         cluster_config: ValidatedClusterConfig {
             user_info: opa.spec.cluster_config.user_info.clone(),
+            tls: opa.spec.cluster_config.tls.clone(),
         },
         role_group_configs,
     })

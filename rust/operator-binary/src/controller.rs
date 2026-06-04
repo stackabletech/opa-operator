@@ -72,7 +72,6 @@ use crate::{
         OpaClusterStatus, OpaConfig, OpaRole, user_info_fetcher, v1alpha2,
     },
     controller::build::properties::logging::BundleBuilderLogLevel,
-    discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
     service::{
         self, APP_PORT, APP_PORT_NAME, build_rolegroup_headless_service,
@@ -228,7 +227,7 @@ pub enum Error {
     },
 
     #[snafu(display("failed to build discovery ConfigMap"))]
-    BuildDiscoveryConfig { source: discovery::Error },
+    BuildDiscoveryConfig { source: build::discovery::Error },
 
     #[snafu(display("failed to apply discovery ConfigMap"))]
     ApplyDiscoveryConfig {
@@ -473,20 +472,17 @@ pub async fn reconcile_opa(
             .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
-    for discovery_cm in build_discovery_configmaps(
-        opa,
-        opa,
-        &validated.image,
+    let discovery_cm = build::discovery::build_discovery_config_map(
+        &validated,
         &server_role_service,
         &client.kubernetes_cluster_info,
+        opa,
     )
-    .context(BuildDiscoveryConfigSnafu)?
-    {
-        cluster_resources
-            .add(client, discovery_cm)
-            .await
-            .context(ApplyDiscoveryConfigSnafu)?;
-    }
+    .context(BuildDiscoveryConfigSnafu)?;
+    cluster_resources
+        .add(client, discovery_cm)
+        .await
+        .context(ApplyDiscoveryConfigSnafu)?;
 
     let cluster_operation_cond_builder =
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
