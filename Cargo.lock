@@ -3519,7 +3519,6 @@ dependencies = [
  "futures",
  "indoc",
  "pin-project",
- "product-config",
  "rustls",
  "semver",
  "serde",

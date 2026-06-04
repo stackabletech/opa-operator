@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -16,11 +16,9 @@ use stackable_operator::{
         fragment::{self, Fragment, ValidationError},
         merge::Merge,
     },
-    config_overrides::KeyValueOverridesProvider,
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::{CustomResource, ResourceExt},
-    product_config_utils::Configuration,
     product_logging::{self, spec::Logging},
     role_utils::{EmptyRoleConfig, GenericCommonConfig, Role, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
@@ -181,12 +179,6 @@ pub struct OpaConfigOverrides {
     pub config_json: JsonOrKeyValueConfigOverrides,
 }
 
-// OPA has no key-value config files, all overrides go through JsonConfigOverrides.
-// This impl is still required because the shared product config pipeline
-// (`transform_all_roles_to_config`) requires the `KeyValueOverridesProvider` bound
-// at compile time. The default implementation returns an empty map.
-impl KeyValueOverridesProvider for OpaConfigOverrides {}
-
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
 #[fragment_attrs(
@@ -327,38 +319,6 @@ impl OpaConfig {
             affinity: Default::default(),
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
-    }
-}
-
-impl Configuration for OpaConfigFragment {
-    type Configurable = v1alpha2::OpaCluster;
-
-    fn compute_env(
-        &self,
-        _resource: &Self::Configurable,
-        _role_name: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
-    {
-        Ok(BTreeMap::new())
-    }
-
-    fn compute_cli(
-        &self,
-        _resource: &Self::Configurable,
-        _role_name: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
-    {
-        Ok(BTreeMap::new())
-    }
-
-    fn compute_files(
-        &self,
-        _resource: &Self::Configurable,
-        _role_name: &str,
-        _file: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
-    {
-        Ok(BTreeMap::new())
     }
 }
 
