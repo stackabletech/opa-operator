@@ -79,7 +79,9 @@ async fn main() -> anyhow::Result<()> {
                 RunArguments {
                     operator_environment,
                     watch_namespace,
-                    product_config,
+                    // OPA no longer uses the product-config; the CLI argument is kept for
+                    // backwards compatibility but ignored.
+                    product_config: _,
                     maintenance,
                     common,
                 },
@@ -116,11 +118,6 @@ async fn main() -> anyhow::Result<()> {
                 EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, &maintenance.end_of_support)?
                     .run(sigterm_watcher.handle())
                     .map(anyhow::Ok);
-
-            let product_config = product_config.load(&[
-                "deploy/config-spec/properties.yaml",
-                "/etc/stackable/opa-operator/config-spec/properties.yaml",
-            ])?;
 
             let client =
                 client::initialize_operator(Some(OPERATOR_NAME.to_string()), &common.cluster_info)
@@ -171,7 +168,6 @@ async fn main() -> anyhow::Result<()> {
                     controller::error_policy,
                     Arc::new(controller::Ctx {
                         client: client.clone(),
-                        product_config,
                         opa_bundle_builder_image: operator_image.clone(),
                         user_info_fetcher_image: operator_image,
                         operator_environment,

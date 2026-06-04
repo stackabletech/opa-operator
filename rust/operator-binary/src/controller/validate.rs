@@ -1,20 +1,22 @@
 //! The validate step in the OpaCluster controller
 //!
-//! Synchronously validates inputs that don't require a Kubernetes client. Produces
-//! [`ValidatedInputs`], consumed by the rest of `reconcile_opa`.
+//! Synchronously merges and validates the cluster spec into the typed
+//! [`ValidatedCluster`] consumed by the rest of `reconcile_opa`. No Kubernetes
+//! client is required.
 
-use product_config::{ProductConfigManager, types::PropertyNameKind};
+use std::{collections::BTreeMap, str::FromStr};
+
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection::{self, ResolvedProductImage},
-    product_config_utils::{
-        ValidatedRoleConfigByPropertyKind, transform_all_roles_to_config,
-        validate_all_roles_and_groups_config,
-    },
+    kube::{ResourceExt, runtime::reflector::ObjectRef},
+    role_utils::RoleGroupRef,
+    v2::types::operator::ClusterName,
 };
+use strum::IntoEnumIterator;
 
-use crate::crd::{OpaRole, v1alpha2};
+use crate::crd::{OpaConfig, OpaRole, v1alpha2};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -23,31 +25,40 @@ pub enum Error {
         source: product_image_selection::Error,
     },
 
-    #[snafu(display("failed to transform configs"))]
-    ProductConfigTransform {
-        source: stackable_operator::product_config_utils::Error,
+    #[snafu(display("invalid cluster name"))]
+    InvalidClusterName {
+        source: stackable_operator::v2::macros::attributed_string_type::Error,
     },
 
-    #[snafu(display("invalid product config"))]
-    InvalidProductConfig {
-        source: stackable_operator::product_config_utils::Error,
-    },
+    #[snafu(display("failed to resolve and merge config for role and role group"))]
+    FailedToResolveConfig { source: crate::crd::Error },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// Synchronous inputs the rest of `reconcile_opa` needs after dereferencing.
-pub struct ValidatedInputs {
+/// The validated [`v1alpha2::OpaCluster`].
+///
+/// The output of the validate step: config fragments merged and validated for every role group,
+/// ready to be turned into Kubernetes resources without touching the raw `OpaCluster` spec again
+/// (except for owner references).
+pub struct ValidatedCluster {
+    // TODO: consumed by the config_map build step in a follow-up commit (Step 3).
+    #[allow(dead_code)]
+    pub name: ClusterName,
     pub image: ResolvedProductImage,
-    pub validated_role_config: ValidatedRoleConfigByPropertyKind,
+    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<String, OpaRoleGroupConfig>>,
 }
 
-/// Validates the cluster spec and the dereferenced inputs.
+/// The validated configuration of a single role group.
+pub struct OpaRoleGroupConfig {
+    pub merged_config: OpaConfig,
+}
+
+/// Validates the cluster spec and produces a [`ValidatedCluster`].
 pub fn validate(
     opa: &v1alpha2::OpaCluster,
     operator_environment: &OperatorEnvironmentOptions,
-    product_config: &ProductConfigManager,
-) -> Result<ValidatedInputs> {
+) -> Result<ValidatedCluster> {
     let image = opa
         .spec
         .image
@@ -58,32 +69,30 @@ pub fn validate(
         )
         .context(ResolveProductImageSnafu)?;
 
-    let validated_role_config = validate_all_roles_and_groups_config(
-        &image.product_version,
-        &transform_all_roles_to_config(
-            opa,
-            &[(
-                OpaRole::Server.to_string(),
-                (
-                    vec![
-                        PropertyNameKind::File(super::CONFIG_FILE.to_string()),
-                        PropertyNameKind::Env,
-                        PropertyNameKind::Cli,
-                    ],
-                    opa.spec.servers.clone(),
-                ),
-            )]
-            .into(),
-        )
-        .context(ProductConfigTransformSnafu)?,
-        product_config,
-        false,
-        false,
-    )
-    .context(InvalidProductConfigSnafu)?;
+    let mut role_group_configs = BTreeMap::new();
+    for opa_role in OpaRole::iter() {
+        let role = opa.role(&opa_role);
 
-    Ok(ValidatedInputs {
+        let mut group_configs = BTreeMap::new();
+        for role_group_name in role.role_groups.keys() {
+            let rolegroup_ref = RoleGroupRef {
+                cluster: ObjectRef::from_obj(opa),
+                role: opa_role.to_string(),
+                role_group: role_group_name.clone(),
+            };
+            let merged_config = opa
+                .merged_config(&opa_role, &rolegroup_ref)
+                .context(FailedToResolveConfigSnafu)?;
+
+            group_configs.insert(role_group_name.clone(), OpaRoleGroupConfig { merged_config });
+        }
+
+        role_group_configs.insert(opa_role, group_configs);
+    }
+
+    Ok(ValidatedCluster {
+        name: ClusterName::from_str(&opa.name_any()).context(InvalidClusterNameSnafu)?,
         image,
-        validated_role_config,
+        role_group_configs,
     })
 }

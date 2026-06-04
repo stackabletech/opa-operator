@@ -1,12 +1,7 @@
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use const_format::concatcp;
 use indoc::formatdoc;
-use product_config::{ProductConfigManager, types::PropertyNameKind};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -159,7 +154,6 @@ const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 
 pub struct Ctx {
     pub client: stackable_operator::client::Client,
-    pub product_config: ProductConfigManager,
     pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
     pub cluster_info: KubernetesClusterInfo,
@@ -243,9 +237,6 @@ pub enum Error {
     ApplyDiscoveryConfig {
         source: stackable_operator::cluster_resources::Error,
     },
-
-    #[snafu(display("failed to resolve and merge config for role and role group"))]
-    FailedToResolveConfig { source: crate::crd::Error },
 
     #[snafu(display("illegal container name"))]
     IllegalContainerName {
@@ -440,8 +431,7 @@ pub async fn reconcile_opa(
 
     // NOTE(@maltesander): There currently is no dereference (client required) step for OPA.
     // validate (no client required)
-    let validated = validate::validate(opa, &ctx.operator_environment, &ctx.product_config)
-        .context(ValidateClusterSnafu)?;
+    let validated = validate::validate(opa, &ctx.operator_environment).context(ValidateClusterSnafu)?;
 
     let opa_role = OpaRole::Server;
 
@@ -455,11 +445,11 @@ pub async fn reconcile_opa(
     )
     .context(FailedToCreateClusterResourcesSnafu)?;
 
-    let role_server_config = validated
-        .validated_role_config
-        .get(&opa_role.to_string())
-        .map(Cow::Borrowed)
-        .unwrap_or_default();
+    let empty_role_group_configs = BTreeMap::new();
+    let role_group_configs = validated
+        .role_group_configs
+        .get(&opa_role)
+        .unwrap_or(&empty_role_group_configs);
 
     let server_role_service =
         build_server_role_service(opa, &validated.image).context(BuildServiceSnafu)?;
@@ -487,19 +477,17 @@ pub async fn reconcile_opa(
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
-    for (rolegroup_name, rolegroup_config) in role_server_config.iter() {
+    for (rolegroup_name, rolegroup_config) in role_group_configs {
         let rolegroup = RoleGroupRef {
             cluster: opa_ref.clone(),
             role: opa_role.to_string(),
             role_group: rolegroup_name.to_string(),
         };
 
-        let merged_config = opa
-            .merged_config(&opa_role, &rolegroup)
-            .context(FailedToResolveConfigSnafu)?;
+        let merged_config = &rolegroup_config.merged_config;
 
         let rg_configmap =
-            build_server_rolegroup_config_map(opa, &validated.image, &rolegroup, &merged_config)?;
+            build_server_rolegroup_config_map(opa, &validated.image, &rolegroup, merged_config)?;
         let rg_service = build_rolegroup_headless_service(opa, &validated.image, &rolegroup)
             .context(BuildServiceSnafu)?;
         let rg_metrics_service = build_rolegroup_metrics_service(opa, &validated.image, &rolegroup)
@@ -509,8 +497,7 @@ pub async fn reconcile_opa(
             &validated.image,
             &opa_role,
             &rolegroup,
-            rolegroup_config,
-            &merged_config,
+            merged_config,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
             &rbac_sa,
@@ -721,7 +708,6 @@ fn build_server_rolegroup_daemonset(
     resolved_product_image: &ResolvedProductImage,
     opa_role: &OpaRole,
     rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    server_config: &HashMap<PropertyNameKind, BTreeMap<String, String>>,
     merged_config: &OpaConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
@@ -742,10 +728,17 @@ fn build_server_rolegroup_daemonset(
         merged
     };
 
-    let env = server_config
-        .get(&PropertyNameKind::Env)
+    // Merge the role- and role-group-level `envOverrides`, the role group taking precedence.
+    // Collected into a `BTreeMap` for deterministic ordering of the resulting env vars.
+    let merged_env_overrides = {
+        let mut merged: BTreeMap<String, String> =
+            role.config.env_overrides.clone().into_iter().collect();
+        merged.extend(role_group.config.env_overrides.clone());
+        merged
+    };
+
+    let env = merged_env_overrides
         .iter()
-        .flat_map(|env_vars| env_vars.iter())
         .map(|(k, v)| EnvVar {
             name: k.clone(),
             value: Some(v.clone()),
