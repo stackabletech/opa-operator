@@ -67,11 +67,11 @@ use stackable_operator::{
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
+    controller::build::properties::logging::BundleBuilderLogLevel,
     crd::{
         APP_NAME, Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
         OpaClusterStatus, OpaConfig, OpaRole, user_info_fetcher, v1alpha2,
     },
-    controller::build::properties::logging::BundleBuilderLogLevel,
     operations::graceful_shutdown::add_graceful_shutdown_config,
     service::{
         self, APP_PORT, APP_PORT_NAME, build_rolegroup_headless_service,
@@ -336,7 +336,8 @@ pub async fn reconcile_opa(
 
     // NOTE(@maltesander): There currently is no dereference (client required) step for OPA.
     // validate (no client required)
-    let validated = validate::validate(opa, &ctx.operator_environment).context(ValidateClusterSnafu)?;
+    let validated =
+        validate::validate(opa, &ctx.operator_environment).context(ValidateClusterSnafu)?;
 
     let opa_role = OpaRole::Server;
 

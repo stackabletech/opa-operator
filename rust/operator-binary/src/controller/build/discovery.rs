@@ -162,6 +162,9 @@ mod tests {
             data.get("OPA").map(String::as_str),
             Some("https://test-opa-server.default.svc.cluster.local:8443/")
         );
-        assert_eq!(data.get("OPA_SECRET_CLASS").map(String::as_str), Some("tls"));
+        assert_eq!(
+            data.get("OPA_SECRET_CLASS").map(String::as_str),
+            Some("tls")
+        );
     }
 }

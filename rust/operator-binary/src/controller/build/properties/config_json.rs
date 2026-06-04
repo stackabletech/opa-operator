@@ -49,9 +49,10 @@ pub fn build(merged_config: &OpaConfig, config_overrides: &OpaConfigOverrides) -
 
     let config = OpaClusterConfigFile::new(decision_logging);
 
-    let config_value = serde_json::to_value(&config).with_context(|_| SerializeConfigFileSnafu {
-        file: ConfigFileName::ConfigJson.to_string(),
-    })?;
+    let config_value =
+        serde_json::to_value(&config).with_context(|_| SerializeConfigFileSnafu {
+            file: ConfigFileName::ConfigJson.to_string(),
+        })?;
 
     // Apply the merged user `configOverrides`. The merge built a sequence that applies the
     // role-level patch first, then the role-group-level patch on top. `apply` is infallible; an
@@ -139,7 +140,9 @@ mod tests {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::{controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole};
+    use crate::{
+        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
+    };
 
     /// Renders `config.json` for the `default` server role group of an `OpaCluster` built from
     /// `spec`, and parses it back into a [`Value`].
@@ -159,8 +162,14 @@ mod tests {
 
         // The bundled stackable service and its default polling values.
         assert_eq!(config["services"][0]["name"], "stackable");
-        assert_eq!(config["bundles"]["stackable"]["polling"]["min_delay_seconds"], 10);
-        assert_eq!(config["bundles"]["stackable"]["polling"]["max_delay_seconds"], 20);
+        assert_eq!(
+            config["bundles"]["stackable"]["polling"]["min_delay_seconds"],
+            10
+        );
+        assert_eq!(
+            config["bundles"]["stackable"]["polling"]["max_delay_seconds"],
+            20
+        );
         // Prometheus status metrics are enabled, decision logs are off by default.
         assert_eq!(config["status"]["prometheus"], true);
         assert!(config.get("decision_logs").is_none_or(Value::is_null));

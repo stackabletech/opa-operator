@@ -86,11 +86,9 @@ pub fn build_rolegroup_config_map(
         cm_builder.add_data(VECTOR_CONFIG_FILE, vector_config);
     }
 
-    cm_builder
-        .build()
-        .with_context(|_| BuildConfigMapSnafu {
-            rolegroup: rolegroup_ref.clone(),
-        })
+    cm_builder.build().with_context(|_| BuildConfigMapSnafu {
+        rolegroup: rolegroup_ref.clone(),
+    })
 }
 
 #[cfg(test)]
@@ -100,8 +98,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        controller::{build::properties::test_support::validated_cluster_from_spec,
-            build_recommended_labels},
+        controller::{
+            build::properties::test_support::validated_cluster_from_spec, build_recommended_labels,
+        },
         crd::OpaRole,
     };
 

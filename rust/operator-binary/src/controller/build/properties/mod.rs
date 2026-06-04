@@ -48,8 +48,8 @@ pub(crate) mod test_support {
             image_repository: "oci.stackable.tech/sdp".to_string(),
         };
 
-        let validated =
-            validate(&opa, &operator_environment).expect("validation should succeed for the fixture");
+        let validated = validate(&opa, &operator_environment)
+            .expect("validation should succeed for the fixture");
         (opa, validated)
     }
 }
