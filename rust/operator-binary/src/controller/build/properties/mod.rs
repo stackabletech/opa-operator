@@ -6,6 +6,7 @@
 //! operators.
 
 pub mod config_json;
+pub mod logging;
 pub mod user_info_fetcher;
 
 /// The names of the config files assembled into the rolegroup `ConfigMap`.

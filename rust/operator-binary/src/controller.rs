@@ -71,9 +71,9 @@ use crate::{
         APP_NAME, Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
         OpaClusterStatus, OpaConfig, OpaRole, user_info_fetcher, v1alpha2,
     },
+    controller::build::properties::logging::BundleBuilderLogLevel,
     discovery::{self, build_discovery_configmaps},
     operations::graceful_shutdown::add_graceful_shutdown_config,
-    product_logging::BundleBuilderLogLevel,
     service::{
         self, APP_PORT, APP_PORT_NAME, build_rolegroup_headless_service,
         build_rolegroup_metrics_service, build_server_role_service,

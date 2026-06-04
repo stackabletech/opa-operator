@@ -7,14 +7,14 @@ use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     k8s_openapi::api::core::v1::ConfigMap,
     kvp::ObjectLabels,
+    product_logging::framework::VECTOR_CONFIG_FILE,
     role_utils::RoleGroupRef,
 };
 
-use super::properties::{ConfigFileName, config_json, user_info_fetcher};
+use super::properties::{ConfigFileName, config_json, logging, user_info_fetcher};
 use crate::{
     controller::validate::{OpaRoleGroupConfig, ValidatedCluster},
     crd::v1alpha2,
-    product_logging::extend_role_group_config_map,
 };
 
 #[derive(Snafu, Debug)]
@@ -34,12 +34,6 @@ pub enum Error {
 
     #[snafu(display("failed to build user-info-fetcher.json"))]
     BuildUserInfoFetcher { source: user_info_fetcher::Error },
-
-    #[snafu(display("failed to add the logging configuration to the ConfigMap [{cm_name}]"))]
-    InvalidLoggingConfig {
-        source: crate::product_logging::Error,
-        cm_name: String,
-    },
 
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildConfigMap {
@@ -86,14 +80,11 @@ pub fn build_rolegroup_config_map(
         );
     }
 
-    extend_role_group_config_map(
-        rolegroup_ref,
-        &rolegroup_config.merged_config.logging,
-        &mut cm_builder,
-    )
-    .context(InvalidLoggingConfigSnafu {
-        cm_name: rolegroup_ref.object_name(),
-    })?;
+    if let Some(vector_config) =
+        logging::build_vector_config(rolegroup_ref, &rolegroup_config.merged_config.logging)
+    {
+        cm_builder.add_data(VECTOR_CONFIG_FILE, vector_config);
+    }
 
     cm_builder
         .build()

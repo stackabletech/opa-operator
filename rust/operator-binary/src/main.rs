@@ -40,7 +40,6 @@ mod controller;
 mod crd;
 mod discovery;
 mod operations;
-mod product_logging;
 mod service;
 mod webhooks;
 
