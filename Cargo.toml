@@ -29,7 +29,13 @@ ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
 moka = { version = "0.12", features = ["future"] }
 native-tls = "0.2.12"
 pin-project = "1.1"
-reqwest = { version = "0.13", features = ["json", "form", "query"] }
+# `default-features = false` drops reqwest 0.13's `default-tls = ["rustls"]`; we select
+# `native-tls` (OpenSSL) to stay on the same TLS stack as ldap3 (see utils/tls.rs). The
+# rustls platform verifier eagerly errors ("No CA certificates were loaded from the
+# system") when the container has no system CA bundle; OpenSSL loads certs lazily instead.
+# charset/http2/system-proxy are reqwest 0.13 defaults re-added here.
+# TODO(@maltesander): We should remove these and "native-tls" and add ca-certificates to the docker images?
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "query", "native-tls", "charset", "http2", "system-proxy"] }
 rustls = "0.23"
 rustls-pki-types = "1.13"
 semver = "1.0"
