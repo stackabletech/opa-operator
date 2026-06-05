@@ -25,7 +25,7 @@ commands:
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
       metadata:
-        name: test-opa-groupofnames-tls
+        name: opa-groupofnames-tls
       spec:
         image:
 {% if test_scenario['values']['opa-latest'].find(",") > 0 %}
@@ -84,7 +84,7 @@ commands:
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
       metadata:
-        name: test-opa-groupofnames-notls
+        name: opa-groupofnames-notls
       spec:
         image:
 {% if test_scenario['values']['opa-latest'].find(",") > 0 %}
@@ -134,7 +134,7 @@ commands:
       apiVersion: opa.stackable.tech/v1alpha1
       kind: OpaCluster
       metadata:
-        name: test-opa-posixgroup-tls
+        name: opa-posixgroup-tls
       spec:
         image:
 {% if test_scenario['values']['opa-latest'].find(",") > 0 %}

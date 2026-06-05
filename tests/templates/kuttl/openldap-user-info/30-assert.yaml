@@ -5,6 +5,6 @@ metadata:
   name: install-opa
 timeout: 300
 commands:
-  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa-groupofnames-tls --timeout 301s
-  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa-groupofnames-notls --timeout 301s
-  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa-posixgroup-tls --timeout 301s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/opa-groupofnames-tls --timeout 301s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/opa-groupofnames-notls --timeout 301s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/opa-posixgroup-tls --timeout 301s
