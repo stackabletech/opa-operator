@@ -181,14 +181,15 @@ pub(crate) async fn get_user_info(
         .context(UserNotFoundSnafu { request })?;
     let user = SearchEntry::construct(user);
     tracing::debug!(?user, "got user from LDAP");
-    user_attributes(
+    let attrs = user_attributes(
         &mut ldap,
         base_distinguished_name,
         &user,
         custom_attribute_mappings,
         additional_group_attribute_filters,
     )
-    .await
+    .await?;
+    Ok(attrs)
 }
 
 /// Constructs a user filter that searches both the UPN as well as the sAMAccountName attributes.

@@ -34,7 +34,7 @@ pub async fn create_webhook_server(
         disable_crd_maintenance,
     };
 
-    let (conversion_webhook, _initial_reconcile_rx) =
+    let (conversion_webhook, _) =
         ConversionWebhook::new(crds_and_handlers, client, conversion_webhook_options);
 
     let webhook_server_options = WebhookServerOptions {

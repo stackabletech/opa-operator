@@ -210,7 +210,8 @@ async fn main() -> Result<(), StartupError> {
             .context(RunServerSnafu)
     });
 
-    future::select(reflector, server).await.factor_first().0
+    future::select(reflector, server).await.factor_first().0?;
+    Ok(())
 }
 
 #[derive(Snafu, Debug)]
@@ -244,7 +245,7 @@ enum BundleError {
 }
 
 impl BundleError {
-    fn to_http_response(&self) -> impl IntoResponse {
+    fn to_http_response(&self) -> impl IntoResponse + use<> {
         (
             http::StatusCode::INTERNAL_SERVER_ERROR,
             "failed to build bundle, see opa-bundle-builder logs for more details",
