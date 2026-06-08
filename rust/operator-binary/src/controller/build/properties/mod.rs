@@ -37,7 +37,11 @@ pub(crate) mod test_support {
         let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
             "apiVersion": "opa.stackable.tech/v1alpha2",
             "kind": "OpaCluster",
-            "metadata": { "name": "test-opa", "namespace": "default", "uid": "42" },
+            "metadata": {
+                "name": "test-opa",
+                "namespace": "default",
+                "uid": "c27b3971-ca72-42c1-80a4-abdfc1db0ddd",
+            },
             "spec": spec,
         }))
         .expect("invalid test input");

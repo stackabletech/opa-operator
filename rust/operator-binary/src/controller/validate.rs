@@ -4,16 +4,23 @@
 //! [`ValidatedCluster`] consumed by the rest of `reconcile_opa`. No Kubernetes
 //! client is required.
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::collections::BTreeMap;
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection::{self, ResolvedProductImage},
     config::merge::Merge,
-    kube::{ResourceExt, runtime::reflector::ObjectRef},
+    kube::{Resource, api::ObjectMeta, runtime::reflector::ObjectRef},
     role_utils::RoleGroupRef,
-    v2::types::operator::ClusterName,
+    v2::{
+        HasName, HasUid, NameIsValidLabelValue,
+        controller_utils::{get_cluster_name, get_namespace, get_uid},
+        types::{
+            kubernetes::{NamespaceName, Uid},
+            operator::ClusterName,
+        },
+    },
 };
 use strum::IntoEnumIterator;
 
@@ -29,9 +36,19 @@ pub enum Error {
         source: product_image_selection::Error,
     },
 
-    #[snafu(display("invalid cluster name"))]
-    InvalidClusterName {
-        source: stackable_operator::v2::macros::attributed_string_type::Error,
+    #[snafu(display("failed to get the cluster name"))]
+    GetClusterName {
+        source: stackable_operator::v2::controller_utils::Error,
+    },
+
+    #[snafu(display("failed to get the cluster namespace"))]
+    GetNamespace {
+        source: stackable_operator::v2::controller_utils::Error,
+    },
+
+    #[snafu(display("failed to get the cluster UID"))]
+    GetUid {
+        source: stackable_operator::v2::controller_utils::Error,
     },
 
     #[snafu(display("failed to resolve and merge config for role and role group"))]
@@ -46,10 +63,70 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 /// for every role group, ready to be turned into Kubernetes resources without touching the raw
 /// `OpaCluster` spec again (except for owner references).
 pub struct ValidatedCluster {
+    /// Object metadata (name, namespace, UID) of the owning `OpaCluster`, built from the validated
+    /// fields below. Lets [`ValidatedCluster`] implement [`Resource`] so the build steps can derive
+    /// owner references and object metadata without touching the raw `OpaCluster` spec.
+    metadata: ObjectMeta,
     pub name: ClusterName,
+    pub namespace: NamespaceName,
+    pub uid: Uid,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
     pub role_group_configs: BTreeMap<OpaRole, BTreeMap<String, OpaRoleGroupConfig>>,
+}
+
+impl ValidatedCluster {
+    /// The name of the role-level load-balanced Kubernetes `Service`, as used in the discovery URL.
+    pub fn server_role_service_name(&self) -> String {
+        format!("{name}-{role}", name = self.name, role = OpaRole::Server)
+    }
+}
+
+impl HasName for ValidatedCluster {
+    fn to_name(&self) -> String {
+        self.name.to_string()
+    }
+}
+
+impl HasUid for ValidatedCluster {
+    fn to_uid(&self) -> Uid {
+        self.uid.clone()
+    }
+}
+
+impl NameIsValidLabelValue for ValidatedCluster {
+    fn to_label_value(&self) -> String {
+        self.name.to_label_value()
+    }
+}
+
+impl Resource for ValidatedCluster {
+    type DynamicType = <v1alpha2::OpaCluster as Resource>::DynamicType;
+    type Scope = <v1alpha2::OpaCluster as Resource>::Scope;
+
+    fn kind(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
+        v1alpha2::OpaCluster::kind(dt)
+    }
+
+    fn group(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
+        v1alpha2::OpaCluster::group(dt)
+    }
+
+    fn version(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
+        v1alpha2::OpaCluster::version(dt)
+    }
+
+    fn plural(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
+        v1alpha2::OpaCluster::plural(dt)
+    }
+
+    fn meta(&self) -> &ObjectMeta {
+        &self.metadata
+    }
+
+    fn meta_mut(&mut self) -> &mut ObjectMeta {
+        &mut self.metadata
+    }
 }
 
 /// Cluster-wide settings resolved once during validation, so the build steps no longer need the
@@ -74,6 +151,11 @@ pub fn validate(
     opa: &v1alpha2::OpaCluster,
     operator_environment: &OperatorEnvironmentOptions,
 ) -> Result<ValidatedCluster> {
+    // Wrap the metadata in fail-safe v2 types so the build steps never have to re-check it.
+    let name = get_cluster_name(opa).context(GetClusterNameSnafu)?;
+    let namespace = get_namespace(opa).context(GetNamespaceSnafu)?;
+    let uid = get_uid(opa).context(GetUidSnafu)?;
+
     let image = opa
         .spec
         .image
@@ -115,8 +197,18 @@ pub fn validate(
         role_group_configs.insert(opa_role, group_configs);
     }
 
+    let metadata = ObjectMeta {
+        name: Some(name.to_string()),
+        namespace: Some(namespace.to_string()),
+        uid: Some(uid.to_string()),
+        ..ObjectMeta::default()
+    };
+
     Ok(ValidatedCluster {
-        name: ClusterName::from_str(&opa.name_any()).context(InvalidClusterNameSnafu)?,
+        metadata,
+        name,
+        namespace,
+        uid,
         image,
         cluster_config: ValidatedClusterConfig {
             user_info: opa.spec.cluster_config.user_info.clone(),

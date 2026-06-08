@@ -6,24 +6,22 @@ use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     k8s_openapi::api::core::v1::ConfigMap,
-    kvp::ObjectLabels,
     product_logging::framework::VECTOR_CONFIG_FILE,
     role_utils::RoleGroupRef,
+    v2::builder::meta::ownerreference_from_resource,
 };
 
 use super::properties::{ConfigFileName, config_json, logging, user_info_fetcher};
 use crate::{
-    controller::validate::{OpaRoleGroupConfig, ValidatedCluster},
+    controller::{
+        build_recommended_labels,
+        validate::{OpaRoleGroupConfig, ValidatedCluster},
+    },
     crd::v1alpha2,
 };
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("object is missing metadata to build owner reference"))]
-    ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::builder::meta::Error,
-    },
-
     #[snafu(display("failed to build object meta data"))]
     ObjectMeta {
         source: stackable_operator::builder::meta::Error,
@@ -50,17 +48,19 @@ pub fn build_rolegroup_config_map(
     cluster: &ValidatedCluster,
     rolegroup_config: &OpaRoleGroupConfig,
     rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    recommended_labels: &ObjectLabels<'_, v1alpha2::OpaCluster>,
-    owner: &v1alpha2::OpaCluster,
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
     let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(owner)
         .name(rolegroup_ref.object_name())
-        .ownerreference_from_resource(owner, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
-        .with_recommended_labels(recommended_labels)
+        .namespace(&cluster.namespace)
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
+        .with_recommended_labels(&build_recommended_labels(
+            cluster,
+            &cluster.image.app_version_label_value,
+            &rolegroup_ref.role,
+            &rolegroup_ref.role_group,
+        ))
         .context(ObjectMetaSnafu)?
         .build();
 
@@ -98,10 +98,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        controller::{
-            build::properties::test_support::validated_cluster_from_spec, build_recommended_labels,
-        },
-        crd::OpaRole,
+        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
     };
 
     /// Renders the ConfigMap of the `default` server role group of an `OpaCluster` built from `spec`.
@@ -115,21 +112,9 @@ mod tests {
             role: role.to_string(),
             role_group: "default".to_string(),
         };
-        let recommended_labels = build_recommended_labels(
-            &opa,
-            &validated.image.app_version_label_value,
-            &rolegroup_ref.role,
-            &rolegroup_ref.role_group,
-        );
 
-        build_rolegroup_config_map(
-            &validated,
-            rg_config,
-            &rolegroup_ref,
-            &recommended_labels,
-            &opa,
-        )
-        .expect("the config map should build")
+        build_rolegroup_config_map(&validated, rg_config, &rolegroup_ref)
+            .expect("the config map should build")
     }
 
     #[test]

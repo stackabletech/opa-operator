@@ -4,34 +4,22 @@
 //! [`Service`] and `cluster_info`); the owner object is only used for the owner reference and
 //! object metadata.
 
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
-    k8s_openapi::api::core::v1::{ConfigMap, Service},
-    kube::runtime::reflector::ObjectRef,
+    k8s_openapi::api::core::v1::ConfigMap,
     utils::cluster_info::KubernetesClusterInfo,
+    v2::builder::meta::ownerreference_from_resource,
 };
 
 use crate::{
     controller::{build_recommended_labels, validate::ValidatedCluster},
-    crd::{OpaRole, v1alpha2},
+    crd::OpaRole,
     service::{APP_PORT, APP_TLS_PORT},
 };
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("object {} is missing metadata to build owner reference", opa))]
-    ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::builder::meta::Error,
-        opa: ObjectRef<v1alpha2::OpaCluster>,
-    },
-
-    #[snafu(display("the role Service has no name associated"))]
-    NoServiceName,
-
-    #[snafu(display("the role Service has no namespace associated"))]
-    NoServiceNamespace,
-
     #[snafu(display("failed to build ConfigMap"))]
     BuildConfigMap {
         source: stackable_operator::builder::configmap::Error,
@@ -49,12 +37,8 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 /// class) clients need to connect to the cluster.
 pub fn build_discovery_config_map(
     cluster: &ValidatedCluster,
-    svc: &Service,
     cluster_info: &KubernetesClusterInfo,
-    owner: &v1alpha2::OpaCluster,
 ) -> Result<ConfigMap> {
-    let name = cluster.name.to_string();
-
     let (scheme, port) = if cluster.cluster_config.tls.is_some() {
         ("https", APP_TLS_PORT)
     } else {
@@ -63,24 +47,17 @@ pub fn build_discovery_config_map(
 
     let url = format!(
         "{scheme}://{service_name}.{namespace}.svc.{cluster_domain}:{port}/",
-        service_name = svc.metadata.name.as_deref().context(NoServiceNameSnafu)?,
-        namespace = svc
-            .metadata
-            .namespace
-            .as_deref()
-            .context(NoServiceNamespaceSnafu)?,
+        service_name = cluster.server_role_service_name(),
+        namespace = cluster.namespace,
         cluster_domain = cluster_info.cluster_domain,
     );
 
     let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(owner)
-        .name(&name)
-        .ownerreference_from_resource(owner, None, Some(true))
-        .with_context(|_| ObjectMissingMetadataForOwnerRefSnafu {
-            opa: ObjectRef::from_obj(owner),
-        })?
+        .name(cluster.name.to_string())
+        .namespace(&cluster.namespace)
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
         .with_recommended_labels(&build_recommended_labels(
-            owner,
+            cluster,
             &cluster.image.app_version_label_value,
             &OpaRole::Server.to_string(),
             "discovery",
@@ -101,26 +78,11 @@ pub fn build_discovery_config_map(
 #[cfg(test)]
 mod tests {
     use stackable_operator::{
-        commons::networking::DomainName,
-        k8s_openapi::api::core::v1::{Service, ServiceSpec},
-        kube::api::ObjectMeta,
-        utils::cluster_info::KubernetesClusterInfo,
+        commons::networking::DomainName, utils::cluster_info::KubernetesClusterInfo,
     };
 
     use super::*;
     use crate::controller::build::properties::test_support::validated_cluster_from_spec;
-
-    fn role_service() -> Service {
-        Service {
-            metadata: ObjectMeta {
-                name: Some("test-opa-server".to_owned()),
-                namespace: Some("default".to_owned()),
-                ..ObjectMeta::default()
-            },
-            spec: Some(ServiceSpec::default()),
-            status: None,
-        }
-    }
 
     fn cluster_info() -> KubernetesClusterInfo {
         KubernetesClusterInfo {
@@ -130,13 +92,12 @@ mod tests {
 
     #[test]
     fn renders_http_url_without_tls() {
-        let (opa, validated) = validated_cluster_from_spec(serde_json::json!({
+        let (_opa, validated) = validated_cluster_from_spec(serde_json::json!({
             "image": { "productVersion": "1.2.3" },
             "servers": { "roleGroups": { "default": {} } },
         }));
 
-        let cm =
-            build_discovery_config_map(&validated, &role_service(), &cluster_info(), &opa).unwrap();
+        let cm = build_discovery_config_map(&validated, &cluster_info()).unwrap();
         let data = cm.data.unwrap();
 
         assert_eq!(
@@ -148,14 +109,13 @@ mod tests {
 
     #[test]
     fn renders_https_url_and_secret_class_with_tls() {
-        let (opa, validated) = validated_cluster_from_spec(serde_json::json!({
+        let (_opa, validated) = validated_cluster_from_spec(serde_json::json!({
             "image": { "productVersion": "1.2.3" },
             "clusterConfig": { "tls": { "serverSecretClass": "tls" } },
             "servers": { "roleGroups": { "default": {} } },
         }));
 
-        let cm =
-            build_discovery_config_map(&validated, &role_service(), &cluster_info(), &opa).unwrap();
+        let cm = build_discovery_config_map(&validated, &cluster_info()).unwrap();
         let data = cm.data.unwrap();
 
         assert_eq!(

@@ -359,8 +359,7 @@ pub async fn reconcile_opa(
 
     let server_role_service =
         build_server_role_service(opa, &validated.image).context(BuildServiceSnafu)?;
-    // required for discovery config map later
-    let server_role_service = cluster_resources
+    cluster_resources
         .add(client, server_role_service)
         .await
         .context(ApplyRoleServiceSnafu)?;
@@ -392,22 +391,11 @@ pub async fn reconcile_opa(
 
         let merged_config = &rolegroup_config.merged_config;
 
-        let recommended_labels = build_recommended_labels(
-            opa,
-            &validated.image.app_version_label_value,
-            &rolegroup.role,
-            &rolegroup.role_group,
-        );
-        let rg_configmap = build::config_map::build_rolegroup_config_map(
-            &validated,
-            rolegroup_config,
-            &rolegroup,
-            &recommended_labels,
-            opa,
-        )
-        .with_context(|_| BuildRoleGroupConfigSnafu {
-            rolegroup: rolegroup.clone(),
-        })?;
+        let rg_configmap =
+            build::config_map::build_rolegroup_config_map(&validated, rolegroup_config, &rolegroup)
+                .with_context(|_| BuildRoleGroupConfigSnafu {
+                    rolegroup: rolegroup.clone(),
+                })?;
         let rg_service = build_rolegroup_headless_service(opa, &validated.image, &rolegroup)
             .context(BuildServiceSnafu)?;
         let rg_metrics_service = build_rolegroup_metrics_service(opa, &validated.image, &rolegroup)
@@ -473,13 +461,9 @@ pub async fn reconcile_opa(
             .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
     }
 
-    let discovery_cm = build::discovery::build_discovery_config_map(
-        &validated,
-        &server_role_service,
-        &client.kubernetes_cluster_info,
-        opa,
-    )
-    .context(BuildDiscoveryConfigSnafu)?;
+    let discovery_cm =
+        build::discovery::build_discovery_config_map(&validated, &client.kubernetes_cluster_info)
+            .context(BuildDiscoveryConfigSnafu)?;
     cluster_resources
         .add(client, discovery_cm)
         .await
