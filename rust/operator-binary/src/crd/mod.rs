@@ -24,7 +24,6 @@ use stackable_operator::{
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
-    utils::cluster_info::KubernetesClusterInfo,
     v2::config_overrides::JsonOrKeyValueConfigOverrides,
     versioned::versioned,
 };
@@ -354,16 +353,6 @@ impl v1alpha2::OpaCluster {
             cluster_name = self.name_any(),
             role = OpaRole::Server
         )
-    }
-
-    /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_fqdn(&self, cluster_info: &KubernetesClusterInfo) -> Option<String> {
-        Some(format!(
-            "{role_service_name}.{namespace}.svc.{cluster_domain}",
-            role_service_name = self.server_role_service_name(),
-            namespace = self.metadata.namespace.as_ref()?,
-            cluster_domain = cluster_info.cluster_domain
-        ))
     }
 
     /// Retrieve and merge resource configs for role and role groups
