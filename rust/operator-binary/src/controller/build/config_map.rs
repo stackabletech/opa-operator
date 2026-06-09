@@ -66,11 +66,8 @@ pub fn build_rolegroup_config_map(
 
     cm_builder.metadata(metadata).add_data(
         ConfigFileName::ConfigJson.to_string(),
-        config_json::build(
-            &rolegroup_config.merged_config,
-            &rolegroup_config.config_overrides,
-        )
-        .context(BuildConfigJsonSnafu)?,
+        config_json::build(&rolegroup_config.config, &rolegroup_config.config_overrides)
+            .context(BuildConfigJsonSnafu)?,
     );
 
     if let Some(user_info) = &cluster.cluster_config.user_info {
@@ -81,7 +78,7 @@ pub fn build_rolegroup_config_map(
     }
 
     if let Some(vector_config) =
-        logging::build_vector_config(rolegroup_ref, &rolegroup_config.merged_config.logging)
+        logging::build_vector_config(rolegroup_ref, &rolegroup_config.config.logging)
     {
         cm_builder.add_data(VECTOR_CONFIG_FILE, vector_config);
     }

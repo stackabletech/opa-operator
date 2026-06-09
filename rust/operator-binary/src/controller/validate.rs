@@ -4,18 +4,19 @@
 //! [`ValidatedCluster`] consumed by the rest of `reconcile_opa`. No Kubernetes
 //! client is required.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection::{self, ResolvedProductImage},
-    config::merge::Merge,
-    kube::{Resource, api::ObjectMeta, runtime::reflector::ObjectRef},
-    role_utils::RoleGroupRef,
+    kube::{Resource, api::ObjectMeta},
+    role_utils::RoleGroup,
     v2::{
         HasName, HasUid, NameIsValidLabelValue,
+        builder::pod::container::{EnvVarName, EnvVarSet},
         controller_utils::{get_cluster_name, get_namespace, get_uid},
+        role_utils::{GenericCommonConfig, RoleGroupConfig, with_validated_config},
         types::{
             kubernetes::{NamespaceName, Uid},
             operator::ClusterName,
@@ -51,8 +52,17 @@ pub enum Error {
         source: stackable_operator::v2::controller_utils::Error,
     },
 
-    #[snafu(display("failed to resolve and merge config for role and role group"))]
-    FailedToResolveConfig { source: crate::crd::Error },
+    #[snafu(display("failed to merge and validate config for role group {role_group:?}"))]
+    ValidateRoleGroupConfig {
+        source: stackable_operator::config::fragment::ValidationError,
+        role_group: String,
+    },
+
+    #[snafu(display("failed to parse environment variable name {name:?}"))]
+    ParseEnvVarName {
+        source: stackable_operator::v2::builder::pod::container::Error,
+        name: String,
+    },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -137,14 +147,14 @@ pub struct ValidatedClusterConfig {
 }
 
 /// The validated configuration of a single role group.
-pub struct OpaRoleGroupConfig {
-    pub merged_config: OpaConfig,
-
-    /// The role-level and role-group-level `configOverrides` merged into one (role group wins).
-    /// For `config.json` the merge builds a sequence that applies the role patch first, then the
-    /// role-group patch on top.
-    pub config_overrides: OpaConfigOverrides,
-}
+///
+/// All override kinds (`config`, `configOverrides`, `envOverrides`, `cliOverrides`, `podOverrides`)
+/// are merged once by [`with_validated_config`], with the role group winning over the role, which
+/// wins over the operator defaults.
+///
+/// Note: `replicas` is carried by the framework type but unused here — OPA runs as a `DaemonSet`
+/// (one Pod per node).
+pub type OpaRoleGroupConfig = RoleGroupConfig<OpaConfig, GenericCommonConfig, OpaConfigOverrides>;
 
 /// Validates the cluster spec and produces a [`ValidatedCluster`].
 pub fn validate(
@@ -172,24 +182,38 @@ pub fn validate(
 
         let mut group_configs = BTreeMap::new();
         for (role_group_name, role_group) in &role.role_groups {
-            let rolegroup_ref = RoleGroupRef {
-                cluster: ObjectRef::from_obj(opa),
-                role: opa_role.to_string(),
-                role_group: role_group_name.clone(),
-            };
-            let merged_config = opa
-                .merged_config(&opa_role, &rolegroup_ref)
-                .context(FailedToResolveConfigSnafu)?;
+            // Merge default <- role <- role group and validate the config fragment, plus merge all
+            // four override kinds (config/env/cli/pod) in one shot. Role group wins over role wins
+            // over defaults.
+            let merged: RoleGroup<OpaConfig, _, _> =
+                with_validated_config(role_group, role, &OpaConfig::default_config()).context(
+                    ValidateRoleGroupConfigSnafu {
+                        role_group: role_group_name.clone(),
+                    },
+                )?;
 
-            // Merge the role- and role-group-level `configOverrides`, the role group winning.
-            let mut config_overrides = role_group.config.config_overrides.clone();
-            config_overrides.merge(&role.config.config_overrides);
+            // The framework keeps `envOverrides` as a `HashMap<String, String>`; lift it into the
+            // type-safe `EnvVarSet` so the build step matches opensearch/hive.
+            let mut env_overrides = EnvVarSet::new();
+            for (name, value) in merged.config.env_overrides {
+                env_overrides = env_overrides.with_value(
+                    &EnvVarName::from_str(&name)
+                        .context(ParseEnvVarNameSnafu { name: name.clone() })?,
+                    value,
+                );
+            }
 
             group_configs.insert(
                 role_group_name.clone(),
                 OpaRoleGroupConfig {
-                    merged_config,
-                    config_overrides,
+                    // Unused for a DaemonSet, but the framework type requires it.
+                    replicas: merged.replicas.unwrap_or(0),
+                    config: merged.config.config,
+                    config_overrides: merged.config.config_overrides,
+                    env_overrides,
+                    cli_overrides: merged.config.cli_overrides,
+                    pod_overrides: merged.config.pod_overrides,
+                    product_specific_common_config: merged.config.product_specific_common_config,
                 },
             );
         }

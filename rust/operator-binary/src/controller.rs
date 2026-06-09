@@ -32,8 +32,8 @@ use stackable_operator::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
-                EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector,
-                Probe, SecretVolumeSource, ServiceAccount,
+                EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
+                SecretVolumeSource, ServiceAccount,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -389,8 +389,6 @@ pub async fn reconcile_opa(
             role_group: rolegroup_name.to_string(),
         };
 
-        let merged_config = &rolegroup_config.merged_config;
-
         let rg_configmap =
             build::config_map::build_rolegroup_config_map(&validated, rolegroup_config, &rolegroup)
                 .with_context(|_| BuildRoleGroupConfigSnafu {
@@ -403,9 +401,8 @@ pub async fn reconcile_opa(
         let rg_daemonset = build_server_rolegroup_daemonset(
             opa,
             &validated.image,
-            &opa_role,
             &rolegroup,
-            merged_config,
+            rolegroup_config,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
             &rbac_sa,
@@ -538,45 +535,16 @@ fn add_stackable_rust_cli_env_vars(
 fn build_server_rolegroup_daemonset(
     opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
-    opa_role: &OpaRole,
     rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    merged_config: &OpaConfig,
+    rolegroup_config: &validate::OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let opa_name = opa.metadata.name.as_deref().context(NoNameSnafu)?;
-    let role = opa.role(opa_role);
-    let role_group = opa
-        .rolegroup(rolegroup_ref)
-        .context(InternalOperatorFailureSnafu)?;
-
-    let merged_cli_overrides = {
-        let role_cli_overrides: &BTreeMap<String, String> = &role.config.cli_overrides;
-        let rolegroup_cli_overrides: &BTreeMap<String, String> = &role_group.config.cli_overrides;
-        let mut merged = role_cli_overrides.clone();
-        merged.extend(rolegroup_cli_overrides.clone());
-        merged
-    };
-
-    // Merge the role- and role-group-level `envOverrides`, the role group taking precedence.
-    // Collected into a `BTreeMap` for deterministic ordering of the resulting env vars.
-    let merged_env_overrides = {
-        let mut merged: BTreeMap<String, String> =
-            role.config.env_overrides.clone().into_iter().collect();
-        merged.extend(role_group.config.env_overrides.clone());
-        merged
-    };
-
-    let env = merged_env_overrides
-        .iter()
-        .map(|(k, v)| EnvVar {
-            name: k.clone(),
-            value: Some(v.clone()),
-            ..EnvVar::default()
-        })
-        .collect::<Vec<_>>();
+    // All overrides were already merged (role group over role over defaults) in the validate step.
+    let merged_config = &rolegroup_config.config;
 
     let mut pb = PodBuilder::new();
 
@@ -678,9 +646,9 @@ fn build_server_rolegroup_daemonset(
             merged_config,
             &opa_container_name,
             opa.spec.cluster_config.tls_enabled(),
-            &merged_cli_overrides,
+            &rolegroup_config.cli_overrides,
         )])
-        .add_env_vars(env)
+        .add_env_vars(rolegroup_config.env_overrides.clone())
         .add_env_var(
             "CONTAINERDEBUG_LOG_DIRECTORY",
             format!("{STACKABLE_LOG_DIR}/containerdebug"),
@@ -957,8 +925,7 @@ fn build_server_rolegroup_daemonset(
     add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;
 
     let mut pod_template = pb.build_template();
-    pod_template.merge_from(role.config.pod_overrides.clone());
-    pod_template.merge_from(role_group.config.pod_overrides.clone());
+    pod_template.merge_from(rolegroup_config.pod_overrides.clone());
 
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)

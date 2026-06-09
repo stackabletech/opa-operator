@@ -12,19 +12,16 @@ use stackable_operator::{
             Resources, ResourcesFragment,
         },
     },
-    config::{
-        fragment::{self, Fragment, ValidationError},
-        merge::Merge,
-    },
+    config::{fragment::Fragment, merge::Merge},
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::{CustomResource, ResourceExt},
     product_logging::{self, spec::Logging},
-    role_utils::{EmptyRoleConfig, GenericCommonConfig, Role, RoleGroup, RoleGroupRef},
+    role_utils::{EmptyRoleConfig, Role, RoleGroup, RoleGroupRef},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
-    v2::config_overrides::JsonOrKeyValueConfigOverrides,
+    v2::{config_overrides::JsonOrKeyValueConfigOverrides, role_utils::GenericCommonConfig},
     versioned::versioned,
 };
 use strum::{Display, EnumIter, EnumString};
@@ -39,7 +36,10 @@ pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_mi
 /// Safety puffer to guarantee the graceful shutdown works every time.
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
 
-pub type OpaRoleType = Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig>;
+// The 4th generic (`CommonConfig`) is the v2 `GenericCommonConfig`, which implements `Merge`.
+// This lets us merge role groups via the upstream `v2::role_utils::with_validated_config`.
+pub type OpaRoleType =
+    Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig, GenericCommonConfig>;
 
 pub type OpaRoleGroupType = RoleGroup<OpaConfigFragment, GenericCommonConfig, OpaConfigOverrides>;
 
@@ -53,12 +53,6 @@ pub enum Error {
         source: strum::ParseError,
         role: String,
     },
-
-    #[snafu(display("the role group [{role_group}] is missing"))]
-    MissingRoleGroup { role_group: String },
-
-    #[snafu(display("fragment validation failure"))]
-    FragmentValidationFailure { source: ValidationError },
 }
 
 #[versioned(
@@ -299,7 +293,7 @@ impl v1alpha2::OpaClusterConfig {
 }
 
 impl OpaConfig {
-    fn default_config() -> OpaConfigFragment {
+    pub fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
@@ -353,44 +347,6 @@ impl v1alpha2::OpaCluster {
             cluster_name = self.name_any(),
             role = OpaRole::Server
         )
-    }
-
-    /// Retrieve and merge resource configs for role and role groups
-    pub fn merged_config(
-        &self,
-        role: &OpaRole,
-        rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    ) -> Result<OpaConfig, Error> {
-        // Initialize the result with all default values as baseline
-        let conf_defaults = OpaConfig::default_config();
-
-        let opa_role = match role {
-            OpaRole::Server => &self.spec.servers,
-        };
-
-        let mut conf_role = opa_role.config.config.to_owned();
-
-        // Retrieve rolegroup specific resource config
-        let mut conf_rolegroup = opa_role
-            .role_groups
-            .get(&rolegroup_ref.role_group)
-            .context(MissingRoleGroupSnafu {
-                role_group: rolegroup_ref.role_group.clone(),
-            })?
-            .to_owned()
-            .config
-            .config;
-
-        // Merge more specific configs into default config
-        // Hierarchy is:
-        // 1. RoleGroup
-        // 2. Role
-        // 3. Default
-        conf_role.merge(&conf_defaults);
-        conf_rolegroup.merge(&conf_role);
-
-        tracing::debug!("Merged config: {:?}", conf_rolegroup);
-        fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
     }
 }
 
