@@ -35,10 +35,9 @@ pub fn build(merged_config: &OpaConfig, config_overrides: &OpaConfigOverrides) -
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(&Container::Opa)
+        && let Some(config) = log_config.loggers.get("decision")
     {
-        if let Some(config) = log_config.loggers.get("decision") {
-            decision_logging_enabled = config.level != LogLevel::NONE;
-        }
+        decision_logging_enabled = config.level != LogLevel::NONE;
     }
 
     let decision_logging = if decision_logging_enabled {

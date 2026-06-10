@@ -1085,13 +1085,11 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
         .logging
         .containers
         .get(&Container::BundleBuilder)
-    {
-        if let Some(AppenderConfig {
+        && let Some(AppenderConfig {
             level: Some(log_level),
         }) = log_config.console
-        {
-            console_logging_off = log_level == LogLevel::NONE
-        }
+    {
+        console_logging_off = log_level == LogLevel::NONE
     };
 
     formatdoc! {"
@@ -1145,13 +1143,11 @@ fn sidecar_container_log_level(
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(sidecar_container)
-    {
-        if let Some(logger) = log_config
+        && let Some(logger) = log_config
             .loggers
             .get(AutomaticContainerLogConfig::ROOT_LOGGER)
-        {
-            return BundleBuilderLogLevel::from(logger.level);
-        }
+    {
+        return BundleBuilderLogLevel::from(logger.level);
     }
 
     BundleBuilderLogLevel::Info
