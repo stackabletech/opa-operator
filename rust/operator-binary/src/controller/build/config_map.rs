@@ -1,6 +1,5 @@
 //! Assembles the rolegroup [`ConfigMap`] from the [`ValidatedCluster`], dispatching to the
-//! per-file builders in [`super::properties`]. The owner object is only used for the owner
-//! reference and object metadata, never for config content.
+//! per-file builders in [`super::properties`].
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{

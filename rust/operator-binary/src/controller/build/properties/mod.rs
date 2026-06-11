@@ -1,9 +1,4 @@
 //! Per-config-file build steps assembled into the rolegroup `ConfigMap`.
-//!
-//! Unlike trino/hdfs (which emit several key-value `.properties` / `.xml` files), OPA only emits
-//! JSON documents, so each builder returns a serialized `String` and there is no key-value
-//! `writer`. The structure (one module per file + the [`ConfigFileName`] enum) mirrors the other
-//! operators.
 
 pub mod config_json;
 pub mod logging;

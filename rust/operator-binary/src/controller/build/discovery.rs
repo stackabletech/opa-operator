@@ -1,8 +1,7 @@
 //! Builds the discovery [`ConfigMap`] clients use to connect to an `OpaCluster`.
 //!
 //! The content comes entirely from the [`ValidatedCluster`] (plus the externally-resolved role
-//! [`Service`] and `cluster_info`); the owner object is only used for the owner reference and
-//! object metadata.
+//! service and `cluster_info`).
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
