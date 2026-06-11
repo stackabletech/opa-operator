@@ -9,8 +9,8 @@ use stackable_operator::{
 
 use super::ConfigFileName;
 use crate::{
-    controller::OPA_STACKABLE_SERVICE_NAME,
     crd::{Container, OpaConfig, OpaConfigOverrides},
+    opa_controller::OPA_STACKABLE_SERVICE_NAME,
 };
 
 /// Decision logging is disabled by default. It is enabled when the `decision` logger is set to a

@@ -13,11 +13,9 @@ use stackable_operator::{
 
 use super::properties::{ConfigFileName, config_json, logging, user_info_fetcher};
 use crate::{
-    controller::{
-        build_recommended_labels,
-        validate::{OpaRoleGroupConfig, ValidatedCluster},
-    },
+    controller::{OpaRoleGroupConfig, ValidatedCluster},
     crd::v1alpha2,
+    opa_controller::build_recommended_labels,
 };
 
 #[derive(Snafu, Debug)]

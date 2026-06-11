@@ -27,7 +27,7 @@ pub(crate) mod test_support {
     use stackable_operator::cli::OperatorEnvironmentOptions;
 
     use crate::{
-        controller::validate::{ValidatedCluster, validate},
+        controller::{ValidatedCluster, validate::validate},
         crd::v1alpha2,
     };
 

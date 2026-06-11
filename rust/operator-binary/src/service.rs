@@ -8,8 +8,8 @@ use stackable_operator::{
 };
 
 use crate::{
-    controller::build_recommended_labels,
     crd::{APP_NAME, OpaRole, v1alpha2},
+    opa_controller::build_recommended_labels,
 };
 
 pub const APP_PORT: u16 = 8081;

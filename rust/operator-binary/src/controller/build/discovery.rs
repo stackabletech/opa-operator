@@ -13,8 +13,9 @@ use stackable_operator::{
 };
 
 use crate::{
-    controller::{build_recommended_labels, validate::ValidatedCluster},
+    controller::ValidatedCluster,
     crd::OpaRole,
+    opa_controller::build_recommended_labels,
     service::{APP_PORT, APP_TLS_PORT},
 };
 

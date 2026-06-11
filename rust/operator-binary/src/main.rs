@@ -31,13 +31,14 @@ use stackable_operator::{
 };
 
 use crate::{
-    controller::OPA_FULL_CONTROLLER_NAME,
     crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2},
+    opa_controller::OPA_FULL_CONTROLLER_NAME,
     webhooks::conversion::create_webhook_server,
 };
 
 mod controller;
 mod crd;
+mod opa_controller;
 mod operations;
 mod service;
 mod webhooks;
@@ -162,9 +163,9 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .graceful_shutdown_on(sigterm_watcher.handle())
                 .run(
-                    controller::reconcile_opa,
-                    controller::error_policy,
-                    Arc::new(controller::Ctx {
+                    opa_controller::reconcile_opa,
+                    opa_controller::error_policy,
+                    Arc::new(opa_controller::Ctx {
                         client: client.clone(),
                         opa_bundle_builder_image: operator_image.clone(),
                         user_info_fetcher_image: operator_image,

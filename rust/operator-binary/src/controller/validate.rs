@@ -9,26 +9,18 @@ use std::{collections::BTreeMap, str::FromStr};
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
-    commons::product_image_selection::{self, ResolvedProductImage},
-    kube::{Resource, api::ObjectMeta},
+    commons::product_image_selection,
     role_utils::RoleGroup,
     v2::{
-        HasName, HasUid, NameIsValidLabelValue,
         builder::pod::container::{EnvVarName, EnvVarSet},
         controller_utils::{get_cluster_name, get_namespace, get_uid},
-        role_utils::{GenericCommonConfig, RoleGroupConfig, with_validated_config},
-        types::{
-            kubernetes::{NamespaceName, Uid},
-            operator::ClusterName,
-        },
+        role_utils::with_validated_config,
     },
 };
 use strum::IntoEnumIterator;
 
-use crate::crd::{
-    OpaConfig, OpaConfigOverrides, OpaRole, user_info_fetcher,
-    v1alpha2::{self, OpaTls},
-};
+use super::{OpaRoleGroupConfig, ValidatedCluster, ValidatedClusterConfig};
+use crate::crd::{OpaConfig, OpaRole, v1alpha2};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -67,95 +59,6 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// The validated [`v1alpha2::OpaCluster`].
-///
-/// The output of the validate step: config fragments and `configOverrides` merged and validated
-/// for every role group, ready to be turned into Kubernetes resources without touching the raw
-/// `OpaCluster` spec again (except for owner references).
-pub struct ValidatedCluster {
-    /// Object metadata (name, namespace, UID) of the owning `OpaCluster`, built from the validated
-    /// fields below. Lets [`ValidatedCluster`] implement [`Resource`] so the build steps can derive
-    /// owner references and object metadata without touching the raw `OpaCluster` spec.
-    metadata: ObjectMeta,
-    pub name: ClusterName,
-    pub namespace: NamespaceName,
-    pub uid: Uid,
-    pub image: ResolvedProductImage,
-    pub cluster_config: ValidatedClusterConfig,
-    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<String, OpaRoleGroupConfig>>,
-}
-
-impl ValidatedCluster {
-    /// The name of the role-level load-balanced Kubernetes `Service`, as used in the discovery URL.
-    pub fn server_role_service_name(&self) -> String {
-        format!("{name}-{role}", name = self.name, role = OpaRole::Server)
-    }
-}
-
-impl HasName for ValidatedCluster {
-    fn to_name(&self) -> String {
-        self.name.to_string()
-    }
-}
-
-impl HasUid for ValidatedCluster {
-    fn to_uid(&self) -> Uid {
-        self.uid.clone()
-    }
-}
-
-impl NameIsValidLabelValue for ValidatedCluster {
-    fn to_label_value(&self) -> String {
-        self.name.to_label_value()
-    }
-}
-
-impl Resource for ValidatedCluster {
-    type DynamicType = <v1alpha2::OpaCluster as Resource>::DynamicType;
-    type Scope = <v1alpha2::OpaCluster as Resource>::Scope;
-
-    fn kind(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
-        v1alpha2::OpaCluster::kind(dt)
-    }
-
-    fn group(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
-        v1alpha2::OpaCluster::group(dt)
-    }
-
-    fn version(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
-        v1alpha2::OpaCluster::version(dt)
-    }
-
-    fn plural(dt: &Self::DynamicType) -> std::borrow::Cow<'_, str> {
-        v1alpha2::OpaCluster::plural(dt)
-    }
-
-    fn meta(&self) -> &ObjectMeta {
-        &self.metadata
-    }
-
-    fn meta_mut(&mut self) -> &mut ObjectMeta {
-        &mut self.metadata
-    }
-}
-
-/// Cluster-wide settings resolved once during validation, so the build steps no longer need the
-/// raw `OpaCluster` to render config (except for owner references).
-pub struct ValidatedClusterConfig {
-    pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
-    pub tls: Option<OpaTls>,
-}
-
-/// The validated configuration of a single role group.
-///
-/// All override kinds (`config`, `configOverrides`, `envOverrides`, `cliOverrides`, `podOverrides`)
-/// are merged once by [`with_validated_config`], with the role group winning over the role, which
-/// wins over the operator defaults.
-///
-/// Note: `replicas` is carried by the framework type but unused here — OPA runs as a `DaemonSet`
-/// (one Pod per node).
-pub type OpaRoleGroupConfig = RoleGroupConfig<OpaConfig, GenericCommonConfig, OpaConfigOverrides>;
-
 /// Validates the cluster spec and produces a [`ValidatedCluster`].
 pub fn validate(
     opa: &v1alpha2::OpaCluster,
@@ -170,7 +73,7 @@ pub fn validate(
         .spec
         .image
         .resolve(
-            super::CONTAINER_IMAGE_BASE_NAME,
+            crate::opa_controller::CONTAINER_IMAGE_BASE_NAME,
             &operator_environment.image_repository,
             crate::built_info::PKG_VERSION,
         )
@@ -221,23 +124,15 @@ pub fn validate(
         role_group_configs.insert(opa_role, group_configs);
     }
 
-    let metadata = ObjectMeta {
-        name: Some(name.to_string()),
-        namespace: Some(namespace.to_string()),
-        uid: Some(uid.to_string()),
-        ..ObjectMeta::default()
-    };
-
-    Ok(ValidatedCluster {
-        metadata,
+    Ok(ValidatedCluster::new(
         name,
         namespace,
         uid,
         image,
-        cluster_config: ValidatedClusterConfig {
+        ValidatedClusterConfig {
             user_info: opa.spec.cluster_config.user_info.clone(),
             tls: opa.spec.cluster_config.tls.clone(),
         },
         role_group_configs,
-    })
+    ))
 }

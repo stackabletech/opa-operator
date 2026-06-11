@@ -67,7 +67,9 @@ use stackable_operator::{
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
-    controller::build::properties::logging::BundleBuilderLogLevel,
+    controller::{
+        OpaRoleGroupConfig, build, build::properties::logging::BundleBuilderLogLevel, validate,
+    },
     crd::{
         APP_NAME, Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
         OpaClusterStatus, OpaConfig, OpaRole, user_info_fetcher, v1alpha2,
@@ -79,11 +81,10 @@ use crate::{
     },
 };
 
-mod build;
-mod validate;
-
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 pub const OPA_FULL_CONTROLLER_NAME: &str = concatcp!(OPA_CONTROLLER_NAME, '.', OPERATOR_NAME);
+
+pub(crate) const CONTAINER_IMAGE_BASE_NAME: &str = "opa";
 
 pub const CONFIG_FILE: &str = "config.json";
 
@@ -105,8 +106,6 @@ const USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: &str = "kerberos";
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
 const TLS_VOLUME_NAME: &str = "tls";
 const TLS_STORE_DIR: &str = "/stackable/tls";
-
-const CONTAINER_IMAGE_BASE_NAME: &str = "opa";
 
 const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
 const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
@@ -536,7 +535,7 @@ fn build_server_rolegroup_daemonset(
     opa: &v1alpha2::OpaCluster,
     resolved_product_image: &ResolvedProductImage,
     rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    rolegroup_config: &validate::OpaRoleGroupConfig,
+    rolegroup_config: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
