@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use const_format::concatcp;
 use indoc::formatdoc;
 use serde_json::json;
-use snafu::{OptionExt, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::{
         self,
@@ -41,9 +41,9 @@ use stackable_operator::{
     kube::{
         Resource as KubeResource, ResourceExt,
         core::{DeserializeGuard, error_boundary},
-        runtime::{controller::Action, reflector::ObjectRef},
+        runtime::controller::Action,
     },
-    kvp::{LabelError, Labels, ObjectLabels},
+    kvp::LabelError,
     logging::controller::ReconcilerError,
     memory::{BinaryMultiple, MemoryQuantity},
     product_logging::{
@@ -56,7 +56,6 @@ use stackable_operator::{
             ContainerLogConfigChoice, LogLevel,
         },
     },
-    role_utils::RoleGroupRef,
     shared::time::Duration,
     status::condition::{
         compute_conditions, daemonset::DaemonSetConditionBuilder,
@@ -69,7 +68,7 @@ use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
     controller::{
-        OpaRoleGroupConfig, ValidatedCluster, build,
+        OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, build,
         build::properties::logging::BundleBuilderLogLevel, validate,
     },
     crd::{
@@ -159,18 +158,13 @@ pub struct Ctx {
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(IntoStaticStr))]
-#[allow(clippy::enum_variant_names)]
 pub enum Error {
     #[snafu(display("OpaCluster object is invalid"))]
     InvalidOpaCluster {
-        source: error_boundary::InvalidObject,
+        // boxed because otherwise Clippy warns about a large enum variant
+        #[snafu(source(from(error_boundary::InvalidObject, Box::new)))]
+        source: Box<error_boundary::InvalidObject>,
     },
-
-    #[snafu(display("object does not define meta name"))]
-    NoName,
-
-    #[snafu(display("internal operator failure"))]
-    InternalOperatorFailure { source: crate::crd::Error },
 
     #[snafu(display("failed to apply role Service"))]
     ApplyRoleService {
@@ -180,31 +174,31 @@ pub enum Error {
     #[snafu(display("failed to apply Service for [{rolegroup}]"))]
     ApplyRoleGroupService {
         source: stackable_operator::cluster_resources::Error,
-        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
+        rolegroup: RoleGroupName,
     },
 
     #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
     BuildRoleGroupConfig {
         source: build::config_map::Error,
-        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
+        rolegroup: RoleGroupName,
     },
 
     #[snafu(display("failed to apply ConfigMap for [{rolegroup}]"))]
     ApplyRoleGroupConfig {
         source: stackable_operator::cluster_resources::Error,
-        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
+        rolegroup: RoleGroupName,
     },
 
     #[snafu(display("failed to apply DaemonSet for [{rolegroup}]"))]
     ApplyRoleGroupDaemonSet {
         source: stackable_operator::cluster_resources::Error,
-        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
+        rolegroup: RoleGroupName,
     },
 
     #[snafu(display("failed to apply patch for DaemonSet for [{rolegroup}]"))]
     ApplyPatchRoleGroupDaemonSet {
         source: stackable_operator::client::Error,
-        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
+        rolegroup: RoleGroupName,
     },
 
     #[snafu(display("failed to patch service account"))]
@@ -261,11 +255,6 @@ pub enum Error {
     #[snafu(display("failed to build label"))]
     BuildLabel { source: LabelError },
 
-    #[snafu(display("failed to build object meta data"))]
-    ObjectMeta {
-        source: stackable_operator::builder::meta::Error,
-    },
-
     #[snafu(display("failed to build volume spec for the User Info Fetcher TLS config"))]
     UserInfoFetcherKerberosVolume {
         source: stackable_operator::builder::pod::Error,
@@ -297,9 +286,6 @@ pub enum Error {
         source: builder::pod::container::Error,
     },
 
-    #[snafu(display("failed to build service"))]
-    BuildService { source: service::Error },
-
     #[snafu(display("failed to validate cluster"))]
     ValidateCluster { source: validate::Error },
 
@@ -326,7 +312,6 @@ pub async fn reconcile_opa(
         .as_ref()
         .map_err(error_boundary::InvalidObject::clone)
         .context(InvalidOpaClusterSnafu)?;
-    let opa_ref = ObjectRef::from_obj(opa);
 
     let client = &ctx.client;
 
@@ -353,8 +338,7 @@ pub async fn reconcile_opa(
         .get(&opa_role)
         .unwrap_or(&empty_role_group_configs);
 
-    let server_role_service =
-        build_server_role_service(opa, &validated, &validated.image).context(BuildServiceSnafu)?;
+    let server_role_service = build_server_role_service(opa, &validated);
     cluster_resources
         .add(client, server_role_service)
         .await
@@ -379,28 +363,32 @@ pub async fn reconcile_opa(
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
     for (rolegroup_name, rolegroup_config) in role_group_configs {
-        let rolegroup = RoleGroupRef {
-            cluster: opa_ref.clone(),
-            role: opa_role.to_string(),
-            role_group: rolegroup_name.to_string(),
-        };
+        // The Vector agent config is still generated per role group via the upstream
+        // `create_vector_config`, which requires a `RoleGroupRef`. This is the only remaining use
+        // of `RoleGroupRef`; it is built here (where the raw cluster is available) and the
+        // resulting config string is threaded into the ConfigMap builder.
+        let rolegroup_ref = opa.server_rolegroup_ref(rolegroup_name.to_string());
+        let vector_config = build::properties::logging::build_vector_config(
+            &rolegroup_ref,
+            &rolegroup_config.config.logging,
+        );
 
-        let rg_configmap =
-            build::config_map::build_rolegroup_config_map(&validated, rolegroup_config, &rolegroup)
-                .with_context(|_| BuildRoleGroupConfigSnafu {
-                    rolegroup: rolegroup.clone(),
-                })?;
-        let rg_service =
-            build_rolegroup_headless_service(opa, &validated, &validated.image, &rolegroup)
-                .context(BuildServiceSnafu)?;
-        let rg_metrics_service =
-            build_rolegroup_metrics_service(opa, &validated, &validated.image, &rolegroup)
-                .context(BuildServiceSnafu)?;
+        let rg_configmap = build::config_map::build_rolegroup_config_map(
+            &validated,
+            rolegroup_name,
+            rolegroup_config,
+            vector_config,
+        )
+        .with_context(|_| BuildRoleGroupConfigSnafu {
+            rolegroup: rolegroup_name.clone(),
+        })?;
+        let rg_service = build_rolegroup_headless_service(&validated, rolegroup_name);
+        let rg_metrics_service = build_rolegroup_metrics_service(&validated, rolegroup_name);
         let rg_daemonset = build_server_rolegroup_daemonset(
             opa,
             &validated,
             &validated.image,
-            &rolegroup,
+            rolegroup_name,
             rolegroup_config,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
@@ -412,26 +400,26 @@ pub async fn reconcile_opa(
             .add(client, rg_configmap)
             .await
             .with_context(|_| ApplyRoleGroupConfigSnafu {
-                rolegroup: rolegroup.clone(),
+                rolegroup: rolegroup_name.clone(),
             })?;
         cluster_resources
             .add(client, rg_service)
             .await
             .with_context(|_| ApplyRoleGroupServiceSnafu {
-                rolegroup: rolegroup.clone(),
+                rolegroup: rolegroup_name.clone(),
             })?;
         cluster_resources
             .add(client, rg_metrics_service)
             .await
             .with_context(|_| ApplyRoleGroupServiceSnafu {
-                rolegroup: rolegroup.clone(),
+                rolegroup: rolegroup_name.clone(),
             })?;
         ds_cond_builder.add(
             cluster_resources
                 .add(client, rg_daemonset.clone())
                 .await
                 .with_context(|_| ApplyRoleGroupDaemonSetSnafu {
-                    rolegroup: rolegroup.clone(),
+                    rolegroup: rolegroup_name.clone(),
                 })?,
         );
 
@@ -454,7 +442,9 @@ pub async fn reconcile_opa(
                 json!({"apiVersion": "apps/v1", "kind": "DaemonSet"}),
             )
             .await
-            .context(ApplyPatchRoleGroupDaemonSetSnafu { rolegroup })?;
+            .context(ApplyPatchRoleGroupDaemonSetSnafu {
+                rolegroup: rolegroup_name.clone(),
+            })?;
     }
 
     let discovery_cm =
@@ -535,14 +525,13 @@ fn build_server_rolegroup_daemonset(
     opa: &v1alpha2::OpaCluster,
     cluster: &ValidatedCluster,
     resolved_product_image: &ResolvedProductImage,
-    rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
+    role_group_name: &RoleGroupName,
     rolegroup_config: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
-    let opa_name = opa.metadata.name.as_deref().context(NoNameSnafu)?;
     // All overrides were already merged (role group over role over defaults) in the validate step.
     let merged_config = &rolegroup_config.config;
 
@@ -706,13 +695,7 @@ fn build_server_rolegroup_daemonset(
         });
 
     let pb_metadata = ObjectMetaBuilder::new()
-        .with_recommended_labels(&build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label_value,
-            &rolegroup_ref.role,
-            &rolegroup_ref.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
+        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
     pb.metadata(pb_metadata)
@@ -723,7 +706,12 @@ fn build_server_rolegroup_daemonset(
         .affinity(&merged_config.affinity)
         .add_volume(
             VolumeBuilder::new(CONFIG_VOLUME_NAME)
-                .with_config_map(rolegroup_ref.object_name())
+                .with_config_map(
+                    cluster
+                        .resource_names(role_group_name)
+                        .role_group_config_map()
+                        .to_string(),
+                )
                 .build(),
         )
         .context(AddVolumeSnafu)?
@@ -760,9 +748,14 @@ fn build_server_rolegroup_daemonset(
                         // OPA needs the full TLS keypair (public cert + private key) to serve HTTPS.
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
-                    .with_service_scope(opa.server_role_service_name())
-                    .with_service_scope(rolegroup_ref.rolegroup_headless_service_name())
-                    .with_service_scope(rolegroup_ref.rolegroup_metrics_service_name())
+                    .with_service_scope(cluster.server_role_service_name())
+                    .with_service_scope(
+                        cluster
+                            .resource_names(role_group_name)
+                            .headless_service_name()
+                            .to_string(),
+                    )
+                    .with_service_scope(service::metrics_service_name(cluster, role_group_name))
                     .build()
                     .context(TlsVolumeBuildSnafu)?,
                 )
@@ -808,7 +801,7 @@ fn build_server_rolegroup_daemonset(
                         Some(SecretClassVolumeScope {
                             pod: false,
                             node: false,
-                            services: vec![opa_name.to_string()],
+                            services: vec![cluster.name.to_string()],
                             listener_volumes: Vec::new(),
                         }),
                     )
@@ -928,29 +921,23 @@ fn build_server_rolegroup_daemonset(
     pod_template.merge_from(rolegroup_config.pod_overrides.clone());
 
     let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(rolegroup_ref.object_name())
+        .name_and_namespace(cluster)
+        // TODO(@maltesander): `ResourceNames` has no `DaemonSet` helper (OPA is the only DaemonSet operator), so the
+        // (identical) qualified role-group name backing the `StatefulSet` name is reused.
+        // Should be replaced with upstream fix.
+        .name(
+            cluster
+                .resource_names(role_group_name)
+                .stateful_set_name()
+                .to_string(),
+        )
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_recommended_labels(&build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label_value,
-            &rolegroup_ref.role,
-            &rolegroup_ref.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
+        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
-
-    let daemonset_match_labels = Labels::role_group_selector(
-        opa,
-        APP_NAME,
-        &rolegroup_ref.role,
-        &rolegroup_ref.role_group,
-    )
-    .context(BuildLabelSnafu)?;
 
     let daemonset_spec = DaemonSetSpec {
         selector: LabelSelector {
-            match_labels: Some(daemonset_match_labels.into()),
+            match_labels: Some(cluster.role_group_selector(role_group_name).into()),
             ..LabelSelector::default()
         },
         template: pod_template,
@@ -1173,22 +1160,4 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
     prepare_container_args.push(format!("mkdir -p {BUNDLES_TMP_DIR}"));
 
     prepare_container_args
-}
-
-/// Creates recommended `ObjectLabels` to be used in deployed resources
-pub fn build_recommended_labels<'a, T>(
-    owner: &'a T,
-    app_version: &'a str,
-    role: &'a str,
-    role_group: &'a str,
-) -> ObjectLabels<'a, T> {
-    ObjectLabels {
-        owner,
-        app_name: APP_NAME,
-        app_version,
-        operator_name: OPERATOR_NAME,
-        controller_name: OPA_CONTROLLER_NAME,
-        role,
-        role_group,
-    }
 }

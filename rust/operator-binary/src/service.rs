@@ -1,17 +1,15 @@
-use snafu::{ResultExt, Snafu};
+use std::str::FromStr;
+
 use stackable_operator::{
     builder::meta::ObjectMetaBuilder,
-    commons::product_image_selection::ResolvedProductImage,
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
-    kvp::{Annotations, LabelError, Labels},
-    role_utils::RoleGroupRef,
+    kvp::{Annotations, Labels},
     v2::builder::meta::ownerreference_from_resource,
 };
 
 use crate::{
-    controller::ValidatedCluster,
-    crd::{APP_NAME, OpaRole, v1alpha2},
-    opa_controller::build_recommended_labels,
+    controller::{RoleGroupName, ValidatedCluster},
+    crd::v1alpha2,
 };
 
 pub const APP_PORT: u16 = 8081;
@@ -20,15 +18,11 @@ pub const APP_PORT_NAME: &str = "http";
 pub const APP_TLS_PORT_NAME: &str = "https";
 pub const METRICS_PORT_NAME: &str = "metrics";
 
-#[derive(Snafu, Debug)]
-pub enum Error {
-    #[snafu(display("failed to build label"))]
-    BuildLabel { source: LabelError },
-
-    #[snafu(display("failed to build object meta data"))]
-    ObjectMeta {
-        source: stackable_operator::builder::meta::Error,
-    },
+/// The role-level `Service` and the discovery `ConfigMap` are not bound to a single role group, but
+/// the recommended labels require one. `global` is used as a placeholder, matching the historical
+/// `app.kubernetes.io/role-group` value.
+fn role_level_role_group_name() -> RoleGroupName {
+    RoleGroupName::from_str("global").expect("'global' is a valid role group name")
 }
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
@@ -36,30 +30,18 @@ pub enum Error {
 pub(crate) fn build_server_role_service(
     opa: &v1alpha2::OpaCluster,
     cluster: &ValidatedCluster,
-    resolved_product_image: &ResolvedProductImage,
-) -> Result<Service, Error> {
-    let role_name = OpaRole::Server.to_string();
-
+) -> Service {
     let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(opa.server_role_service_name())
+        .name_and_namespace(cluster)
+        .name(cluster.server_role_service_name())
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_recommended_labels(&build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label_value,
-            &role_name,
-            "global",
-        ))
-        .context(ObjectMetaSnafu)?
+        .with_labels(cluster.recommended_labels(&role_level_role_group_name()))
         .build();
-
-    let service_selector_labels =
-        Labels::role_selector(opa, APP_NAME, &role_name).context(BuildLabelSnafu)?;
 
     let service_spec = ServiceSpec {
         type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
-        selector: Some(service_selector_labels.into()),
+        ports: Some(data_service_ports(cluster.cluster_config.tls.is_some())),
+        selector: Some(cluster.role_selector().into()),
         // This ensures that products (e.g. Trino) on a node always talk to the OPA pod on the
         // same node, avoiding cross-node latency. The downside is that if the local OPA pod is
         // unavailable, requests fail instead of falling back to another node.
@@ -70,33 +52,30 @@ pub(crate) fn build_server_role_service(
         ..ServiceSpec::default()
     };
 
-    Ok(Service {
+    Service {
         metadata,
         spec: Some(service_spec),
         status: None,
-    })
+    }
 }
 
 /// The rolegroup [`Service`] is a headless service that allows direct access to the instances of a certain rolegroup
 ///
 /// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
 pub(crate) fn build_rolegroup_headless_service(
-    opa: &v1alpha2::OpaCluster,
     cluster: &ValidatedCluster,
-    resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
-) -> Result<Service, Error> {
+    role_group_name: &RoleGroupName,
+) -> Service {
     let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(rolegroup.rolegroup_headless_service_name())
+        .name_and_namespace(cluster)
+        .name(
+            cluster
+                .resource_names(role_group_name)
+                .headless_service_name()
+                .to_string(),
+        )
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_recommended_labels(&build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label_value,
-            &rolegroup.role,
-            &rolegroup.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
+        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
     let service_spec = ServiceSpec {
@@ -109,68 +88,63 @@ pub(crate) fn build_rolegroup_headless_service(
         // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
-        ports: Some(data_service_ports(opa.spec.cluster_config.tls_enabled())),
-        selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
+        ports: Some(data_service_ports(cluster.cluster_config.tls.is_some())),
+        selector: Some(cluster.role_group_selector(role_group_name).into()),
         publish_not_ready_addresses: Some(true),
         ..ServiceSpec::default()
     };
 
-    Ok(Service {
+    Service {
         metadata,
         spec: Some(service_spec),
         status: None,
-    })
+    }
 }
 
 /// The rolegroup metrics [`Service`] is a service that exposes metrics and has the
 /// prometheus.io/scrape label.
 pub(crate) fn build_rolegroup_metrics_service(
-    opa: &v1alpha2::OpaCluster,
     cluster: &ValidatedCluster,
-    resolved_product_image: &ResolvedProductImage,
-    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
-) -> Result<Service, Error> {
+    role_group_name: &RoleGroupName,
+) -> Service {
+    let tls_enabled = cluster.cluster_config.tls.is_some();
     let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(opa)
-        .name(rolegroup.rolegroup_metrics_service_name())
+        .name_and_namespace(cluster)
+        .name(metrics_service_name(cluster, role_group_name))
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_recommended_labels(&build_recommended_labels(
-            opa,
-            &resolved_product_image.app_version_label_value,
-            &rolegroup.role,
-            &rolegroup.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
+        .with_labels(cluster.recommended_labels(role_group_name))
         .with_labels(prometheus_labels())
-        .with_annotations(prometheus_annotations(
-            opa.spec.cluster_config.tls_enabled(),
-        ))
+        .with_annotations(prometheus_annotations(tls_enabled))
         .build();
 
     let service_spec = ServiceSpec {
         type_: Some("ClusterIP".to_string()),
         cluster_ip: Some("None".to_string()),
-        ports: Some(vec![metrics_service_port(
-            opa.spec.cluster_config.tls_enabled(),
-        )]),
-        selector: Some(role_group_selector_labels(opa, rolegroup)?.into()),
+        ports: Some(vec![metrics_service_port(tls_enabled)]),
+        selector: Some(cluster.role_group_selector(role_group_name).into()),
         ..ServiceSpec::default()
     };
 
-    Ok(Service {
+    Service {
         metadata,
         spec: Some(service_spec),
         status: None,
-    })
+    }
 }
 
-/// Returns the [`Labels`] that can be used to select all Pods that are part of the roleGroup.
-fn role_group_selector_labels(
-    opa: &v1alpha2::OpaCluster,
-    rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
-) -> Result<Labels, Error> {
-    Labels::role_group_selector(opa, APP_NAME, &rolegroup.role, &rolegroup.role_group)
-        .context(BuildLabelSnafu)
+/// The metrics [`Service`] name, `<cluster>-<role>-<rolegroup>-metrics`.
+///
+/// [`ResourceNames`](stackable_operator::v2::role_group_utils::ResourceNames) has no metrics
+/// service helper, so the `-metrics` suffix is appended to the qualified role-group name (which is
+/// also the StatefulSet/DaemonSet name).
+pub(crate) fn metrics_service_name(
+    cluster: &ValidatedCluster,
+    role_group_name: &RoleGroupName,
+) -> String {
+    format!(
+        "{qualified}-metrics",
+        qualified = cluster.resource_names(role_group_name).stateful_set_name()
+    )
 }
 
 fn data_service_ports(tls_enabled: bool) -> Vec<ServicePort> {

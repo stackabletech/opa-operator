@@ -3,6 +3,8 @@
 //! The content comes entirely from the [`ValidatedCluster`] (plus the externally-resolved role
 //! service and `cluster_info`).
 
+use std::str::FromStr;
+
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
@@ -12,9 +14,7 @@ use stackable_operator::{
 };
 
 use crate::{
-    controller::ValidatedCluster,
-    crd::OpaRole,
-    opa_controller::build_recommended_labels,
+    controller::{RoleGroupName, ValidatedCluster},
     service::{APP_PORT, APP_TLS_PORT},
 };
 
@@ -23,11 +23,6 @@ pub enum Error {
     #[snafu(display("failed to build ConfigMap"))]
     BuildConfigMap {
         source: stackable_operator::builder::configmap::Error,
-    },
-
-    #[snafu(display("failed to build object meta data"))]
-    ObjectMeta {
-        source: stackable_operator::builder::meta::Error,
     },
 }
 
@@ -52,17 +47,14 @@ pub fn build_discovery_config_map(
         cluster_domain = cluster_info.cluster_domain,
     );
 
+    // Discovery is a cluster-level object (named after the cluster); `discovery` is used as a
+    // placeholder role-group name for the recommended labels.
     let metadata = ObjectMetaBuilder::new()
-        .name(cluster.name.to_string())
-        .namespace(&cluster.namespace)
+        .name_and_namespace(cluster)
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_recommended_labels(&build_recommended_labels(
-            cluster,
-            &cluster.image.app_version_label_value,
-            &OpaRole::Server.to_string(),
-            "discovery",
+        .with_labels(cluster.recommended_labels(
+            &RoleGroupName::from_str("discovery").expect("'discovery' is a valid role group name"),
         ))
-        .context(ObjectMetaSnafu)?
         .build();
 
     let mut cm_builder = ConfigMapBuilder::new();

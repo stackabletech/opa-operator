@@ -6,34 +6,24 @@ use stackable_operator::{
     builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
     k8s_openapi::api::core::v1::ConfigMap,
     product_logging::framework::VECTOR_CONFIG_FILE,
-    role_utils::RoleGroupRef,
     v2::builder::meta::ownerreference_from_resource,
 };
 
-use super::properties::{ConfigFileName, config_json, logging, user_info_fetcher};
-use crate::{
-    controller::{OpaRoleGroupConfig, ValidatedCluster},
-    crd::v1alpha2,
-    opa_controller::build_recommended_labels,
-};
+use super::properties::{ConfigFileName, config_json, user_info_fetcher};
+use crate::controller::{OpaRoleGroupConfig, RoleGroupName, ValidatedCluster};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("failed to build object meta data"))]
-    ObjectMeta {
-        source: stackable_operator::builder::meta::Error,
-    },
-
     #[snafu(display("failed to build config.json"))]
     BuildConfigJson { source: config_json::Error },
 
     #[snafu(display("failed to build user-info-fetcher.json"))]
     BuildUserInfoFetcher { source: user_info_fetcher::Error },
 
-    #[snafu(display("failed to build ConfigMap for [{rolegroup}]"))]
-    BuildConfigMap {
+    #[snafu(display("failed to assemble ConfigMap for role group {role_group}"))]
+    Assemble {
         source: stackable_operator::builder::configmap::Error,
-        rolegroup: RoleGroupRef<v1alpha2::OpaCluster>,
+        role_group: RoleGroupName,
     },
 }
 
@@ -41,24 +31,27 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the
 /// administrator.
+///
+/// `vector_config` is the Vector agent config (`vector.yaml`) built by the caller (where a
+/// `RoleGroupRef` is available); it is `None` when the Vector agent is disabled.
 pub fn build_rolegroup_config_map(
     cluster: &ValidatedCluster,
+    role_group_name: &RoleGroupName,
     rolegroup_config: &OpaRoleGroupConfig,
-    rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
+    vector_config: Option<String>,
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
     let metadata = ObjectMetaBuilder::new()
-        .name(rolegroup_ref.object_name())
-        .namespace(&cluster.namespace)
+        .name_and_namespace(cluster)
+        .name(
+            cluster
+                .resource_names(role_group_name)
+                .role_group_config_map()
+                .to_string(),
+        )
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_recommended_labels(&build_recommended_labels(
-            cluster,
-            &cluster.image.app_version_label_value,
-            &rolegroup_ref.role,
-            &rolegroup_ref.role_group,
-        ))
-        .context(ObjectMetaSnafu)?
+        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
     cm_builder.metadata(metadata).add_data(
@@ -74,21 +67,18 @@ pub fn build_rolegroup_config_map(
         );
     }
 
-    if let Some(vector_config) =
-        logging::build_vector_config(rolegroup_ref, &rolegroup_config.config.logging)
-    {
+    if let Some(vector_config) = vector_config {
         cm_builder.add_data(VECTOR_CONFIG_FILE, vector_config);
     }
 
-    cm_builder.build().with_context(|_| BuildConfigMapSnafu {
-        rolegroup: rolegroup_ref.clone(),
+    cm_builder.build().with_context(|_| AssembleSnafu {
+        role_group: role_group_name.clone(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
-    use stackable_operator::kube::runtime::reflector::ObjectRef;
 
     use super::*;
     use crate::{
@@ -97,20 +87,15 @@ mod tests {
 
     /// Renders the ConfigMap of the `default` server role group of an `OpaCluster` built from `spec`.
     fn build_config_map(spec: Value) -> ConfigMap {
-        let (opa, validated) = validated_cluster_from_spec(spec);
+        let (_opa, validated) = validated_cluster_from_spec(spec);
 
         let role = OpaRole::Server;
-        let rg_config = validated.role_group_configs[&role]
-            .values()
+        let (role_group_name, rg_config) = validated.role_group_configs[&role]
+            .iter()
             .next()
             .expect("the default role group should exist");
-        let rolegroup_ref = RoleGroupRef {
-            cluster: ObjectRef::from_obj(&opa),
-            role: role.to_string(),
-            role_group: "default".to_string(),
-        };
 
-        build_rolegroup_config_map(&validated, rg_config, &rolegroup_ref)
+        build_rolegroup_config_map(&validated, role_group_name, rg_config, None)
             .expect("the config map should build")
     }
 

@@ -1,7 +1,4 @@
-use std::str::FromStr;
-
 use serde::{Deserialize, Serialize};
-use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
         affinity::StackableAffinity,
@@ -15,9 +12,9 @@ use stackable_operator::{
     config::{fragment::Fragment, merge::Merge},
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
-    kube::{CustomResource, ResourceExt},
+    kube::{CustomResource, runtime::reflector::ObjectRef},
     product_logging::{self, spec::Logging},
-    role_utils::{EmptyRoleConfig, Role, RoleGroup, RoleGroupRef},
+    role_utils::{EmptyRoleConfig, Role, RoleGroupRef},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
@@ -40,20 +37,6 @@ pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_se
 // This lets us merge role groups via the upstream `v2::role_utils::with_validated_config`.
 pub type OpaRoleType =
     Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig, GenericCommonConfig>;
-
-pub type OpaRoleGroupType = RoleGroup<OpaConfigFragment, GenericCommonConfig, OpaConfigOverrides>;
-
-#[derive(Snafu, Debug)]
-pub enum Error {
-    #[snafu(display("the role group {role_group} is not defined"))]
-    CannotRetrieveOpaRoleGroup { role_group: String },
-
-    #[snafu(display("unknown role {role}"))]
-    UnknownOpaRole {
-        source: strum::ParseError,
-        role: String,
-    },
-}
 
 #[versioned(
     version(name = "v1alpha1"),
@@ -323,30 +306,18 @@ impl v1alpha2::OpaCluster {
         }
     }
 
-    /// Returns a reference to the role group. Raises an error if the role or role group are not defined.
-    pub fn rolegroup(
-        &self,
-        rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    ) -> Result<&OpaRoleGroupType, Error> {
-        let role_variant =
-            OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
-                role: rolegroup_ref.role.to_owned(),
-            })?;
-        let role = self.role(&role_variant);
-        role.role_groups
-            .get(&rolegroup_ref.role_group)
-            .with_context(|| CannotRetrieveOpaRoleGroupSnafu {
-                role_group: rolegroup_ref.role_group.to_owned(),
-            })
-    }
-
-    /// The name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_name(&self) -> String {
-        format!(
-            "{cluster_name}-{role}",
-            cluster_name = self.name_any(),
-            role = OpaRole::Server
-        )
+    /// A [`RoleGroupRef`] for the given server role group.
+    ///
+    /// This is only needed to build the Vector agent config via the upstream
+    /// [`create_vector_config`](stackable_operator::product_logging::framework::create_vector_config),
+    /// which still requires a `RoleGroupRef`. All other resource naming goes through
+    /// [`ValidatedCluster`](crate::controller::ValidatedCluster) and the v2 `ResourceNames`.
+    pub fn server_rolegroup_ref(&self, group_name: impl Into<String>) -> RoleGroupRef<Self> {
+        RoleGroupRef {
+            cluster: ObjectRef::from_obj(self),
+            role: OpaRole::Server.to_string(),
+            role_group: group_name.into(),
+        }
     }
 }
 

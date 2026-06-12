@@ -1,22 +1,35 @@
 //! Controller-level vocabulary: the [`ValidatedCluster`] type and the `build` / `validate`
 //! sub-modules.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
+// Re-exported so the rest of the controller refers to `crate::controller::RoleGroupName`.
+pub use stackable_operator::v2::types::operator::RoleGroupName;
 use stackable_operator::{
     commons::product_image_selection::ResolvedProductImage,
     kube::{Resource as KubeResource, api::ObjectMeta},
+    kvp::Labels,
     v2::{
         HasName, HasUid, NameIsValidLabelValue,
+        kvp::label::{recommended_labels, role_group_selector, role_selector},
+        role_group_utils::ResourceNames,
         role_utils::{GenericCommonConfig, RoleGroupConfig},
         types::{
             kubernetes::{NamespaceName, Uid},
-            operator::{ClusterName, RoleGroupName},
+            operator::{
+                ClusterName, ControllerName, OperatorName, ProductName, ProductVersion, RoleName,
+            },
         },
     },
 };
 
-use crate::crd::{OpaConfig, OpaConfigOverrides, OpaRole, user_info_fetcher, v1alpha2};
+use crate::{
+    crd::{
+        APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, user_info_fetcher,
+        v1alpha2,
+    },
+    opa_controller::OPA_CONTROLLER_NAME,
+};
 
 pub mod build;
 pub mod validate;
@@ -69,6 +82,72 @@ impl ValidatedCluster {
     pub fn server_role_service_name(&self) -> String {
         format!("{name}-{role}", name = self.name, role = OpaRole::Server)
     }
+
+    /// The single OPA role name (`server`).
+    pub fn role_name() -> RoleName {
+        RoleName::from_str(&OpaRole::Server.to_string())
+            .expect("the server role name is a valid role name")
+    }
+
+    /// Type-safe names for the resources of a given role group.
+    pub(crate) fn resource_names(&self, role_group_name: &RoleGroupName) -> ResourceNames {
+        ResourceNames {
+            cluster_name: self.name.clone(),
+            role_name: Self::role_name(),
+            role_group_name: role_group_name.clone(),
+        }
+    }
+
+    /// The product version as a type-safe label value.
+    ///
+    /// `app_version_label_value` is constructed to be a valid label value, so it is also a valid
+    /// [`ProductVersion`].
+    fn product_version(&self) -> ProductVersion {
+        ProductVersion::from_str(&self.image.app_version_label_value)
+            .expect("the app version label value is a valid product version")
+    }
+
+    /// Recommended labels for a role-group resource.
+    ///
+    /// For role-level or cluster-level resources (e.g. the role `Service` or the discovery
+    /// `ConfigMap`) pass a placeholder role-group name such as `global` or `discovery`.
+    pub fn recommended_labels(&self, role_group_name: &RoleGroupName) -> Labels {
+        recommended_labels(
+            self,
+            &product_name(),
+            &self.product_version(),
+            &operator_name(),
+            &controller_name(),
+            &Self::role_name(),
+            role_group_name,
+        )
+    }
+
+    /// Selector labels matching the pods of a role group.
+    pub fn role_group_selector(&self, role_group_name: &RoleGroupName) -> Labels {
+        role_group_selector(self, &product_name(), &Self::role_name(), role_group_name)
+    }
+
+    /// Selector labels matching all pods of the (single) OPA role.
+    pub fn role_selector(&self) -> Labels {
+        role_selector(self, &product_name(), &Self::role_name())
+    }
+}
+
+/// The product name (`opa`) as a type-safe label value.
+fn product_name() -> ProductName {
+    ProductName::from_str(APP_NAME).expect("'opa' is a valid product name")
+}
+
+/// The operator name as a type-safe label value.
+fn operator_name() -> OperatorName {
+    OperatorName::from_str(OPERATOR_NAME).expect("the operator name is a valid label value")
+}
+
+/// The controller name as a type-safe label value.
+fn controller_name() -> ControllerName {
+    ControllerName::from_str(OPA_CONTROLLER_NAME)
+        .expect("the controller name is a valid label value")
 }
 
 impl HasName for ValidatedCluster {
