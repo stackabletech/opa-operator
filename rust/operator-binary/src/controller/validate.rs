@@ -15,6 +15,7 @@ use stackable_operator::{
         builder::pod::container::{EnvVarName, EnvVarSet},
         controller_utils::{get_cluster_name, get_namespace, get_uid},
         role_utils::with_validated_config,
+        types::operator::RoleGroupName,
     },
 };
 use strum::IntoEnumIterator;
@@ -54,6 +55,12 @@ pub enum Error {
     ParseEnvVarName {
         source: stackable_operator::v2::builder::pod::container::Error,
         name: String,
+    },
+
+    #[snafu(display("the role group name {role_group:?} is invalid"))]
+    ParseRoleGroupName {
+        source: <RoleGroupName as FromStr>::Err,
+        role_group: String,
     },
 }
 
@@ -106,8 +113,15 @@ pub fn validate(
                 );
             }
 
+            // Validate the role group name against the upstream `RoleGroupName` newtype (RFC 1123
+            // label, length-bounded) so the typed key is guaranteed to produce valid resource names.
+            let role_group_name =
+                RoleGroupName::from_str(role_group_name).context(ParseRoleGroupNameSnafu {
+                    role_group: role_group_name.clone(),
+                })?;
+
             group_configs.insert(
-                role_group_name.clone(),
+                role_group_name,
                 OpaRoleGroupConfig {
                     // Unused for a DaemonSet, but the framework type requires it.
                     replicas: merged.replicas.unwrap_or(0),

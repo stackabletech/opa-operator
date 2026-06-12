@@ -11,7 +11,7 @@ use stackable_operator::{
         role_utils::{GenericCommonConfig, RoleGroupConfig},
         types::{
             kubernetes::{NamespaceName, Uid},
-            operator::ClusterName,
+            operator::{ClusterName, RoleGroupName},
         },
     },
 };
@@ -36,7 +36,7 @@ pub struct ValidatedCluster {
     pub uid: Uid,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
-    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<String, OpaRoleGroupConfig>>,
+    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
 }
 
 impl ValidatedCluster {
@@ -46,7 +46,7 @@ impl ValidatedCluster {
         uid: Uid,
         image: ResolvedProductImage,
         cluster_config: ValidatedClusterConfig,
-        role_group_configs: BTreeMap<OpaRole, BTreeMap<String, OpaRoleGroupConfig>>,
+        role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
     ) -> Self {
         let metadata = ObjectMeta {
             name: Some(name.to_string()),

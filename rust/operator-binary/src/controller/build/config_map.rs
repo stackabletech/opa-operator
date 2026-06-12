@@ -100,7 +100,10 @@ mod tests {
         let (opa, validated) = validated_cluster_from_spec(spec);
 
         let role = OpaRole::Server;
-        let rg_config = &validated.role_group_configs[&role]["default"];
+        let rg_config = validated.role_group_configs[&role]
+            .values()
+            .next()
+            .expect("the default role group should exist");
         let rolegroup_ref = RoleGroupRef {
             cluster: ObjectRef::from_obj(&opa),
             role: role.to_string(),

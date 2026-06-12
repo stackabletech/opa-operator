@@ -147,7 +147,10 @@ mod tests {
     /// `spec`, and parses it back into a [`Value`].
     fn config_json_for(spec: Value) -> Value {
         let (_, validated) = validated_cluster_from_spec(spec);
-        let rg = &validated.role_group_configs[&OpaRole::Server]["default"];
+        let rg = validated.role_group_configs[&OpaRole::Server]
+            .values()
+            .next()
+            .expect("the default role group should exist");
         let rendered = build(&rg.config, &rg.config_overrides).expect("config.json builds");
         serde_json::from_str(&rendered).expect("config.json should be valid JSON")
     }

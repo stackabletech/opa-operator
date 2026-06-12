@@ -63,12 +63,14 @@ use stackable_operator::{
         operations::ClusterOperationsConditionBuilder,
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
+    v2::builder::meta::ownerreference_from_resource,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
     controller::{
-        OpaRoleGroupConfig, build, build::properties::logging::BundleBuilderLogLevel, validate,
+        OpaRoleGroupConfig, ValidatedCluster, build,
+        build::properties::logging::BundleBuilderLogLevel, validate,
     },
     crd::{
         APP_NAME, Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OPERATOR_NAME,
@@ -220,11 +222,6 @@ pub enum Error {
         source: stackable_operator::client::Error,
     },
 
-    #[snafu(display("object is missing metadata to build owner reference"))]
-    ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::builder::meta::Error,
-    },
-
     #[snafu(display("failed to build discovery ConfigMap"))]
     BuildDiscoveryConfig { source: build::discovery::Error },
 
@@ -357,7 +354,7 @@ pub async fn reconcile_opa(
         .unwrap_or(&empty_role_group_configs);
 
     let server_role_service =
-        build_server_role_service(opa, &validated.image).context(BuildServiceSnafu)?;
+        build_server_role_service(opa, &validated, &validated.image).context(BuildServiceSnafu)?;
     cluster_resources
         .add(client, server_role_service)
         .await
@@ -393,12 +390,15 @@ pub async fn reconcile_opa(
                 .with_context(|_| BuildRoleGroupConfigSnafu {
                     rolegroup: rolegroup.clone(),
                 })?;
-        let rg_service = build_rolegroup_headless_service(opa, &validated.image, &rolegroup)
-            .context(BuildServiceSnafu)?;
-        let rg_metrics_service = build_rolegroup_metrics_service(opa, &validated.image, &rolegroup)
-            .context(BuildServiceSnafu)?;
+        let rg_service =
+            build_rolegroup_headless_service(opa, &validated, &validated.image, &rolegroup)
+                .context(BuildServiceSnafu)?;
+        let rg_metrics_service =
+            build_rolegroup_metrics_service(opa, &validated, &validated.image, &rolegroup)
+                .context(BuildServiceSnafu)?;
         let rg_daemonset = build_server_rolegroup_daemonset(
             opa,
+            &validated,
             &validated.image,
             &rolegroup,
             rolegroup_config,
@@ -533,6 +533,7 @@ fn add_stackable_rust_cli_env_vars(
 #[allow(clippy::too_many_arguments)]
 fn build_server_rolegroup_daemonset(
     opa: &v1alpha2::OpaCluster,
+    cluster: &ValidatedCluster,
     resolved_product_image: &ResolvedProductImage,
     rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
     rolegroup_config: &OpaRoleGroupConfig,
@@ -929,8 +930,7 @@ fn build_server_rolegroup_daemonset(
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
         .name(rolegroup_ref.object_name())
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
         .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,

@@ -5,9 +5,11 @@ use stackable_operator::{
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
     kvp::{Annotations, LabelError, Labels},
     role_utils::RoleGroupRef,
+    v2::builder::meta::ownerreference_from_resource,
 };
 
 use crate::{
+    controller::ValidatedCluster,
     crd::{APP_NAME, OpaRole, v1alpha2},
     opa_controller::build_recommended_labels,
 };
@@ -27,17 +29,13 @@ pub enum Error {
     ObjectMeta {
         source: stackable_operator::builder::meta::Error,
     },
-
-    #[snafu(display("object is missing metadata to build owner reference"))]
-    ObjectMissingMetadataForOwnerRef {
-        source: stackable_operator::builder::meta::Error,
-    },
 }
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
 pub(crate) fn build_server_role_service(
     opa: &v1alpha2::OpaCluster,
+    cluster: &ValidatedCluster,
     resolved_product_image: &ResolvedProductImage,
 ) -> Result<Service, Error> {
     let role_name = OpaRole::Server.to_string();
@@ -45,8 +43,7 @@ pub(crate) fn build_server_role_service(
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
         .name(opa.server_role_service_name())
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
         .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
@@ -85,14 +82,14 @@ pub(crate) fn build_server_role_service(
 /// This is mostly useful for internal communication between peers, or for clients that perform client-side load balancing.
 pub(crate) fn build_rolegroup_headless_service(
     opa: &v1alpha2::OpaCluster,
+    cluster: &ValidatedCluster,
     resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
 ) -> Result<Service, Error> {
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
         .name(rolegroup.rolegroup_headless_service_name())
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
         .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
@@ -129,14 +126,14 @@ pub(crate) fn build_rolegroup_headless_service(
 /// prometheus.io/scrape label.
 pub(crate) fn build_rolegroup_metrics_service(
     opa: &v1alpha2::OpaCluster,
+    cluster: &ValidatedCluster,
     resolved_product_image: &ResolvedProductImage,
     rolegroup: &RoleGroupRef<v1alpha2::OpaCluster>,
 ) -> Result<Service, Error> {
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(opa)
         .name(rolegroup.rolegroup_metrics_service_name())
-        .ownerreference_from_resource(opa, None, Some(true))
-        .context(ObjectMissingMetadataForOwnerRefSnafu)?
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
         .with_recommended_labels(&build_recommended_labels(
             opa,
             &resolved_product_image.app_version_label_value,
