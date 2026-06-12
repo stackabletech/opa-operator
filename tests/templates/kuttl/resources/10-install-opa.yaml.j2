@@ -27,8 +27,8 @@ spec:
       logging:
         enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
     roleGroups:
-      resources-from-role: {}
-      resources-from-role-group:
+      from-role: {}
+      from-role-group:
         config:
           resources:
             cpu:
@@ -38,7 +38,7 @@ spec:
               limit: 284Mi
           logging:
             enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
-      resources-from-pod-overrides:
+      pod-overrides:
         podOverrides:
           spec:
             containers:
