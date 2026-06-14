@@ -83,9 +83,11 @@ const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
 stackable_operator::constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
-// HTTP probe configuration shared by the bundle-builder and OPA containers. Both expose a
-// `/status` endpoint; only the port (and, for OPA, the URI scheme) differ.
-const PROBE_PATH: &str = "/status";
+// HTTP probe configuration shared by the bundle-builder and OPA containers. They differ in the
+// probed path (the bundle-builder exposes `/status`, OPA's HTTP server answers `/`), the port and,
+// for OPA, the URI scheme.
+const BUNDLE_BUILDER_PROBE_PATH: &str = "/status";
+const OPA_PROBE_PATH: &str = "/";
 const PROBE_PERIOD_SECONDS: i32 = 10;
 const READINESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 5;
 const READINESS_PROBE_FAILURE_THRESHOLD: i32 = 5;
@@ -190,15 +192,15 @@ fn bash_entrypoint_command() -> Vec<String> {
         .collect()
 }
 
-/// An HTTP readiness [`Probe`] against the `/status` endpoint on the given `port`/`scheme`.
-fn http_status_readiness_probe(port: IntOrString, scheme: Option<String>) -> Probe {
+/// An HTTP readiness [`Probe`] against `path` on the given `port`/`scheme`.
+fn http_readiness_probe(path: &str, port: IntOrString, scheme: Option<String>) -> Probe {
     Probe {
         initial_delay_seconds: Some(READINESS_PROBE_INITIAL_DELAY_SECONDS),
         period_seconds: Some(PROBE_PERIOD_SECONDS),
         failure_threshold: Some(READINESS_PROBE_FAILURE_THRESHOLD),
         http_get: Some(HTTPGetAction {
             port,
-            path: Some(PROBE_PATH.to_string()),
+            path: Some(path.to_string()),
             scheme,
             ..HTTPGetAction::default()
         }),
@@ -206,14 +208,14 @@ fn http_status_readiness_probe(port: IntOrString, scheme: Option<String>) -> Pro
     }
 }
 
-/// An HTTP liveness [`Probe`] against the `/status` endpoint on the given `port`/`scheme`.
-fn http_status_liveness_probe(port: IntOrString, scheme: Option<String>) -> Probe {
+/// An HTTP liveness [`Probe`] against `path` on the given `port`/`scheme`.
+fn http_liveness_probe(path: &str, port: IntOrString, scheme: Option<String>) -> Probe {
     Probe {
         initial_delay_seconds: Some(LIVENESS_PROBE_INITIAL_DELAY_SECONDS),
         period_seconds: Some(PROBE_PERIOD_SECONDS),
         http_get: Some(HTTPGetAction {
             port,
-            path: Some(PROBE_PATH.to_string()),
+            path: Some(path.to_string()),
             scheme,
             ..HTTPGetAction::default()
         }),
@@ -289,11 +291,13 @@ pub fn build_server_rolegroup_daemonset(
                 .with_memory_limit("128Mi")
                 .build(),
         )
-        .readiness_probe(http_status_readiness_probe(
+        .readiness_probe(http_readiness_probe(
+            BUNDLE_BUILDER_PROBE_PATH,
             IntOrString::Int(BUNDLE_BUILDER_PORT),
             None,
         ))
-        .liveness_probe(http_status_liveness_probe(
+        .liveness_probe(http_liveness_probe(
+            BUNDLE_BUILDER_PROBE_PATH,
             IntOrString::Int(BUNDLE_BUILDER_PORT),
             None,
         ));
@@ -348,11 +352,13 @@ pub fn build_server_rolegroup_daemonset(
     };
 
     cb_opa
-        .readiness_probe(http_status_readiness_probe(
+        .readiness_probe(http_readiness_probe(
+            OPA_PROBE_PATH,
             IntOrString::String(probe_port_name.to_string()),
             probe_scheme.clone(),
         ))
-        .liveness_probe(http_status_liveness_probe(
+        .liveness_probe(http_liveness_probe(
+            OPA_PROBE_PATH,
             IntOrString::String(probe_port_name.to_string()),
             probe_scheme,
         ));
@@ -842,8 +848,10 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
 mod tests {
     use serde_json::json;
     use stackable_operator::{
-        commons::networking::DomainName, k8s_openapi::api::core::v1::ServiceAccount,
-        k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta,
+        commons::networking::DomainName,
+        k8s_openapi::{
+            api::core::v1::ServiceAccount, apimachinery::pkg::apis::meta::v1::ObjectMeta,
+        },
     };
 
     use super::*;
@@ -996,6 +1004,35 @@ mod tests {
         })));
 
         assert!(container_names(&ds).contains(&"user-info-fetcher".to_owned()));
+    }
+
+    #[test]
+    fn opa_probes_root_and_bundle_builder_probes_status() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+        let pod_spec = ds.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+        let liveness_path = |container: &str| -> String {
+            pod_spec
+                .containers
+                .iter()
+                .find(|c| c.name == container)
+                .unwrap_or_else(|| panic!("container {container} should exist"))
+                .liveness_probe
+                .as_ref()
+                .unwrap()
+                .http_get
+                .as_ref()
+                .unwrap()
+                .path
+                .clone()
+                .unwrap()
+        };
+        // OPA's HTTP server answers `/`; only the bundle-builder exposes `/status`. A wrong path
+        // here makes the liveness probe fail and the OPA container CrashLoop.
+        assert_eq!(liveness_path("opa"), "/");
+        assert_eq!(liveness_path("bundle-builder"), "/status");
     }
 
     #[test]
