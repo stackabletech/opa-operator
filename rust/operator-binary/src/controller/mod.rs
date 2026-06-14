@@ -202,6 +202,7 @@ impl KubeResource for ValidatedCluster {
 pub struct ValidatedClusterConfig {
     pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
     pub tls: Option<v1alpha2::OpaTls>,
+    pub listener_class: v1alpha2::CurrentlySupportedListenerClasses,
 }
 
 /// The validated configuration of a single role group.

@@ -170,7 +170,7 @@ pub async fn reconcile_opa(
 
     // NOTE(@maltesander): There currently is no dereference (client required) step for OPA.
     // validate (no client required)
-    let validated =
+    let validated_cluster =
         validate::validate(opa, &ctx.operator_environment).context(ValidateClusterSnafu)?;
 
     let opa_role = OpaRole::Server;
@@ -186,12 +186,12 @@ pub async fn reconcile_opa(
     .context(FailedToCreateClusterResourcesSnafu)?;
 
     let empty_role_group_configs = BTreeMap::new();
-    let role_group_configs = validated
+    let role_group_configs = validated_cluster
         .role_group_configs
         .get(&opa_role)
         .unwrap_or(&empty_role_group_configs);
 
-    let server_role_service = build_server_role_service(opa, &validated);
+    let server_role_service = build_server_role_service(&validated_cluster);
     cluster_resources
         .add(client, server_role_service)
         .await
@@ -225,7 +225,7 @@ pub async fn reconcile_opa(
             .map(|_| build::properties::product_logging::vector_config_file_content());
 
         let rg_configmap = build::resource::config_map::build_rolegroup_config_map(
-            &validated,
+            &validated_cluster,
             rolegroup_name,
             &rolegroup.config,
             vector_config,
@@ -233,12 +233,11 @@ pub async fn reconcile_opa(
         .with_context(|_| BuildRoleGroupConfigSnafu {
             rolegroup: rolegroup_name.clone(),
         })?;
-        let rg_service = build_rolegroup_headless_service(&validated, rolegroup_name);
-        let rg_metrics_service = build_rolegroup_metrics_service(&validated, rolegroup_name);
+        let rg_service = build_rolegroup_headless_service(&validated_cluster, rolegroup_name);
+        let rg_metrics_service =
+            build_rolegroup_metrics_service(&validated_cluster, rolegroup_name);
         let rg_daemonset = build::resource::daemonset::build_server_rolegroup_daemonset(
-            opa,
-            &validated,
-            &validated.image,
+            &validated_cluster,
             rolegroup_name,
             rolegroup,
             &ctx.opa_bundle_builder_image,
@@ -302,7 +301,7 @@ pub async fn reconcile_opa(
     }
 
     let discovery_cm = build::resource::discovery::build_discovery_config_map(
-        &validated,
+        &validated_cluster,
         &client.kubernetes_cluster_info,
     )
     .context(BuildDiscoveryConfigSnafu)?;

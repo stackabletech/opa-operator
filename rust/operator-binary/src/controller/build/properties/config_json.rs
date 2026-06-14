@@ -146,7 +146,7 @@ mod tests {
     /// Renders `config.json` for the `default` server role group of an `OpaCluster` built from
     /// `spec`, and parses it back into a [`Value`].
     fn config_json_for(spec: Value) -> Value {
-        let (_, validated) = validated_cluster_from_spec(spec);
+        let validated = validated_cluster_from_spec(spec);
         let rg = validated.role_group_configs[&OpaRole::Server]
             .values()
             .next()

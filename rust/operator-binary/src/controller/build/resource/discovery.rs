@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn renders_http_url_without_tls() {
-        let (_opa, validated) = validated_cluster_from_spec(serde_json::json!({
+        let validated = validated_cluster_from_spec(serde_json::json!({
             "image": { "productVersion": "1.2.3" },
             "servers": { "roleGroups": { "default": {} } },
         }));
@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn renders_https_url_and_secret_class_with_tls() {
-        let (_opa, validated) = validated_cluster_from_spec(serde_json::json!({
+        let validated = validated_cluster_from_spec(serde_json::json!({
             "image": { "productVersion": "1.2.3" },
             "clusterConfig": { "tls": { "serverSecretClass": "tls" } },
             "servers": { "roleGroups": { "default": {} } },

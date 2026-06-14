@@ -89,7 +89,7 @@ mod tests {
 
     /// Renders the ConfigMap of the `default` server role group of an `OpaCluster` built from `spec`.
     fn build_config_map(spec: Value) -> ConfigMap {
-        let (_opa, validated) = validated_cluster_from_spec(spec);
+        let validated = validated_cluster_from_spec(spec);
 
         let role = OpaRole::Server;
         let (role_group_name, rg) = validated.role_group_configs[&role]

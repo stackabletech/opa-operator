@@ -268,13 +268,6 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
     }
 }
 
-impl v1alpha2::OpaClusterConfig {
-    /// Returns whether TLS encryption is enabled for the OPA server.
-    pub fn tls_enabled(&self) -> bool {
-        self.tls.is_some()
-    }
-}
-
 impl OpaConfig {
     pub fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {

@@ -227,6 +227,7 @@ pub fn validate(
         ValidatedClusterConfig {
             user_info: opa.spec.cluster_config.user_info.clone(),
             tls: opa.spec.cluster_config.tls.clone(),
+            listener_class: opa.spec.cluster_config.listener_class.clone(),
         },
         role_group_configs,
     ))

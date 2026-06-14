@@ -26,9 +26,9 @@ pub(crate) mod test_support {
         crd::v1alpha2,
     };
 
-    /// Builds an `OpaCluster` from the given `spec` JSON and runs the validate step, returning both
-    /// the raw cluster (for owner references) and the [`ValidatedCluster`].
-    pub fn validated_cluster_from_spec(spec: Value) -> (v1alpha2::OpaCluster, ValidatedCluster) {
+    /// Builds an `OpaCluster` from the given `spec` JSON and runs the validate step, returning the
+    /// resulting [`ValidatedCluster`].
+    pub fn validated_cluster_from_spec(spec: Value) -> ValidatedCluster {
         let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
             "apiVersion": "opa.stackable.tech/v1alpha2",
             "kind": "OpaCluster",
@@ -47,8 +47,6 @@ pub(crate) mod test_support {
             image_repository: "oci.stackable.tech/sdp".to_string(),
         };
 
-        let validated = validate(&opa, &operator_environment)
-            .expect("validation should succeed for the fixture");
-        (opa, validated)
+        validate(&opa, &operator_environment).expect("validation should succeed for the fixture")
     }
 }

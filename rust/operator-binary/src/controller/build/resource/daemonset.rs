@@ -18,7 +18,6 @@ use stackable_operator::{
         },
     },
     commons::{
-        product_image_selection::ResolvedProductImage,
         secret_class::{
             SecretClassVolume, SecretClassVolumeProvisionParts, SecretClassVolumeScope,
         },
@@ -60,9 +59,7 @@ use stackable_operator::{
 use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
     controller::{RoleGroupName, ValidatedCluster, ValidatedRoleGroup, build},
-    crd::{
-        Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaConfig, user_info_fetcher, v1alpha2,
-    },
+    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaConfig, user_info_fetcher},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
 
@@ -234,9 +231,7 @@ fn http_status_liveness_probe(port: IntOrString, scheme: Option<String>) -> Prob
 /// policy queries (which are often chained in serial, and block other tasks in the products).
 #[allow(clippy::too_many_arguments)]
 pub fn build_server_rolegroup_daemonset(
-    opa: &v1alpha2::OpaCluster,
     cluster: &ValidatedCluster,
-    resolved_product_image: &ResolvedProductImage,
     role_group_name: &RoleGroupName,
     role_group: &ValidatedRoleGroup,
     opa_bundle_builder_image: &str,
@@ -244,6 +239,7 @@ pub fn build_server_rolegroup_daemonset(
     service_account: &ServiceAccount,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
+    let resolved_product_image = &cluster.image;
     let rolegroup_config = &role_group.config;
     // All overrides were already merged (role group over role over defaults) in the validate step.
     let merged_config = &rolegroup_config.config;
@@ -314,7 +310,7 @@ pub fn build_server_rolegroup_daemonset(
         .args(vec![build_opa_start_command(
             merged_config,
             opa_container_name.as_ref(),
-            opa.spec.cluster_config.tls_enabled(),
+            cluster.cluster_config.tls.is_some(),
             &rolegroup_config.cli_overrides,
         )])
         .add_env_vars(rolegroup_config.env_overrides.clone())
@@ -329,7 +325,7 @@ pub fn build_server_rolegroup_daemonset(
     // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
     //
     // So we don't do that
-    if opa.spec.cluster_config.tls_enabled() {
+    if cluster.cluster_config.tls.is_some() {
         cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
         cb_opa
             .add_volume_mount(TLS_VOLUME_NAME.as_ref(), TLS_STORE_DIR)
@@ -345,7 +341,7 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
-    let (probe_port_name, probe_scheme) = if opa.spec.cluster_config.tls_enabled() {
+    let (probe_port_name, probe_scheme) = if cluster.cluster_config.tls.is_some() {
         (service::APP_TLS_PORT_NAME, Some("HTTPS".to_string()))
     } else {
         (APP_PORT_NAME, Some("HTTP".to_string()))
@@ -406,7 +402,7 @@ pub fn build_server_rolegroup_daemonset(
         .service_account_name(service_account.name_any())
         .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
 
-    if let Some(tls) = &opa.spec.cluster_config.tls {
+    if let Some(tls) = &cluster.cluster_config.tls {
         pb.add_volume(
             VolumeBuilder::new(TLS_VOLUME_NAME.as_ref())
                 .ephemeral(
@@ -431,7 +427,7 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeSnafu)?;
     }
 
-    if let Some(user_info) = &opa.spec.cluster_config.user_info {
+    if let Some(user_info) = &cluster.cluster_config.user_info {
         let user_info_fetcher_container_name = container_name(&Container::UserInfoFetcher);
         let mut cb_user_info_fetcher = new_container_builder(&user_info_fetcher_container_name);
 

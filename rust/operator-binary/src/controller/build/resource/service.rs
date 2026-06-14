@@ -7,10 +7,7 @@ use stackable_operator::{
     v2::builder::meta::ownerreference_from_resource,
 };
 
-use crate::{
-    controller::{RoleGroupName, ValidatedCluster},
-    crd::v1alpha2,
-};
+use crate::controller::{RoleGroupName, ValidatedCluster};
 
 pub const APP_PORT: u16 = 8081;
 pub const APP_TLS_PORT: u16 = 8443;
@@ -27,10 +24,7 @@ fn role_level_role_group_name() -> RoleGroupName {
 
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
-pub(crate) fn build_server_role_service(
-    opa: &v1alpha2::OpaCluster,
-    cluster: &ValidatedCluster,
-) -> Service {
+pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(cluster)
         .name(cluster.server_role_service_name())
@@ -39,7 +33,7 @@ pub(crate) fn build_server_role_service(
         .build();
 
     let service_spec = ServiceSpec {
-        type_: Some(opa.spec.cluster_config.listener_class.k8s_service_type()),
+        type_: Some(cluster.cluster_config.listener_class.k8s_service_type()),
         ports: Some(data_service_ports(cluster.cluster_config.tls.is_some())),
         selector: Some(cluster.role_selector().into()),
         // This ensures that products (e.g. Trino) on a node always talk to the OPA pod on the
