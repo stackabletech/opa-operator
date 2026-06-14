@@ -49,7 +49,10 @@ use stackable_operator::{
         },
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
-    v2::{builder::meta::ownerreference_from_resource, types::kubernetes::VolumeName},
+    v2::{
+        builder::{meta::ownerreference_from_resource, pod::container::new_container_builder},
+        types::kubernetes::{ContainerName, VolumeName},
+    },
 };
 
 use super::service::{self, APP_PORT, APP_PORT_NAME};
@@ -131,11 +134,6 @@ const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("illegal container name"))]
-    IllegalContainerName {
-        source: stackable_operator::builder::pod::container::Error,
-    },
-
     #[snafu(display("vector agent is enabled but vector aggregator ConfigMap is missing"))]
     VectorAggregatorConfigMapMissing,
 
@@ -182,6 +180,13 @@ pub enum Error {
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
+
+/// The typed [`ContainerName`] for a [`Container`]. The enum's `Display` values are all valid
+/// container names, so this conversion is infallible.
+fn container_name(container: &Container) -> ContainerName {
+    ContainerName::from_str(&container.to_string())
+        .expect("Container enum variants are valid container names")
+}
 
 /// The strict-mode `bash` entrypoint shared by the prepare, bundle-builder, and OPA containers.
 /// The actual script is passed via `.args(...)`.
@@ -248,23 +253,21 @@ pub fn build_server_rolegroup_daemonset(
 
     let mut pb = PodBuilder::new();
 
-    let prepare_container_name = Container::Prepare.to_string();
-    let mut cb_prepare =
-        ContainerBuilder::new(&prepare_container_name).context(IllegalContainerNameSnafu)?;
+    let prepare_container_name = container_name(&Container::Prepare);
+    let mut cb_prepare = new_container_builder(&prepare_container_name);
 
-    let bundle_builder_container_name = Container::BundleBuilder.to_string();
-    let mut cb_bundle_builder =
-        ContainerBuilder::new(&bundle_builder_container_name).context(IllegalContainerNameSnafu)?;
+    let bundle_builder_container_name = container_name(&Container::BundleBuilder);
+    let mut cb_bundle_builder = new_container_builder(&bundle_builder_container_name);
 
-    let opa_container_name = Container::Opa.to_string();
-    let mut cb_opa =
-        ContainerBuilder::new(&opa_container_name).context(IllegalContainerNameSnafu)?;
+    let opa_container_name = container_name(&Container::Opa);
+    let mut cb_opa = new_container_builder(&opa_container_name);
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
         .command(bash_entrypoint_command())
         .args(vec![
-            build_prepare_start_command(merged_config, &prepare_container_name).join(" && "),
+            build_prepare_start_command(merged_config, prepare_container_name.as_ref())
+                .join(" && "),
         ])
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
@@ -278,7 +281,7 @@ pub fn build_server_rolegroup_daemonset(
         .command(bash_entrypoint_command())
         .args(vec![build_bundle_builder_start_command(
             merged_config,
-            &bundle_builder_container_name,
+            bundle_builder_container_name.as_ref(),
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", &FieldPathEnvVar::Namespace)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
@@ -313,7 +316,7 @@ pub fn build_server_rolegroup_daemonset(
         .command(bash_entrypoint_command())
         .args(vec![build_opa_start_command(
             merged_config,
-            &opa_container_name,
+            opa_container_name.as_ref(),
             opa.spec.cluster_config.tls_enabled(),
             &rolegroup_config.cli_overrides,
         )])
@@ -432,8 +435,8 @@ pub fn build_server_rolegroup_daemonset(
     }
 
     if let Some(user_info) = &opa.spec.cluster_config.user_info {
-        let mut cb_user_info_fetcher =
-            ContainerBuilder::new("user-info-fetcher").context(IllegalContainerNameSnafu)?;
+        let user_info_fetcher_container_name = container_name(&Container::UserInfoFetcher);
+        let mut cb_user_info_fetcher = new_container_builder(&user_info_fetcher_container_name);
 
         cb_user_info_fetcher
             .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
