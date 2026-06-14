@@ -49,7 +49,7 @@ pub struct ValidatedCluster {
     pub uid: Uid,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
-    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
+    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, ValidatedRoleGroup>>,
 }
 
 impl ValidatedCluster {
@@ -59,7 +59,7 @@ impl ValidatedCluster {
         uid: Uid,
         image: ResolvedProductImage,
         cluster_config: ValidatedClusterConfig,
-        role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
+        role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, ValidatedRoleGroup>>,
     ) -> Self {
         let metadata = ObjectMeta {
             name: Some(name.to_string()),
@@ -213,3 +213,10 @@ pub struct ValidatedClusterConfig {
 /// Note: `replicas` is carried by the framework type but unused here — OPA runs as a `DaemonSet`
 /// (one Pod per node).
 pub type OpaRoleGroupConfig = RoleGroupConfig<OpaConfig, GenericCommonConfig, OpaConfigOverrides>;
+
+/// A single validated role group: the merged [`OpaRoleGroupConfig`] plus its validated logging
+/// configuration (produced together by the validate step, so the build steps never re-validate).
+pub struct ValidatedRoleGroup {
+    pub config: OpaRoleGroupConfig,
+    pub logging: validate::ValidatedLogging,
+}

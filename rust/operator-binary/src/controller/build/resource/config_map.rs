@@ -92,12 +92,12 @@ mod tests {
         let (_opa, validated) = validated_cluster_from_spec(spec);
 
         let role = OpaRole::Server;
-        let (role_group_name, rg_config) = validated.role_group_configs[&role]
+        let (role_group_name, rg) = validated.role_group_configs[&role]
             .iter()
             .next()
             .expect("the default role group should exist");
 
-        build_rolegroup_config_map(&validated, role_group_name, rg_config, None)
+        build_rolegroup_config_map(&validated, role_group_name, &rg.config, None)
             .expect("the config map should build")
     }
 

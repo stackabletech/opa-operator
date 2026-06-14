@@ -12,9 +12,9 @@ use stackable_operator::{
     config::{fragment::Fragment, merge::Merge},
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
-    kube::{CustomResource, runtime::reflector::ObjectRef},
+    kube::CustomResource,
     product_logging::{self, spec::Logging},
-    role_utils::{EmptyRoleConfig, Role, RoleGroupRef},
+    role_utils::{EmptyRoleConfig, Role},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
@@ -303,20 +303,6 @@ impl v1alpha2::OpaCluster {
     pub fn role(&self, role_variant: &OpaRole) -> &OpaRoleType {
         match role_variant {
             OpaRole::Server => &self.spec.servers,
-        }
-    }
-
-    /// A [`RoleGroupRef`] for the given server role group.
-    ///
-    /// This is only needed to build the Vector agent config via the upstream
-    /// [`create_vector_config`](stackable_operator::product_logging::framework::create_vector_config),
-    /// which still requires a `RoleGroupRef`. All other resource naming goes through
-    /// [`ValidatedCluster`](crate::controller::ValidatedCluster) and the v2 `ResourceNames`.
-    pub fn server_rolegroup_ref(&self, group_name: impl Into<String>) -> RoleGroupRef<Self> {
-        RoleGroupRef {
-            cluster: ObjectRef::from_obj(self),
-            role: OpaRole::Server.to_string(),
-            role_group: group_name.into(),
         }
     }
 }

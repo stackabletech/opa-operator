@@ -1,7 +1,7 @@
 //! Per-config-file build steps assembled into the rolegroup `ConfigMap`.
 
 pub mod config_json;
-pub mod logging;
+pub mod product_logging;
 pub mod user_info_fetcher;
 
 /// The names of the config files assembled into the rolegroup `ConfigMap`.

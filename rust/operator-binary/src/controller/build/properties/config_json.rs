@@ -151,7 +151,8 @@ mod tests {
             .values()
             .next()
             .expect("the default role group should exist");
-        let rendered = build(&rg.config, &rg.config_overrides).expect("config.json builds");
+        let rendered =
+            build(&rg.config.config, &rg.config.config_overrides).expect("config.json builds");
         serde_json::from_str(&rendered).expect("config.json should be valid JSON")
     }
 

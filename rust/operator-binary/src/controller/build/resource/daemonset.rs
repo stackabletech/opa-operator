@@ -40,9 +40,7 @@ use stackable_operator::{
     memory::{BinaryMultiple, MemoryQuantity},
     product_logging::{
         self,
-        framework::{
-            LoggingError, create_vector_shutdown_file_command, remove_vector_shutdown_file_command,
-        },
+        framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
         spec::{
             AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
             ContainerLogConfigChoice, LogLevel,
@@ -50,14 +48,18 @@ use stackable_operator::{
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
     v2::{
-        builder::{meta::ownerreference_from_resource, pod::container::new_container_builder},
+        builder::{
+            meta::ownerreference_from_resource,
+            pod::container::{EnvVarSet, new_container_builder},
+        },
+        product_logging::framework::vector_container,
         types::kubernetes::{ContainerName, VolumeName},
     },
 };
 
 use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
-    controller::{OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, build},
+    controller::{RoleGroupName, ValidatedCluster, ValidatedRoleGroup, build},
     crd::{
         Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaConfig, user_info_fetcher, v1alpha2,
     },
@@ -134,9 +136,6 @@ const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("vector agent is enabled but vector aggregator ConfigMap is missing"))]
-    VectorAggregatorConfigMapMissing,
-
     #[snafu(display("failed to configure graceful shutdown"))]
     GracefulShutdown {
         source: crate::operations::graceful_shutdown::Error,
@@ -161,9 +160,6 @@ pub enum Error {
         "failed to build volume or volume mount spec for the User Info Fetcher LDAP config"
     ))]
     UserInfoFetcherLdapVolumeAndMounts { source: ldap::v1alpha1::Error },
-
-    #[snafu(display("failed to configure logging"))]
-    ConfigureLogging { source: LoggingError },
 
     #[snafu(display("failed to add needed volume"))]
     AddVolume { source: builder::pod::Error },
@@ -242,12 +238,13 @@ pub fn build_server_rolegroup_daemonset(
     cluster: &ValidatedCluster,
     resolved_product_image: &ResolvedProductImage,
     role_group_name: &RoleGroupName,
-    rolegroup_config: &OpaRoleGroupConfig,
+    role_group: &ValidatedRoleGroup,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
+    let rolegroup_config = &role_group.config;
     // All overrides were already merged (role group over role over defaults) in the validate step.
     let merged_config = &rolegroup_config.config;
 
@@ -559,30 +556,18 @@ pub fn build_server_rolegroup_daemonset(
         pb.add_container(cb_user_info_fetcher.build());
     }
 
-    if merged_config.logging.enable_vector_agent {
-        match &opa.spec.cluster_config.vector_aggregator_config_map_name {
-            Some(vector_aggregator_config_map_name) => {
-                pb.add_container(
-                    product_logging::framework::vector_container(
-                        resolved_product_image,
-                        CONFIG_VOLUME_NAME.as_ref(),
-                        LOG_VOLUME_NAME.as_ref(),
-                        merged_config.logging.containers.get(&Container::Vector),
-                        ResourceRequirementsBuilder::new()
-                            .with_cpu_request("250m")
-                            .with_cpu_limit("500m")
-                            .with_memory_request("128Mi")
-                            .with_memory_limit("128Mi")
-                            .build(),
-                        vector_aggregator_config_map_name,
-                    )
-                    .context(ConfigureLoggingSnafu)?,
-                );
-            }
-            None => {
-                VectorAggregatorConfigMapMissingSnafu.fail()?;
-            }
-        }
+    // The Vector logging config was validated up-front (see `ValidatedLogging`); a `Some` here means
+    // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
+    if let Some(vector_log_config) = &role_group.logging.vector_container {
+        pb.add_container(vector_container(
+            &container_name(&Container::Vector),
+            resolved_product_image,
+            vector_log_config,
+            &cluster.resource_names(role_group_name),
+            &CONFIG_VOLUME_NAME,
+            &LOG_VOLUME_NAME,
+            EnvVarSet::new(),
+        ));
     }
 
     add_graceful_shutdown_config(merged_config, &mut pb).context(GracefulShutdownSnafu)?;
@@ -820,7 +805,7 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
 fn sidecar_container_log_level(
     merged_config: &OpaConfig,
     sidecar_container: &Container,
-) -> build::properties::logging::BundleBuilderLogLevel {
+) -> build::properties::product_logging::BundleBuilderLogLevel {
     if let Some(ContainerLogConfig {
         choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
     }) = merged_config.logging.containers.get(sidecar_container)
@@ -828,10 +813,10 @@ fn sidecar_container_log_level(
             .loggers
             .get(AutomaticContainerLogConfig::ROOT_LOGGER)
     {
-        return build::properties::logging::BundleBuilderLogLevel::from(logger.level);
+        return build::properties::product_logging::BundleBuilderLogLevel::from(logger.level);
     }
 
-    build::properties::logging::BundleBuilderLogLevel::Info
+    build::properties::product_logging::BundleBuilderLogLevel::Info
 }
 
 fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) -> Vec<String> {

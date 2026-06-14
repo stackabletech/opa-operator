@@ -73,3 +73,23 @@ commands:
         printf '%s\n' "$actual"
         exit 1
       fi
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+  # When the Vector agent is enabled, the rolegroup ConfigMap also carries the
+  # OPA-specific Vector agent config (`vector.yaml`). The file is static and its
+  # full content is covered by the operator's `vector test`/unit tests, so here we
+  # only assert it is wired into the ConfigMap with the OPA-specific sources/sink.
+  - script: |
+      actual=$(kubectl -n $NAMESPACE get cm test-opa-server-default -o json | jq -r '.data."vector.yaml" // ""')
+      if [ -z "$actual" ]; then
+        echo "ERROR: ConfigMap test-opa-server-default is missing the vector.yaml entry."
+        exit 1
+      fi
+      for marker in 'files_opa_json' 'files_tracing_rs' 'address: ${VECTOR_AGGREGATOR_ADDRESS}'; do
+        if ! printf '%s\n' "$actual" | grep -qF "$marker"; then
+          echo "ERROR: vector.yaml in ConfigMap test-opa-server-default is missing expected content: $marker"
+          echo "=== actual ==="
+          printf '%s\n' "$actual"
+          exit 1
+        fi
+      done
+{% endif %}

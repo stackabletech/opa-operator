@@ -215,21 +215,19 @@ pub async fn reconcile_opa(
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
-    for (rolegroup_name, rolegroup_config) in role_group_configs {
-        // The Vector agent config is still generated per role group via the upstream
-        // `create_vector_config`, which requires a `RoleGroupRef`. This is the only remaining use
-        // of `RoleGroupRef`; it is built here (where the raw cluster is available) and the
-        // resulting config string is threaded into the ConfigMap builder.
-        let rolegroup_ref = opa.server_rolegroup_ref(rolegroup_name.to_string());
-        let vector_config = build::properties::logging::build_vector_config(
-            &rolegroup_ref,
-            &rolegroup_config.config.logging,
-        );
+    for (rolegroup_name, rolegroup) in role_group_configs {
+        // The static Vector agent config (`vector.yaml`) is added to the rolegroup ConfigMap only
+        // when the Vector agent is enabled for this role group.
+        let vector_config = rolegroup
+            .logging
+            .vector_container
+            .as_ref()
+            .map(|_| build::properties::product_logging::vector_config_file_content());
 
         let rg_configmap = build::resource::config_map::build_rolegroup_config_map(
             &validated,
             rolegroup_name,
-            rolegroup_config,
+            &rolegroup.config,
             vector_config,
         )
         .with_context(|_| BuildRoleGroupConfigSnafu {
@@ -242,7 +240,7 @@ pub async fn reconcile_opa(
             &validated,
             &validated.image,
             rolegroup_name,
-            rolegroup_config,
+            rolegroup,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
             &rbac_sa,
