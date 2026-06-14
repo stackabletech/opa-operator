@@ -13,10 +13,8 @@ use stackable_operator::{
     v2::builder::meta::ownerreference_from_resource,
 };
 
-use crate::{
-    controller::{RoleGroupName, ValidatedCluster},
-    service::{APP_PORT, APP_TLS_PORT},
-};
+use super::service::{APP_PORT, APP_TLS_PORT};
+use crate::controller::{RoleGroupName, ValidatedCluster};
 
 #[derive(Snafu, Debug)]
 pub enum Error {

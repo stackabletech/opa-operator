@@ -40,7 +40,6 @@ mod controller;
 mod crd;
 mod opa_controller;
 mod operations;
-mod service;
 mod webhooks;
 
 pub mod built_info {

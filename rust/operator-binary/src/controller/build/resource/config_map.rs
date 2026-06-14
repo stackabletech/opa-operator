@@ -1,5 +1,5 @@
 //! Assembles the rolegroup [`ConfigMap`] from the [`ValidatedCluster`], dispatching to the
-//! per-file builders in [`super::properties`].
+//! per-file builders in [`crate::controller::build::properties`].
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
@@ -9,8 +9,10 @@ use stackable_operator::{
     v2::builder::meta::ownerreference_from_resource,
 };
 
-use super::properties::{ConfigFileName, config_json, user_info_fetcher};
-use crate::controller::{OpaRoleGroupConfig, RoleGroupName, ValidatedCluster};
+use crate::controller::{
+    OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
+    build::properties::{ConfigFileName, config_json, user_info_fetcher},
+};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
