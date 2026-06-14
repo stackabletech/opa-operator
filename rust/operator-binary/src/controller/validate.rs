@@ -232,3 +232,57 @@ pub fn validate(
         role_group_configs,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use stackable_operator::product_logging::spec::{
+        AutomaticContainerLogConfig, ContainerLogConfig, ContainerLogConfigChoice,
+    };
+
+    use super::*;
+
+    /// A [`Logging`] with a single (automatic) Vector container log config, as the build step
+    /// expects when the Vector agent is enabled.
+    fn logging(enable_vector_agent: bool) -> Logging<Container> {
+        Logging {
+            enable_vector_agent,
+            containers: [(
+                Container::Vector,
+                ContainerLogConfig {
+                    choice: Some(ContainerLogConfigChoice::Automatic(
+                        AutomaticContainerLogConfig::default(),
+                    )),
+                },
+            )]
+            .into(),
+        }
+    }
+
+    #[test]
+    fn validate_logging_disabled_has_no_vector_container() {
+        let validated = validate_logging(&logging(false), &None).expect("should validate");
+        assert!(!validated.enable_vector_agent);
+        assert!(validated.vector_container.is_none());
+    }
+
+    #[test]
+    fn validate_logging_enabled_requires_aggregator_config_map() {
+        assert!(matches!(
+            validate_logging(&logging(true), &None),
+            Err(Error::MissingVectorAggregatorConfigMapName)
+        ));
+    }
+
+    #[test]
+    fn validate_logging_enabled_with_aggregator_yields_vector_container() {
+        let aggregator =
+            Some(ConfigMapName::from_str("vector-aggregator-discovery").expect("valid name"));
+        let validated = validate_logging(&logging(true), &aggregator).expect("should validate");
+        assert!(validated.enable_vector_agent);
+        let vector = validated.vector_container.expect("vector container config");
+        assert_eq!(
+            vector.vector_aggregator_config_map_name.as_ref(),
+            "vector-aggregator-discovery"
+        );
+    }
+}

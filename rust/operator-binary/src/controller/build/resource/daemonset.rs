@@ -837,3 +837,175 @@ fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) 
 
     prepare_container_args
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use stackable_operator::{
+        commons::networking::DomainName, k8s_openapi::api::core::v1::ServiceAccount,
+        k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta,
+    };
+
+    use super::*;
+    use crate::{
+        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
+    };
+
+    fn cluster_info() -> KubernetesClusterInfo {
+        KubernetesClusterInfo {
+            cluster_domain: DomainName::try_from("cluster.local").unwrap(),
+        }
+    }
+
+    fn service_account() -> ServiceAccount {
+        ServiceAccount {
+            metadata: ObjectMeta {
+                name: Some("test-opa-serviceaccount".to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn build(cluster: &ValidatedCluster) -> DaemonSet {
+        let (role_group_name, role_group) = cluster.role_group_configs[&OpaRole::Server]
+            .iter()
+            .next()
+            .expect("the default role group should exist");
+        build_server_rolegroup_daemonset(
+            cluster,
+            role_group_name,
+            role_group,
+            "bundle-builder-image",
+            "user-info-fetcher-image",
+            &service_account(),
+            &cluster_info(),
+        )
+        .expect("the daemonset should build")
+    }
+
+    fn container_names(ds: &DaemonSet) -> Vec<String> {
+        ds.spec
+            .as_ref()
+            .unwrap()
+            .template
+            .spec
+            .as_ref()
+            .unwrap()
+            .containers
+            .iter()
+            .map(|c| c.name.clone())
+            .collect()
+    }
+
+    fn volume_names(ds: &DaemonSet) -> Vec<String> {
+        ds.spec
+            .as_ref()
+            .unwrap()
+            .template
+            .spec
+            .as_ref()
+            .unwrap()
+            .volumes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|v| v.name.clone())
+            .collect()
+    }
+
+    #[test]
+    fn daemonset_has_expected_name_and_rolling_update_strategy() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        assert_eq!(ds.metadata.name.as_deref(), Some("test-opa-server-default"));
+        let strategy = ds.spec.as_ref().unwrap().update_strategy.as_ref().unwrap();
+        assert_eq!(strategy.type_.as_deref(), Some("RollingUpdate"));
+        let rolling_update = strategy.rolling_update.as_ref().unwrap();
+        // A DaemonSet must never take an OPA pod down before the replacement is ready.
+        assert_eq!(rolling_update.max_unavailable, Some(IntOrString::Int(0)));
+    }
+
+    #[test]
+    fn daemonset_runs_opa_and_bundle_builder_with_prepare_init_container() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let containers = container_names(&ds);
+        assert!(containers.contains(&"opa".to_owned()));
+        assert!(containers.contains(&"bundle-builder".to_owned()));
+        // No sidecars without the corresponding cluster config.
+        assert!(!containers.contains(&"user-info-fetcher".to_owned()));
+        assert!(!containers.contains(&"vector".to_owned()));
+
+        let pod_spec = ds.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+        let init_containers: Vec<_> = pod_spec
+            .init_containers
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|c| c.name.clone())
+            .collect();
+        assert_eq!(init_containers, vec!["prepare".to_owned()]);
+
+        // The standard volumes are always present; the TLS volume is not (no TLS configured).
+        let volumes = volume_names(&ds);
+        for expected in ["config", "bundles", "log"] {
+            assert!(
+                volumes.contains(&expected.to_owned()),
+                "missing volume {expected}"
+            );
+        }
+        assert!(!volumes.contains(&"tls".to_owned()));
+    }
+
+    #[test]
+    fn daemonset_adds_vector_container_when_agent_enabled() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": { "vectorAggregatorConfigMapName": "vector-aggregator-discovery" },
+            "servers": {
+                "config": { "logging": { "enableVectorAgent": true } },
+                "roleGroups": { "default": {} },
+            },
+        })));
+
+        assert!(container_names(&ds).contains(&"vector".to_owned()));
+    }
+
+    #[test]
+    fn daemonset_adds_user_info_fetcher_container_when_configured() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "experimentalXfscAas": {
+                            "hostname": "aas.default.svc.cluster.local",
+                            "port": 5000,
+                        }
+                    }
+                }
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        assert!(container_names(&ds).contains(&"user-info-fetcher".to_owned()));
+    }
+
+    #[test]
+    fn daemonset_adds_tls_volume_when_tls_enabled() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": { "tls": { "serverSecretClass": "tls" } },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        assert!(volume_names(&ds).contains(&"tls".to_owned()));
+    }
+}
