@@ -1,7 +1,7 @@
 //! Builds the rolegroup [`DaemonSet`] that runs OPA (plus its bundle-builder, optional
 //! user-info-fetcher, and Vector sidecars) on every node.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
@@ -49,7 +49,7 @@ use stackable_operator::{
         },
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
-    v2::builder::meta::ownerreference_from_resource,
+    v2::{builder::meta::ownerreference_from_resource, types::kubernetes::VolumeName},
 };
 
 use super::service::{self, APP_PORT, APP_PORT_NAME};
@@ -68,18 +68,26 @@ pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 pub const BUNDLE_BUILDER_PORT: i32 = 3030;
 
-const CONFIG_VOLUME_NAME: &str = "config";
+stackable_operator::constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
 const CONFIG_DIR: &str = "/stackable/config";
-const LOG_VOLUME_NAME: &str = "log";
+stackable_operator::constant!(LOG_VOLUME_NAME: VolumeName = "log");
 const STACKABLE_LOG_DIR: &str = "/stackable/log";
-const BUNDLES_VOLUME_NAME: &str = "bundles";
+stackable_operator::constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
 const BUNDLES_DIR: &str = "/bundles";
-const USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: &str = "credentials";
+stackable_operator::constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "credentials");
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
-const USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: &str = "kerberos";
+stackable_operator::constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
-const TLS_VOLUME_NAME: &str = "tls";
+stackable_operator::constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
+
+// HTTP probe configuration shared by the bundle-builder and OPA containers. Both expose a
+// `/status` endpoint; only the port (and, for OPA, the URI scheme) differ.
+const PROBE_PATH: &str = "/status";
+const PROBE_PERIOD_SECONDS: i32 = 10;
+const READINESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 5;
+const READINESS_PROBE_FAILURE_THRESHOLD: i32 = 5;
+const LIVENESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 30;
 
 const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
 const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
@@ -175,6 +183,46 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// The strict-mode `bash` entrypoint shared by the prepare, bundle-builder, and OPA containers.
+/// The actual script is passed via `.args(...)`.
+fn bash_entrypoint_command() -> Vec<String> {
+    ["/bin/bash", "-x", "-euo", "pipefail", "-c"]
+        .iter()
+        .map(|arg| arg.to_string())
+        .collect()
+}
+
+/// An HTTP readiness [`Probe`] against the `/status` endpoint on the given `port`/`scheme`.
+fn http_status_readiness_probe(port: IntOrString, scheme: Option<String>) -> Probe {
+    Probe {
+        initial_delay_seconds: Some(READINESS_PROBE_INITIAL_DELAY_SECONDS),
+        period_seconds: Some(PROBE_PERIOD_SECONDS),
+        failure_threshold: Some(READINESS_PROBE_FAILURE_THRESHOLD),
+        http_get: Some(HTTPGetAction {
+            port,
+            path: Some(PROBE_PATH.to_string()),
+            scheme,
+            ..HTTPGetAction::default()
+        }),
+        ..Probe::default()
+    }
+}
+
+/// An HTTP liveness [`Probe`] against the `/status` endpoint on the given `port`/`scheme`.
+fn http_status_liveness_probe(port: IntOrString, scheme: Option<String>) -> Probe {
+    Probe {
+        initial_delay_seconds: Some(LIVENESS_PROBE_INITIAL_DELAY_SECONDS),
+        period_seconds: Some(PROBE_PERIOD_SECONDS),
+        http_get: Some(HTTPGetAction {
+            port,
+            path: Some(PROBE_PATH.to_string()),
+            scheme,
+            ..HTTPGetAction::default()
+        }),
+        ..Probe::default()
+    }
+}
+
 /// The rolegroup [`DaemonSet`] runs the rolegroup, as configured by the administrator.
 ///
 /// The [`Pod`](`stackable_operator::k8s_openapi::api::core::v1::Pod`)s are accessible through the
@@ -214,40 +262,28 @@ pub fn build_server_rolegroup_daemonset(
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
-        .command(vec![
-            "/bin/bash".to_string(),
-            "-x".to_string(),
-            "-euo".to_string(),
-            "pipefail".to_string(),
-            "-c".to_string(),
-        ])
+        .command(bash_entrypoint_command())
         .args(vec![
             build_prepare_start_command(merged_config, &prepare_container_name).join(" && "),
         ])
-        .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
-        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
     cb_bundle_builder
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
-        .command(vec![
-            "/bin/bash".to_string(),
-            "-x".to_string(),
-            "-euo".to_string(),
-            "pipefail".to_string(),
-            "-c".to_string(),
-        ])
+        .command(bash_entrypoint_command())
         .args(vec![build_bundle_builder_start_command(
             merged_config,
             &bundle_builder_container_name,
         )])
         .add_env_var_from_field_path("WATCH_NAMESPACE", &FieldPathEnvVar::Namespace)
-        .add_volume_mount(BUNDLES_VOLUME_NAME, BUNDLES_DIR)
+        .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
-        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
         .context(AddVolumeMountSnafu)?
         .resources(
             ResourceRequirementsBuilder::new()
@@ -257,27 +293,14 @@ pub fn build_server_rolegroup_daemonset(
                 .with_memory_limit("128Mi")
                 .build(),
         )
-        .readiness_probe(Probe {
-            initial_delay_seconds: Some(5),
-            period_seconds: Some(10),
-            failure_threshold: Some(5),
-            http_get: Some(HTTPGetAction {
-                port: IntOrString::Int(BUNDLE_BUILDER_PORT),
-                path: Some("/status".to_string()),
-                ..HTTPGetAction::default()
-            }),
-            ..Probe::default()
-        })
-        .liveness_probe(Probe {
-            initial_delay_seconds: Some(30),
-            period_seconds: Some(10),
-            http_get: Some(HTTPGetAction {
-                port: IntOrString::Int(BUNDLE_BUILDER_PORT),
-                path: Some("/status".to_string()),
-                ..HTTPGetAction::default()
-            }),
-            ..Probe::default()
-        });
+        .readiness_probe(http_status_readiness_probe(
+            IntOrString::Int(BUNDLE_BUILDER_PORT),
+            None,
+        ))
+        .liveness_probe(http_status_liveness_probe(
+            IntOrString::Int(BUNDLE_BUILDER_PORT),
+            None,
+        ));
     add_stackable_rust_cli_env_vars(
         &mut cb_bundle_builder,
         cluster_info,
@@ -287,13 +310,7 @@ pub fn build_server_rolegroup_daemonset(
 
     cb_opa
         .image_from_product_image(resolved_product_image)
-        .command(vec![
-            "/bin/bash".to_string(),
-            "-x".to_string(),
-            "-euo".to_string(),
-            "pipefail".to_string(),
-            "-c".to_string(),
-        ])
+        .command(bash_entrypoint_command())
         .args(vec![build_opa_start_command(
             merged_config,
             &opa_container_name,
@@ -315,16 +332,16 @@ pub fn build_server_rolegroup_daemonset(
     if opa.spec.cluster_config.tls_enabled() {
         cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
         cb_opa
-            .add_volume_mount(TLS_VOLUME_NAME, TLS_STORE_DIR)
+            .add_volume_mount(TLS_VOLUME_NAME.as_ref(), TLS_STORE_DIR)
             .context(AddVolumeMountSnafu)?;
     } else {
         cb_opa.add_container_port(APP_PORT_NAME, APP_PORT.into());
     }
 
     cb_opa
-        .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+        .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
         .context(AddVolumeMountSnafu)?
-        .add_volume_mount(LOG_VOLUME_NAME, STACKABLE_LOG_DIR)
+        .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
@@ -335,27 +352,14 @@ pub fn build_server_rolegroup_daemonset(
     };
 
     cb_opa
-        .readiness_probe(Probe {
-            initial_delay_seconds: Some(5),
-            period_seconds: Some(10),
-            failure_threshold: Some(5),
-            http_get: Some(HTTPGetAction {
-                port: IntOrString::String(probe_port_name.to_string()),
-                scheme: probe_scheme.clone(),
-                ..HTTPGetAction::default()
-            }),
-            ..Probe::default()
-        })
-        .liveness_probe(Probe {
-            initial_delay_seconds: Some(30),
-            period_seconds: Some(10),
-            http_get: Some(HTTPGetAction {
-                port: IntOrString::String(probe_port_name.to_string()),
-                scheme: probe_scheme,
-                ..HTTPGetAction::default()
-            }),
-            ..Probe::default()
-        });
+        .readiness_probe(http_status_readiness_probe(
+            IntOrString::String(probe_port_name.to_string()),
+            probe_scheme.clone(),
+        ))
+        .liveness_probe(http_status_liveness_probe(
+            IntOrString::String(probe_port_name.to_string()),
+            probe_scheme,
+        ));
 
     let pb_metadata = ObjectMetaBuilder::new()
         .with_labels(cluster.recommended_labels(role_group_name))
@@ -368,7 +372,7 @@ pub fn build_server_rolegroup_daemonset(
         .image_pull_secrets_from_product_image(resolved_product_image)
         .affinity(&merged_config.affinity)
         .add_volume(
-            VolumeBuilder::new(CONFIG_VOLUME_NAME)
+            VolumeBuilder::new(CONFIG_VOLUME_NAME.as_ref())
                 .with_config_map(
                     cluster
                         .resource_names(role_group_name)
@@ -379,13 +383,13 @@ pub fn build_server_rolegroup_daemonset(
         )
         .context(AddVolumeSnafu)?
         .add_volume(
-            VolumeBuilder::new(BUNDLES_VOLUME_NAME)
+            VolumeBuilder::new(BUNDLES_VOLUME_NAME.as_ref())
                 .with_empty_dir(None::<String>, None)
                 .build(),
         )
         .context(AddVolumeSnafu)?
         .add_volume(
-            VolumeBuilder::new(LOG_VOLUME_NAME)
+            VolumeBuilder::new(LOG_VOLUME_NAME.as_ref())
                 .empty_dir(EmptyDirVolumeSource {
                     medium: None,
                     size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
@@ -404,7 +408,7 @@ pub fn build_server_rolegroup_daemonset(
 
     if let Some(tls) = &opa.spec.cluster_config.tls {
         pb.add_volume(
-            VolumeBuilder::new(TLS_VOLUME_NAME)
+            VolumeBuilder::new(TLS_VOLUME_NAME.as_ref())
                 .ephemeral(
                     SecretOperatorVolumeSourceBuilder::new(
                         &tls.server_secret_class,
@@ -437,7 +441,7 @@ pub fn build_server_rolegroup_daemonset(
             .command(vec!["stackable-opa-user-info-fetcher".to_string()])
             .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
-            .add_volume_mount(CONFIG_VOLUME_NAME, CONFIG_DIR)
+            .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
             .context(AddVolumeMountSnafu)?
             .resources(
                 ResourceRequirementsBuilder::new()
@@ -469,7 +473,7 @@ pub fn build_server_rolegroup_daemonset(
                         }),
                     )
                     .to_volume(
-                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME.as_ref(),
                         // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
@@ -478,7 +482,7 @@ pub fn build_server_rolegroup_daemonset(
                 .context(UserInfoFetcherKerberosVolumeSnafu)?;
                 cb_user_info_fetcher
                     .add_volume_mount(
-                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_KERBEROS_DIR,
                     )
                     .context(UserInfoFetcherKerberosVolumeMountSnafu)?;
@@ -497,7 +501,7 @@ pub fn build_server_rolegroup_daemonset(
             }
             user_info_fetcher::v1alpha2::Backend::Keycloak(keycloak) => {
                 pb.add_volume(
-                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref())
                         .secret(SecretVolumeSource {
                             secret_name: Some(keycloak.client_credentials_secret.clone()),
                             ..Default::default()
@@ -507,7 +511,7 @@ pub fn build_server_rolegroup_daemonset(
                 .context(AddVolumeSnafu)?;
                 cb_user_info_fetcher
                     .add_volume_mount(
-                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
                     )
                     .context(AddVolumeMountSnafu)?;
@@ -518,7 +522,7 @@ pub fn build_server_rolegroup_daemonset(
             }
             user_info_fetcher::v1alpha2::Backend::Entra(entra) => {
                 pb.add_volume(
-                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME)
+                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref())
                         .secret(SecretVolumeSource {
                             secret_name: Some(entra.client_credentials_secret.clone()),
                             ..Default::default()
@@ -528,7 +532,7 @@ pub fn build_server_rolegroup_daemonset(
                 .context(AddVolumeSnafu)?;
                 cb_user_info_fetcher
                     .add_volume_mount(
-                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
                     )
                     .context(AddVolumeMountSnafu)?;
@@ -558,8 +562,8 @@ pub fn build_server_rolegroup_daemonset(
                 pb.add_container(
                     product_logging::framework::vector_container(
                         resolved_product_image,
-                        CONFIG_VOLUME_NAME,
-                        LOG_VOLUME_NAME,
+                        CONFIG_VOLUME_NAME.as_ref(),
+                        LOG_VOLUME_NAME.as_ref(),
                         merged_config.logging.containers.get(&Container::Vector),
                         ResourceRequirementsBuilder::new()
                             .with_cpu_request("250m")

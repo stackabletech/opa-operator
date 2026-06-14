@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 
 use stackable_operator::{
     builder::meta::ObjectMetaBuilder,
@@ -78,26 +78,39 @@ pub(crate) fn build_rolegroup_headless_service(
         .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
-    let service_spec = ServiceSpec {
-        // Currently we don't offer listener-exposition of OPA mostly due to security concerns.
-        // OPA is currently public within the Kubernetes (without authentication).
-        // Opening it up to outside of Kubernetes might worsen things.
-        // We are open to implement listener-integration, but this needs to be thought through before
-        // implementing it.
-        // Note: We have kind of similar situations for HMS and Zookeeper, as the authentication
-        // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
-        type_: Some("ClusterIP".to_string()),
-        cluster_ip: Some("None".to_string()),
-        ports: Some(data_service_ports(cluster.cluster_config.tls.is_some())),
-        selector: Some(cluster.role_group_selector(role_group_name).into()),
-        publish_not_ready_addresses: Some(true),
-        ..ServiceSpec::default()
-    };
+    // Currently we don't offer listener-exposition of OPA mostly due to security concerns.
+    // OPA is currently public within the Kubernetes (without authentication).
+    // Opening it up to outside of Kubernetes might worsen things.
+    // We are open to implement listener-integration, but this needs to be thought through before
+    // implementing it.
+    // Note: We have kind of similar situations for HMS and Zookeeper, as the authentication
+    // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
+    let service_spec = headless_cluster_ip_service_spec(
+        data_service_ports(cluster.cluster_config.tls.is_some()),
+        cluster.role_group_selector(role_group_name).into(),
+        true,
+    );
 
     Service {
         metadata,
         spec: Some(service_spec),
         status: None,
+    }
+}
+
+/// A headless (`ClusterIP: None`) [`ServiceSpec`] for the given ports and role-group `selector`.
+fn headless_cluster_ip_service_spec(
+    ports: Vec<ServicePort>,
+    selector: BTreeMap<String, String>,
+    publish_not_ready_addresses: bool,
+) -> ServiceSpec {
+    ServiceSpec {
+        type_: Some("ClusterIP".to_string()),
+        cluster_ip: Some("None".to_string()),
+        ports: Some(ports),
+        selector: Some(selector),
+        publish_not_ready_addresses: publish_not_ready_addresses.then_some(true),
+        ..ServiceSpec::default()
     }
 }
 
@@ -117,13 +130,11 @@ pub(crate) fn build_rolegroup_metrics_service(
         .with_annotations(prometheus_annotations(tls_enabled))
         .build();
 
-    let service_spec = ServiceSpec {
-        type_: Some("ClusterIP".to_string()),
-        cluster_ip: Some("None".to_string()),
-        ports: Some(vec![metrics_service_port(tls_enabled)]),
-        selector: Some(cluster.role_group_selector(role_group_name).into()),
-        ..ServiceSpec::default()
-    };
+    let service_spec = headless_cluster_ip_service_spec(
+        vec![metrics_service_port(tls_enabled)],
+        cluster.role_group_selector(role_group_name).into(),
+        false,
+    );
 
     Service {
         metadata,
