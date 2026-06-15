@@ -413,7 +413,7 @@ pub fn build_server_rolegroup_daemonset(
             VolumeBuilder::new(TLS_VOLUME_NAME.as_ref())
                 .ephemeral(
                     SecretOperatorVolumeSourceBuilder::new(
-                        &tls.server_secret_class,
+                        tls.server_secret_class.to_string(),
                         // OPA needs the full TLS keypair (public cert + private key) to serve HTTPS.
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
@@ -466,7 +466,7 @@ pub fn build_server_rolegroup_daemonset(
             user_info_fetcher::v1alpha2::Backend::ActiveDirectory(ad) => {
                 pb.add_volume(
                     SecretClassVolume::new(
-                        ad.kerberos_secret_class_name.clone(),
+                        ad.kerberos_secret_class_name.to_string(),
                         Some(SecretClassVolumeScope {
                             pod: false,
                             node: false,
@@ -505,7 +505,7 @@ pub fn build_server_rolegroup_daemonset(
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref())
                         .secret(SecretVolumeSource {
-                            secret_name: Some(keycloak.client_credentials_secret.clone()),
+                            secret_name: Some(keycloak.client_credentials_secret.to_string()),
                             ..Default::default()
                         })
                         .build(),
@@ -526,7 +526,7 @@ pub fn build_server_rolegroup_daemonset(
                 pb.add_volume(
                     VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref())
                         .secret(SecretVolumeSource {
-                            secret_name: Some(entra.client_credentials_secret.clone()),
+                            secret_name: Some(entra.client_credentials_secret.to_string()),
                             ..Default::default()
                         })
                         .build(),

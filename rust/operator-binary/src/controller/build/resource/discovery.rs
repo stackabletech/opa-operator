@@ -59,7 +59,7 @@ pub fn build_discovery_config_map(
     cm_builder.metadata(metadata).add_data("OPA", url);
 
     if let Some(tls) = &cluster.cluster_config.tls {
-        cm_builder.add_data("OPA_SECRET_CLASS", &tls.server_secret_class);
+        cm_builder.add_data("OPA_SECRET_CLASS", tls.server_secret_class.to_string());
     }
 
     cm_builder.build().context(BuildConfigMapSnafu)

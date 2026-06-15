@@ -18,7 +18,11 @@ use stackable_operator::{
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
-    v2::{config_overrides::JsonOrKeyValueConfigOverrides, role_utils::GenericCommonConfig},
+    v2::{
+        config_overrides::JsonOrKeyValueConfigOverrides,
+        role_utils::GenericCommonConfig,
+        types::kubernetes::{ConfigMapName, SecretClassName},
+    },
     versioned::versioned,
 };
 use strum::{Display, EnumIter, EnumString};
@@ -85,7 +89,7 @@ pub mod versioned {
         /// Name of the Vector aggregator discovery ConfigMap.
         /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub vector_aggregator_config_map_name: Option<String>,
+        pub vector_aggregator_config_map_name: Option<ConfigMapName>,
 
         /// This field controls which type of Service the operator creates for this OpaCluster:
         ///
@@ -125,7 +129,7 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct OpaTls {
         /// Name of the SecretClass which will provide TLS certificates for the OPA server.
-        pub server_secret_class: String,
+        pub server_secret_class: SecretClassName,
     }
 
     // TODO: Temporary solution until listener-operator is finished

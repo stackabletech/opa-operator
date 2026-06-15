@@ -57,6 +57,9 @@ spec:
                     properties:
                       serverSecretClass:
                         description: Name of the SecretClass which will provide TLS certificates for the OPA server.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                     required:
                     - serverSecretClass
@@ -94,6 +97,9 @@ spec:
                                   permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               port:
                                 description: Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
@@ -191,6 +197,9 @@ spec:
                                 type: object
                               kerberosSecretClassName:
                                 description: The name of the Kerberos SecretClass.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               ldapServer:
                                 description: Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
@@ -422,6 +431,9 @@ spec:
                                   Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               hostname:
                                 description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
@@ -510,7 +522,10 @@ spec:
                     description: |-
                       Name of the Vector aggregator discovery ConfigMap.
                       It must contain the key `ADDRESS` with the address of the Vector aggregator.
+                    maxLength: 253
+                    minLength: 1
                     nullable: true
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                 type: object
               clusterOperation:
@@ -1834,6 +1849,9 @@ spec:
                     properties:
                       serverSecretClass:
                         description: Name of the SecretClass which will provide TLS certificates for the OPA server.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                     required:
                     - serverSecretClass
@@ -1886,6 +1904,9 @@ spec:
                                 type: object
                               kerberosSecretClassName:
                                 description: The name of the Kerberos SecretClass.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               ldapServer:
                                 description: Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
@@ -1949,6 +1970,9 @@ spec:
                                   permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               port:
                                 description: Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
@@ -2199,6 +2223,9 @@ spec:
                                   Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               hostname:
                                 description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
@@ -2287,7 +2314,10 @@ spec:
                     description: |-
                       Name of the Vector aggregator discovery ConfigMap.
                       It must contain the key `ADDRESS` with the address of the Vector aggregator.
+                    maxLength: 253
+                    minLength: 1
                     nullable: true
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                 type: object
               clusterOperation:
