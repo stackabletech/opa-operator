@@ -1182,9 +1182,9 @@ rec {
       };
       "cc" = rec {
         crateName = "cc";
-        version = "1.2.63";
+        version = "1.2.64";
         edition = "2018";
-        sha256 = "0zy2bqc4nvj6bv2cipx4h4bn65wf1zqf1fw1hsh64mmvg1hh2vjm";
+        sha256 = "07shcd8faxw7csz13m3cg2mj6i8z07pqs960k181pscbjpyqgn6s";
         authors = [
           "Alex Crichton <alex@alexcrichton.com>"
         ];
@@ -2152,14 +2152,6 @@ rec {
         authors = [
           "Jacob Pratt <jacob@jhpratt.dev>"
         ];
-        dependencies = [
-          {
-            name = "powerfmt";
-            packageId = "powerfmt";
-            optional = true;
-            usesDefaultFeatures = false;
-          }
-        ];
         features = {
           "macros" = [ "dep:deranged-macros" ];
           "num" = [ "dep:num-traits" ];
@@ -2171,7 +2163,7 @@ rec {
           "rand09" = [ "dep:rand09" ];
           "serde" = [ "dep:serde_core" ];
         };
-        resolvedDefaultFeatures = [ "default" "powerfmt" ];
+        resolvedDefaultFeatures = [ "default" ];
       };
       "derive_more" = rec {
         crateName = "derive_more";
@@ -3747,9 +3739,9 @@ rec {
       };
       "h2" = rec {
         crateName = "h2";
-        version = "0.4.14";
+        version = "0.4.15";
         edition = "2021";
-        sha256 = "0cw7jk7kn2vn6f8w8ssh6gis1mljnfjxd606gvi4sjpyjayfy7qp";
+        sha256 = "0mgilh1g8gydcchqi6acs5l6j0gwg5jwpa64sj4b3ncb9v497c3c";
         authors = [
           "Carl Lerche <me@carllerche.com>"
           "Sean McArthur <sean@seanmonstar.com>"
@@ -5317,9 +5309,9 @@ rec {
       };
       "js-sys" = rec {
         crateName = "js-sys";
-        version = "0.3.100";
+        version = "0.3.102";
         edition = "2021";
-        sha256 = "0qi1wjakyw2rx9wwprcfx77g3lvn1b8n6yvfhj2pgym4swh5y0pj";
+        sha256 = "0cgxklnyrfpzvf32cvdl3x5d070kfsv7ykdxfl3yizwdjqq4rl03";
         libName = "js_sys";
         authors = [
           "The wasm-bindgen Developers"
@@ -5525,7 +5517,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "k8s_version";
@@ -7175,9 +7167,9 @@ rec {
       };
       "openssl" = rec {
         crateName = "openssl";
-        version = "0.10.80";
+        version = "0.10.81";
         edition = "2021";
-        sha256 = "0ryrcbdd7hq0ydvassn4cr02agii1l54yd6sali7chkci2ma4px4";
+        sha256 = "0ibsv2ppsjrp62jqyzprhay9vczk1bw9xvdr3h4h7fxsy0kkm0kp";
         authors = [
           "Steven Fackler <sfackler@gmail.com>"
         ];
@@ -7254,10 +7246,10 @@ rec {
       };
       "openssl-sys" = rec {
         crateName = "openssl-sys";
-        version = "0.9.116";
+        version = "0.9.117";
         edition = "2021";
         links = "openssl";
-        sha256 = "1i0qcgsimh8qkfgrglmzz2kq3jk2d5575rz5jvqabka0f7f252pj";
+        sha256 = "159nf6jsqnmsynkh6gjzx088q1ifll7v88sss8qdk363n9mpwzml";
         build = "build/main.rs";
         libName = "openssl_sys";
         authors = [
@@ -10930,7 +10922,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "stackable_certs";
@@ -11340,7 +11332,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "stackable_operator";
@@ -11451,6 +11443,11 @@ rec {
             packageId = "serde_yaml";
           }
           {
+            name = "sha2";
+            packageId = "sha2";
+            features = [ "oid" ];
+          }
+          {
             name = "snafu";
             packageId = "snafu 0.9.1";
           }
@@ -11534,7 +11531,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         procMacro = true;
@@ -11569,7 +11566,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "stackable_shared";
@@ -11650,7 +11647,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "stackable_telemetry";
@@ -11760,7 +11757,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "stackable_versioned";
@@ -11810,7 +11807,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         procMacro = true;
@@ -11878,7 +11875,7 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/stackabletech//operator-rs.git";
-          rev = "1e8099fd157b06f27d93854b0838f67871448c4e";
+          rev = "a9fbbc8d1f0dc0387f26ae443a8b7d5a6e24323c";
           sha256 = "0s5giiz1zhz644s2fy9bfvd1hybm4smz75ak33fkvh2flvjfqba3";
         };
         libName = "stackable_webhook";
@@ -12453,9 +12450,9 @@ rec {
       };
       "time" = rec {
         crateName = "time";
-        version = "0.3.47";
+        version = "0.3.49";
         edition = "2024";
-        sha256 = "0b7g9ly2iabrlgizliz6v5x23yq5d6bpp0mqz6407z1s526d8fvl";
+        sha256 = "0sc4dgw6g187gvz5qj9iqqk2ashqzvdwi664b2183gbvsk1566ki";
         authors = [
           "Jacob Pratt <open-source@jhpratt.dev>"
           "Time contributors"
@@ -12464,12 +12461,6 @@ rec {
           {
             name = "deranged";
             packageId = "deranged";
-            features = [ "powerfmt" ];
-          }
-          {
-            name = "itoa";
-            packageId = "itoa";
-            optional = true;
           }
           {
             name = "num-conv";
@@ -12509,13 +12500,14 @@ rec {
         features = {
           "alloc" = [ "serde_core?/alloc" ];
           "default" = [ "std" ];
-          "formatting" = [ "dep:itoa" "std" "time-macros?/formatting" ];
+          "formatting" = [ "std" "time-macros?/formatting" ];
           "large-dates" = [ "time-core/large-dates" "time-macros?/large-dates" ];
           "local-offset" = [ "std" "dep:libc" "dep:num_threads" ];
           "macros" = [ "dep:time-macros" ];
           "parsing" = [ "time-macros?/parsing" ];
           "quickcheck" = [ "dep:quickcheck" "alloc" "deranged/quickcheck" ];
-          "rand" = [ "rand08" "rand09" ];
+          "rand" = [ "rand08" "rand09" "rand010" ];
+          "rand010" = [ "dep:rand010" "deranged/rand010" ];
           "rand08" = [ "dep:rand08" "deranged/rand08" ];
           "rand09" = [ "dep:rand09" "deranged/rand09" ];
           "serde" = [ "dep:serde_core" "time-macros?/serde" "deranged/serde" ];
@@ -12528,9 +12520,9 @@ rec {
       };
       "time-core" = rec {
         crateName = "time-core";
-        version = "0.1.8";
+        version = "0.1.9";
         edition = "2024";
-        sha256 = "1jidl426mw48i7hjj4hs9vxgd9lwqq4vyalm4q8d7y4iwz7y353n";
+        sha256 = "028ix0ax7ixp1h1k5zsqwgw85w6y1q32irslma7ci6ddd5kr074y";
         libName = "time_core";
         authors = [
           "Jacob Pratt <open-source@jhpratt.dev>"
@@ -12541,9 +12533,9 @@ rec {
       };
       "time-macros" = rec {
         crateName = "time-macros";
-        version = "0.2.27";
+        version = "0.2.29";
         edition = "2024";
-        sha256 = "058ja265waq275wxvnfwavbz9r1hd4dgwpfn7a1a9a70l32y8w1f";
+        sha256 = "0zf1ycfikg93ijf00qnprk801khqnqqga1zp0adbp73sfaim5iki";
         procMacro = true;
         libName = "time_macros";
         authors = [
@@ -14145,9 +14137,9 @@ rec {
       };
       "wasip2" = rec {
         crateName = "wasip2";
-        version = "1.0.3+wasi-0.2.9";
+        version = "1.0.4+wasi-0.2.12";
         edition = "2021";
-        sha256 = "1mi3w855dz99xzjqc4aa8c9q5b6z1y5c963pkk4cvmr6vdr4c1i0";
+        sha256 = "11wl7lqwq4pbmlmzr6n7bwz0hzy1z6sxc4554bkmrr86w4vznzmn";
         dependencies = [
           {
             name = "wit-bindgen";
@@ -14190,9 +14182,9 @@ rec {
       };
       "wasm-bindgen" = rec {
         crateName = "wasm-bindgen";
-        version = "0.2.123";
+        version = "0.2.125";
         edition = "2021";
-        sha256 = "0qqmx07r597gm8lbz8qngvv0phwvpzzyfh3nl84nz9qr1jqs8m52";
+        sha256 = "06nakz7nfy0ymyp7a27wfbjwx69659i12117hkgddkiv2iwkznwd";
         libName = "wasm_bindgen";
         authors = [
           "The wasm-bindgen Developers"
@@ -14241,9 +14233,9 @@ rec {
       };
       "wasm-bindgen-futures" = rec {
         crateName = "wasm-bindgen-futures";
-        version = "0.4.73";
+        version = "0.4.75";
         edition = "2021";
-        sha256 = "1bva12h8gdpqkp753czlxabs0s21lvgzm41brr4lhpdzz818fmjl";
+        sha256 = "104jssshr6cm5hmkn6c66mbkyxgaaphng6c17g0dmj7jhk918fsh";
         libName = "wasm_bindgen_futures";
         authors = [
           "The wasm-bindgen Developers"
@@ -14269,9 +14261,9 @@ rec {
       };
       "wasm-bindgen-macro" = rec {
         crateName = "wasm-bindgen-macro";
-        version = "0.2.123";
+        version = "0.2.125";
         edition = "2021";
-        sha256 = "1p50xdwmv543b52bc49vm5lcsgd9adpx647bdisg7ihfbg3hz914";
+        sha256 = "0g9w68dwcs4ylm5kxf7schi0kjdfarhc9qlnf8arxc9zn62a28af";
         procMacro = true;
         libName = "wasm_bindgen_macro";
         authors = [
@@ -14293,9 +14285,9 @@ rec {
       };
       "wasm-bindgen-macro-support" = rec {
         crateName = "wasm-bindgen-macro-support";
-        version = "0.2.123";
+        version = "0.2.125";
         edition = "2021";
-        sha256 = "0nwqyc63byl7rp9nnv45av8h85fncfmxywkvy35d9qwwkfyk93wh";
+        sha256 = "1gayzdx5iwl8gllh7ys79wg9cf4iyasl9hrzzhh5m4xx6nfgvkpy";
         libName = "wasm_bindgen_macro_support";
         authors = [
           "The wasm-bindgen Developers"
@@ -14329,10 +14321,10 @@ rec {
       };
       "wasm-bindgen-shared" = rec {
         crateName = "wasm-bindgen-shared";
-        version = "0.2.123";
+        version = "0.2.125";
         edition = "2021";
         links = "wasm_bindgen";
-        sha256 = "14lvjm3pzywm5c4962i6s5zmngic1knpggshnnxr9c97dihzgjvs";
+        sha256 = "07w7fy5qa14ys3p8v2p84h98yqinw713smibz9v7apcspd29x4r3";
         libName = "wasm_bindgen_shared";
         authors = [
           "The wasm-bindgen Developers"
@@ -14457,9 +14449,9 @@ rec {
       };
       "web-sys" = rec {
         crateName = "web-sys";
-        version = "0.3.100";
+        version = "0.3.102";
         edition = "2021";
-        sha256 = "0sffbkrpgyi1402mv4wzp9av6ky6rnb1d2m2dpf87wi7yfn7223f";
+        sha256 = "0786aybrnwsgdmcynhc2k5ii291a02rq9zk054j35csyvxr0lhx6";
         libName = "web_sys";
         authors = [
           "The wasm-bindgen Developers"
@@ -17324,9 +17316,9 @@ rec {
       };
       "zeroize" = rec {
         crateName = "zeroize";
-        version = "1.8.2";
-        edition = "2021";
-        sha256 = "1l48zxgcv34d7kjskr610zqsm6j2b4fcr2vfh9jm9j1jgvk58wdr";
+        version = "1.9.0";
+        edition = "2024";
+        sha256 = "0kpnij2v1ig6g2mhc0bnci0lrdfdhiq40afbc0fahajqc9jiag71";
         authors = [
           "The RustCrypto Project Developers"
         ];
@@ -17348,9 +17340,9 @@ rec {
       };
       "zeroize_derive" = rec {
         crateName = "zeroize_derive";
-        version = "1.4.3";
-        edition = "2021";
-        sha256 = "0bl5vd1lz27p4z336nximg5wrlw5j7jc8fxh7iv6r1wrhhav99c5";
+        version = "1.5.0";
+        edition = "2024";
+        sha256 = "0a7kq8srk81pn23xqn7c9jw1jpnfy41ffn802x1zrqqgpdf6al1w";
         procMacro = true;
         authors = [
           "The RustCrypto Project Developers"
