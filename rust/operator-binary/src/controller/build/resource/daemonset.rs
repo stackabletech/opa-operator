@@ -52,7 +52,10 @@ use stackable_operator::{
             pod::container::{EnvVarSet, new_container_builder},
         },
         product_logging::framework::vector_container,
-        types::kubernetes::{ContainerName, VolumeName},
+        types::{
+            common::Port,
+            kubernetes::{ContainerName, VolumeName},
+        },
     },
 };
 
@@ -68,7 +71,7 @@ pub const CONFIG_FILE: &str = "config.json";
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
-pub const BUNDLE_BUILDER_PORT: i32 = 3030;
+pub const BUNDLE_BUILDER_PORT: Port = Port(3030);
 
 stackable_operator::constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
 const CONFIG_DIR: &str = "/stackable/config";
@@ -293,12 +296,12 @@ pub fn build_server_rolegroup_daemonset(
         )
         .readiness_probe(http_readiness_probe(
             BUNDLE_BUILDER_PROBE_PATH,
-            IntOrString::Int(BUNDLE_BUILDER_PORT),
+            IntOrString::Int(BUNDLE_BUILDER_PORT.into()),
             None,
         ))
         .liveness_probe(http_liveness_probe(
             BUNDLE_BUILDER_PROBE_PATH,
-            IntOrString::Int(BUNDLE_BUILDER_PORT),
+            IntOrString::Int(BUNDLE_BUILDER_PORT.into()),
             None,
         ));
     add_stackable_rust_cli_env_vars(

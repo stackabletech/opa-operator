@@ -4,13 +4,13 @@ use stackable_operator::{
     builder::meta::ObjectMetaBuilder,
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
     kvp::{Annotations, Labels},
-    v2::builder::meta::ownerreference_from_resource,
+    v2::{builder::meta::ownerreference_from_resource, types::common::Port},
 };
 
 use crate::controller::{RoleGroupName, ValidatedCluster};
 
-pub const APP_PORT: u16 = 8081;
-pub const APP_TLS_PORT: u16 = 8443;
+pub const APP_PORT: Port = Port(8081);
+pub const APP_TLS_PORT: Port = Port(8443);
 pub const APP_PORT_NAME: &str = "http";
 pub const APP_TLS_PORT_NAME: &str = "https";
 pub const METRICS_PORT_NAME: &str = "metrics";
