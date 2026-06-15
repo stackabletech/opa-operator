@@ -5,10 +5,10 @@ use serde_json::json;
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
-    cluster_resources::{ClusterResourceApplyStrategy, ClusterResources},
+    cluster_resources::ClusterResourceApplyStrategy,
     commons::rbac::build_rbac_resources,
     kube::{
-        Resource as KubeResource, ResourceExt,
+        ResourceExt,
         core::{DeserializeGuard, error_boundary},
         runtime::controller::Action,
     },
@@ -20,6 +20,7 @@ use stackable_operator::{
         operations::ClusterOperationsConditionBuilder,
     },
     utils::cluster_info::KubernetesClusterInfo,
+    v2::cluster_resources::cluster_resources_new,
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
@@ -30,7 +31,7 @@ use crate::{
             build_rolegroup_headless_service, build_rolegroup_metrics_service,
             build_server_role_service,
         },
-        validate,
+        controller_name, operator_name, product_name, validate,
     },
     crd::{APP_NAME, OPERATOR_NAME, OpaClusterStatus, OpaRole, v1alpha2},
 };
@@ -126,11 +127,6 @@ pub enum Error {
         source: stackable_operator::cluster_resources::Error,
     },
 
-    #[snafu(display("failed to create cluster resources"))]
-    FailedToCreateClusterResources {
-        source: stackable_operator::cluster_resources::Error,
-    },
-
     #[snafu(display("failed to delete orphaned resources"))]
     DeleteOrphans {
         source: stackable_operator::cluster_resources::Error,
@@ -175,15 +171,16 @@ pub async fn reconcile_opa(
 
     let opa_role = OpaRole::Server;
 
-    let mut cluster_resources = ClusterResources::new(
-        APP_NAME,
-        OPERATOR_NAME,
-        OPA_CONTROLLER_NAME,
-        &opa.object_ref(&()),
+    let mut cluster_resources = cluster_resources_new(
+        &product_name(),
+        &operator_name(),
+        &controller_name(),
+        &validated_cluster.name,
+        &validated_cluster.namespace,
+        &validated_cluster.uid,
         ClusterResourceApplyStrategy::from(&opa.spec.cluster_operation),
         &opa.spec.object_overrides,
-    )
-    .context(FailedToCreateClusterResourcesSnafu)?;
+    );
 
     let empty_role_group_configs = BTreeMap::new();
     let role_group_configs = validated_cluster
