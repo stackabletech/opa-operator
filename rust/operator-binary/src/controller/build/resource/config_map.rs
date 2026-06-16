@@ -34,8 +34,8 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the
 /// administrator.
 ///
-/// `vector_config` is the Vector agent config (`vector.yaml`) built by the caller (where a
-/// `RoleGroupRef` is available); it is `None` when the Vector agent is disabled.
+/// `vector_config` is the Vector agent config (`vector.yaml`) built by the caller; it is `None`
+/// when the Vector agent is disabled.
 pub fn build_rolegroup_config_map(
     cluster: &ValidatedCluster,
     role_group_name: &RoleGroupName,

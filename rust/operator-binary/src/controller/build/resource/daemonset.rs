@@ -51,7 +51,7 @@ use stackable_operator::{
             meta::ownerreference_from_resource,
             pod::container::{EnvVarSet, new_container_builder},
         },
-        product_logging::framework::vector_container,
+        product_logging::framework::{STACKABLE_LOG_DIR, vector_container},
         types::{
             common::Port,
             kubernetes::{ContainerName, VolumeName},
@@ -76,7 +76,6 @@ pub const BUNDLE_BUILDER_PORT: Port = Port(3030);
 stackable_operator::constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
 const CONFIG_DIR: &str = "/stackable/config";
 stackable_operator::constant!(LOG_VOLUME_NAME: VolumeName = "log");
-const STACKABLE_LOG_DIR: &str = "/stackable/log";
 stackable_operator::constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
 const BUNDLES_DIR: &str = "/bundles";
 stackable_operator::constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "credentials");
@@ -427,7 +426,12 @@ pub fn build_server_rolegroup_daemonset(
                             .headless_service_name()
                             .to_string(),
                     )
-                    .with_service_scope(service::metrics_service_name(cluster, role_group_name))
+                    .with_service_scope(
+                        cluster
+                            .resource_names(role_group_name)
+                            .metrics_service_name()
+                            .to_string(),
+                    )
                     .build()
                     .context(TlsVolumeBuildSnafu)?,
                 )

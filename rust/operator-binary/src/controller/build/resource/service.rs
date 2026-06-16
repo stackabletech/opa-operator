@@ -117,7 +117,12 @@ pub(crate) fn build_rolegroup_metrics_service(
     let tls_enabled = cluster.cluster_config.tls.is_some();
     let metadata = ObjectMetaBuilder::new()
         .name_and_namespace(cluster)
-        .name(metrics_service_name(cluster, role_group_name))
+        .name(
+            cluster
+                .resource_names(role_group_name)
+                .metrics_service_name()
+                .to_string(),
+        )
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
         .with_labels(cluster.recommended_labels(role_group_name))
         .with_labels(prometheus_labels())
@@ -135,21 +140,6 @@ pub(crate) fn build_rolegroup_metrics_service(
         spec: Some(service_spec),
         status: None,
     }
-}
-
-/// The metrics [`Service`] name, `<cluster>-<role>-<rolegroup>-metrics`.
-///
-/// [`ResourceNames`](stackable_operator::v2::role_group_utils::ResourceNames) has no metrics
-/// service helper, so the `-metrics` suffix is appended to the qualified role-group name (which is
-/// also the StatefulSet/DaemonSet name).
-pub(crate) fn metrics_service_name(
-    cluster: &ValidatedCluster,
-    role_group_name: &RoleGroupName,
-) -> String {
-    format!(
-        "{qualified}-metrics",
-        qualified = cluster.resource_names(role_group_name).stateful_set_name()
-    )
 }
 
 fn data_service_ports(tls_enabled: bool) -> Vec<ServicePort> {

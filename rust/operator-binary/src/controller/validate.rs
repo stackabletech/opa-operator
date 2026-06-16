@@ -82,9 +82,9 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Validated logging configuration for a role group.
 ///
-/// Produced up-front by [`validate_logging`] (mirroring hive/opensearch) so that a missing or
-/// invalid Vector aggregator discovery ConfigMap name fails reconciliation during validation
-/// rather than at resource-build time.
+/// Produced up-front by [`validate_logging`] so that a missing or invalid Vector aggregator
+/// discovery ConfigMap name fails reconciliation during validation rather than at
+/// resource-build time.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedLogging {
     /// The validated Vector container config, or `None` when the Vector agent is disabled.
@@ -165,7 +165,7 @@ pub fn validate(
                 )?;
 
             // The framework keeps `envOverrides` as a `HashMap<String, String>`; lift it into the
-            // type-safe `EnvVarSet` so the build step matches opensearch/hive.
+            // type-safe `EnvVarSet` consumed by the build step.
             let mut env_overrides = EnvVarSet::new();
             for (name, value) in merged.config.env_overrides {
                 env_overrides = env_overrides.with_value(
@@ -194,7 +194,7 @@ pub fn validate(
                 ValidatedRoleGroup {
                     config: OpaRoleGroupConfig {
                         // Unused for a DaemonSet, but the framework type requires it.
-                        replicas: merged.replicas.unwrap_or(0),
+                        replicas: merged.replicas,
                         config: merged.config.config,
                         config_overrides: merged.config.config_overrides,
                         env_overrides,
