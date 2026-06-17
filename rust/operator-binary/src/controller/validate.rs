@@ -25,9 +25,7 @@ use stackable_operator::{
 };
 use strum::IntoEnumIterator;
 
-use super::{
-    OpaRoleGroupConfig, ValidatedCluster, ValidatedClusterConfig, ValidatedOpaConfig,
-};
+use super::{OpaRoleGroupConfig, ValidatedCluster, ValidatedClusterConfig, ValidatedOpaConfig};
 use crate::crd::{Container, OpaConfig, OpaRole, v1alpha2};
 
 #[derive(Snafu, Debug)]
@@ -96,7 +94,6 @@ pub struct ValidatedLogging {
     pub containers: BTreeMap<Container, ValidatedContainerLogConfigChoice>,
     /// The validated Vector container config, or `None` when the Vector agent is disabled.
     pub vector_container: Option<VectorContainerLogConfig>,
-    pub enable_vector_agent: bool,
 }
 
 /// Validates the logging configuration of every OPA container up-front.
@@ -137,7 +134,6 @@ fn validate_logging(
     Ok(ValidatedLogging {
         containers,
         vector_container,
-        enable_vector_agent: logging.enable_vector_agent,
     })
 }
 
@@ -275,7 +271,6 @@ mod tests {
     #[test]
     fn validate_logging_disabled_has_no_vector_container() {
         let validated = validate_logging(&logging(false), &None).expect("should validate");
-        assert!(!validated.enable_vector_agent);
         assert!(validated.vector_container.is_none());
     }
 
@@ -292,7 +287,6 @@ mod tests {
         let aggregator =
             Some(ConfigMapName::from_str("vector-aggregator-discovery").expect("valid name"));
         let validated = validate_logging(&logging(true), &aggregator).expect("should validate");
-        assert!(validated.enable_vector_agent);
         let vector = validated.vector_container.expect("vector container config");
         assert_eq!(
             vector.vector_aggregator_config_map_name.as_ref(),

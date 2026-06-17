@@ -32,7 +32,7 @@ pub fn build_discovery_config_map(
     cluster: &ValidatedCluster,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<ConfigMap> {
-    let (scheme, port) = if cluster.cluster_config.tls.is_some() {
+    let (scheme, port) = if cluster.is_tls_enabled() {
         ("https", APP_TLS_PORT)
     } else {
         ("http", APP_PORT)

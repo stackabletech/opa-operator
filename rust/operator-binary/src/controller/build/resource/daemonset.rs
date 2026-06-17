@@ -60,9 +60,7 @@ use stackable_operator::{
 
 use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
-    controller::{
-        OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig, build,
-    },
+    controller::{OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig, build},
     crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, user_info_fetcher},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
@@ -317,7 +315,7 @@ pub fn build_server_rolegroup_daemonset(
         .args(vec![build_opa_start_command(
             merged_config,
             opa_container_name.as_ref(),
-            cluster.cluster_config.tls.is_some(),
+            cluster.is_tls_enabled(),
             &rolegroup_config.cli_overrides,
         )])
         .add_env_vars(rolegroup_config.env_overrides.clone())
@@ -332,7 +330,7 @@ pub fn build_server_rolegroup_daemonset(
     // .spec.template.spec.containers[name="opa"].ports: duplicate entries for key [containerPort=8081,protocol="TCP"]
     //
     // So we don't do that
-    if cluster.cluster_config.tls.is_some() {
+    if cluster.is_tls_enabled() {
         cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
         cb_opa
             .add_volume_mount(TLS_VOLUME_NAME.as_ref(), TLS_STORE_DIR)
@@ -348,7 +346,7 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
-    let (probe_port_name, probe_scheme) = if cluster.cluster_config.tls.is_some() {
+    let (probe_port_name, probe_scheme) = if cluster.is_tls_enabled() {
         (service::APP_TLS_PORT_NAME, Some("HTTPS".to_string()))
     } else {
         (APP_PORT_NAME, Some("HTTP".to_string()))

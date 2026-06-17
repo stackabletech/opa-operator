@@ -42,8 +42,7 @@ pub mod validate;
 /// The validated [`v1alpha2::OpaCluster`].
 ///
 /// The output of the validate step: config fragments and `configOverrides` merged and validated
-/// for every role group, ready to be turned into Kubernetes resources without touching the raw
-/// `OpaCluster` spec again (except for owner references).
+/// for every role group.
 pub struct ValidatedCluster {
     /// Object metadata (name, namespace, UID) of the owning `OpaCluster`, built from the validated
     /// fields below. Lets [`ValidatedCluster`] implement [`KubeResource`] so the build steps can
@@ -81,6 +80,11 @@ impl ValidatedCluster {
             cluster_config,
             role_group_configs,
         }
+    }
+
+    /// Whether the cluster serves HTTPS, derived from the validated cluster config.
+    pub fn is_tls_enabled(&self) -> bool {
+        self.cluster_config.tls.is_some()
     }
 
     /// The name of the role-level load-balanced Kubernetes `Service`, as used in the discovery URL.
