@@ -97,7 +97,7 @@ mod tests {
             .next()
             .expect("the default role group should exist");
 
-        build_rolegroup_config_map(&validated, role_group_name, &rg.config, None)
+        build_rolegroup_config_map(&validated, role_group_name, rg, None)
             .expect("the config map should build")
     }
 

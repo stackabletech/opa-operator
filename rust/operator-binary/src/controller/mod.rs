@@ -6,9 +6,14 @@ use std::{collections::BTreeMap, str::FromStr};
 // Re-exported so the rest of the controller refers to `crate::controller::RoleGroupName`.
 pub use stackable_operator::v2::types::operator::RoleGroupName;
 use stackable_operator::{
-    commons::product_image_selection::ResolvedProductImage,
+    commons::{
+        affinity::StackableAffinity,
+        product_image_selection::ResolvedProductImage,
+        resources::{NoRuntimeLimits, Resources},
+    },
     kube::{Resource as KubeResource, api::ObjectMeta},
     kvp::Labels,
+    shared::time::Duration,
     v2::{
         HasName, HasUid, NameIsValidLabelValue,
         kvp::label::{recommended_labels, role_group_selector, role_selector},
@@ -25,8 +30,8 @@ use stackable_operator::{
 
 use crate::{
     crd::{
-        APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, user_info_fetcher,
-        v1alpha2,
+        APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig,
+        user_info_fetcher, v1alpha2,
     },
     opa_controller::OPA_CONTROLLER_NAME,
 };
@@ -49,7 +54,7 @@ pub struct ValidatedCluster {
     pub uid: Uid,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
-    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, ValidatedRoleGroup>>,
+    pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
 }
 
 impl ValidatedCluster {
@@ -59,7 +64,7 @@ impl ValidatedCluster {
         uid: Uid,
         image: ResolvedProductImage,
         cluster_config: ValidatedClusterConfig,
-        role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, ValidatedRoleGroup>>,
+        role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
     ) -> Self {
         let metadata = ObjectMeta {
             name: Some(name.to_string()),
@@ -205,19 +210,26 @@ pub struct ValidatedClusterConfig {
     pub listener_class: v1alpha2::CurrentlySupportedListenerClasses,
 }
 
-/// The validated configuration of a single role group.
-///
-/// All override kinds (`config`, `configOverrides`, `envOverrides`, `cliOverrides`, `podOverrides`)
-/// are merged once by [`with_validated_config`](stackable_operator::v2::role_utils::with_validated_config),
-/// with the role group winning over the role, which wins over the operator defaults.
-///
-/// Note: `replicas` is carried by the framework type but unused here — OPA runs as a `DaemonSet`
-/// (one Pod per node).
-pub type OpaRoleGroupConfig = RoleGroupConfig<OpaConfig, GenericCommonConfig, OpaConfigOverrides>;
+/// The validated, merged configuration of a single OPA role group.
+pub type OpaRoleGroupConfig =
+    RoleGroupConfig<ValidatedOpaConfig, GenericCommonConfig, OpaConfigOverrides>;
 
-/// A single validated role group: the merged [`OpaRoleGroupConfig`] plus its validated logging
-/// configuration (produced together by the validate step, so the build steps never re-validate).
-pub struct ValidatedRoleGroup {
-    pub config: OpaRoleGroupConfig,
+/// A validated OPA config: the merged [`OpaConfig`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct ValidatedOpaConfig {
+    pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
     pub logging: validate::ValidatedLogging,
+    pub affinity: StackableAffinity,
+    pub graceful_shutdown_timeout: Option<Duration>,
+}
+
+impl ValidatedOpaConfig {
+    pub(crate) fn from_merged(merged: OpaConfig, logging: validate::ValidatedLogging) -> Self {
+        Self {
+            resources: merged.resources,
+            logging,
+            affinity: merged.affinity,
+            graceful_shutdown_timeout: merged.graceful_shutdown_timeout,
+        }
+    }
 }

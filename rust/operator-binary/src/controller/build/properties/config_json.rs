@@ -3,13 +3,17 @@
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
-    product_logging::spec::{ContainerLogConfig, ContainerLogConfigChoice, LogLevel},
-    v2::config_overrides::JsonConfigOverrides,
+    product_logging::spec::LogLevel,
+    v2::{
+        config_overrides::JsonConfigOverrides,
+        product_logging::framework::ValidatedContainerLogConfigChoice,
+    },
 };
 
 use super::ConfigFileName;
 use crate::{
-    crd::{Container, OpaConfig, OpaConfigOverrides},
+    controller::ValidatedOpaConfig,
+    crd::{Container, OpaConfigOverrides},
     opa_controller::OPA_STACKABLE_SERVICE_NAME,
 };
 
@@ -29,12 +33,14 @@ pub enum Error {
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Builds the OPA `config.json` from the operator defaults and the merged user `configOverrides`.
-pub fn build(merged_config: &OpaConfig, config_overrides: &OpaConfigOverrides) -> Result<String> {
+pub fn build(
+    merged_config: &ValidatedOpaConfig,
+    config_overrides: &OpaConfigOverrides,
+) -> Result<String> {
     let mut decision_logging_enabled = DEFAULT_DECISION_LOGGING_ENABLED;
 
-    if let Some(ContainerLogConfig {
-        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config.logging.containers.get(&Container::Opa)
+    if let Some(ValidatedContainerLogConfigChoice::Automatic(log_config)) =
+        merged_config.logging.containers.get(&Container::Opa)
         && let Some(config) = log_config.loggers.get("decision")
     {
         decision_logging_enabled = config.level != LogLevel::NONE;
@@ -151,8 +157,7 @@ mod tests {
             .values()
             .next()
             .expect("the default role group should exist");
-        let rendered =
-            build(&rg.config.config, &rg.config.config_overrides).expect("config.json builds");
+        let rendered = build(&rg.config, &rg.config_overrides).expect("config.json builds");
         serde_json::from_str(&rendered).expect("config.json should be valid JSON")
     }
 

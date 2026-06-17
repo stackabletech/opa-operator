@@ -40,10 +40,7 @@ use stackable_operator::{
     product_logging::{
         self,
         framework::{create_vector_shutdown_file_command, remove_vector_shutdown_file_command},
-        spec::{
-            AppenderConfig, AutomaticContainerLogConfig, ContainerLogConfig,
-            ContainerLogConfigChoice, LogLevel,
-        },
+        spec::{AppenderConfig, AutomaticContainerLogConfig, LogLevel},
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
     v2::{
@@ -51,7 +48,9 @@ use stackable_operator::{
             meta::ownerreference_from_resource,
             pod::container::{EnvVarSet, new_container_builder},
         },
-        product_logging::framework::{STACKABLE_LOG_DIR, vector_container},
+        product_logging::framework::{
+            STACKABLE_LOG_DIR, ValidatedContainerLogConfigChoice, vector_container,
+        },
         types::{
             common::Port,
             kubernetes::{ContainerName, VolumeName},
@@ -61,8 +60,10 @@ use stackable_operator::{
 
 use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
-    controller::{RoleGroupName, ValidatedCluster, ValidatedRoleGroup, build},
-    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaConfig, user_info_fetcher},
+    controller::{
+        OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig, build,
+    },
+    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, user_info_fetcher},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
 
@@ -237,14 +238,14 @@ fn http_liveness_probe(path: &str, port: IntOrString, scheme: Option<String>) ->
 pub fn build_server_rolegroup_daemonset(
     cluster: &ValidatedCluster,
     role_group_name: &RoleGroupName,
-    role_group: &ValidatedRoleGroup,
+    role_group: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     service_account: &ServiceAccount,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let resolved_product_image = &cluster.image;
-    let rolegroup_config = &role_group.config;
+    let rolegroup_config = role_group;
     // All overrides were already merged (role group over role over defaults) in the validate step.
     let merged_config = &rolegroup_config.config;
 
@@ -567,7 +568,7 @@ pub fn build_server_rolegroup_daemonset(
 
     // The Vector logging config was validated up-front (see `ValidatedLogging`); a `Some` here means
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
-    if let Some(vector_log_config) = &role_group.logging.vector_container {
+    if let Some(vector_log_config) = &merged_config.logging.vector_container {
         pb.add_container(vector_container(
             &container_name(&Container::Vector),
             resolved_product_image,
@@ -661,7 +662,7 @@ fn add_stackable_rust_cli_env_vars(
 }
 
 fn build_opa_start_command(
-    merged_config: &OpaConfig,
+    merged_config: &ValidatedOpaConfig,
     container_name: &str,
     tls_enabled: bool,
     cli_overrides: &BTreeMap<String, String>,
@@ -671,9 +672,8 @@ fn build_opa_start_command(
     let mut server_log_level = DEFAULT_SERVER_LOG_LEVEL;
     let mut decision_log_level = DEFAULT_DECISION_LOG_LEVEL;
 
-    if let Some(ContainerLogConfig {
-        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config.logging.containers.get(&Container::Opa)
+    if let Some(ValidatedContainerLogConfigChoice::Automatic(log_config)) =
+        merged_config.logging.containers.get(&Container::Opa)
     {
         if let Some(AppenderConfig {
             level: Some(log_level),
@@ -749,14 +749,15 @@ fn build_opa_start_command(
     }
 }
 
-fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name: &str) -> String {
+fn build_bundle_builder_start_command(
+    merged_config: &ValidatedOpaConfig,
+    container_name: &str,
+) -> String {
     let mut console_logging_off = false;
 
     // We need to check if the console logging is deactivated (NONE)
     // This will result in not using `tee` later on in the start command
-    if let Some(ContainerLogConfig {
-        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config
+    if let Some(ValidatedContainerLogConfigChoice::Automatic(log_config)) = merged_config
         .logging
         .containers
         .get(&Container::BundleBuilder)
@@ -812,12 +813,11 @@ fn build_bundle_builder_start_command(merged_config: &OpaConfig, container_name:
 ///
 /// Context: https://docs.stackable.tech/home/stable/concepts/logging/
 fn sidecar_container_log_level(
-    merged_config: &OpaConfig,
+    merged_config: &ValidatedOpaConfig,
     sidecar_container: &Container,
 ) -> build::properties::product_logging::BundleBuilderLogLevel {
-    if let Some(ContainerLogConfig {
-        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config.logging.containers.get(sidecar_container)
+    if let Some(ValidatedContainerLogConfigChoice::Automatic(log_config)) =
+        merged_config.logging.containers.get(sidecar_container)
         && let Some(logger) = log_config
             .loggers
             .get(AutomaticContainerLogConfig::ROOT_LOGGER)
@@ -828,11 +828,13 @@ fn sidecar_container_log_level(
     build::properties::product_logging::BundleBuilderLogLevel::Info
 }
 
-fn build_prepare_start_command(merged_config: &OpaConfig, container_name: &str) -> Vec<String> {
+fn build_prepare_start_command(
+    merged_config: &ValidatedOpaConfig,
+    container_name: &str,
+) -> Vec<String> {
     let mut prepare_container_args = vec![];
-    if let Some(ContainerLogConfig {
-        choice: Some(ContainerLogConfigChoice::Automatic(log_config)),
-    }) = merged_config.logging.containers.get(&Container::Prepare)
+    if let Some(ValidatedContainerLogConfigChoice::Automatic(log_config)) =
+        merged_config.logging.containers.get(&Container::Prepare)
     {
         prepare_container_args.push(product_logging::framework::capture_shell_output(
             STACKABLE_LOG_DIR,

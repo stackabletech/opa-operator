@@ -216,6 +216,7 @@ pub async fn reconcile_opa(
         // The static Vector agent config (`vector.yaml`) is added to the rolegroup ConfigMap only
         // when the Vector agent is enabled for this role group.
         let vector_config = rolegroup
+            .config
             .logging
             .vector_container
             .as_ref()
@@ -224,7 +225,7 @@ pub async fn reconcile_opa(
         let rg_configmap = build::resource::config_map::build_rolegroup_config_map(
             &validated_cluster,
             rolegroup_name,
-            &rolegroup.config,
+            rolegroup,
             vector_config,
         )
         .with_context(|_| BuildRoleGroupConfigSnafu {

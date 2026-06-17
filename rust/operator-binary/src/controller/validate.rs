@@ -16,7 +16,8 @@ use stackable_operator::{
         builder::pod::container::{EnvVarName, EnvVarSet},
         controller_utils::{get_cluster_name, get_namespace, get_uid},
         product_logging::framework::{
-            VectorContainerLogConfig, validate_logging_configuration_for_container,
+            ValidatedContainerLogConfigChoice, VectorContainerLogConfig,
+            validate_logging_configuration_for_container,
         },
         role_utils::with_validated_config,
         types::{kubernetes::ConfigMapName, operator::RoleGroupName},
@@ -24,7 +25,9 @@ use stackable_operator::{
 };
 use strum::IntoEnumIterator;
 
-use super::{OpaRoleGroupConfig, ValidatedCluster, ValidatedClusterConfig, ValidatedRoleGroup};
+use super::{
+    OpaRoleGroupConfig, ValidatedCluster, ValidatedClusterConfig, ValidatedOpaConfig,
+};
 use crate::crd::{Container, OpaConfig, OpaRole, v1alpha2};
 
 #[derive(Snafu, Debug)]
@@ -87,19 +90,37 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 /// resource-build time.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedLogging {
+    /// The validated log config choice of every OPA container except [`Container::Vector`], whose
+    /// validated config lives in `vector_container` (it also carries the aggregator discovery
+    /// ConfigMap name).
+    pub containers: BTreeMap<Container, ValidatedContainerLogConfigChoice>,
     /// The validated Vector container config, or `None` when the Vector agent is disabled.
     pub vector_container: Option<VectorContainerLogConfig>,
     pub enable_vector_agent: bool,
 }
 
-/// Validates the logging configuration for the (optional) Vector container of a role group.
+/// Validates the logging configuration of every OPA container up-front.
 ///
-/// `vector_aggregator_config_map_name` is the discovery ConfigMap name of the Vector aggregator;
-/// it is required (and validated) only when the Vector agent is enabled.
+/// Each non-Vector container's log config choice is validated into the `containers` map (so a
+/// custom log ConfigMap name is parsed and checked during validation). The Vector container is
+/// validated separately into `vector_container`, which is only present — and whose
+/// `vector_aggregator_config_map_name` is only required (and validated) — when the Vector agent is
+/// enabled.
 fn validate_logging(
     logging: &Logging<Container>,
     vector_aggregator_config_map_name: &Option<ConfigMapName>,
 ) -> Result<ValidatedLogging> {
+    let mut containers = BTreeMap::new();
+    for container in Container::iter() {
+        // The Vector container is handled separately (see `vector_container` below).
+        if container == Container::Vector {
+            continue;
+        }
+        let validated = validate_logging_configuration_for_container(logging, &container)
+            .context(ValidateLoggingConfigSnafu)?;
+        containers.insert(container, validated);
+    }
+
     let vector_container = if logging.enable_vector_agent {
         let vector_aggregator_config_map_name = vector_aggregator_config_map_name
             .clone()
@@ -114,6 +135,7 @@ fn validate_logging(
     };
 
     Ok(ValidatedLogging {
+        containers,
         vector_container,
         enable_vector_agent: logging.enable_vector_agent,
     })
@@ -191,20 +213,15 @@ pub fn validate(
 
             group_configs.insert(
                 role_group_name,
-                ValidatedRoleGroup {
-                    config: OpaRoleGroupConfig {
-                        // Unused for a DaemonSet, but the framework type requires it.
-                        replicas: merged.replicas,
-                        config: merged.config.config,
-                        config_overrides: merged.config.config_overrides,
-                        env_overrides,
-                        cli_overrides: merged.config.cli_overrides,
-                        pod_overrides: merged.config.pod_overrides,
-                        product_specific_common_config: merged
-                            .config
-                            .product_specific_common_config,
-                    },
-                    logging,
+                OpaRoleGroupConfig {
+                    // Unused for a DaemonSet, but the framework type requires it.
+                    replicas: merged.replicas,
+                    config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
+                    config_overrides: merged.config.config_overrides,
+                    env_overrides,
+                    cli_overrides: merged.config.cli_overrides,
+                    pod_overrides: merged.config.pod_overrides,
+                    product_specific_common_config: merged.config.product_specific_common_config,
                 },
             );
         }
@@ -234,20 +251,24 @@ mod tests {
 
     use super::*;
 
-    /// A [`Logging`] with a single (automatic) Vector container log config, as the build step
-    /// expects when the Vector agent is enabled.
+    /// A [`Logging`] with an automatic log config for every container, as the (defaulted) merged
+    /// config provides at runtime. `validate_logging` validates all containers, so all must be
+    /// present.
     fn logging(enable_vector_agent: bool) -> Logging<Container> {
         Logging {
             enable_vector_agent,
-            containers: [(
-                Container::Vector,
-                ContainerLogConfig {
-                    choice: Some(ContainerLogConfigChoice::Automatic(
-                        AutomaticContainerLogConfig::default(),
-                    )),
-                },
-            )]
-            .into(),
+            containers: Container::iter()
+                .map(|container| {
+                    (
+                        container,
+                        ContainerLogConfig {
+                            choice: Some(ContainerLogConfigChoice::Automatic(
+                                AutomaticContainerLogConfig::default(),
+                            )),
+                        },
+                    )
+                })
+                .collect(),
         }
     }
 
