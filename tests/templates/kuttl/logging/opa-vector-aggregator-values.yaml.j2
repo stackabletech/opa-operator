@@ -28,33 +28,33 @@ customConfig:
       type: filter
       inputs: [validEvents]
       condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log") &&
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "opa" &&
         .logger == "decision"
     filteredAutomaticLogConfigServerOpa:
       type: filter
       inputs: [validEvents]
       condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log") &&
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "opa" &&
         .logger != "decision"
     filteredAutomaticLogConfigServerBundleBuilder:
       type: filter
       inputs: [validEvents]
       condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log") &&
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "bundle-builder"
     filteredAutomaticLogConfigServerVector:
       type: filter
       inputs: [validEvents]
       condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log") &&
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "vector"
     filteredAutomaticLogConfigServerPrepare:
       type: filter
       inputs: [validEvents]
       condition: >-
-        starts_with(string!(.pod), "test-opa-server-automatic-log") &&
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "prepare"
     filteredInvalidEvents:
       type: filter

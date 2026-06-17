@@ -3,13 +3,13 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 timeout: 600
 commands:
-  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-from-role --timeout 600s
-  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-from-role-group --timeout 600s
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role --timeout 600s
+  - script: kubectl -n $NAMESPACE rollout status daemonset opa-server-resources-from-role-group --timeout 600s
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: opa-server-from-role
+  name: opa-server-resources-from-role
 spec:
   template:
     spec:
@@ -30,7 +30,7 @@ spec:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: opa-server-from-role-group
+  name: opa-server-resources-from-role-group
 spec:
   template:
     spec:
@@ -51,7 +51,7 @@ spec:
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: opa-server-pod-overrides
+  name: opa-server-resources-from-pod-overrides
 spec:
   template:
     spec:
