@@ -12,7 +12,7 @@ use stackable_operator::{
 
 use super::ConfigFileName;
 use crate::{
-    controller::ValidatedOpaConfig,
+    controller::{ValidatedOpaConfig, build::BUNDLE_BUILDER_PORT},
     crd::{Container, OpaConfigOverrides},
     opa_controller::OPA_STACKABLE_SERVICE_NAME,
 };
@@ -20,6 +20,10 @@ use crate::{
 /// Decision logging is disabled by default. It is enabled when the `decision` logger is set to a
 /// level other than `NONE`.
 const DEFAULT_DECISION_LOGGING_ENABLED: bool = false;
+
+/// Default delays OPA uses when long-polling the bundle-builder for new bundles.
+const DEFAULT_BUNDLE_POLLING_MIN_DELAY_SECONDS: i32 = 10;
+const DEFAULT_BUNDLE_POLLING_MAX_DELAY_SECONDS: i32 = 20;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -84,7 +88,7 @@ impl OpaClusterConfigFile {
         Self {
             services: vec![OpaClusterConfigService {
                 name: OPA_STACKABLE_SERVICE_NAME.to_owned(),
-                url: "http://localhost:3030/opa/v1".to_owned(),
+                url: format!("http://localhost:{BUNDLE_BUILDER_PORT}/opa/v1"),
             }],
             bundles: OpaClusterBundle {
                 stackable: OpaClusterBundleConfig {
@@ -92,8 +96,8 @@ impl OpaClusterConfigFile {
                     resource: "opa/bundle.tar.gz".to_owned(),
                     persist: true,
                     polling: OpaClusterBundleConfigPolling {
-                        min_delay_seconds: 10,
-                        max_delay_seconds: 20,
+                        min_delay_seconds: DEFAULT_BUNDLE_POLLING_MIN_DELAY_SECONDS,
+                        max_delay_seconds: DEFAULT_BUNDLE_POLLING_MAX_DELAY_SECONDS,
                     },
                 },
             },

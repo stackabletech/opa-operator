@@ -218,8 +218,11 @@ pub mod versioned {
     }
 }
 
+/// Default time-to-live for cached user metadata.
+pub(crate) const DEFAULT_CACHE_ENTRY_TIME_TO_LIVE: Duration = Duration::from_minutes_unchecked(1);
+
 const fn default_entry_time_to_live() -> Duration {
-    Duration::from_minutes_unchecked(1)
+    DEFAULT_CACHE_ENTRY_TIME_TO_LIVE
 }
 
 fn default_root_path() -> String {

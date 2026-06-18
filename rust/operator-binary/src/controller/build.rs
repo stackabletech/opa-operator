@@ -3,10 +3,15 @@
 
 use std::str::FromStr;
 
+use stackable_operator::v2::types::common::Port;
+
 use crate::controller::RoleGroupName;
 
 pub mod properties;
 pub mod resource;
+
+/// The port the bundle-builder sidecar listens on, and which OPA connects to for bundle polling.
+pub(crate) const BUNDLE_BUILDER_PORT: Port = Port(3030);
 
 // Placeholder role-group name for the recommended labels of the role-level `Service`, which is not
 // bound to a single role group. `global` matches the historical `app.kubernetes.io/role-group`

@@ -30,7 +30,7 @@ use stackable_operator::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
                 EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
-                SecretVolumeSource, ServiceAccount,
+                ResourceRequirements, SecretVolumeSource, ServiceAccount,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -48,10 +48,7 @@ use stackable_operator::{
         product_logging::framework::{
             STACKABLE_LOG_DIR, ValidatedContainerLogConfigChoice, vector_container,
         },
-        types::{
-            common::Port,
-            kubernetes::{ContainerName, VolumeName},
-        },
+        types::kubernetes::{ContainerName, VolumeName},
     },
 };
 
@@ -62,12 +59,9 @@ use crate::{
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
 
-pub const CONFIG_FILE: &str = "config.json";
-
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
-pub const BUNDLE_BUILDER_PORT: Port = Port(3030);
 
 stackable_operator::constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
 const CONFIG_DIR: &str = "/stackable/config";
@@ -181,6 +175,16 @@ fn container_name(container: &Container) -> ContainerName {
         .expect("Container enum variants are valid container names")
 }
 
+/// The CPU and memory requests/limits shared by the bundle-builder and user-info-fetcher sidecars.
+fn sidecar_resource_requirements() -> ResourceRequirements {
+    ResourceRequirementsBuilder::new()
+        .with_cpu_request("100m")
+        .with_cpu_limit("200m")
+        .with_memory_request("128Mi")
+        .with_memory_limit("128Mi")
+        .build()
+}
+
 /// The strict-mode `bash` entrypoint shared by the prepare, bundle-builder, and OPA containers.
 /// The actual script is passed via `.args(...)`.
 fn bash_entrypoint_command() -> Vec<String> {
@@ -281,22 +285,15 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
         .context(AddVolumeMountSnafu)?
-        .resources(
-            ResourceRequirementsBuilder::new()
-                .with_cpu_request("100m")
-                .with_cpu_limit("200m")
-                .with_memory_request("128Mi")
-                .with_memory_limit("128Mi")
-                .build(),
-        )
+        .resources(sidecar_resource_requirements())
         .readiness_probe(http_readiness_probe(
             BUNDLE_BUILDER_PROBE_PATH,
-            IntOrString::Int(BUNDLE_BUILDER_PORT.into()),
+            IntOrString::Int(build::BUNDLE_BUILDER_PORT.into()),
             None,
         ))
         .liveness_probe(http_liveness_probe(
             BUNDLE_BUILDER_PROBE_PATH,
-            IntOrString::Int(BUNDLE_BUILDER_PORT.into()),
+            IntOrString::Int(build::BUNDLE_BUILDER_PORT.into()),
             None,
         ));
     add_stackable_rust_cli_env_vars(
@@ -444,18 +441,17 @@ pub fn build_server_rolegroup_daemonset(
             .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
             .image(user_info_fetcher_image) // ...override the image
             .command(vec!["stackable-opa-user-info-fetcher".to_string()])
-            .add_env_var("CONFIG", format!("{CONFIG_DIR}/user-info-fetcher.json"))
+            .add_env_var(
+                "CONFIG",
+                format!(
+                    "{CONFIG_DIR}/{file}",
+                    file = build::properties::ConfigFileName::UserInfoFetcher
+                ),
+            )
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
             .context(AddVolumeMountSnafu)?
-            .resources(
-                ResourceRequirementsBuilder::new()
-                    .with_cpu_request("100m")
-                    .with_cpu_limit("200m")
-                    .with_memory_request("128Mi")
-                    .with_memory_limit("128Mi")
-                    .build(),
-            );
+            .resources(sidecar_resource_requirements());
         add_stackable_rust_cli_env_vars(
             &mut cb_user_info_fetcher,
             cluster_info,
@@ -722,13 +718,15 @@ fn build_opa_start_command(
         .collect::<Vec<_>>()
         .join(" ");
 
+    let config_file = build::properties::ConfigFileName::ConfigJson;
+
     // TODO: Think about adding --shutdown-wait-period, as suggested by https://github.com/open-policy-agent/opa/issues/2764
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
         containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
-        opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{CONFIG_FILE} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
+        opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{config_file} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
         ",
