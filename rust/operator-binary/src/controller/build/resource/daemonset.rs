@@ -44,10 +44,7 @@ use stackable_operator::{
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
     v2::{
-        builder::{
-            meta::ownerreference_from_resource,
-            pod::container::{EnvVarSet, new_container_builder},
-        },
+        builder::pod::container::{EnvVarSet, new_container_builder},
         product_logging::framework::{
             STACKABLE_LOG_DIR, ValidatedContainerLogConfigChoice, vector_container,
         },
@@ -583,19 +580,17 @@ pub fn build_server_rolegroup_daemonset(
     let mut pod_template = pb.build_template();
     pod_template.merge_from(rolegroup_config.pod_overrides.clone());
 
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(cluster)
-        // TODO(@maltesander): `ResourceNames` has no `DaemonSet` helper (OPA is the only DaemonSet operator), so the
-        // (identical) qualified role-group name backing the `StatefulSet` name is reused.
-        // Should be replaced with upstream fix.
-        .name(
+    // TODO(@maltesander): `ResourceNames` has no `DaemonSet` helper (OPA is the only DaemonSet operator), so the
+    // (identical) qualified role-group name backing the `StatefulSet` name is reused.
+    // Should be replaced with upstream fix.
+    let metadata = cluster
+        .object_meta(
             cluster
                 .resource_names(role_group_name)
                 .stateful_set_name()
                 .to_string(),
+            role_group_name,
         )
-        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
     let daemonset_spec = DaemonSetSpec {

@@ -3,10 +3,8 @@
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
-    builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
-    k8s_openapi::api::core::v1::ConfigMap,
+    builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
     product_logging::framework::VECTOR_CONFIG_FILE,
-    v2::builder::meta::ownerreference_from_resource,
 };
 
 use crate::controller::{
@@ -44,16 +42,14 @@ pub fn build_rolegroup_config_map(
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(cluster)
-        .name(
+    let metadata = cluster
+        .object_meta(
             cluster
                 .resource_names(role_group_name)
                 .role_group_config_map()
                 .to_string(),
+            role_group_name,
         )
-        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
     cm_builder.metadata(metadata).add_data(

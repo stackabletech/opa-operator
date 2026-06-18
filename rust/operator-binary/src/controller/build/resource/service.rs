@@ -1,10 +1,9 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use stackable_operator::{
-    builder::meta::ObjectMetaBuilder,
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
     kvp::{Annotations, Labels},
-    v2::{builder::meta::ownerreference_from_resource, types::common::Port},
+    v2::types::common::Port,
 };
 
 use crate::controller::{RoleGroupName, ValidatedCluster};
@@ -25,16 +24,16 @@ fn role_level_role_group_name() -> RoleGroupName {
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
 pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(cluster)
-        .name(cluster.server_role_service_name())
-        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(&role_level_role_group_name()))
+    let metadata = cluster
+        .object_meta(
+            cluster.server_role_service_name(),
+            &role_level_role_group_name(),
+        )
         .build();
 
     let service_spec = ServiceSpec {
         type_: Some(cluster.cluster_config.listener_class.k8s_service_type()),
-        ports: Some(data_service_ports(cluster.cluster_config.tls.is_some())),
+        ports: Some(data_service_ports(cluster.is_tls_enabled())),
         selector: Some(cluster.role_selector().into()),
         // This ensures that products (e.g. Trino) on a node always talk to the OPA pod on the
         // same node, avoiding cross-node latency. The downside is that if the local OPA pod is
@@ -60,16 +59,14 @@ pub(crate) fn build_rolegroup_headless_service(
     cluster: &ValidatedCluster,
     role_group_name: &RoleGroupName,
 ) -> Service {
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(cluster)
-        .name(
+    let metadata = cluster
+        .object_meta(
             cluster
                 .resource_names(role_group_name)
                 .headless_service_name()
                 .to_string(),
+            role_group_name,
         )
-        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(role_group_name))
         .build();
 
     // Currently we don't offer listener-exposition of OPA mostly due to security concerns.
@@ -80,7 +77,7 @@ pub(crate) fn build_rolegroup_headless_service(
     // Note: We have kind of similar situations for HMS and Zookeeper, as the authentication
     // options there are non-existent (mTLS still opens plain port) or suck (Kerberos).
     let service_spec = headless_cluster_ip_service_spec(
-        data_service_ports(cluster.cluster_config.tls.is_some()),
+        data_service_ports(cluster.is_tls_enabled()),
         cluster.role_group_selector(role_group_name).into(),
         true,
     );
@@ -114,17 +111,15 @@ pub(crate) fn build_rolegroup_metrics_service(
     cluster: &ValidatedCluster,
     role_group_name: &RoleGroupName,
 ) -> Service {
-    let tls_enabled = cluster.cluster_config.tls.is_some();
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(cluster)
-        .name(
+    let tls_enabled = cluster.is_tls_enabled();
+    let metadata = cluster
+        .object_meta(
             cluster
                 .resource_names(role_group_name)
                 .metrics_service_name()
                 .to_string(),
+            role_group_name,
         )
-        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(role_group_name))
         .with_labels(prometheus_labels())
         .with_annotations(prometheus_annotations(tls_enabled))
         .build();

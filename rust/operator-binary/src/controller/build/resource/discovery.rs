@@ -7,10 +7,8 @@ use std::str::FromStr;
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
-    builder::{configmap::ConfigMapBuilder, meta::ObjectMetaBuilder},
-    k8s_openapi::api::core::v1::ConfigMap,
+    builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
     utils::cluster_info::KubernetesClusterInfo,
-    v2::builder::meta::ownerreference_from_resource,
 };
 
 use super::service::{APP_PORT, APP_TLS_PORT};
@@ -47,12 +45,11 @@ pub fn build_discovery_config_map(
 
     // Discovery is a cluster-level object (named after the cluster); `discovery` is used as a
     // placeholder role-group name for the recommended labels.
-    let metadata = ObjectMetaBuilder::new()
-        .name_and_namespace(cluster)
-        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(
+    let metadata = cluster
+        .object_meta(
+            cluster.name.to_string(),
             &RoleGroupName::from_str("discovery").expect("'discovery' is a valid role group name"),
-        ))
+        )
         .build();
 
     let mut cm_builder = ConfigMapBuilder::new();
