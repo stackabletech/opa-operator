@@ -164,8 +164,6 @@ pub async fn reconcile_opa(
 
     let client = &ctx.client;
 
-    // NOTE(@maltesander): There currently is no dereference (client required) step for OPA.
-    // validate (no client required)
     let validated_cluster =
         validate::validate(opa, &ctx.operator_environment).context(ValidateClusterSnafu)?;
 

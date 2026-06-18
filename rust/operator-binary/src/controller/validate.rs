@@ -142,7 +142,6 @@ pub fn validate(
     opa: &v1alpha2::OpaCluster,
     operator_environment: &OperatorEnvironmentOptions,
 ) -> Result<ValidatedCluster> {
-    // Wrap the metadata in fail-safe v2 types so the build steps never have to re-check it.
     let name = get_cluster_name(opa).context(GetClusterNameSnafu)?;
     let namespace = get_namespace(opa).context(GetNamespaceSnafu)?;
     let uid = get_uid(opa).context(GetUidSnafu)?;
@@ -182,8 +181,8 @@ pub fn validate(
                     },
                 )?;
 
-            // The framework keeps `envOverrides` as a `HashMap<String, String>`; lift it into the
-            // type-safe `EnvVarSet` consumed by the build step.
+            // `envOverrides` is kept as a `HashMap<String, String>`; lift it into the type-safe
+            // `EnvVarSet` consumed by the build step.
             let mut env_overrides = EnvVarSet::new();
             for (name, value) in merged.config.env_overrides {
                 env_overrides = env_overrides.with_value(
@@ -200,8 +199,8 @@ pub fn validate(
                 &vector_aggregator_config_map_name,
             )?;
 
-            // Validate the role group name against the upstream `RoleGroupName` newtype (RFC 1123
-            // label, length-bounded) so the typed key is guaranteed to produce valid resource names.
+            // Validate the role group name against the `RoleGroupName` newtype (RFC 1123 label,
+            // length-bounded) so the typed key is guaranteed to produce valid resource names.
             let role_group_name =
                 RoleGroupName::from_str(role_group_name).context(ParseRoleGroupNameSnafu {
                     role_group: role_group_name.clone(),
@@ -210,7 +209,7 @@ pub fn validate(
             group_configs.insert(
                 role_group_name,
                 OpaRoleGroupConfig {
-                    // Unused for a DaemonSet, but the framework type requires it.
+                    // Unused for a DaemonSet, but the `RoleGroupConfig` type requires it.
                     replicas: merged.replicas,
                     config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
                     config_overrides: merged.config.config_overrides,

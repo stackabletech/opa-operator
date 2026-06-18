@@ -6,8 +6,8 @@ pub mod user_info_fetcher;
 
 /// The names of the config files assembled into the rolegroup `ConfigMap`.
 ///
-/// The Vector config file is intentionally not listed here; like in hdfs it is added via the
-/// `stackable_operator::product_logging::framework::VECTOR_CONFIG_FILE` constant.
+/// The Vector config file is intentionally not listed here; it is added separately via the
+/// `VECTOR_CONFIG_FILE` constant.
 #[derive(Clone, Copy, Debug, strum::Display)]
 pub enum ConfigFileName {
     #[strum(serialize = "config.json")]

@@ -37,8 +37,6 @@ pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_mi
 /// Safety puffer to guarantee the graceful shutdown works every time.
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
 
-// The 4th generic (`CommonConfig`) is the v2 `GenericCommonConfig`, which implements `Merge`.
-// This lets us merge role groups via the upstream `v2::role_utils::with_validated_config`.
 pub type OpaRoleType =
     Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig, GenericCommonConfig>;
 
