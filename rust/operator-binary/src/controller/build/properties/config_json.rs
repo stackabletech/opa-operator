@@ -1,6 +1,6 @@
 //! Builds the OPA `config.json` file.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     product_logging::spec::LogLevel,
@@ -74,8 +74,8 @@ pub fn build(
     })
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct OpaClusterConfigFile {
+#[derive(Serialize)]
+struct OpaClusterConfigFile {
     services: Vec<OpaClusterConfigService>,
     bundles: OpaClusterBundle,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -84,7 +84,7 @@ pub struct OpaClusterConfigFile {
 }
 
 impl OpaClusterConfigFile {
-    pub fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
+    fn new(decision_logging: Option<OpaClusterConfigDecisionLog>) -> Self {
         Self {
             services: vec![OpaClusterConfigService {
                 name: OPA_STACKABLE_SERVICE_NAME.to_owned(),
@@ -109,18 +109,18 @@ impl OpaClusterConfigFile {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct OpaClusterConfigService {
     name: String,
     url: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct OpaClusterBundle {
     stackable: OpaClusterBundleConfig,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct OpaClusterBundleConfig {
     service: String,
     resource: String,
@@ -128,18 +128,18 @@ struct OpaClusterBundleConfig {
     polling: OpaClusterBundleConfigPolling,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct OpaClusterBundleConfigPolling {
     min_delay_seconds: i32,
     max_delay_seconds: i32,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct OpaClusterConfigDecisionLog {
+#[derive(Serialize)]
+struct OpaClusterConfigDecisionLog {
     console: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct OpaClusterConfigStatus {
     prometheus: bool,
 }
