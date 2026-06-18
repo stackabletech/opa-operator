@@ -1,10 +1,4 @@
 //! Builds the discovery [`ConfigMap`] clients use to connect to an `OpaCluster`.
-//!
-//! The content comes entirely from the [`ValidatedCluster`] (plus the externally-resolved role
-//! service and `cluster_info`).
-
-use std::str::FromStr;
-
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
@@ -12,7 +6,7 @@ use stackable_operator::{
 };
 
 use super::service::{APP_PORT, APP_TLS_PORT};
-use crate::controller::{RoleGroupName, ValidatedCluster};
+use crate::controller::{ValidatedCluster, build::PLACEHOLDER_DISCOVERY_ROLE_GROUP};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -46,10 +40,7 @@ pub fn build_discovery_config_map(
     // Discovery is a cluster-level object (named after the cluster); `discovery` is used as a
     // placeholder role-group name for the recommended labels.
     let metadata = cluster
-        .object_meta(
-            cluster.name.to_string(),
-            &RoleGroupName::from_str("discovery").expect("'discovery' is a valid role group name"),
-        )
+        .object_meta(cluster.name.to_string(), &PLACEHOLDER_DISCOVERY_ROLE_GROUP)
         .build();
 
     let mut cm_builder = ConfigMapBuilder::new();

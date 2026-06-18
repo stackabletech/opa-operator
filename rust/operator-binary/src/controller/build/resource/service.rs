@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::collections::BTreeMap;
 
 use stackable_operator::{
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
@@ -6,7 +6,9 @@ use stackable_operator::{
     v2::types::common::Port,
 };
 
-use crate::controller::{RoleGroupName, ValidatedCluster};
+use crate::controller::{
+    RoleGroupName, ValidatedCluster, build::PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP,
+};
 
 pub const APP_PORT: Port = Port(8081);
 pub const APP_TLS_PORT: Port = Port(8443);
@@ -14,20 +16,13 @@ pub const APP_PORT_NAME: &str = "http";
 pub const APP_TLS_PORT_NAME: &str = "https";
 pub const METRICS_PORT_NAME: &str = "metrics";
 
-/// The role-level `Service` and the discovery `ConfigMap` are not bound to a single role group, but
-/// the recommended labels require one. `global` is used as a placeholder, matching the historical
-/// `app.kubernetes.io/role-group` value.
-fn role_level_role_group_name() -> RoleGroupName {
-    RoleGroupName::from_str("global").expect("'global' is a valid role group name")
-}
-
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
 pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
     let metadata = cluster
         .object_meta(
             cluster.server_role_service_name(),
-            &role_level_role_group_name(),
+            &PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP,
         )
         .build();
 
