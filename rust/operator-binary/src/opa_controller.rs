@@ -200,7 +200,7 @@ pub async fn reconcile_opa(
         build_rbac_resources(opa, APP_NAME, required_labels).context(BuildRbacResourcesSnafu)?;
 
     let rbac_sa = cluster_resources
-        .add(client, rbac_sa.clone())
+        .add(client, rbac_sa)
         .await
         .context(ApplyServiceAccountSnafu)?;
     cluster_resources

@@ -142,6 +142,11 @@ pub enum Error {
         source: stackable_operator::builder::pod::container::Error,
     },
 
+    #[snafu(display("failed to convert the User Info Fetcher Kerberos SecretClass into a volume"))]
+    ConvertUserInfoFetcherKerberosSecretClassVolume {
+        source: stackable_operator::commons::secret_class::SecretClassVolumeError,
+    },
+
     #[snafu(display(
         "failed to build volume or volume mount spec for the User Info Fetcher TLS config"
     ))]
@@ -478,7 +483,7 @@ pub fn build_server_rolegroup_daemonset(
                         // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
-                    .unwrap(),
+                    .context(ConvertUserInfoFetcherKerberosSecretClassVolumeSnafu)?,
                 )
                 .context(UserInfoFetcherKerberosVolumeSnafu)?;
                 cb_user_info_fetcher
@@ -834,12 +839,10 @@ fn build_prepare_start_command(
         ));
     }
 
-    prepare_container_args.push(format!("echo \"Create dir [{BUNDLES_ACTIVE_DIR}]\""));
-    prepare_container_args.push(format!("mkdir -p {BUNDLES_ACTIVE_DIR}"));
-    prepare_container_args.push(format!("echo \"Create dir [{BUNDLES_INCOMING_DIR}]\""));
-    prepare_container_args.push(format!("mkdir -p {BUNDLES_INCOMING_DIR}"));
-    prepare_container_args.push(format!("echo \"Create dir [{BUNDLES_TMP_DIR}]\""));
-    prepare_container_args.push(format!("mkdir -p {BUNDLES_TMP_DIR}"));
+    for dir in [BUNDLES_ACTIVE_DIR, BUNDLES_INCOMING_DIR, BUNDLES_TMP_DIR] {
+        prepare_container_args.push(format!("echo \"Create dir [{dir}]\""));
+        prepare_container_args.push(format!("mkdir -p {dir}"));
+    }
 
     prepare_container_args
 }
