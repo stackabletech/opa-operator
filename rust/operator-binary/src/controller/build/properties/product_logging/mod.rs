@@ -47,4 +47,21 @@ mod tests {
         assert!(content.contains("files_opa_json"));
         assert!(content.contains("files_tracing_rs"));
     }
+
+    #[test]
+    fn bundle_builder_log_level_maps_and_renders_uppercase() {
+        // The sidecar only understands these five levels, so FATAL and NONE collapse onto ERROR.
+        let cases = [
+            (LogLevel::TRACE, "TRACE"),
+            (LogLevel::DEBUG, "DEBUG"),
+            (LogLevel::INFO, "INFO"),
+            (LogLevel::WARN, "WARN"),
+            (LogLevel::ERROR, "ERROR"),
+            (LogLevel::FATAL, "ERROR"),
+            (LogLevel::NONE, "ERROR"),
+        ];
+        for (level, expected) in cases {
+            assert_eq!(BundleBuilderLogLevel::from(level).to_string(), expected);
+        }
+    }
 }

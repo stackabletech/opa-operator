@@ -292,4 +292,24 @@ mod tests {
             Some("8081")
         );
     }
+
+    #[test]
+    fn metrics_service_uses_https_scheme_and_port_with_tls() {
+        let cluster = cluster(true);
+        let rg = default_role_group(&cluster);
+        let service = build_rolegroup_metrics_service(&cluster, &rg);
+
+        // The metrics endpoint follows the data port, so it serves on the HTTPS port over `https`.
+        assert_eq!(single_port(&service), ("metrics".to_owned(), 8443));
+
+        let annotations = service.metadata.annotations.unwrap();
+        assert_eq!(
+            annotations.get("prometheus.io/scheme").map(String::as_str),
+            Some("https")
+        );
+        assert_eq!(
+            annotations.get("prometheus.io/port").map(String::as_str),
+            Some("8443")
+        );
+    }
 }

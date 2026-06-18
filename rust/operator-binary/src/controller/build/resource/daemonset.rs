@@ -1048,4 +1048,87 @@ mod tests {
 
         assert!(volume_names(&ds).contains(&"tls".to_owned()));
     }
+
+    #[test]
+    fn opa_container_serves_https_when_tls_enabled() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": { "tls": { "serverSecretClass": "tls" } },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+        let pod_spec = ds.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+        let opa = pod_spec
+            .containers
+            .iter()
+            .find(|c| c.name == "opa")
+            .expect("opa container should exist");
+
+        // The single container port is the HTTPS data port.
+        let ports = opa.ports.as_ref().unwrap();
+        assert_eq!(ports.len(), 1);
+        assert_eq!(ports[0].name.as_deref(), Some("https"));
+        assert_eq!(ports[0].container_port, 8443);
+
+        // The probe must speak HTTPS, otherwise it would fail against the TLS-only server.
+        let scheme = opa
+            .liveness_probe
+            .as_ref()
+            .unwrap()
+            .http_get
+            .as_ref()
+            .unwrap()
+            .scheme
+            .clone();
+        assert_eq!(scheme.as_deref(), Some("HTTPS"));
+
+        // The start command binds the HTTPS port and passes the TLS cert/key flags.
+        let args = opa.args.as_ref().unwrap();
+        assert!(args[0].contains("-a 0.0.0.0:8443"));
+        assert!(args[0].contains("--tls-cert-file"));
+    }
+
+    #[test]
+    fn bundle_builder_start_command_silences_console_only_when_none() {
+        let role_group_config = |spec: serde_json::Value| {
+            let cluster = validated_cluster_from_spec(spec);
+            cluster.role_group_configs[&OpaRole::Server]
+                .values()
+                .next()
+                .expect("the default role group should exist")
+                .config
+                .clone()
+        };
+
+        // Console level NONE redirects bundle-builder output to /dev/null (no `tee`).
+        let silenced = role_group_config(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "config": { "logging": { "containers": {
+                    "bundle-builder": { "console": { "level": "NONE" } }
+                } } },
+                "roleGroups": { "default": {} },
+            },
+        }));
+        // The redirect is appended directly after the bundle-builder invocation. (`/dev/null` also
+        // appears in the shared bash trap helpers, so match the specific redirect.)
+        assert!(
+            build_bundle_builder_start_command(&silenced, "bundle-builder")
+                .contains("stackable-opa-bundle-builder > /dev/null")
+        );
+
+        // With a console level above NONE, output is not discarded.
+        let logging = role_group_config(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "config": { "logging": { "containers": {
+                    "bundle-builder": { "console": { "level": "INFO" } }
+                } } },
+                "roleGroups": { "default": {} },
+            },
+        }));
+        assert!(
+            build_bundle_builder_start_command(&logging, "bundle-builder")
+                .contains("stackable-opa-bundle-builder &")
+        );
+    }
 }

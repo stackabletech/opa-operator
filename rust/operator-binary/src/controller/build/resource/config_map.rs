@@ -132,4 +132,38 @@ mod tests {
         assert!(data.contains_key("config.json"));
         assert!(data.contains_key("user-info-fetcher.json"));
     }
+
+    #[test]
+    fn renders_vector_yaml_when_agent_enabled() {
+        let cm = build_config_map(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": { "vectorAggregatorConfigMapName": "vector-aggregator-discovery" },
+            "servers": {
+                "config": { "logging": { "enableVectorAgent": true } },
+                "roleGroups": { "default": {} },
+            },
+        }));
+
+        assert!(
+            cm.data
+                .as_ref()
+                .expect("config map data")
+                .contains_key(VECTOR_CONFIG_FILE)
+        );
+    }
+
+    #[test]
+    fn omits_vector_yaml_when_agent_disabled() {
+        let cm = build_config_map(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        }));
+
+        assert!(
+            !cm.data
+                .as_ref()
+                .expect("config map data")
+                .contains_key(VECTOR_CONFIG_FILE)
+        );
+    }
 }

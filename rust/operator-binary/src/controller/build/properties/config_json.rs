@@ -224,4 +224,31 @@ mod tests {
         // Role-group-level addition is applied on top.
         assert_eq!(config["labels"]["rolegroup"], "default");
     }
+
+    #[test]
+    fn decision_logs_follow_decision_logger_level() {
+        // Decision logging is enabled when the `decision` logger is set above `NONE`.
+        let enabled = config_json_for(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "config": { "logging": { "containers": {
+                    "opa": { "loggers": { "decision": { "level": "INFO" } } }
+                } } },
+                "roleGroups": { "default": {} },
+            },
+        }));
+        assert_eq!(enabled["decision_logs"]["console"], true);
+
+        // An explicit `NONE` level keeps decision logging disabled (field omitted).
+        let disabled = config_json_for(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "config": { "logging": { "containers": {
+                    "opa": { "loggers": { "decision": { "level": "NONE" } } }
+                } } },
+                "roleGroups": { "default": {} },
+            },
+        }));
+        assert!(disabled.get("decision_logs").is_none_or(Value::is_null));
+    }
 }
