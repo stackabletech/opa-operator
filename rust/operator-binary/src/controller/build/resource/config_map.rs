@@ -9,7 +9,7 @@ use stackable_operator::{
 
 use crate::controller::{
     OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
-    build::properties::{ConfigFileName, config_json, user_info_fetcher},
+    build::properties::{ConfigFileName, config_json, product_logging, user_info_fetcher},
 };
 
 #[derive(Snafu, Debug)]
@@ -32,13 +32,12 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 /// The rolegroup [`ConfigMap`] configures the rolegroup based on the configuration given by the
 /// administrator.
 ///
-/// `vector_config` is the Vector agent config (`vector.yaml`) built by the caller; it is `None`
-/// when the Vector agent is disabled.
+/// The Vector agent config (`vector.yaml`) is added only when the Vector agent is enabled for this
+/// role group.
 pub fn build_rolegroup_config_map(
     cluster: &ValidatedCluster,
     role_group_name: &RoleGroupName,
     rolegroup_config: &OpaRoleGroupConfig,
-    vector_config: Option<String>,
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
@@ -65,8 +64,11 @@ pub fn build_rolegroup_config_map(
         );
     }
 
-    if let Some(vector_config) = vector_config {
-        cm_builder.add_data(VECTOR_CONFIG_FILE, vector_config);
+    if rolegroup_config.config.logging.vector_container.is_some() {
+        cm_builder.add_data(
+            VECTOR_CONFIG_FILE,
+            product_logging::vector_config_file_content(),
+        );
     }
 
     cm_builder.build().with_context(|_| AssembleSnafu {
@@ -93,7 +95,7 @@ mod tests {
             .next()
             .expect("the default role group should exist");
 
-        build_rolegroup_config_map(&validated, role_group_name, rg, None)
+        build_rolegroup_config_map(&validated, role_group_name, rg)
             .expect("the config map should build")
     }
 

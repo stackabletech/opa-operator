@@ -211,20 +211,10 @@ pub async fn reconcile_opa(
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
 
     for (rolegroup_name, rolegroup) in role_group_configs {
-        // The static Vector agent config (`vector.yaml`) is added to the rolegroup ConfigMap only
-        // when the Vector agent is enabled for this role group.
-        let vector_config = rolegroup
-            .config
-            .logging
-            .vector_container
-            .as_ref()
-            .map(|_| build::properties::product_logging::vector_config_file_content());
-
         let rg_configmap = build::resource::config_map::build_rolegroup_config_map(
             &validated_cluster,
             rolegroup_name,
             rolegroup,
-            vector_config,
         )
         .with_context(|_| BuildRoleGroupConfigSnafu {
             rolegroup: rolegroup_name.clone(),
