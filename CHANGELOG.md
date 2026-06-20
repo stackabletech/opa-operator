@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Added support for OPA `1.16.2`. `1.12.3` is now deprecated ([#838]).
 - BREAKING: Add required CLI argument and env var to set the image repository used to construct final product image names: `IMAGE_REPOSITORY` (`--image-repository`), eg. `oci.example.org/my/namespace` ([#830]).
 - Support `configOverrides` for `config.json` ([#818], [#831]).
+- Add a description for the `OpaCluster` CRD, which shows up in the generated CRD ([#843]).
 
 ### Changed
 
@@ -31,6 +32,7 @@ All notable changes to this project will be documented in this file.
 [#836]: https://github.com/stackabletech/opa-operator/pull/836
 [#838]: https://github.com/stackabletech/opa-operator/pull/838
 [#840]: https://github.com/stackabletech/opa-operator/pull/840
+[#843]: https://github.com/stackabletech/opa-operator/pull/843
 
 ## [26.3.0] - 2026-03-16
 

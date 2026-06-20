@@ -75,6 +75,9 @@ pub enum Error {
     )
 )]
 pub mod versioned {
+    /// An OPA (Open Policy Agent) cluster stacklet. This resource is managed by the Stackable operator for OPA.
+    /// Find more information on how to use it and the resources that the operator generates in the
+    /// [operator documentation](DOCS_BASE_URL_PLACEHOLDER/opa/).
     #[versioned(crd(
         group = "opa.stackable.tech",
         status = "OpaClusterStatus",
