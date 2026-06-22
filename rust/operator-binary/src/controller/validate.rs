@@ -58,7 +58,7 @@ pub enum Error {
 
     #[snafu(display("failed to parse environment variable name {name:?}"))]
     ParseEnvVarName {
-        source: stackable_operator::v2::builder::pod::container::Error,
+        source: stackable_operator::v2::macros::attributed_string_type::Error,
         name: String,
     },
 
