@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 
 use stackable_operator::{
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
-    kvp::{Annotations, Labels},
-    v2::types::common::Port,
+    v2::{
+        builder::service::{Scheme, Scraping, prometheus_annotations, prometheus_labels},
+        types::common::Port,
+    },
 };
 
 use crate::controller::{
@@ -107,6 +109,11 @@ pub(crate) fn build_rolegroup_metrics_service(
     role_group_name: &RoleGroupName,
 ) -> Service {
     let tls_enabled = cluster.is_tls_enabled();
+    let (scheme, port) = if tls_enabled {
+        (Scheme::Https, APP_TLS_PORT)
+    } else {
+        (Scheme::Http, APP_PORT)
+    };
     let metadata = cluster
         .object_meta(
             cluster
@@ -115,8 +122,14 @@ pub(crate) fn build_rolegroup_metrics_service(
                 .to_string(),
             role_group_name,
         )
-        .with_labels(prometheus_labels())
-        .with_annotations(prometheus_annotations(tls_enabled))
+        .with_labels(prometheus_labels(&Scraping::Enabled))
+        // The metrics are served on the same port as the HTTP/HTTPS traffic, under `/metrics`.
+        .with_annotations(prometheus_annotations(
+            &Scraping::Enabled,
+            &scheme,
+            "/metrics",
+            &port,
+        ))
         .build();
 
     let service_spec = headless_cluster_ip_service_spec(
@@ -157,32 +170,6 @@ fn metrics_service_port(tls_enabled: bool) -> ServicePort {
         protocol: Some("TCP".to_string()),
         ..ServicePort::default()
     }
-}
-
-/// Common labels for Prometheus
-fn prometheus_labels() -> Labels {
-    Labels::try_from([("prometheus.io/scrape", "true")]).expect("should be a valid label")
-}
-
-/// Common annotations for Prometheus
-///
-/// These annotations can be used in a ServiceMonitor.
-///
-/// see also <https://github.com/prometheus-community/helm-charts/blob/prometheus-27.32.0/charts/prometheus/values.yaml#L983-L1036>
-fn prometheus_annotations(tls_enabled: bool) -> Annotations {
-    let (port, scheme) = if tls_enabled {
-        (APP_TLS_PORT, "https")
-    } else {
-        (APP_PORT, "http")
-    };
-
-    Annotations::try_from([
-        ("prometheus.io/path".to_owned(), "/metrics".to_owned()),
-        ("prometheus.io/port".to_owned(), port.to_string()),
-        ("prometheus.io/scheme".to_owned(), scheme.to_owned()),
-        ("prometheus.io/scrape".to_owned(), "true".to_owned()),
-    ])
-    .expect("should be valid annotations")
 }
 
 #[cfg(test)]

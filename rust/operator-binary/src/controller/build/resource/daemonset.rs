@@ -581,14 +581,11 @@ pub fn build_server_rolegroup_daemonset(
     let mut pod_template = pb.build_template();
     pod_template.merge_from(rolegroup_config.pod_overrides.clone());
 
-    // TODO(@maltesander): `ResourceNames` has no `DaemonSet` helper (OPA is the only DaemonSet operator), so the
-    // (identical) qualified role-group name backing the `StatefulSet` name is reused.
-    // Should be replaced with upstream fix.
     let metadata = cluster
         .object_meta(
             cluster
                 .resource_names(role_group_name)
-                .stateful_set_name()
+                .daemon_set_name()
                 .to_string(),
             role_group_name,
         )
