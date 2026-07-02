@@ -61,6 +61,9 @@ spec:
                     properties:
                       serverSecretClass:
                         description: Name of the SecretClass which will provide TLS certificates for the OPA server.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                     required:
                     - serverSecretClass
@@ -98,6 +101,9 @@ spec:
                                   permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               port:
                                 description: Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
@@ -195,6 +201,9 @@ spec:
                                 type: object
                               kerberosSecretClassName:
                                 description: The name of the Kerberos SecretClass.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               ldapServer:
                                 description: Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
@@ -426,6 +435,9 @@ spec:
                                   Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               hostname:
                                 description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
@@ -514,7 +526,10 @@ spec:
                     description: |-
                       Name of the Vector aggregator discovery ConfigMap.
                       It must contain the key `ADDRESS` with the address of the Vector aggregator.
+                    maxLength: 253
+                    minLength: 1
                     nullable: true
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                 type: object
               clusterOperation:
@@ -1140,69 +1155,11 @@ spec:
                       available config files and settings for the specific product.
                     properties:
                       config.json:
+                        default:
+                          jsonMergePatch: {}
                         description: Overrides for the OPA `config.json` file.
-                        nullable: true
-                        oneOf:
-                        - required:
-                          - jsonMergePatch
-                        - required:
-                          - jsonPatches
-                        - required:
-                          - userProvided
-                        properties:
-                          jsonMergePatch:
-                            description: |-
-                              Can be set to arbitrary YAML content, which is converted to JSON and used as
-                              [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
-                            type: object
-                            x-kubernetes-preserve-unknown-fields: true
-                          jsonPatches:
-                            description: |-
-                              List of [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patches.
-
-                              Can be used when more flexibility is needed, e.g. to only modify elements
-                              in a list based on a condition.
-
-                              A patch looks something like
-
-                              `{"op": "test", "path": "/0/name", "value": "Andrew"}`
-
-                              or
-
-                              `{"op": "add", "path": "/0/happy", "value": true}`
-                            items:
-                              type: string
-                            type: array
-                          userProvided:
-                            description: |-
-                              Override the entire config file with the specified JSON document.
-
-                              Please note that you can in-line JSON into YAML as follows:
-
-                              ```yaml
-                              # ... other YAML content
-                              userProvided: {
-                                "myString": "test",
-                                "myList": ["test"],
-                                "myBool": true,
-                                "my": {"nested.field.with.dots": 42}
-                              }
-                              ```
-
-                              As an alternative you can also stick to YAML:
-
-                              ```yaml
-                              # ... other YAML content
-                              userProvided:
-                                myString: test
-                                myList: [test]
-                                myBool: true
-                                my:
-                                  nested.field.with.dots: 42
-                              ```
-                            type: object
-                            x-kubernetes-preserve-unknown-fields: true
                         type: object
+                        x-kubernetes-preserve-unknown-fields: true
                     type: object
                   envOverrides:
                     additionalProperties:
@@ -1759,69 +1716,11 @@ spec:
                             available config files and settings for the specific product.
                           properties:
                             config.json:
+                              default:
+                                jsonMergePatch: {}
                               description: Overrides for the OPA `config.json` file.
-                              nullable: true
-                              oneOf:
-                              - required:
-                                - jsonMergePatch
-                              - required:
-                                - jsonPatches
-                              - required:
-                                - userProvided
-                              properties:
-                                jsonMergePatch:
-                                  description: |-
-                                    Can be set to arbitrary YAML content, which is converted to JSON and used as
-                                    [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
-                                  type: object
-                                  x-kubernetes-preserve-unknown-fields: true
-                                jsonPatches:
-                                  description: |-
-                                    List of [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patches.
-
-                                    Can be used when more flexibility is needed, e.g. to only modify elements
-                                    in a list based on a condition.
-
-                                    A patch looks something like
-
-                                    `{"op": "test", "path": "/0/name", "value": "Andrew"}`
-
-                                    or
-
-                                    `{"op": "add", "path": "/0/happy", "value": true}`
-                                  items:
-                                    type: string
-                                  type: array
-                                userProvided:
-                                  description: |-
-                                    Override the entire config file with the specified JSON document.
-
-                                    Please note that you can in-line JSON into YAML as follows:
-
-                                    ```yaml
-                                    # ... other YAML content
-                                    userProvided: {
-                                      "myString": "test",
-                                      "myList": ["test"],
-                                      "myBool": true,
-                                      "my": {"nested.field.with.dots": 42}
-                                    }
-                                    ```
-
-                                    As an alternative you can also stick to YAML:
-
-                                    ```yaml
-                                    # ... other YAML content
-                                    userProvided:
-                                      myString: test
-                                      myList: [test]
-                                      myBool: true
-                                      my:
-                                        nested.field.with.dots: 42
-                                    ```
-                                  type: object
-                                  x-kubernetes-preserve-unknown-fields: true
                               type: object
+                              x-kubernetes-preserve-unknown-fields: true
                           type: object
                         envOverrides:
                           additionalProperties:
@@ -1958,6 +1857,9 @@ spec:
                     properties:
                       serverSecretClass:
                         description: Name of the SecretClass which will provide TLS certificates for the OPA server.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                     required:
                     - serverSecretClass
@@ -2010,6 +1912,9 @@ spec:
                                 type: object
                               kerberosSecretClassName:
                                 description: The name of the Kerberos SecretClass.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               ldapServer:
                                 description: Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
@@ -2073,6 +1978,9 @@ spec:
                                   permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               port:
                                 description: Port of the identity provider. If TLS is used defaults to `443`, otherwise to `80`.
@@ -2323,6 +2231,9 @@ spec:
                                   Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
 
                                   Must contain the fields `clientId` and `clientSecret`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                 type: string
                               hostname:
                                 description: Hostname of the identity provider, e.g. `my.keycloak.corp`.
@@ -2411,7 +2322,10 @@ spec:
                     description: |-
                       Name of the Vector aggregator discovery ConfigMap.
                       It must contain the key `ADDRESS` with the address of the Vector aggregator.
+                    maxLength: 253
+                    minLength: 1
                     nullable: true
+                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                     type: string
                 type: object
               clusterOperation:
@@ -3037,69 +2951,11 @@ spec:
                       available config files and settings for the specific product.
                     properties:
                       config.json:
+                        default:
+                          jsonMergePatch: {}
                         description: Overrides for the OPA `config.json` file.
-                        nullable: true
-                        oneOf:
-                        - required:
-                          - jsonMergePatch
-                        - required:
-                          - jsonPatches
-                        - required:
-                          - userProvided
-                        properties:
-                          jsonMergePatch:
-                            description: |-
-                              Can be set to arbitrary YAML content, which is converted to JSON and used as
-                              [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
-                            type: object
-                            x-kubernetes-preserve-unknown-fields: true
-                          jsonPatches:
-                            description: |-
-                              List of [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patches.
-
-                              Can be used when more flexibility is needed, e.g. to only modify elements
-                              in a list based on a condition.
-
-                              A patch looks something like
-
-                              `{"op": "test", "path": "/0/name", "value": "Andrew"}`
-
-                              or
-
-                              `{"op": "add", "path": "/0/happy", "value": true}`
-                            items:
-                              type: string
-                            type: array
-                          userProvided:
-                            description: |-
-                              Override the entire config file with the specified JSON document.
-
-                              Please note that you can in-line JSON into YAML as follows:
-
-                              ```yaml
-                              # ... other YAML content
-                              userProvided: {
-                                "myString": "test",
-                                "myList": ["test"],
-                                "myBool": true,
-                                "my": {"nested.field.with.dots": 42}
-                              }
-                              ```
-
-                              As an alternative you can also stick to YAML:
-
-                              ```yaml
-                              # ... other YAML content
-                              userProvided:
-                                myString: test
-                                myList: [test]
-                                myBool: true
-                                my:
-                                  nested.field.with.dots: 42
-                              ```
-                            type: object
-                            x-kubernetes-preserve-unknown-fields: true
                         type: object
+                        x-kubernetes-preserve-unknown-fields: true
                     type: object
                   envOverrides:
                     additionalProperties:
@@ -3656,69 +3512,11 @@ spec:
                             available config files and settings for the specific product.
                           properties:
                             config.json:
+                              default:
+                                jsonMergePatch: {}
                               description: Overrides for the OPA `config.json` file.
-                              nullable: true
-                              oneOf:
-                              - required:
-                                - jsonMergePatch
-                              - required:
-                                - jsonPatches
-                              - required:
-                                - userProvided
-                              properties:
-                                jsonMergePatch:
-                                  description: |-
-                                    Can be set to arbitrary YAML content, which is converted to JSON and used as
-                                    [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
-                                  type: object
-                                  x-kubernetes-preserve-unknown-fields: true
-                                jsonPatches:
-                                  description: |-
-                                    List of [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patches.
-
-                                    Can be used when more flexibility is needed, e.g. to only modify elements
-                                    in a list based on a condition.
-
-                                    A patch looks something like
-
-                                    `{"op": "test", "path": "/0/name", "value": "Andrew"}`
-
-                                    or
-
-                                    `{"op": "add", "path": "/0/happy", "value": true}`
-                                  items:
-                                    type: string
-                                  type: array
-                                userProvided:
-                                  description: |-
-                                    Override the entire config file with the specified JSON document.
-
-                                    Please note that you can in-line JSON into YAML as follows:
-
-                                    ```yaml
-                                    # ... other YAML content
-                                    userProvided: {
-                                      "myString": "test",
-                                      "myList": ["test"],
-                                      "myBool": true,
-                                      "my": {"nested.field.with.dots": 42}
-                                    }
-                                    ```
-
-                                    As an alternative you can also stick to YAML:
-
-                                    ```yaml
-                                    # ... other YAML content
-                                    userProvided:
-                                      myString: test
-                                      myList: [test]
-                                      myBool: true
-                                      my:
-                                        nested.field.with.dots: 42
-                                    ```
-                                  type: object
-                                  x-kubernetes-preserve-unknown-fields: true
                               type: object
+                              x-kubernetes-preserve-unknown-fields: true
                           type: object
                         envOverrides:
                           additionalProperties:

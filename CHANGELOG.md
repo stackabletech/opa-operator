@@ -13,12 +13,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Bump `stackable-operator` to 0.111.0 and `snafu` to 0.9 ([#818], [#830]).
+- Bump `stackable-operator` to 0.112.0 and `snafu` to 0.9 ([#818], [#830], [#842]).
 - Set `maxSurge=1` and `maxUnavailable=0` on the OPA DaemonSet rolling update strategy to eliminate
   availability gaps during rolling updates ([#819]).
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
 - Internal operator refactoring: introduce dereference() and validate() steps in the reconciler ([#836]).
 - test: Bump vector-aggregator to 0.55.0, replace /graphql call with gRPC call ([#840]).
+- BREAKING: Removed product-config machinery. This is a breaking change in terms of configuration.
+  Users relying on the product-config `properties.yaml` file have to set these properties via the CRD ([#842]).
 
 ### Removed
 
@@ -32,6 +34,7 @@ All notable changes to this project will be documented in this file.
 [#836]: https://github.com/stackabletech/opa-operator/pull/836
 [#838]: https://github.com/stackabletech/opa-operator/pull/838
 [#840]: https://github.com/stackabletech/opa-operator/pull/840
+[#842]: https://github.com/stackabletech/opa-operator/pull/842
 [#843]: https://github.com/stackabletech/opa-operator/pull/843
 
 ## [26.3.0] - 2026-03-16

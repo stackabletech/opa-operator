@@ -1,7 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
-
 use serde::{Deserialize, Serialize};
-use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::{
     commons::{
         affinity::StackableAffinity,
@@ -12,21 +9,20 @@ use stackable_operator::{
             Resources, ResourcesFragment,
         },
     },
-    config::{
-        fragment::{self, Fragment, ValidationError},
-        merge::Merge,
-    },
-    config_overrides::{JsonConfigOverrides, KeyValueOverridesProvider},
+    config::{fragment::Fragment, merge::Merge},
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
-    kube::{CustomResource, ResourceExt},
-    product_config_utils::Configuration,
+    kube::CustomResource,
     product_logging::{self, spec::Logging},
-    role_utils::{EmptyRoleConfig, GenericCommonConfig, Role, RoleGroup, RoleGroupRef},
+    role_utils::{EmptyRoleConfig, Role},
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
-    utils::cluster_info::KubernetesClusterInfo,
+    v2::{
+        config_overrides::JsonOrKeyValueConfigOverrides,
+        role_utils::GenericCommonConfig,
+        types::kubernetes::{ConfigMapName, SecretClassName},
+    },
     versioned::versioned,
 };
 use strum::{Display, EnumIter, EnumString};
@@ -41,27 +37,8 @@ pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_mi
 /// Safety puffer to guarantee the graceful shutdown works every time.
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
 
-pub type OpaRoleType = Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig>;
-
-pub type OpaRoleGroupType = RoleGroup<OpaConfigFragment, GenericCommonConfig, OpaConfigOverrides>;
-
-#[derive(Snafu, Debug)]
-pub enum Error {
-    #[snafu(display("the role group {role_group} is not defined"))]
-    CannotRetrieveOpaRoleGroup { role_group: String },
-
-    #[snafu(display("unknown role {role}"))]
-    UnknownOpaRole {
-        source: strum::ParseError,
-        role: String,
-    },
-
-    #[snafu(display("the role group [{role_group}] is missing"))]
-    MissingRoleGroup { role_group: String },
-
-    #[snafu(display("fragment validation failure"))]
-    FragmentValidationFailure { source: ValidationError },
-}
+pub type OpaRoleType =
+    Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig, GenericCommonConfig>;
 
 #[versioned(
     version(name = "v1alpha1"),
@@ -113,7 +90,7 @@ pub mod versioned {
         /// Name of the Vector aggregator discovery ConfigMap.
         /// It must contain the key `ADDRESS` with the address of the Vector aggregator.
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub vector_aggregator_config_map_name: Option<String>,
+        pub vector_aggregator_config_map_name: Option<ConfigMapName>,
 
         /// This field controls which type of Service the operator creates for this OpaCluster:
         ///
@@ -153,7 +130,7 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct OpaTls {
         /// Name of the SecretClass which will provide TLS certificates for the OPA server.
-        pub server_secret_class: String,
+        pub server_secret_class: SecretClassName,
     }
 
     // TODO: Temporary solution until listener-operator is finished
@@ -173,25 +150,15 @@ pub mod versioned {
 /// Typed config override strategies for OPA config files.
 ///
 /// OPA only has one config file (`config.json`), which is JSON-formatted.
-/// Users can override it using JSON merge patch (RFC 7396), JSON patch (RFC 6902),
-/// or by providing the full file content.
-#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+/// Users can override it using key-value pairs, JSON merge patch (RFC 7396),
+/// JSON patch (RFC 6902), or by providing the full file content.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, Merge, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpaConfigOverrides {
     /// Overrides for the OPA `config.json` file.
-    #[serde(
-        default,
-        rename = "config.json",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub config_json: Option<JsonConfigOverrides>,
+    #[serde(default, rename = "config.json")]
+    pub config_json: JsonOrKeyValueConfigOverrides,
 }
-
-// OPA has no key-value config files, all overrides go through JsonConfigOverrides.
-// This impl is still required because the shared product config pipeline
-// (`transform_all_roles_to_config`) requires the `KeyValueOverridesProvider` bound
-// at compile time. The default implementation returns an empty map.
-impl KeyValueOverridesProvider for OpaConfigOverrides {}
 
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
@@ -273,7 +240,9 @@ pub struct OpaConfig {
     Deserialize,
     Eq,
     JsonSchema,
+    Ord,
     PartialEq,
+    PartialOrd,
     Serialize,
     Display,
     EnumString,
@@ -304,15 +273,8 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
     }
 }
 
-impl v1alpha2::OpaClusterConfig {
-    /// Returns whether TLS encryption is enabled for the OPA server.
-    pub fn tls_enabled(&self) -> bool {
-        self.tls.is_some()
-    }
-}
-
 impl OpaConfig {
-    fn default_config() -> OpaConfigFragment {
+    pub fn default_config() -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
@@ -334,118 +296,12 @@ impl OpaConfig {
     }
 }
 
-impl Configuration for OpaConfigFragment {
-    type Configurable = v1alpha2::OpaCluster;
-
-    fn compute_env(
-        &self,
-        _resource: &Self::Configurable,
-        _role_name: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
-    {
-        Ok(BTreeMap::new())
-    }
-
-    fn compute_cli(
-        &self,
-        _resource: &Self::Configurable,
-        _role_name: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
-    {
-        Ok(BTreeMap::new())
-    }
-
-    fn compute_files(
-        &self,
-        _resource: &Self::Configurable,
-        _role_name: &str,
-        _file: &str,
-    ) -> Result<BTreeMap<String, Option<String>>, stackable_operator::product_config_utils::Error>
-    {
-        Ok(BTreeMap::new())
-    }
-}
-
 impl v1alpha2::OpaCluster {
     /// Returns a reference to the role.
     pub fn role(&self, role_variant: &OpaRole) -> &OpaRoleType {
         match role_variant {
             OpaRole::Server => &self.spec.servers,
         }
-    }
-
-    /// Returns a reference to the role group. Raises an error if the role or role group are not defined.
-    pub fn rolegroup(
-        &self,
-        rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    ) -> Result<&OpaRoleGroupType, Error> {
-        let role_variant =
-            OpaRole::from_str(&rolegroup_ref.role).with_context(|_| UnknownOpaRoleSnafu {
-                role: rolegroup_ref.role.to_owned(),
-            })?;
-        let role = self.role(&role_variant);
-        role.role_groups
-            .get(&rolegroup_ref.role_group)
-            .with_context(|| CannotRetrieveOpaRoleGroupSnafu {
-                role_group: rolegroup_ref.role_group.to_owned(),
-            })
-    }
-
-    /// The name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_name(&self) -> String {
-        format!(
-            "{cluster_name}-{role}",
-            cluster_name = self.name_any(),
-            role = OpaRole::Server
-        )
-    }
-
-    /// The fully-qualified domain name of the role-level load-balanced Kubernetes `Service`
-    pub fn server_role_service_fqdn(&self, cluster_info: &KubernetesClusterInfo) -> Option<String> {
-        Some(format!(
-            "{role_service_name}.{namespace}.svc.{cluster_domain}",
-            role_service_name = self.server_role_service_name(),
-            namespace = self.metadata.namespace.as_ref()?,
-            cluster_domain = cluster_info.cluster_domain
-        ))
-    }
-
-    /// Retrieve and merge resource configs for role and role groups
-    pub fn merged_config(
-        &self,
-        role: &OpaRole,
-        rolegroup_ref: &RoleGroupRef<v1alpha2::OpaCluster>,
-    ) -> Result<OpaConfig, Error> {
-        // Initialize the result with all default values as baseline
-        let conf_defaults = OpaConfig::default_config();
-
-        let opa_role = match role {
-            OpaRole::Server => &self.spec.servers,
-        };
-
-        let mut conf_role = opa_role.config.config.to_owned();
-
-        // Retrieve rolegroup specific resource config
-        let mut conf_rolegroup = opa_role
-            .role_groups
-            .get(&rolegroup_ref.role_group)
-            .context(MissingRoleGroupSnafu {
-                role_group: rolegroup_ref.role_group.clone(),
-            })?
-            .to_owned()
-            .config
-            .config;
-
-        // Merge more specific configs into default config
-        // Hierarchy is:
-        // 1. RoleGroup
-        // 2. Role
-        // 3. Default
-        conf_role.merge(&conf_defaults);
-        conf_rolegroup.merge(&conf_role);
-
-        tracing::debug!("Merged config: {:?}", conf_rolegroup);
-        fragment::validate(conf_rolegroup).context(FragmentValidationFailureSnafu)
     }
 }
 

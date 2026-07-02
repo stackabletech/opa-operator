@@ -9,6 +9,7 @@ use stackable_operator::{
     },
     schemars::{self, JsonSchema},
     shared::time::Duration,
+    v2::types::kubernetes::{SecretClassName, SecretName},
     versioned::versioned,
 };
 
@@ -75,7 +76,7 @@ pub mod versioned {
         /// Name of a Secret that contains client credentials of a Keycloak account with permission to read user metadata.
         ///
         /// Must contain the fields `clientId` and `clientSecret`.
-        pub client_credentials_secret: String,
+        pub client_credentials_secret: SecretName,
 
         /// The Keycloak realm that OPA's Keycloak account (as specified by `credentialsSecretName` exists in).
         ///
@@ -90,7 +91,7 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct AasBackend {
         /// Hostname of the identity provider, e.g. `my.aas.corp`.
-        pub hostname: String,
+        pub hostname: HostName,
 
         /// Port of the identity provider. Defaults to port 5000.
         #[serde(default = "aas_default_port")]
@@ -101,13 +102,13 @@ pub mod versioned {
     #[serde(rename_all = "camelCase")]
     pub struct ActiveDirectoryBackend {
         /// Hostname of the domain controller, e.g. `ad-ds-1.contoso.com`.
-        pub ldap_server: String,
+        pub ldap_server: HostName,
 
         /// The root Distinguished Name (DN) where users and groups are located.
         pub base_distinguished_name: String,
 
         /// The name of the Kerberos SecretClass.
-        pub kerberos_secret_class_name: String,
+        pub kerberos_secret_class_name: SecretClassName,
 
         /// Use a TLS connection. If not specified then no TLS will be used.
         #[serde(flatten)]
@@ -155,7 +156,7 @@ pub mod versioned {
         /// permissions `User.ReadAll` and `GroupMemberShip.ReadAll`.
         ///
         /// Must contain the fields `clientId` and `clientSecret`.
-        pub client_credentials_secret: String,
+        pub client_credentials_secret: SecretName,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -217,8 +218,11 @@ pub mod versioned {
     }
 }
 
+/// Default time-to-live for cached user metadata.
+pub(crate) const DEFAULT_CACHE_ENTRY_TIME_TO_LIVE: Duration = Duration::from_minutes_unchecked(1);
+
 const fn default_entry_time_to_live() -> Duration {
-    Duration::from_minutes_unchecked(1)
+    DEFAULT_CACHE_ENTRY_TIME_TO_LIVE
 }
 
 fn default_root_path() -> String {

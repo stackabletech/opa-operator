@@ -10,8 +10,7 @@ edition = "2024"
 repository = "https://github.com/stackabletech/opa-operator"
 
 [workspace.dependencies]
-product-config = { git = "https://github.com/stackabletech/product-config.git", tag = "0.8.0" }
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", rev = "57d8d1270016fdbe159fdf39b60cd02b465935af", features = ["webhook"] }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "stackable-operator-0.112.0", features = ["webhook"] }
 krb5 = { git = "https://github.com/stackabletech/krb5-rs.git", tag = "v0.1.0" }
 
 anyhow = "1.0"
@@ -19,7 +18,7 @@ axum = "0.8"
 base64 = "0.22"
 built = { version = "0.8", features = ["chrono", "git2"] }
 byteorder = "1.5"
-clap = "4.5"
+clap = "4.6"
 const_format = "0.2"
 flate2 = "1.0"
 fnv = "1.0"
@@ -30,7 +29,13 @@ ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
 moka = { version = "0.12", features = ["future"] }
 native-tls = "0.2.12"
 pin-project = "1.1"
-reqwest = { version = "0.13", features = ["json", "form", "query"] }
+# `default-features = false` drops reqwest 0.13's `default-tls = ["rustls"]`; we select
+# `native-tls` (OpenSSL) to stay on the same TLS stack as ldap3 (see utils/tls.rs). The
+# rustls platform verifier eagerly errors ("No CA certificates were loaded from the
+# system") when the container has no system CA bundle; OpenSSL loads certs lazily instead.
+# charset/http2/system-proxy are reqwest 0.13 defaults re-added here.
+# TODO(@maltesander): We should remove these and "native-tls" and add ca-certificates to the docker images?
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "query", "native-tls", "charset", "http2", "system-proxy"] }
 rustls = "0.23"
 rustls-pki-types = "1.13"
 semver = "1.0"
@@ -39,7 +44,7 @@ serde_json = "1.0"
 snafu = "0.9"
 strum = { version = "0.28", features = ["derive"] }
 tar = "0.4"
-tokio = { version = "1.40", features = ["full"] }
+tokio = { version = "1.52", features = ["full"] }
 tracing = "0.1"
 url = "2.5"
 uuid = "1.10"

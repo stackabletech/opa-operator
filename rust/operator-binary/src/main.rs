@@ -31,17 +31,15 @@ use stackable_operator::{
 };
 
 use crate::{
-    controller::OPA_FULL_CONTROLLER_NAME,
     crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2},
+    opa_controller::OPA_FULL_CONTROLLER_NAME,
     webhooks::conversion::create_webhook_server,
 };
 
 mod controller;
 mod crd;
-mod discovery;
+mod opa_controller;
 mod operations;
-mod product_logging;
-mod service;
 mod webhooks;
 
 pub mod built_info {
@@ -79,7 +77,9 @@ async fn main() -> anyhow::Result<()> {
                 RunArguments {
                     operator_environment,
                     watch_namespace,
-                    product_config,
+                    // OPA no longer uses the product-config; the CLI argument is kept for
+                    // backwards compatibility but ignored.
+                    product_config: _,
                     maintenance,
                     common,
                 },
@@ -116,11 +116,6 @@ async fn main() -> anyhow::Result<()> {
                 EndOfSupportChecker::new(built_info::BUILT_TIME_UTC, &maintenance.end_of_support)?
                     .run(sigterm_watcher.handle())
                     .map(anyhow::Ok);
-
-            let product_config = product_config.load(&[
-                "deploy/config-spec/properties.yaml",
-                "/etc/stackable/opa-operator/config-spec/properties.yaml",
-            ])?;
 
             let client =
                 client::initialize_operator(Some(OPERATOR_NAME.to_string()), &common.cluster_info)
@@ -167,11 +162,10 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .graceful_shutdown_on(sigterm_watcher.handle())
                 .run(
-                    controller::reconcile_opa,
-                    controller::error_policy,
-                    Arc::new(controller::Ctx {
+                    opa_controller::reconcile_opa,
+                    opa_controller::error_policy,
+                    Arc::new(opa_controller::Ctx {
                         client: client.clone(),
-                        product_config,
                         opa_bundle_builder_image: operator_image.clone(),
                         user_info_fetcher_image: operator_image,
                         operator_environment,
