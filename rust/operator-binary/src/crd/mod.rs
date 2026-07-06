@@ -19,7 +19,7 @@ use stackable_operator::{
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
     v2::{
-        config_overrides::JsonOrKeyValueConfigOverrides,
+        config_overrides::JsonConfigOverrides,
         role_utils::GenericCommonConfig,
         types::kubernetes::{ConfigMapName, SecretClassName},
     },
@@ -56,6 +56,7 @@ pub mod versioned {
     /// Find more information on how to use it and the resources that the operator generates in the
     /// [operator documentation](DOCS_BASE_URL_PLACEHOLDER/opa/).
     #[versioned(crd(
+        doc = "An Open Policy Agent (OPA) cluster stacklet. This resource is managed by the Stackable operator for OPA.",
         group = "opa.stackable.tech",
         status = "OpaClusterStatus",
         shortname = "opa",
@@ -157,7 +158,7 @@ pub mod versioned {
 pub struct OpaConfigOverrides {
     /// Overrides for the OPA `config.json` file.
     #[serde(default, rename = "config.json")]
-    pub config_json: JsonOrKeyValueConfigOverrides,
+    pub config_json: JsonConfigOverrides,
 }
 
 #[allow(clippy::derive_partial_eq_without_eq)]

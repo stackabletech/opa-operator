@@ -4,10 +4,7 @@ use serde::Serialize;
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     product_logging::spec::LogLevel,
-    v2::{
-        config_overrides::JsonConfigOverrides,
-        product_logging::framework::ValidatedContainerLogConfigChoice,
-    },
+    v2::product_logging::framework::ValidatedContainerLogConfigChoice,
 };
 
 use super::ConfigFileName;
@@ -66,7 +63,7 @@ pub fn build(
     // Apply the merged user `configOverrides`. The merge built a sequence that applies the
     // role-level patch first, then the role-group-level patch on top. `apply` is infallible; an
     // invalid patch is logged and skipped.
-    let config_json = JsonConfigOverrides::from(config_overrides.config_json.clone());
+    let config_json = config_overrides.config_json.clone();
     let config_value = config_json.apply(&config_value);
 
     serde_json::to_string_pretty(&config_value).with_context(|_| SerializeConfigFileSnafu {

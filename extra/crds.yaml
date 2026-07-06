@@ -18,7 +18,7 @@ spec:
     name: v1alpha2
     schema:
       openAPIV3Schema:
-        description: Auto-generated derived type for OpaClusterSpec via `CustomResource`
+        description: An Open Policy Agent (OPA) cluster stacklet. This resource is managed by the Stackable operator for OPA.
         properties:
           spec:
             description: |-
@@ -303,7 +303,7 @@ spec:
                                         type: array
                                     type: object
                                   secretClass:
-                                    description: '[SecretClass](https://docs.stackable.tech/home/nightly/secret-operator/secretclass) containing the LDAP bind credentials.'
+                                    description: '[SecretClass](https://docs.stackable.tech/home/nightly/secret-operator/secretclass) providing the requested secrets.'
                                     type: string
                                 required:
                                 - secretClass
@@ -1158,8 +1158,41 @@ spec:
                         default:
                           jsonMergePatch: {}
                         description: Overrides for the OPA `config.json` file.
+                        oneOf:
+                        - required:
+                          - jsonMergePatch
+                        - required:
+                          - jsonPatch
+                        - required:
+                          - userProvided
+                        properties:
+                          jsonMergePatch:
+                            description: |-
+                              Can be set to arbitrary YAML content, which is converted to JSON and used as
+                              [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          jsonPatch:
+                            description: |-
+                              An [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patch.
+
+                              Can be used when more flexibility is needed, e.g. to only modify elements
+                              in a list based on a condition.
+
+                              A patch looks something like
+
+                              `- {"op": "test", "path": "/0/name", "value": "Andrew"}`
+
+                              or
+
+                              `- {"op": "add", "path": "/0/happy", "value": true}`
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          userProvided:
+                            description: Override the entire config file with the specified JSON value.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                         type: object
-                        x-kubernetes-preserve-unknown-fields: true
                     type: object
                   envOverrides:
                     additionalProperties:
@@ -1719,8 +1752,41 @@ spec:
                               default:
                                 jsonMergePatch: {}
                               description: Overrides for the OPA `config.json` file.
+                              oneOf:
+                              - required:
+                                - jsonMergePatch
+                              - required:
+                                - jsonPatch
+                              - required:
+                                - userProvided
+                              properties:
+                                jsonMergePatch:
+                                  description: |-
+                                    Can be set to arbitrary YAML content, which is converted to JSON and used as
+                                    [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
+                                jsonPatch:
+                                  description: |-
+                                    An [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patch.
+
+                                    Can be used when more flexibility is needed, e.g. to only modify elements
+                                    in a list based on a condition.
+
+                                    A patch looks something like
+
+                                    `- {"op": "test", "path": "/0/name", "value": "Andrew"}`
+
+                                    or
+
+                                    `- {"op": "add", "path": "/0/happy", "value": true}`
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
+                                userProvided:
+                                  description: Override the entire config file with the specified JSON value.
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                               type: object
-                              x-kubernetes-preserve-unknown-fields: true
                           type: object
                         envOverrides:
                           additionalProperties:
@@ -1752,6 +1818,21 @@ spec:
                           nullable: true
                           type: integer
                       type: object
+                    description: |-
+                      The set of role groups for this role, keyed by their name.
+
+                      A role group is a subset of the replicas of a role that share the same configuration,
+                      allowing finer-grained control than the role level. This is useful to e.g. schedule groups
+                      onto different classes of nodes or into different regions, or to run them with different
+                      settings. Configuration set on a role group is merged on top of the role-level `config`,
+                      with the more specific role group values taking precedence.
+
+                      Every role needs at least one role group. A role with a single role group conventionally
+                      names it `default`.
+
+                      Read the
+                      [roles and role groups concept documentation](https://docs.stackable.tech/home/nightly/concepts/roles-and-role-groups)
+                      for more details.
                     type: object
                 required:
                 - roleGroups
@@ -1814,7 +1895,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Auto-generated derived type for OpaClusterSpec via `CustomResource`
+        description: An Open Policy Agent (OPA) cluster stacklet. This resource is managed by the Stackable operator for OPA.
         properties:
           spec:
             description: |-
@@ -2099,7 +2180,7 @@ spec:
                                         type: array
                                     type: object
                                   secretClass:
-                                    description: '[SecretClass](https://docs.stackable.tech/home/nightly/secret-operator/secretclass) containing the LDAP bind credentials.'
+                                    description: '[SecretClass](https://docs.stackable.tech/home/nightly/secret-operator/secretclass) providing the requested secrets.'
                                     type: string
                                 required:
                                 - secretClass
@@ -2954,8 +3035,41 @@ spec:
                         default:
                           jsonMergePatch: {}
                         description: Overrides for the OPA `config.json` file.
+                        oneOf:
+                        - required:
+                          - jsonMergePatch
+                        - required:
+                          - jsonPatch
+                        - required:
+                          - userProvided
+                        properties:
+                          jsonMergePatch:
+                            description: |-
+                              Can be set to arbitrary YAML content, which is converted to JSON and used as
+                              [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          jsonPatch:
+                            description: |-
+                              An [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patch.
+
+                              Can be used when more flexibility is needed, e.g. to only modify elements
+                              in a list based on a condition.
+
+                              A patch looks something like
+
+                              `- {"op": "test", "path": "/0/name", "value": "Andrew"}`
+
+                              or
+
+                              `- {"op": "add", "path": "/0/happy", "value": true}`
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          userProvided:
+                            description: Override the entire config file with the specified JSON value.
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
                         type: object
-                        x-kubernetes-preserve-unknown-fields: true
                     type: object
                   envOverrides:
                     additionalProperties:
@@ -3515,8 +3629,41 @@ spec:
                               default:
                                 jsonMergePatch: {}
                               description: Overrides for the OPA `config.json` file.
+                              oneOf:
+                              - required:
+                                - jsonMergePatch
+                              - required:
+                                - jsonPatch
+                              - required:
+                                - userProvided
+                              properties:
+                                jsonMergePatch:
+                                  description: |-
+                                    Can be set to arbitrary YAML content, which is converted to JSON and used as
+                                    [RFC 7396](https://datatracker.ietf.org/doc/html/rfc7396) JSON merge patch.
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
+                                jsonPatch:
+                                  description: |-
+                                    An [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON patch.
+
+                                    Can be used when more flexibility is needed, e.g. to only modify elements
+                                    in a list based on a condition.
+
+                                    A patch looks something like
+
+                                    `- {"op": "test", "path": "/0/name", "value": "Andrew"}`
+
+                                    or
+
+                                    `- {"op": "add", "path": "/0/happy", "value": true}`
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
+                                userProvided:
+                                  description: Override the entire config file with the specified JSON value.
+                                  type: object
+                                  x-kubernetes-preserve-unknown-fields: true
                               type: object
-                              x-kubernetes-preserve-unknown-fields: true
                           type: object
                         envOverrides:
                           additionalProperties:
@@ -3548,6 +3695,21 @@ spec:
                           nullable: true
                           type: integer
                       type: object
+                    description: |-
+                      The set of role groups for this role, keyed by their name.
+
+                      A role group is a subset of the replicas of a role that share the same configuration,
+                      allowing finer-grained control than the role level. This is useful to e.g. schedule groups
+                      onto different classes of nodes or into different regions, or to run them with different
+                      settings. Configuration set on a role group is merged on top of the role-level `config`,
+                      with the more specific role group values taking precedence.
+
+                      Every role needs at least one role group. A role with a single role group conventionally
+                      names it `default`.
+
+                      Read the
+                      [roles and role groups concept documentation](https://docs.stackable.tech/home/nightly/concepts/roles-and-role-groups)
+                      for more details.
                     type: object
                 required:
                 - roleGroups
