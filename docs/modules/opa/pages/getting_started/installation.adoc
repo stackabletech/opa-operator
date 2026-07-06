@@ -44,7 +44,8 @@ Install the Stackable OPA operator:
 include::example$getting_started/getting_started.sh[tag=helm-install-operators]
 ----
 
-Helm deploys the operator in a Kubernetes Deployment and apply the CRDs for the OPA service.
+Helm deploys the operator in a Kubernetes Deployment.
+The operator installs and maintains its own CRDs at startup (see xref:concepts:maintenance/crds.adoc[]).
 --
 ====
 
