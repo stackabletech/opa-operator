@@ -223,6 +223,84 @@ mod tests {
     }
 
     #[test]
+    fn applies_json_patch() {
+        let config = config_json_for(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "configOverrides": {
+                    "config.json": { "jsonPatch": [
+                        {
+                            "op": "replace",
+                            "path": "/bundles/stackable/polling/min_delay_seconds",
+                            "value": 1,
+                        },
+                        { "op": "add", "path": "/default_decision", "value": "test/allow" },
+                    ] }
+                },
+                "roleGroups": { "default": {} },
+            },
+        }));
+
+        // The `replace` operation edits an existing value.
+        assert_eq!(
+            config["bundles"]["stackable"]["polling"]["min_delay_seconds"],
+            1
+        );
+        // The `add` operation introduces a new key.
+        assert_eq!(config["default_decision"], "test/allow");
+    }
+
+    #[test]
+    fn skips_invalid_json_patch() {
+        // The `remove` targets a path that does not exist, so the whole patch fails to apply. The
+        // error is logged and skipped, leaving the base config untouched (the earlier `replace`
+        // operation is rolled back as well).
+        let config = config_json_for(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "configOverrides": {
+                    "config.json": { "jsonPatch": [
+                        {
+                            "op": "replace",
+                            "path": "/bundles/stackable/polling/min_delay_seconds",
+                            "value": 1,
+                        },
+                        { "op": "remove", "path": "/does/not/exist" },
+                    ] }
+                },
+                "roleGroups": { "default": {} },
+            },
+        }));
+
+        // The default is preserved because the invalid patch is skipped as a whole.
+        assert_eq!(
+            config["bundles"]["stackable"]["polling"]["min_delay_seconds"],
+            10
+        );
+    }
+
+    #[test]
+    fn user_provided_replaces_entire_config() {
+        let config = config_json_for(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "configOverrides": {
+                    "config.json": { "userProvided": {
+                        "services": [ { "name": "custom", "url": "http://example.com/opa/v1" } ],
+                    } }
+                },
+                "roleGroups": { "default": {} },
+            },
+        }));
+
+        // The user-provided document replaces the operator defaults entirely.
+        assert_eq!(config["services"][0]["name"], "custom");
+        // Operator defaults such as the bundle config and prometheus status are gone.
+        assert!(config.get("bundles").is_none_or(Value::is_null));
+        assert!(config.get("status").is_none_or(Value::is_null));
+    }
+
+    #[test]
     fn decision_logs_follow_decision_logger_level() {
         // Decision logging is enabled when the `decision` logger is set above `NONE`.
         let enabled = config_json_for(json!({
