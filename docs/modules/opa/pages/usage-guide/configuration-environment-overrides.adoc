@@ -11,22 +11,8 @@ This will lead to faulty installations.
 OPA's `config.json` can be overridden using `configOverrides`.
 For details on the supported override strategies, see the xref:concepts:overrides.adoc#json-config-overrides[config overrides documentation].
 
-For example per role:
-
-[source,yaml]
-----
-servers:
-  configOverrides:
-    config.json:
-      jsonPatches:
-        - '{"op": "replace", "path": "/bundles/stackable/polling/min_delay_seconds", "value": 3}'
-        - '{"op": "add", "path": "/default_decision", "value": "allow"}'
-  roleGroups:
-    default:
-      config: {}
-----
-
-or per role group:
+A JSON merge patch (https://datatracker.ietf.org/doc/html/rfc7396[RFC 7396]) is the recommended way to override the configuration.
+For example per role group:
 
 [source,yaml]
 ----
@@ -39,6 +25,45 @@ servers:
             distributed_tracing:
               address: jaeger-collector.default.svc.cluster.local:4317
               type: grpc
+----
+
+When more flexibility is needed, e.g. to only modify elements in a list based on a condition, a JSON patch (https://datatracker.ietf.org/doc/html/rfc6902[RFC 6902]) can be used.
+For example per role:
+
+[source,yaml]
+----
+servers:
+  configOverrides:
+    config.json:
+      jsonPatch:
+        - op: replace
+          path: /bundles/stackable/polling/min_delay_seconds
+          value: 3
+        - op: add
+          path: /default_decision
+          value: allow
+  roleGroups:
+    default:
+      config: {}
+----
+
+To replace the entire `config.json` file instead of patching it, use `userProvided`:
+
+[source,yaml]
+----
+servers:
+  roleGroups:
+    default:
+      configOverrides:
+        config.json:
+          userProvided:
+            services:
+              - name: stackable
+                url: http://localhost:3030/opa/v1
+            bundles:
+              stackable:
+                service: stackable
+                resource: opa/bundle.tar.gz
 ----
 
 == Environment variables
