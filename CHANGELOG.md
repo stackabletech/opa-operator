@@ -13,14 +13,15 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Bump `stackable-operator` to 0.112.0 and `snafu` to 0.9 ([#818], [#830], [#842]).
+- Bump `stackable-operator` to 0.113.3 and `snafu` to 0.9 ([#818], [#830], [#842]).
 - Set `maxSurge=1` and `maxUnavailable=0` on the OPA DaemonSet rolling update strategy to eliminate
   availability gaps during rolling updates ([#819]).
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
 - Internal operator refactoring: introduce dereference() and validate() steps in the reconciler ([#836]).
 - test: Bump vector-aggregator to 0.55.0, replace /graphql call with gRPC call ([#840]).
 - BREAKING: Removed product-config machinery. This is a breaking change in terms of configuration.
-  Users relying on the product-config `properties.yaml` file have to set these properties via the CRD ([#842]).
+  Users relying on the product-config `properties.yaml` file have to set these properties via the CRD.
+  JsonPatches has been renamed to JsonPatch ([#842]).
 
 ### Removed
 
