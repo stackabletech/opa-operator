@@ -129,7 +129,7 @@ async fn resolve_backend(
             Ok(ResolvedBackend::ExperimentalXfscAas(resolved))
         }
         v1alpha2::Backend::ActiveDirectory(config) => Ok(ResolvedBackend::ActiveDirectory {
-            ldap_server: config.ldap_server,
+            ldap_server: config.ldap_server.to_string(),
             tls: config.tls,
             base_distinguished_name: config.base_distinguished_name,
             custom_attribute_mappings: config.custom_attribute_mappings,

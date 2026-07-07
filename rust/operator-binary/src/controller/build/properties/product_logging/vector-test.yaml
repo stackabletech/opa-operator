@@ -1,0 +1,185 @@
+# Run tests with `./test-vector.sh` (requires the `vector` binary).
+#
+# The tests assert individual fields (rather than the whole event) because the `message` field
+# embeds `encode_key_value` output whose ordering is an implementation detail. Please adapt the
+# tests if you change the VRL code in vector.yaml.
+---
+tests:
+  - name: OPA server log (valid)
+    inputs:
+      - type: log
+        insert_at: processed_files_opa_json
+        log_fields:
+          file: /stackable/log/opa/test
+          message: '{"level":"info","msg":"Valid server log event","name":"stackable","plugin":"bundle","time":"2024-01-01T00:00:00Z","logger":"server"}'
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.container, "opa")
+              assert_eq!(.file, "test")
+              assert_eq!(.level, "INFO")
+              assert_eq!(.logger, "server")
+              assert_eq!(.namespace, "default")
+              assert_eq!(.cluster, "opa")
+              assert_eq!(.role, "server")
+              assert_eq!(.roleGroup, "default")
+              assert!(!exists(.errors), "valid event should not carry errors")
+              assert!(contains(string!(.message), "Valid server log event"))
+
+  - name: OPA decision log (valid)
+    inputs:
+      - type: log
+        insert_at: processed_files_opa_json
+        log_fields:
+          file: /stackable/log/opa/test
+          message: '{"level":"info","msg":"Valid decision log event","decision_id":"5b887ec2","time":"2024-01-01T00:00:00Z","logger":"decision"}'
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.container, "opa")
+              assert_eq!(.logger, "decision")
+              assert_eq!(.level, "INFO")
+              assert!(!exists(.errors))
+
+  - name: OPA log with unknown level (invalid)
+    inputs:
+      - type: log
+        insert_at: processed_files_opa_json
+        log_fields:
+          file: /stackable/log/opa/test
+          message: '{"level":"critical","msg":"Invalid log event with an unknown level","time":"2024-01-01T00:00:00Z","logger":"server"}'
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert!(exists(.errors), "unknown level should be recorded as an error")
+              assert_eq!(.level, "INFO")
+
+  - name: Bundle-builder tracing-rs log (valid)
+    inputs:
+      - type: log
+        insert_at: processed_files_tracing_rs
+        log_fields:
+          file: /stackable/log/bundle-builder/bundle-builder.tracing-rs.json
+          message: '{"timestamp":"2024-01-01T00:00:00.000000Z","level":"INFO","fields":{"message":"Valid log event"},"target":"TestLogger"}'
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.container, "bundle-builder")
+              assert_eq!(.level, "INFO")
+              assert_eq!(.logger, "TestLogger")
+              assert!(!exists(.errors))
+              assert!(contains(string!(.message), "Valid log event"))
+
+  - name: Tracing-rs log without timestamp (invalid)
+    inputs:
+      - type: log
+        insert_at: processed_files_tracing_rs
+        log_fields:
+          file: /stackable/log/bundle-builder/bundle-builder.tracing-rs.json
+          message: '{"level":"INFO","fields":{"message":"Invalid log event with an unparsable timestamp"},"target":"TestLogger","timestamp":"unparsable timestamp"}'
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert!(exists(.errors), "unparsable timestamp should be recorded as an error")
+
+  - name: Prepare stdout log
+    inputs:
+      - type: log
+        insert_at: processed_files_stdout
+        log_fields:
+          file: /stackable/log/prepare/prepare.stdout.log
+          message: Create dir [/bundles/active]
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.container, "prepare")
+              assert_eq!(.logger, "ROOT")
+              assert_eq!(.level, "INFO")
+
+  - name: Prepare stderr log
+    inputs:
+      - type: log
+        insert_at: processed_files_stderr
+        log_fields:
+          file: /stackable/log/prepare/prepare.stderr.log
+          message: something failed
+          pod: test-opa-server-default-0
+          source_type: file
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.container, "prepare")
+              assert_eq!(.logger, "ROOT")
+              assert_eq!(.level, "ERROR")
+
+  - name: Vector internal log
+    inputs:
+      - type: log
+        insert_at: filtered_logs_vector
+        log_fields:
+          message: Vector has started.
+          metadata:
+            level: INFO
+            module_path: vector::internal_events::process
+          pid: 14
+          pod: test-opa-server-default-0
+          source_type: internal_logs
+    outputs:
+      - extract_from: extended_logs
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!(.container, "vector")
+              assert_eq!(.level, "INFO")
+              assert_eq!(.logger, "vector::internal_events::process")
+              assert_eq!(.cluster, "opa")
+
+  - name: Vector internal log level filtering - INFO passes
+    inputs:
+      - type: log
+        insert_at: filtered_logs_vector
+        log_fields:
+          metadata:
+            level: INFO
+    outputs:
+      - extract_from: filtered_logs_vector
+        conditions:
+          - type: vrl
+            source: |
+              assert_eq!("INFO", .metadata.level)
+
+  - name: Vector internal log level filtering - DEBUG dropped
+    inputs:
+      - type: log
+        insert_at: filtered_logs_vector
+        log_fields:
+          metadata:
+            level: DEBUG
+    no_outputs_from:
+      - filtered_logs_vector

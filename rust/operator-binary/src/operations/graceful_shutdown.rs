@@ -1,7 +1,7 @@
 use snafu::{ResultExt, Snafu};
 use stackable_operator::builder::pod::PodBuilder;
 
-use crate::crd::{OpaConfig, SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD};
+use crate::{controller::ValidatedOpaConfig, crd::SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
@@ -12,7 +12,7 @@ pub enum Error {
 }
 
 pub fn add_graceful_shutdown_config(
-    merged_config: &OpaConfig,
+    merged_config: &ValidatedOpaConfig,
     pod_builder: &mut PodBuilder,
 ) -> Result<(), Error> {
     // This must be always set by the merge mechanism, as we provide a default value,
