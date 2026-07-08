@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Bump `stackable-operator` to 0.113.3 and `snafu` to 0.9 ([#818], [#830], [#842]).
+- Bump `stackable-operator` to 0.113.3 and `snafu` to 0.9 ([#818], [#830], [#842], [#851]).
 - Set `maxSurge=1` and `maxUnavailable=0` on the OPA DaemonSet rolling update strategy to eliminate
   availability gaps during rolling updates ([#819]).
 - Document Helm deployed RBAC permissions and remove unnecessary permissions ([#820]).
@@ -37,6 +37,7 @@ All notable changes to this project will be documented in this file.
 [#840]: https://github.com/stackabletech/opa-operator/pull/840
 [#842]: https://github.com/stackabletech/opa-operator/pull/842
 [#843]: https://github.com/stackabletech/opa-operator/pull/843
+[#851]: https://github.com/stackabletech/opa-operator/pull/851
 
 ## [26.3.0] - 2026-03-16
 
