@@ -228,7 +228,7 @@ pub async fn reconcile_opa(
             rolegroup,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
-            &rbac_sa,
+            &rbac_sa.name_any(),
             &ctx.cluster_info,
         )
         .with_context(|_| BuildRoleGroupDaemonSetSnafu {
