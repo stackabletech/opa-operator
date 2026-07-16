@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::Path};
 
 use hyper::StatusCode;
+use info_fetcher_commons::utils::{self, http::send_json_request};
 use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
@@ -8,25 +9,22 @@ use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
 use url::Url;
 
-use crate::{
-    UserInfo, UserInfoRequest, http_error,
-    utils::{self, http::send_json_request},
-};
+use crate::{UserInfo, UserInfoRequest, http_error};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to get access_token"))]
-    AccessToken { source: crate::utils::http::Error },
+    AccessToken { source: utils::http::Error },
 
     #[snafu(display("failed to search for user with username {username:?}"))]
     SearchForUser {
-        source: crate::utils::http::Error,
+        source: utils::http::Error,
         username: String,
     },
 
     #[snafu(display("failed to search for user with id {user_id:?}"))]
     UserNotFoundById {
-        source: crate::utils::http::Error,
+        source: utils::http::Error,
         user_id: String,
     },
 
@@ -34,13 +32,13 @@ pub enum Error {
         "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
     ))]
     RequestUserGroups {
-        source: crate::utils::http::Error,
+        source: utils::http::Error,
         username: String,
         user_id: String,
     },
 
     #[snafu(display("failed to to build entra endpoint for {endpoint}"))]
-    BuildEntraEndpointFailed {
+    BuildEntraEndpoint {
         source: url::ParseError,
         endpoint: String,
     },
@@ -71,7 +69,7 @@ impl http_error::Error for Error {
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
-            Self::BuildEntraEndpointFailed { .. } => StatusCode::BAD_REQUEST,
+            Self::BuildEntraEndpoint { .. } => StatusCode::BAD_REQUEST,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ReadClientId { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -254,14 +252,13 @@ impl EntraBackend {
 
         let token_endpoint =
             format!("{schema}://{token_endpoint}:{port}/{tenant_id}/oauth2/v2.0/token");
-        let token_endpoint_url =
-            Url::parse(&token_endpoint).context(BuildEntraEndpointFailedSnafu {
-                endpoint: token_endpoint,
-            })?;
+        let token_endpoint_url = Url::parse(&token_endpoint).context(BuildEntraEndpointSnafu {
+            endpoint: token_endpoint,
+        })?;
 
         let user_info_endpoint = format!("{schema}://{user_info_endpoint}:{port}");
         let user_info_endpoint_url =
-            Url::parse(&user_info_endpoint).context(BuildEntraEndpointFailedSnafu {
+            Url::parse(&user_info_endpoint).context(BuildEntraEndpointSnafu {
                 endpoint: user_info_endpoint,
             })?;
 

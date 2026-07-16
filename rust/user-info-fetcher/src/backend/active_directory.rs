@@ -8,13 +8,14 @@ use std::{
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use hyper::StatusCode;
+use info_fetcher_commons::utils;
 use krb5::KrbContext;
 use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_operator::commons::tls_verification::TlsClientDetails;
 use uuid::Uuid;
 
-use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error, utils};
+use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error};
 
 #[derive(Snafu, Debug)]
 pub enum Error {

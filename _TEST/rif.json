@@ -1,0 +1,8 @@
+{
+    "backend": {
+        "dataHub": {
+            "hostname": "localhost",
+            "port": 8080
+        }
+    }
+}

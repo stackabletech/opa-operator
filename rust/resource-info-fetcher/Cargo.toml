@@ -1,6 +1,6 @@
 [package]
-name = "stackable-opa-user-info-fetcher"
-description = "Fetches user metadata from directory services"
+name = "stackable-opa-resource-info-fetcher"
+description = "Fetches resource metadata"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -12,28 +12,20 @@ publish = false
 stackable-opa-operator = { path = "../operator-binary" }
 info-fetcher-commons = { path = "../info-fetcher-commons" }
 stackable-operator.workspace = true
-krb5.workspace = true
 
 axum.workspace = true
-base64.workspace = true
-byteorder.workspace = true
 clap.workspace = true
 futures.workspace = true
 hyper.workspace = true
-ldap3.workspace = true
 moka.workspace = true
-native-tls.workspace = true
-pin-project.workspace = true
 reqwest.workspace = true
-rustls-pki-types.workspace = true
-semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 snafu.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
-uuid.workspace = true
+urlencoding.workspace = true
 
 [build-dependencies]
 built.workspace = true

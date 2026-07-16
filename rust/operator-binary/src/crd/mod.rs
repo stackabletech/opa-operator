@@ -27,6 +27,8 @@ use stackable_operator::{
 };
 use strum::{Display, EnumIter, EnumString};
 
+pub mod cache;
+pub mod resource_info_fetcher;
 pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";

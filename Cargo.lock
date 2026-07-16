@@ -1608,6 +1608,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "info-fetcher-commons"
+version = "0.0.0-dev"
+dependencies = [
+ "axum",
+ "hyper",
+ "native-tls",
+ "reqwest",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "snafu 0.9.1",
+ "stackable-operator",
+ "tokio",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3440,6 +3456,29 @@ name = "stackable-opa-regorule-library"
 version = "0.0.0-dev"
 
 [[package]]
+name = "stackable-opa-resource-info-fetcher"
+version = "0.0.0-dev"
+dependencies = [
+ "axum",
+ "built",
+ "clap",
+ "futures",
+ "hyper",
+ "info-fetcher-commons",
+ "moka",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "snafu 0.9.1",
+ "stackable-opa-operator",
+ "stackable-operator",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
 name = "stackable-opa-user-info-fetcher"
 version = "0.0.0-dev"
 dependencies = [
@@ -3450,6 +3489,7 @@ dependencies = [
  "clap",
  "futures",
  "hyper",
+ "info-fetcher-commons",
  "krb5",
  "ldap3",
  "moka",
@@ -4233,6 +4273,12 @@ dependencies = [
  "serde",
  "serde_derive",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "utf8_iter"
