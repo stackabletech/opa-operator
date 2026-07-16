@@ -26,16 +26,21 @@ pub struct ResourceInfoRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
+// Soon there will be something else than Trino
+#[expect(clippy::enum_variant_names)]
 pub enum ResourceInfoRequestResource {
     TrinoTable {
         catalog: String,
         schema: String,
         table: String,
     },
-    // TrinoSchema {
-    //     catalog: String,
-    //     schema: String,
-    // },
+    TrinoSchema {
+        catalog: String,
+        schema: String,
+    },
+    TrinoCatalog {
+        catalog: String,
+    },
 }
 
 #[derive(Snafu, Debug)]

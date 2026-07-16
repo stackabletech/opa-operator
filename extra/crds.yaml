@@ -518,7 +518,7 @@ spec:
                         properties:
                           entryTimeToLive:
                             default: 1m
-                            description: How long metadata about each user should be cached for.
+                            description: How long responses should be cached for.
                             type: string
                         type: object
                     type: object
@@ -2449,7 +2449,7 @@ spec:
                         properties:
                           entryTimeToLive:
                             default: 1m
-                            description: How long metadata about each user should be cached for.
+                            description: How long responses should be cached for.
                             type: string
                         type: object
                     type: object

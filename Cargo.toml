@@ -26,6 +26,7 @@ futures = { version = "0.3" }
 hyper = "1.4"
 indoc = "2.0"
 ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
+md5 = "0.7"
 moka = { version = "0.12", features = ["future"] }
 native-tls = "0.2.12"
 pin-project = "1.1"

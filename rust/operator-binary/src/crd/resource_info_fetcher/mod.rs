@@ -45,6 +45,8 @@ pub mod versioned {
     }
 }
 
+// We actually use it as serde(default) value, but Rust fails to see that
+#[allow(dead_code)]
 fn default_data_hub_env() -> String {
     "PROD".to_owned()
 }
