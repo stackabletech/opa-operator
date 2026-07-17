@@ -13,7 +13,6 @@
 use std::collections::HashMap;
 
 use hyper::StatusCode;
-use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
@@ -91,7 +90,7 @@ pub struct ResolvedXfscAasBackend {
 impl ResolvedXfscAasBackend {
     /// Resolves an XFSC AAS backend by initializing the HTTP client.
     pub fn resolve(config: v1alpha2::AasBackend) -> Result<Self, Error> {
-        let http_client = ClientBuilder::new()
+        let http_client = crate::utils::http::client_builder()
             .build()
             .context(ConstructHttpClientSnafu)?;
 
