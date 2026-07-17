@@ -34,5 +34,8 @@ tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
 
+[dev-dependencies]
+wiremock.workspace = true
+
 [build-dependencies]
 built.workspace = true

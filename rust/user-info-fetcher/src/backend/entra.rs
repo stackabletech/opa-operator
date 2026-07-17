@@ -98,6 +98,10 @@ struct UserMetadata {
 #[serde(rename_all = "camelCase")]
 struct GroupMembershipResponse {
     value: Vec<GroupMembership>,
+
+    /// Set by Graph when further pages of group memberships are available.
+    #[serde(rename = "@odata.nextLink")]
+    next_link: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -215,22 +219,31 @@ impl ResolvedEntraBackend {
             }
         };
 
-        let groups = send_json_request::<GroupMembershipResponse>(
-            self.http_client
-                .get(entra_backend.group_info(&user_info.id))
-                .bearer_auth(&authn.access_token),
-        )
-        .await
-        .with_context(|_| RequestUserGroupsSnafu {
-            username: user_info.user_principal_name.clone(),
-            user_id: user_info.id.clone(),
-        })?
-        .value;
+        let mut groups = Vec::new();
+        let mut next_url = Some(entra_backend.group_info(&user_info.id));
+
+        while let Some(url) = next_url {
+            let response = send_json_request::<GroupMembershipResponse>(
+                self.http_client.get(url).bearer_auth(&authn.access_token),
+            )
+            .await
+            .with_context(|_| RequestUserGroupsSnafu {
+                username: user_info.user_principal_name.clone(),
+                user_id: user_info.id.clone(),
+            })?;
+
+            groups.extend(response.value.into_iter().filter_map(|g| g.display_name));
+
+            next_url = response
+                .next_link
+                .map(|next_link| entra_backend.next_page(&next_link))
+                .transpose()?;
+        }
 
         Ok(UserInfo {
             id: Some(user_info.id),
             username: Some(user_info.user_principal_name),
-            groups: groups.into_iter().filter_map(|g| g.display_name).collect(),
+            groups,
             custom_attributes: user_info.attributes,
         })
     }
@@ -282,10 +295,34 @@ impl EntraBackend {
         user_info_url
     }
 
+    /// Requests the first page of the user's group memberships.
+    ///
+    /// The `microsoft.graph.group` segment restricts the result to groups. Without it, Graph also
+    /// returns the directory roles and administrative units the user belongs to.
     pub fn group_info(&self, user: &str) -> Url {
         let mut user_info_url = self.user_info_endpoint_url.clone();
-        user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
+        user_info_url.set_path(&format!(
+            "/v1.0/users/{user}/memberOf/microsoft.graph.group"
+        ));
+        // 999 is the largest page size Graph accepts, and keeps the number of round-trips down.
+        user_info_url.set_query(Some("$select=displayName&$top=999"));
         user_info_url
+    }
+
+    /// Rebases an `@odata.nextLink` onto the configured user info endpoint.
+    ///
+    /// Graph reports the link against its public `graph.microsoft.com` host, so following it
+    /// verbatim would ignore a configured endpoint and send the access token to whichever host
+    /// the response names. Only the path and query are taken from the link itself.
+    pub fn next_page(&self, next_link: &str) -> Result<Url, Error> {
+        let next_link_url = Url::parse(next_link).context(BuildEntraEndpointFailedSnafu {
+            endpoint: next_link,
+        })?;
+
+        let mut next_page_url = self.user_info_endpoint_url.clone();
+        next_page_url.set_path(next_link_url.path());
+        next_page_url.set_query(next_link_url.query());
+        Ok(next_page_url)
     }
 }
 
@@ -293,7 +330,107 @@ impl EntraBackend {
 mod tests {
     use std::str::FromStr;
 
+    use stackable_operator::v2::types::kubernetes::SecretName;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path, query_param},
+    };
+
     use super::*;
+    use crate::UserInfoRequestById;
+
+    const TENANT_ID: &str = "1234-5678-1234-5678";
+    const USER_ID: &str = "8765-4321-8765-4321";
+
+    /// Builds a backend pointing at `mock_server`, bypassing [`ResolvedEntraBackend::resolve`]
+    /// so that no credentials have to be read from disk.
+    fn backend_for(mock_server: &MockServer) -> ResolvedEntraBackend {
+        let host = HostName::from_str(&mock_server.address().ip().to_string()).unwrap();
+
+        ResolvedEntraBackend {
+            config: v1alpha2::EntraBackend {
+                token_hostname: host.clone(),
+                user_info_hostname: host,
+                port: Some(mock_server.address().port()),
+                tenant_id: TENANT_ID.to_owned(),
+                tls: None,
+                client_credentials_secret: SecretName::from_str("entra-credentials").unwrap(),
+            },
+            client_id: "client-id".to_owned(),
+            client_secret: "client-secret".to_owned(),
+            http_client: reqwest::Client::new(),
+        }
+    }
+
+    /// Mocks the OAuth2 token and user metadata endpoints, which every `get_user_info` call hits
+    /// before it gets to the group memberships we actually care about.
+    async fn mock_token_and_user(mock_server: &MockServer) {
+        Mock::given(method("POST"))
+            .and(path(format!("/{TENANT_ID}/oauth2/v2.0/token")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "access-token",
+            })))
+            .mount(mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/users/{USER_ID}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": USER_ID,
+                "userPrincipalName": "alice@example.com",
+            })))
+            .mount(mock_server)
+            .await;
+    }
+
+    async fn get_user_info_by_id(backend: &ResolvedEntraBackend) -> UserInfo {
+        backend
+            .get_user_info(&UserInfoRequest::UserInfoRequestById(UserInfoRequestById {
+                id: USER_ID.to_owned(),
+            }))
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_entra_follows_paginated_group_memberships() {
+        let mock_server = MockServer::start().await;
+        mock_token_and_user(&mock_server).await;
+
+        let group_path = format!("/v1.0/users/{USER_ID}/memberOf/microsoft.graph.group");
+        let next_link_path = "/v1.0/paged-groups";
+
+        // First page: two groups, plus a link to the second page.
+        Mock::given(method("GET"))
+            .and(path(group_path))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "value": [
+                        {"displayName": "group-1"},
+                        {"displayName": "group-2"},
+                    ],
+                    "@odata.nextLink": format!("https://graph.microsoft.com{next_link_path}?$skiptoken=abc"),
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        // Second (final) page: one more group and no further link.
+        Mock::given(method("GET"))
+            .and(path(next_link_path))
+            .and(query_param("$skiptoken", "abc"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "value": [
+                    {"displayName": "group-3"},
+                ],
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let user_info = get_user_info_by_id(&backend_for(&mock_server)).await;
+
+        assert_eq!(user_info.groups, vec!["group-1", "group-2", "group-3"]);
+    }
 
     #[test]
     fn test_entra_defaults_id() {
@@ -323,9 +460,15 @@ mod tests {
         assert_eq!(
             entra.group_info(user),
             Url::parse(&format!(
-                "https://graph.microsoft.com/v1.0/users/{user}/memberOf"
+                "https://graph.microsoft.com/v1.0/users/{user}/memberOf/microsoft.graph.group?$select=displayName&$top=999"
             ))
             .unwrap()
+        );
+        assert_eq!(
+            entra
+                .next_page("https://graph.microsoft.com/v1.0/paged-groups?$skiptoken=abc")
+                .unwrap(),
+            Url::parse("https://graph.microsoft.com/v1.0/paged-groups?$skiptoken=abc").unwrap()
         );
     }
 
@@ -357,9 +500,16 @@ mod tests {
         assert_eq!(
             entra.group_info(user),
             Url::parse(&format!(
-                "http://graph.mock.com:8080/v1.0/users/{user}/memberOf"
+                "http://graph.mock.com:8080/v1.0/users/{user}/memberOf/microsoft.graph.group?$select=displayName&$top=999"
             ))
             .unwrap()
+        );
+        // The link Graph returns names its own public host, but the configured endpoint wins.
+        assert_eq!(
+            entra
+                .next_page("https://graph.microsoft.com/v1.0/paged-groups?$skiptoken=abc")
+                .unwrap(),
+            Url::parse("http://graph.mock.com:8080/v1.0/paged-groups?$skiptoken=abc").unwrap()
         );
     }
 }
