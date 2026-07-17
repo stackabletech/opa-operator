@@ -230,6 +230,19 @@ impl ResolvedEntraBackend {
         let mut pages_remaining = MAX_GROUP_PAGES;
 
         while let Some(url) = next_url {
+            // Bound the loop so we can't run into an infinite loop for any reason
+            if pages_remaining == 0 {
+                tracing::warn!(
+                    user.id = %user_info.id,
+                    max_pages = MAX_GROUP_PAGES,
+                    "reached the maximum number of Entra group membership pages; \
+                     the resolved group list may be incomplete"
+                );
+
+                break;
+            }
+            pages_remaining -= 1;
+
             let response = send_json_request::<GroupMembershipResponse>(
                 self.http_client.get(url).bearer_auth(&authn.access_token),
             )
@@ -245,20 +258,6 @@ impl ResolvedEntraBackend {
                 .next_link
                 .map(|next_link| entra_backend.next_page(&next_link))
                 .transpose()?;
-
-            // Bound the loop so we can't run into an infinite loop for any reason
-            pages_remaining -= 1;
-            if pages_remaining == 0 {
-                if next_url.is_some() {
-                    tracing::warn!(
-                        user.id = %user_info.id,
-                        max_pages = MAX_GROUP_PAGES,
-                        "reached the maximum number of Entra group membership pages; \
-                         the resolved group list may be incomplete"
-                    );
-                }
-                break;
-            }
         }
 
         Ok(UserInfo {

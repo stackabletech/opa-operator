@@ -27,9 +27,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- The Entra user-info-fetcher backend now follows Microsoft Graph's `@odata.nextLink` pagination,
-  so users with more group memberships than fit on a single response page receive their complete
-  group list. Following the link is bounded to 100 pages as a safeguard ([#859]).
+- The user-info-fetcher Entra backend now follows Microsoft Graph's `@odata.nextLink` pagination
+  links - up to 100 times - to fetch 999 group memberships per result page, resulting in a maximum
+  of 99900 fetched memberships for a single user ([#859]).
 
 ### Removed
 
