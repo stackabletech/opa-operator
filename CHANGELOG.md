@@ -22,6 +22,14 @@ All notable changes to this project will be documented in this file.
 - BREAKING: Removed product-config machinery. This is a breaking change in terms of configuration.
   Users relying on the product-config `properties.yaml` file have to set these properties via the CRD.
   JsonPatches has been renamed to JsonPatch ([#842]).
+- Apply a 60s request and 15s connect timeout to all user-info-fetcher outbound HTTP backends
+  (Keycloak, Entra, XFSC AAS), which previously waited indefinitely ([#859]).
+
+### Fixed
+
+- The Entra user-info-fetcher backend now follows Microsoft Graph's `@odata.nextLink` pagination,
+  so users with more group memberships than fit on a single response page receive their complete
+  group list. Following the link is bounded to 100 pages as a safeguard ([#859]).
 
 ### Removed
 
@@ -38,6 +46,7 @@ All notable changes to this project will be documented in this file.
 [#842]: https://github.com/stackabletech/opa-operator/pull/842
 [#843]: https://github.com/stackabletech/opa-operator/pull/843
 [#851]: https://github.com/stackabletech/opa-operator/pull/851
+[#859]: https://github.com/stackabletech/opa-operator/pull/859
 
 ## [26.3.0] - 2026-03-16
 

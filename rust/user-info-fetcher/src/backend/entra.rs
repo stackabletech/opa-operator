@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
 use hyper::StatusCode;
-use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
@@ -110,6 +109,13 @@ struct GroupMembership {
     display_name: Option<String>,
 }
 
+/// Upper bound on the number of `@odata.nextLink` pages followed for a single group lookup.
+///
+/// At Graph's maximum page size of 999 this covers ~99,900 memberships, hopefully well beyond any realistic
+/// account.
+/// It exists purely as a final protection against an infinite loop for whatever reason.
+const MAX_GROUP_PAGES: usize = 100;
+
 /// Entra backend with resolved credentials.
 ///
 /// This struct combines the CRD configuration with credentials loaded from the filesystem.
@@ -145,7 +151,7 @@ impl ResolvedEntraBackend {
                 path: client_secret_path.display().to_string(),
             })?;
 
-        let mut client_builder = ClientBuilder::new();
+        let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(
             &TlsClientDetails {
                 tls: config.tls.clone(),
@@ -221,6 +227,7 @@ impl ResolvedEntraBackend {
 
         let mut groups = Vec::new();
         let mut next_url = Some(entra_backend.group_info(&user_info.id));
+        let mut pages_remaining = MAX_GROUP_PAGES;
 
         while let Some(url) = next_url {
             let response = send_json_request::<GroupMembershipResponse>(
@@ -238,6 +245,20 @@ impl ResolvedEntraBackend {
                 .next_link
                 .map(|next_link| entra_backend.next_page(&next_link))
                 .transpose()?;
+
+            // Bound the loop so we can't run into an infinite loop for any reason
+            pages_remaining -= 1;
+            if pages_remaining == 0 {
+                if next_url.is_some() {
+                    tracing::warn!(
+                        user.id = %user_info.id,
+                        max_pages = MAX_GROUP_PAGES,
+                        "reached the maximum number of Entra group membership pages; \
+                         the resolved group list may be incomplete"
+                    );
+                }
+                break;
+            }
         }
 
         Ok(UserInfo {
@@ -295,15 +316,13 @@ impl EntraBackend {
         user_info_url
     }
 
-    /// Requests the first page of the user's group memberships.
+    /// Requests the first page of the user's directory memberships.
     ///
-    /// The `microsoft.graph.group` segment restricts the result to groups. Without it, Graph also
-    /// returns the directory roles and administrative units the user belongs to.
+    /// `memberOf` returns every directory object the user belongs to: groups as well as directory
+    /// roles and administrative units.
     pub fn group_info(&self, user: &str) -> Url {
         let mut user_info_url = self.user_info_endpoint_url.clone();
-        user_info_url.set_path(&format!(
-            "/v1.0/users/{user}/memberOf/microsoft.graph.group"
-        ));
+        user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
         // 999 is the largest page size Graph accepts, and keeps the number of round-trips down.
         user_info_url.set_query(Some("$select=displayName&$top=999"));
         user_info_url
@@ -397,7 +416,7 @@ mod tests {
         let mock_server = MockServer::start().await;
         mock_token_and_user(&mock_server).await;
 
-        let group_path = format!("/v1.0/users/{USER_ID}/memberOf/microsoft.graph.group");
+        let group_path = format!("/v1.0/users/{USER_ID}/memberOf");
         let next_link_path = "/v1.0/paged-groups";
 
         // First page: two groups, plus a link to the second page.
@@ -432,6 +451,41 @@ mod tests {
         assert_eq!(user_info.groups, vec!["group-1", "group-2", "group-3"]);
     }
 
+    #[tokio::test]
+    async fn test_entra_group_pagination_is_bounded() {
+        let mock_server = MockServer::start().await;
+        mock_token_and_user(&mock_server).await;
+
+        // Both the first page and every subsequent page link onwards, so without the page cap this
+        // would page forever. `next_page` rebases the link onto the mock host, so the loop path is
+        // what actually gets requested after the first page.
+        let loop_path = "/v1.0/looping-groups";
+        let next_link = format!("https://graph.microsoft.com{loop_path}");
+
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/users/{USER_ID}/memberOf")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "value": [{"displayName": "group"}],
+                "@odata.nextLink": next_link,
+            })))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path(loop_path))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "value": [{"displayName": "group"}],
+                "@odata.nextLink": next_link,
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let user_info = get_user_info_by_id(&backend_for(&mock_server)).await;
+
+        // One group per page, stopping once the cap is hit instead of looping forever.
+        assert_eq!(user_info.groups.len(), MAX_GROUP_PAGES);
+    }
+
     #[test]
     fn test_entra_defaults_id() {
         let tenant_id = "1234-5678-1234-5678";
@@ -460,7 +514,7 @@ mod tests {
         assert_eq!(
             entra.group_info(user),
             Url::parse(&format!(
-                "https://graph.microsoft.com/v1.0/users/{user}/memberOf/microsoft.graph.group?$select=displayName&$top=999"
+                "https://graph.microsoft.com/v1.0/users/{user}/memberOf?$select=displayName&$top=999"
             ))
             .unwrap()
         );
@@ -500,7 +554,7 @@ mod tests {
         assert_eq!(
             entra.group_info(user),
             Url::parse(&format!(
-                "http://graph.mock.com:8080/v1.0/users/{user}/memberOf/microsoft.graph.group?$select=displayName&$top=999"
+                "http://graph.mock.com:8080/v1.0/users/{user}/memberOf?$select=displayName&$top=999"
             ))
             .unwrap()
         );
