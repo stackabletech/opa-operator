@@ -422,6 +422,34 @@ rec {
           "default" = [ "std" ];
         };
       };
+      "assert-json-diff" = rec {
+        crateName = "assert-json-diff";
+        version = "2.0.2";
+        edition = "2018";
+        sha256 = "04mg3w0rh3schpla51l18362hsirl23q93aisws2irrj32wg5r27";
+        libName = "assert_json_diff";
+        authors = [
+          "David Pedersen <david.pdrsn@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "serde";
+            packageId = "serde";
+          }
+          {
+            name = "serde_json";
+            packageId = "serde_json";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+        ];
+
+      };
       "async-broadcast" = rec {
         crateName = "async-broadcast";
         version = "0.7.2";
@@ -2101,6 +2129,62 @@ rec {
           }
         ];
 
+      };
+      "deadpool" = rec {
+        crateName = "deadpool";
+        version = "0.12.3";
+        edition = "2021";
+        sha256 = "06wvsfyni5f04ia6jczgjnpkq4w91cnjjdz10mpq93gcsv8v3qhb";
+        authors = [
+          "Michael P. Jung <michael.jung@terreon.de>"
+        ];
+        dependencies = [
+          {
+            name = "deadpool-runtime";
+            packageId = "deadpool-runtime";
+          }
+          {
+            name = "lazy_static";
+            packageId = "lazy_static";
+          }
+          {
+            name = "num_cpus";
+            packageId = "num_cpus";
+          }
+          {
+            name = "tokio";
+            packageId = "tokio";
+            features = [ "sync" ];
+          }
+        ];
+        devDependencies = [
+          {
+            name = "tokio";
+            packageId = "tokio";
+            features = [ "macros" "rt" "rt-multi-thread" "time" ];
+          }
+        ];
+        features = {
+          "default" = [ "managed" "unmanaged" ];
+          "rt_async-std_1" = [ "deadpool-runtime/async-std_1" ];
+          "rt_tokio_1" = [ "deadpool-runtime/tokio_1" ];
+          "serde" = [ "dep:serde" ];
+        };
+        resolvedDefaultFeatures = [ "default" "managed" "unmanaged" ];
+      };
+      "deadpool-runtime" = rec {
+        crateName = "deadpool-runtime";
+        version = "0.1.4";
+        edition = "2021";
+        sha256 = "0arbchl5j887hcfvjy4gq38d32055s5cf7pkpmwn0lfw3ss6ca89";
+        libName = "deadpool_runtime";
+        authors = [
+          "Michael P. Jung <michael.jung@terreon.de>"
+        ];
+        features = {
+          "async-std_1" = [ "dep:async-std_1" ];
+          "tokio_1" = [ "dep:tokio_1" ];
+        };
       };
       "defmt" = rec {
         crateName = "defmt";
@@ -4047,6 +4131,22 @@ rec {
         edition = "2021";
         sha256 = "1sjmpsdl8czyh9ywl3qcsfsq9a307dg4ni2vnlwgnzzqhc4y0113";
 
+      };
+      "hermit-abi" = rec {
+        crateName = "hermit-abi";
+        version = "0.5.2";
+        edition = "2021";
+        sha256 = "1744vaqkczpwncfy960j2hxrbjl1q01csm84jpd9dajbdr2yy3zw";
+        libName = "hermit_abi";
+        authors = [
+          "Stefan Lankes"
+        ];
+        features = {
+          "alloc" = [ "dep:alloc" ];
+          "core" = [ "dep:core" ];
+          "rustc-dep-of-std" = [ "core" "alloc" ];
+        };
+        resolvedDefaultFeatures = [ "default" ];
       };
       "hmac" = rec {
         crateName = "hmac";
@@ -7268,6 +7368,28 @@ rec {
           "libm" = [ "dep:libm" ];
         };
         resolvedDefaultFeatures = [ "default" "i128" "libm" "std" ];
+      };
+      "num_cpus" = rec {
+        crateName = "num_cpus";
+        version = "1.17.0";
+        edition = "2015";
+        sha256 = "0fxjazlng4z8cgbmsvbzv411wrg7x3hyxdq8nxixgzjswyylppwi";
+        authors = [
+          "Sean McArthur <sean@seanmonstar.com>"
+        ];
+        dependencies = [
+          {
+            name = "hermit-abi";
+            packageId = "hermit-abi";
+            target = { target, features }: ("hermit" == target."os" or null);
+          }
+          {
+            name = "libc";
+            packageId = "libc";
+            target = { target, features }: (!(target."windows" or false));
+          }
+        ];
+
       };
       "once_cell" = rec {
         crateName = "once_cell";
@@ -11531,6 +11653,12 @@ rec {
             name = "built";
             packageId = "built";
             features = [ "chrono" "git2" ];
+          }
+        ];
+        devDependencies = [
+          {
+            name = "wiremock";
+            packageId = "wiremock";
           }
         ];
 
@@ -16873,6 +17001,93 @@ rec {
         sha256 = "1v7rb5cibyzx8vak29pdrk8nx9hycsjs4w0jgms08qk49jl6v7sq";
         authors = [
           "Microsoft"
+        ];
+
+      };
+      "wiremock" = rec {
+        crateName = "wiremock";
+        version = "0.6.5";
+        edition = "2024";
+        sha256 = "0cahz2c4lwaw8f7g5d805wlqh824fjhaw8g588akr6sxn3gixnq8";
+        authors = [
+          "Luca Palmieri <rust@lpalmieri.com>"
+        ];
+        dependencies = [
+          {
+            name = "assert-json-diff";
+            packageId = "assert-json-diff";
+          }
+          {
+            name = "base64";
+            packageId = "base64";
+          }
+          {
+            name = "deadpool";
+            packageId = "deadpool";
+          }
+          {
+            name = "futures";
+            packageId = "futures";
+          }
+          {
+            name = "http";
+            packageId = "http";
+          }
+          {
+            name = "http-body-util";
+            packageId = "http-body-util";
+          }
+          {
+            name = "hyper";
+            packageId = "hyper";
+            features = [ "full" ];
+          }
+          {
+            name = "hyper-util";
+            packageId = "hyper-util";
+            features = [ "tokio" "server" "http1" "http2" ];
+          }
+          {
+            name = "log";
+            packageId = "log";
+          }
+          {
+            name = "once_cell";
+            packageId = "once_cell";
+          }
+          {
+            name = "regex";
+            packageId = "regex";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+          }
+          {
+            name = "serde_json";
+            packageId = "serde_json";
+          }
+          {
+            name = "tokio";
+            packageId = "tokio";
+            features = [ "rt" "macros" "net" ];
+          }
+          {
+            name = "url";
+            packageId = "url";
+          }
+        ];
+        devDependencies = [
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "tokio";
+            packageId = "tokio";
+            features = [ "macros" "rt-multi-thread" ];
+          }
         ];
 
       };
