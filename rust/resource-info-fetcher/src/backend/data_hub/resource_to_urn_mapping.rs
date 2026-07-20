@@ -33,8 +33,12 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> Urn {
                 ("schema", schema.as_str()),
             ]))
         }
-        ResourceInfoRequestResource::SupersetChart(_) => todo!(),
-        ResourceInfoRequestResource::SupersetDashboard(_) => todo!(),
+        ResourceInfoRequestResource::SupersetChart { id } => {
+            format!("urn:li:chart:({stacklet},{id})")
+        }
+        ResourceInfoRequestResource::SupersetDashboard { id } => {
+            format!("urn:li:dashboard:({stacklet},{id})")
+        }
         ResourceInfoRequestResource::RawDataHubUrn(urn) => urn.to_owned(),
     };
 

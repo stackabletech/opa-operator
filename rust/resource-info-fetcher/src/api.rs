@@ -42,9 +42,12 @@ pub enum ResourceInfoRequestResource {
         catalog: String,
     },
 
-    SupersetChart(String),
-    SupersetDashboard(String),
-
+    SupersetChart {
+        id: u64,
+    },
+    SupersetDashboard {
+        id: u64,
+    },
     RawDataHubUrn(String),
 }
 
