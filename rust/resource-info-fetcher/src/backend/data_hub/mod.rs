@@ -202,7 +202,14 @@ impl ResolvedDataHubBackend {
 impl ResourceInfoBackend for ResolvedDataHubBackend {
     type Response = DataHubResourceInfoResponse;
 
-    // TODO: Do more parallelism
+    // The individual URN lookups already run concurrently via `try_join_all`. On top of that we
+    // overlap the coarse-grained groups as well: tags are fetched at the same time as the owners,
+    // all owner types are fetched concurrently, and within each owner type the user and group
+    // lookups run at the same time.
+    //
+    // TODO: This is unbounded concurrency. For entities with many owners/tags this can burst a lot
+    // of simultaneous requests at DataHub. If that becomes a problem, bound the concurrency (e.g.
+    // via `futures::stream::StreamExt::buffer_unordered` or a shared `tokio::sync::Semaphore`).
     #[instrument(skip(self))]
     async fn get_resource_info(
         &self,
@@ -210,28 +217,39 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
     ) -> Result<Self::Response, GetResourceInfoError> {
         let urn = urn_for_request(request, &self.config.env);
         let entity_response: DataHubEntityResponse = self.query_entity(&urn).await?;
+        let entity_response = &entity_response;
 
-        let tag_urns = entity_response.tag_urns();
-        let tags = try_join_all(
-            tag_urns
-                .iter()
-                .map(|urn| async { self.query_tag(urn).await }),
-        )
-        .await
-        .context(GetDataHubUserSnafu)?;
+        // Fetch the tags of the entity.
+        let tags_fut = async move {
+            let tag_urns = entity_response.tag_urns();
+            try_join_all(
+                tag_urns
+                    .iter()
+                    .map(|urn| async { self.query_tag(urn).await }),
+            )
+            .await
+            .context(GetDataHubUserSnafu)
+        };
 
-        let mut owners = BTreeMap::new();
-        for owner_type in OwnerType::iter() {
+        // Fetch the owners of every type.
+        let owners_fut = try_join_all(OwnerType::iter().map(|owner_type| async move {
             let (user_urns, users_without_urn, group_urns) =
                 entity_response.owners_for_type(&owner_type);
 
-            let mut users = try_join_all(
-                user_urns
-                    .iter()
-                    .map(|urn| async { self.query_user(urn).await }),
+            let (mut users, groups) = futures::try_join!(
+                try_join_all(
+                    user_urns
+                        .iter()
+                        .map(|urn| async { self.query_user(urn).await }),
+                ),
+                try_join_all(
+                    group_urns
+                        .iter()
+                        .map(|urn| async { self.query_group(urn).await }),
+                ),
             )
-            .await
             .context(GetDataHubUserSnafu)?;
+
             users.extend(
                 users_without_urn
                     .iter()
@@ -244,21 +262,18 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
                     }),
             );
 
-            let groups = try_join_all(
-                group_urns
-                    .iter()
-                    .map(|urn| async { self.query_group(urn).await }),
-            )
-            .await
-            .context(GetDataHubUserSnafu)?;
-
-            owners.insert(
+            Ok::<_, GetResourceInfoError>((
                 owner_type,
                 DataHubResourceInfoResponseOwners { users, groups },
-            );
-        }
+            ))
+        }));
 
-        Ok(DataHubResourceInfoResponse { tags, owners })
+        let (tags, owners) = futures::try_join!(tags_fut, owners_fut)?;
+
+        Ok(DataHubResourceInfoResponse {
+            tags,
+            owners: owners.into_iter().collect(),
+        })
     }
 }
 
