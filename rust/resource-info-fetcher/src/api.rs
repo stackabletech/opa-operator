@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use hyper::StatusCode;
 use info_fetcher_commons::http_error;
 use serde::{Deserialize, Serialize};
@@ -66,14 +64,6 @@ pub enum GetResourceInfoError {
         display("failed to get resource information from DataHub")
     )]
     DataHub { source: backend::data_hub::Error },
-
-    #[snafu(
-        visibility(pub(crate)),
-        display("failed to get user information from DataHub")
-    )]
-    GetDataHubUser {
-        source: Arc<backend::data_hub::Error>,
-    },
 }
 
 impl http_error::Error for GetResourceInfoError {
@@ -87,7 +77,6 @@ impl http_error::Error for GetResourceInfoError {
         match self {
             Self::SerializeResponseAsJson { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::DataHub { source } => source.status_code(),
-            Self::GetDataHubUser { source } => source.status_code(),
         }
     }
 }

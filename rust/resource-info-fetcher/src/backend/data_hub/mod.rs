@@ -1,32 +1,27 @@
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display},
+    path::Path,
+};
 
-use futures::future::try_join_all;
 use hyper::StatusCode;
 use info_fetcher_commons::{
     http_error,
     utils::{self, http::send_json_request},
 };
-use moka::future::Cache;
 use reqwest::{ClientBuilder, Url};
-use serde::Serialize;
-use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1::{self, DataHubBackend};
-use strum::IntoEnumIterator;
+use serde::{Deserialize, Serialize};
+use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
 use tracing::{debug, instrument, trace};
 
 use crate::{
-    api::{GetDataHubUserSnafu, GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest},
-    backend::data_hub::{
-        resource_to_urn_mapping::urn_for_request,
-        upstream_api::{
-            AspectsCorpGroupInfoValue, AspectsCorpUserInfoValue, AspectsOwnershipValueOwnerType,
-            DataHubEntityResponse, OwnerTypeUrn, RawOwnerType, Tag, Urn,
-        },
-    },
+    api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest},
+    backend::data_hub::resource_to_urn_mapping::urn_for_request,
 };
 
+mod graphql;
 mod resource_to_urn_mapping;
-mod upstream_api;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -48,32 +43,20 @@ pub enum Error {
     #[snafu(display("failed to construct HTTP client"))]
     ConstructHttpClient { source: reqwest::Error },
 
-    #[snafu(display("failed to to build DataHub endpoint for {endpoint}"))]
+    #[snafu(display("failed to build DataHub GraphQL endpoint {endpoint:?}"))]
     BuildDataHubEndpoint {
         source: url::ParseError,
         endpoint: String,
     },
 
-    #[snafu(display("failed to query for entity with URN {urn:?}"))]
-    QueryForUrn {
+    #[snafu(display("failed to execute GraphQL query for URN {urn:?}"))]
+    ExecuteGraphQlQuery {
         source: utils::http::Error,
         urn: Urn,
     },
 
-    #[snafu(display(
-        "the entity information send by DataHub for the tag with the URN {urn:?} must contain tag properties"
-    ))]
-    EntityResponseMustContainTagProperties { urn: Urn },
-
-    #[snafu(display(
-        "the entity information send by DataHub for the user with the URN {urn:?} must contain user information"
-    ))]
-    EntityResponseMustContainUserInfo { urn: Urn },
-
-    #[snafu(display(
-        "the entity information send by DataHub for the group with the URN {urn:?} must contain group information"
-    ))]
-    EntityResponseMustContainGroupInfo { urn: Urn },
+    #[snafu(display("DataHub returned GraphQL errors for URN {urn:?}: {messages}"))]
+    GraphQlErrors { messages: String, urn: Urn },
 }
 
 impl http_error::Error for Error {
@@ -84,67 +67,80 @@ impl http_error::Error for Error {
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::BuildDataHubEndpoint { .. } => StatusCode::BAD_REQUEST,
-            Self::QueryForUrn { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::EntityResponseMustContainTagProperties { .. } => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
-            Self::EntityResponseMustContainUserInfo { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::EntityResponseMustContainGroupInfo { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ExecuteGraphQlQuery { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::GraphQlErrors { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
 
+/// A DataHub URN, e.g. `urn:li:corpuser:alice` or `urn:li:tag:pii`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct Urn(pub String);
+
+impl Display for Urn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// The information we return for a single resource. Assembled from a single DataHub GraphQL query
+/// that resolves the resource's tags and owners (with their user/group details) server-side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataHubResourceInfoResponse {
+    urn: Urn,
+    tags: Vec<Tag>,
+
+    /// Owners grouped by their ownership type URN, e.g.
+    /// `urn:li:ownershipType:__system__technical_owner`. DataHub has no fixed set of ownership
+    /// types — users can define custom ones — so this is an open map, not an enum.
+    owners: BTreeMap<Urn, Owners>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Owners {
+    /// Human-readable name of the ownership type, e.g. "Technical Owner". [`None`] if DataHub did
+    /// not resolve a name for the type.
+    ownership_type_name: Option<String>,
+    users: Vec<User>,
+    groups: Vec<Group>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    urn: Urn,
+    name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct User {
+    urn: Urn,
+    full_name: Option<String>,
+    display_name: String,
+    email: Option<String>,
+    active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    urn: Urn,
+    display_name: String,
+    description: Option<String>,
+}
+
 /// This struct combines the CRD configuration with credentials loaded from the filesystem.
-/// Credentials and the HTTP client are initialized once at startup and stored internally.
+/// Credentials, the HTTP client and the GraphQL endpoint are initialized once at startup and stored
+/// internally.
 pub struct ResolvedDataHubBackend {
     config: v1alpha1::DataHubBackend,
     client_id: String,
     client_secret: String,
     http_client: reqwest::Client,
-
-    tag_cache: Cache<Urn, Tag>,
-    user_cache: Cache<Urn, AspectsCorpUserInfoValue>,
-    group_cache: Cache<Urn, AspectsCorpGroupInfoValue>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DataHubResourceInfoResponse {
-    urn: Urn,
-    owners: BTreeMap<OwnerType, DataHubResourceInfoResponseOwners>,
-    tags: Vec<Tag>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord, strum::EnumIter)]
-#[serde(rename_all = "camelCase")]
-pub enum OwnerType {
-    BusinessOwner,
-    TechnicalOwner,
-    DataSteward,
-    None,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DataHubResourceInfoResponseOwners {
-    users: Vec<AspectsCorpUserInfoValue>,
-    groups: Vec<AspectsCorpGroupInfoValue>,
-}
-
-impl From<&AspectsOwnershipValueOwnerType> for OwnerType {
-    fn from(value: &AspectsOwnershipValueOwnerType) -> Self {
-        match value {
-            AspectsOwnershipValueOwnerType::Urn { type_urn } => match type_urn {
-                OwnerTypeUrn::BusinessOwner => Self::BusinessOwner,
-                OwnerTypeUrn::TechnicalOwner => Self::TechnicalOwner,
-                OwnerTypeUrn::DataSteward => Self::DataSteward,
-                OwnerTypeUrn::None => Self::None,
-            },
-            AspectsOwnershipValueOwnerType::Raw {
-                type_: RawOwnerType::TechnicalOwner,
-            } => Self::TechnicalOwner,
-        }
-    }
+    graphql_url: Url,
 }
 
 impl ResolvedDataHubBackend {
@@ -152,7 +148,6 @@ impl ResolvedDataHubBackend {
     #[instrument(skip_all)]
     pub async fn resolve(
         config: v1alpha1::DataHubBackend,
-        cache: &stackable_opa_operator::crd::cache::Cache,
         credentials_dir: &Path,
     ) -> Result<Self, Error> {
         let client_id_path = credentials_dir.join("clientId");
@@ -175,211 +170,95 @@ impl ResolvedDataHubBackend {
             .context(ConfigureTlsSnafu)?;
         let http_client = client_builder.build().context(ConstructHttpClientSnafu)?;
 
-        let tag_cache = Cache::builder()
-            .time_to_live(*cache.entry_time_to_live)
-            .name("tag-info")
-            .build();
-        let user_cache = Cache::builder()
-            .time_to_live(*cache.entry_time_to_live)
-            .name("user-info")
-            .build();
-        let group_cache = Cache::builder()
-            .time_to_live(*cache.entry_time_to_live)
-            .name("group-info")
-            .build();
+        let schema = if config.tls.uses_tls() {
+            "https"
+        } else {
+            "http"
+        };
+        let port = config
+            .port
+            .unwrap_or(if config.tls.uses_tls() { 443 } else { 80 });
+        let graphql = format!(
+            "{schema}://{hostname}:{port}/api/graphql",
+            hostname = config.hostname
+        );
+        let graphql_url = Url::parse(&graphql)
+            .with_context(|_| BuildDataHubEndpointSnafu { endpoint: graphql })?;
 
         Ok(Self {
             config,
             client_id,
             client_secret,
             http_client,
-            tag_cache,
-            user_cache,
-            group_cache,
+            graphql_url,
         })
     }
-}
 
-impl ResourceInfoBackend for ResolvedDataHubBackend {
-    type Response = DataHubResourceInfoResponse;
-
-    // The individual URN lookups already run concurrently via `try_join_all`. On top of that we
-    // overlap the coarse-grained groups as well: tags are fetched at the same time as the owners,
-    // all owner types are fetched concurrently, and within each owner type the user and group
-    // lookups run at the same time.
-    //
-    // TODO: This is unbounded concurrency. For entities with many owners/tags this can burst a lot
-    // of simultaneous requests at DataHub. If that becomes a problem, bound the concurrency (e.g.
-    // via `futures::stream::StreamExt::buffer_unordered` or a shared `tokio::sync::Semaphore`).
+    /// Fetches a resource, its tags and its owners (including the owning users' and groups' details)
+    /// in a single DataHub GraphQL query. DataHub resolves the referenced tag/user/group entities
+    /// server-side, so there is no client-side fan-out.
     #[instrument(skip(self))]
-    async fn get_resource_info(
-        &self,
-        request: &ResourceInfoRequest,
-    ) -> Result<Self::Response, GetResourceInfoError> {
-        let urn = urn_for_request(request, &self.config.env);
-        let entity_response: DataHubEntityResponse = self.query_entity(&urn).await?;
-        let entity_response = &entity_response;
+    async fn query_entity(&self, urn: &Urn) -> Result<graphql::Entity, Error> {
+        trace!(%urn, %self.graphql_url, "Sending GraphQL query to DataHub");
 
-        // Fetch the tags of the entity.
-        let tags_fut = async move {
-            let tag_urns = entity_response.tag_urns();
-            try_join_all(
-                tag_urns
-                    .iter()
-                    .map(|urn| async { self.query_tag(urn).await }),
-            )
-            .await
-            .context(GetDataHubUserSnafu)
-        };
-
-        // Fetch the owners of every type.
-        let owners_fut = try_join_all(OwnerType::iter().map(|owner_type| async move {
-            let (user_urns, users_without_urn, group_urns) =
-                entity_response.owners_for_type(&owner_type);
-
-            let (mut users, groups) = futures::try_join!(
-                try_join_all(
-                    user_urns
-                        .iter()
-                        .map(|urn| async { self.query_user(urn).await }),
-                ),
-                try_join_all(
-                    group_urns
-                        .iter()
-                        .map(|urn| async { self.query_group(urn).await }),
-                ),
-            )
-            .context(GetDataHubUserSnafu)?;
-
-            users.extend(
-                users_without_urn
-                    .iter()
-                    .map(|username| AspectsCorpUserInfoValue {
-                        full_name: None,
-                        display_name: username.trim_start_matches("urn:li:corpuser").to_owned(),
-                        email: None,
-                        active: true,
-                        data_hub_user: false,
-                    }),
-            );
-
-            Ok::<_, GetResourceInfoError>((
-                owner_type,
-                DataHubResourceInfoResponseOwners { users, groups },
-            ))
-        }));
-
-        let (tags, owners) = futures::try_join!(tags_fut, owners_fut)?;
-
-        Ok(DataHubResourceInfoResponse {
-            urn,
-            tags,
-            owners: owners.into_iter().collect(),
-        })
-    }
-}
-
-impl ResolvedDataHubBackend {
-    #[instrument(skip(self))]
-    async fn query_entity(&self, urn: &Urn) -> Result<DataHubEntityResponse, Error> {
-        let Self {
-            config:
-                DataHubBackend {
-                    hostname,
-                    port,
-                    tls,
-                    ..
-                },
-            client_id,
-            client_secret,
-            http_client,
-            ..
-        } = &self;
-
-        let schema = if tls.uses_tls() { "https" } else { "http" };
-        let port = port.unwrap_or(if tls.uses_tls() { 443 } else { 80 });
-
-        let entity = format!(
-            "{schema}://{hostname}:{port}/entitiesV2/{url_encoded_urn}",
-            url_encoded_urn = urlencoding::encode(&urn.0)
-        );
-        let entity_url =
-            Url::parse(&entity).with_context(|_| BuildDataHubEndpointSnafu { endpoint: entity })?;
-
-        trace!(%entity_url, "Sending request to DataHub's entity API");
-
-        let entity = send_json_request(
-            http_client
-                .get(entity_url.clone())
+        let response: graphql::GraphQlResponse = send_json_request(
+            self.http_client
+                .post(self.graphql_url.clone())
                 // DataHub's system authenticator strips the leading "Basic " and compares the rest
                 // VERBATIM against "<id>:<secret>" — it is NOT standard RFC 7617 Basic auth. So do
                 // NOT use reqwest's .basic_auth(), which base64-encodes the credentials; set the
                 // header manually so the value goes out unencoded.
                 .header(
                     reqwest::header::AUTHORIZATION,
-                    format!("Basic {client_id}:{client_secret}"),
-                ),
+                    format!("Basic {}:{}", self.client_id, self.client_secret),
+                )
+                .json(&graphql::request(urn)),
         )
         .await
-        .with_context(|_| QueryForUrnSnafu { urn: urn.clone() })?;
+        .with_context(|_| ExecuteGraphQlQuerySnafu { urn: urn.clone() })?;
 
-        debug!(%urn, %entity_url, "Fetched entity from DataHub");
+        // GraphQL reports genuine problems (unresolvable URNs, resolver failures) in `errors` while
+        // still returning `200 OK`. These are actual errors — not a missing resource — so we fail
+        // the request rather than returning incomplete data.
+        if !response.errors.is_empty() {
+            let messages = response
+                .errors
+                .iter()
+                .map(|error| error.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return GraphQlErrorsSnafu {
+                messages,
+                urn: urn.clone(),
+            }
+            .fail();
+        }
+
+        // A resource that is unknown to DataHub is reported as a null entity (with no errors). It
+        // simply has no metadata, so we return an empty response rather than failing the request.
+        let Some(entity) = response.data.and_then(|data| data.entity) else {
+            debug!(%urn, "DataHub returned no entity; responding with empty resource info");
+            return Ok(graphql::Entity::default());
+        };
+
+        debug!(%urn, "Fetched entity from DataHub via GraphQL");
         trace!(?entity, "DataHub entity payload");
 
         Ok(entity)
     }
+}
+
+impl ResourceInfoBackend for ResolvedDataHubBackend {
+    type Response = DataHubResourceInfoResponse;
 
     #[instrument(skip(self))]
-    async fn query_tag(&self, urn: &Urn) -> Result<Tag, Arc<Error>> {
-        self.tag_cache
-            .try_get_with_by_ref(urn, async {
-                let tag = self
-                    .query_entity(urn)
-                    .await?
-                    .tag_properties()
-                    .with_context(|| EntityResponseMustContainTagPropertiesSnafu {
-                        urn: urn.clone(),
-                    })?
-                    .name
-                    .clone();
-                debug!(%urn, %tag, "Fetched tag from DataHub");
+    async fn get_resource_info(
+        &self,
+        request: &ResourceInfoRequest,
+    ) -> Result<Self::Response, GetResourceInfoError> {
+        let urn = urn_for_request(request, &self.config.env);
+        let entity = self.query_entity(&urn).await?;
 
-                Ok(tag)
-            })
-            .await
-    }
-
-    #[instrument(skip(self))]
-    async fn query_user(&self, urn: &Urn) -> Result<AspectsCorpUserInfoValue, Arc<Error>> {
-        self.user_cache
-            .try_get_with_by_ref(urn, async {
-                let user = self
-                    .query_entity(urn)
-                    .await?
-                    .user_info()
-                    .with_context(|| EntityResponseMustContainUserInfoSnafu { urn: urn.clone() })?
-                    .clone();
-                debug!(%urn, ?user, "Fetched user from DataHub");
-
-                Ok(user)
-            })
-            .await
-    }
-
-    #[instrument(skip(self))]
-    async fn query_group(&self, urn: &Urn) -> Result<AspectsCorpGroupInfoValue, Arc<Error>> {
-        self.group_cache
-            .try_get_with_by_ref(urn, async {
-                let group = self
-                    .query_entity(urn)
-                    .await?
-                    .group_info()
-                    .with_context(|| EntityResponseMustContainGroupInfoSnafu { urn: urn.clone() })?
-                    .clone();
-                debug!(%urn, ?group, "Fetched group from DataHub");
-
-                Ok(group)
-            })
-            .await
+        Ok(entity.into_response(urn))
     }
 }

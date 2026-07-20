@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     api::{ResourceInfoRequest, ResourceInfoRequestResource},
-    backend::data_hub::upstream_api::Urn,
+    backend::data_hub::Urn,
 };
 
 pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> Urn {

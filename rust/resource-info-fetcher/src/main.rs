@@ -84,13 +84,12 @@ enum StartupError {
 /// contains both the configuration and the resolved credentials.
 async fn resolve_backend(
     backend: v1alpha1::Backend,
-    cache: &stackable_opa_operator::crd::cache::Cache,
     credentials_dir: &Path,
 ) -> Result<ResolvedBackend, StartupError> {
     match backend {
         v1alpha1::Backend::DataHub(config) => {
             let resolved =
-                backend::data_hub::ResolvedDataHubBackend::resolve(config, cache, credentials_dir)
+                backend::data_hub::ResolvedDataHubBackend::resolve(config, credentials_dir)
                     .await
                     .context(ResolveDataHubBackendSnafu)?;
             Ok(ResolvedBackend::DataHub(resolved))
@@ -132,8 +131,7 @@ async fn main() -> Result<(), StartupError> {
 
     let config: v1alpha1::Config = read_config_file(&args.config)
         .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
-    let backend =
-        Arc::new(resolve_backend(config.backend, &config.cache, &args.credentials_dir).await?);
+    let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
     let resource_info_cache = {
         Cache::builder()
             .name("resource-info")
