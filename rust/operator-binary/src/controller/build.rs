@@ -12,6 +12,7 @@ use crate::controller::{
         config_map::build_rolegroup_config_map,
         daemonset::build_server_rolegroup_daemonset,
         discovery::build_discovery_config_map,
+        rbac::{build_role_binding, build_service_account},
         service::{
             build_rolegroup_headless_service, build_rolegroup_metrics_service,
             build_server_role_service,
@@ -51,7 +52,6 @@ pub enum Error {
 /// Kubernetes cluster domain used in the discovery URL and the sidecar environment.
 pub fn build(
     cluster: &ValidatedCluster,
-    service_account_name: &str,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     cluster_info: &KubernetesClusterInfo,
@@ -81,7 +81,6 @@ pub fn build(
                     role_group,
                     opa_bundle_builder_image,
                     user_info_fetcher_image,
-                    service_account_name,
                     cluster_info,
                 )
                 .context(DaemonSetSnafu {
@@ -98,6 +97,8 @@ pub fn build(
         daemon_sets,
         services,
         config_maps,
+        service_accounts: vec![build_service_account(cluster)],
+        role_bindings: vec![build_role_binding(cluster)],
     })
 }
 
@@ -115,6 +116,8 @@ stackable_operator::constant!(pub(crate) PLACEHOLDER_DISCOVERY_ROLE_GROUP: RoleG
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use serde_json::json;
     use stackable_operator::{
         commons::networking::DomainName, kube::Resource, utils::cluster_info::KubernetesClusterInfo,
@@ -152,7 +155,6 @@ mod tests {
     fn build_produces_expected_resource_names() {
         let resources = build(
             &cluster(),
-            "test-opa-serviceaccount",
             "bundle-builder-image",
             "user-info-fetcher-image",
             &cluster_info(),
@@ -178,5 +180,59 @@ mod tests {
             sorted_names(&resources.config_maps),
             ["test-opa", "test-opa-server-default"]
         );
+    }
+
+    /// Locks the RBAC resource names, the roleRef, and the recommended label set against
+    /// accidental drift. The fixture's cluster name deliberately differs from the product name so
+    /// that swapped `name`/`instance` label values cannot pass unnoticed.
+    #[test]
+    fn build_produces_rbac() {
+        let resources = build(
+            &cluster(),
+            "bundle-builder-image",
+            "user-info-fetcher-image",
+            &cluster_info(),
+        )
+        .expect("build succeeds");
+
+        assert_eq!(
+            sorted_names(&resources.service_accounts),
+            ["test-opa-serviceaccount"]
+        );
+        assert_eq!(
+            sorted_names(&resources.role_bindings),
+            ["test-opa-rolebinding"]
+        );
+
+        let expected_labels = BTreeMap::from(
+            [
+                ("app.kubernetes.io/component", "none"),
+                ("app.kubernetes.io/instance", "test-opa"),
+                (
+                    "app.kubernetes.io/managed-by",
+                    "opa.stackable.tech_opacluster",
+                ),
+                ("app.kubernetes.io/name", "opa"),
+                ("app.kubernetes.io/role-group", "none"),
+                ("app.kubernetes.io/version", "1.2.3-stackable0.0.0-dev"),
+                ("stackable.tech/vendor", "Stackable"),
+            ]
+            .map(|(key, value)| (key.to_string(), value.to_string())),
+        );
+        let service_account = resources
+            .service_accounts
+            .first()
+            .expect("a ServiceAccount is built");
+        assert_eq!(
+            service_account.metadata.labels,
+            Some(expected_labels.clone())
+        );
+
+        let role_binding = resources
+            .role_bindings
+            .first()
+            .expect("a RoleBinding is built");
+        assert_eq!(role_binding.metadata.labels, Some(expected_labels));
+        assert_eq!(role_binding.role_ref.name, "opa-clusterrole");
     }
 }

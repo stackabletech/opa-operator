@@ -221,7 +221,6 @@ pub fn build_server_rolegroup_daemonset(
     role_group: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
-    service_account_name: &str,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let resolved_product_image = &cluster.image;
@@ -381,7 +380,12 @@ pub fn build_server_rolegroup_daemonset(
                 .build(),
         )
         .context(AddVolumeSnafu)?
-        .service_account_name(service_account_name)
+        .service_account_name(
+            cluster
+                .rbac_resource_names()
+                .service_account_name()
+                .to_string(),
+        )
         .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
 
     if let Some(tls) = &cluster.cluster_config.tls {
@@ -734,7 +738,6 @@ mod tests {
             role_group,
             "bundle-builder-image",
             "user-info-fetcher-image",
-            "test-opa-serviceaccount",
             &cluster_info(),
         )
         .expect("the daemonset should build")

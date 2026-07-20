@@ -13,7 +13,8 @@ use stackable_operator::{
     },
     k8s_openapi::api::{
         apps::v1::DaemonSet,
-        core::v1::{ConfigMap, Service},
+        core::v1::{ConfigMap, Service, ServiceAccount},
+        rbac::v1::RoleBinding,
     },
     kube::{Resource as KubeResource, api::ObjectMeta},
     kvp::Labels,
@@ -22,7 +23,7 @@ use stackable_operator::{
         HasName, HasUid, NameIsValidLabelValue,
         kvp::label::{recommended_labels, role_group_selector, role_selector},
         role_group_utils::ResourceNames,
-        role_utils::{GenericCommonConfig, RoleGroupConfig},
+        role_utils::{self, GenericCommonConfig, RoleGroupConfig},
         types::{
             kubernetes::{NamespaceName, Uid},
             operator::{
@@ -55,6 +56,9 @@ pub struct ValidatedCluster {
     pub name: ClusterName,
     pub namespace: NamespaceName,
     pub uid: Uid,
+    /// The product version as a valid label value, for the recommended `app.kubernetes.io/version`
+    /// label. Derived from the resolved image's app-version label value.
+    pub product_version: ProductVersion,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
     pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
@@ -69,6 +73,9 @@ impl ValidatedCluster {
         cluster_config: ValidatedClusterConfig,
         role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
     ) -> Self {
+        let product_version = ProductVersion::from_str(&image.app_version_label_value)
+            .expect("the app version label value is a valid product version");
+
         let metadata = ObjectMeta {
             name: Some(name.to_string()),
             namespace: Some(namespace.to_string()),
@@ -80,6 +87,7 @@ impl ValidatedCluster {
             name,
             namespace,
             uid,
+            product_version,
             image,
             cluster_config,
             role_group_configs,
@@ -102,6 +110,15 @@ impl ValidatedCluster {
             .expect("the server role name is a valid role name")
     }
 
+    /// Type-safe names for the per-cluster RBAC resources: the ServiceAccount shared by all
+    /// Pods, its (namespaced) RoleBinding, and the operator-deployed ClusterRole it binds.
+    pub fn rbac_resource_names(&self) -> role_utils::ResourceNames {
+        role_utils::ResourceNames {
+            cluster_name: self.name.clone(),
+            product_name: product_name(),
+        }
+    }
+
     /// Type-safe names for the resources of a given role group.
     pub(crate) fn resource_names(&self, role_group_name: &RoleGroupName) -> ResourceNames {
         ResourceNames {
@@ -111,27 +128,33 @@ impl ValidatedCluster {
         }
     }
 
-    /// The product version as a type-safe label value.
-    ///
-    /// `app_version_label_value` is constructed to be a valid label value, so it is also a valid
-    /// [`ProductVersion`].
-    fn product_version(&self) -> ProductVersion {
-        ProductVersion::from_str(&self.image.app_version_label_value)
-            .expect("the app version label value is a valid product version")
+    pub fn recommended_labels(&self, role_group_name: &RoleGroupName) -> Labels {
+        self.recommended_labels_for(&Self::role_name(), role_group_name)
     }
 
-    /// Recommended labels for a role-group resource.
-    ///
-    /// For role-level or cluster-level resources (e.g. the role `Service` or the discovery
-    /// `ConfigMap`) pass a placeholder role-group name such as `global` or `discovery`.
-    pub fn recommended_labels(&self, role_group_name: &RoleGroupName) -> Labels {
+    /// Recommended labels for a resource that is not tied to a concrete role,
+    /// using a free-form role/role-group label value.
+    pub fn recommended_labels_for(
+        &self,
+        role_name: &RoleName,
+        role_group_name: &RoleGroupName,
+    ) -> Labels {
+        self.recommended_labels_with(&self.product_version, role_name, role_group_name)
+    }
+
+    fn recommended_labels_with(
+        &self,
+        product_version: &ProductVersion,
+        role_name: &RoleName,
+        role_group_name: &RoleGroupName,
+    ) -> Labels {
         recommended_labels(
             self,
             &product_name(),
-            &self.product_version(),
+            product_version,
             &operator_name(),
             &controller_name(),
-            &Self::role_name(),
+            role_name,
             role_group_name,
         )
     }
@@ -246,6 +269,8 @@ pub struct KubernetesResources {
     pub daemon_sets: Vec<DaemonSet>,
     pub services: Vec<Service>,
     pub config_maps: Vec<ConfigMap>,
+    pub service_accounts: Vec<ServiceAccount>,
+    pub role_bindings: Vec<RoleBinding>,
 }
 
 /// Cluster-wide settings resolved once during validation, so the build steps no longer need the
