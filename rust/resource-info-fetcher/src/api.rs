@@ -48,6 +48,11 @@ pub enum ResourceInfoRequestResource {
     SupersetDashboard {
         id: u64,
     },
+
+    KafkaTopic {
+        topic: String,
+    },
+
     RawDataHubUrn(String),
 }
 

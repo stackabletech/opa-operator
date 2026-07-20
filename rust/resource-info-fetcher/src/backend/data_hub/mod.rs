@@ -110,6 +110,7 @@ pub struct ResolvedDataHubBackend {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DataHubResourceInfoResponse {
+    urn: Urn,
     owners: BTreeMap<OwnerType, DataHubResourceInfoResponseOwners>,
     tags: Vec<Tag>,
 }
@@ -271,6 +272,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
         let (tags, owners) = futures::try_join!(tags_fut, owners_fut)?;
 
         Ok(DataHubResourceInfoResponse {
+            urn,
             tags,
             owners: owners.into_iter().collect(),
         })
