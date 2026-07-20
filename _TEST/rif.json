@@ -1,4 +1,7 @@
 {
+    "cache": {
+        "entryTimeToLive": "0s"
+    },
     "backend": {
         "dataHub": {
             "hostname": "localhost",

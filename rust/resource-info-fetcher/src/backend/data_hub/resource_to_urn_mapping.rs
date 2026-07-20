@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
-use crate::api::{ResourceInfoRequest, ResourceInfoRequestResource};
+use crate::{
+    api::{ResourceInfoRequest, ResourceInfoRequestResource},
+    backend::data_hub::upstream_api::Urn,
+};
 
-pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> String {
+pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> Urn {
     let stacklet = &request.stacklet;
-    match &request.resource {
+    let urn = match &request.resource {
         ResourceInfoRequestResource::TrinoTable {
             catalog,
             schema,
@@ -17,13 +20,11 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> String {
         // Trino catalogs and schemas are modelled as DataHub `Container`s (subtypes `Database` and
         // `Schema` respectively). Unlike datasets, their URN is not human-readable but a GUID derived
         // from the container key - see `container_urn`.
-        ResourceInfoRequestResource::TrinoCatalog { catalog } => {
-            container_urn(&BTreeMap::from([
-                ("platform", stacklet.as_str()),
-                ("instance", env),
-                ("database", catalog.as_str()),
-            ]))
-        }
+        ResourceInfoRequestResource::TrinoCatalog { catalog } => container_urn(&BTreeMap::from([
+            ("platform", stacklet.as_str()),
+            ("instance", env),
+            ("database", catalog.as_str()),
+        ])),
         ResourceInfoRequestResource::TrinoSchema { catalog, schema } => {
             container_urn(&BTreeMap::from([
                 ("platform", stacklet.as_str()),
@@ -32,7 +33,12 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> String {
                 ("schema", schema.as_str()),
             ]))
         }
-    }
+        ResourceInfoRequestResource::SupersetChart(_) => todo!(),
+        ResourceInfoRequestResource::SupersetDashboard(_) => todo!(),
+        ResourceInfoRequestResource::RawDataHubUrn(urn) => urn.to_owned(),
+    };
+
+    Urn(urn)
 }
 
 /// Reproduces DataHub's `datahub_guid`: the container key is serialized to compact, key-sorted JSON
@@ -43,8 +49,8 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> String {
 /// (e.g. `PROD`) ends up in the `instance` field and no `env` field is present in the key. The
 /// `platform` is the bare platform name (e.g. `trino`), *not* the `urn:li:dataPlatform:` form.
 fn container_urn(container_key: &BTreeMap<&str, &str>) -> String {
-    let key_json =
-        serde_json::to_string(container_key).expect("serializing a BTreeMap<&str, &str> cannot fail");
+    let key_json = serde_json::to_string(container_key)
+        .expect("serializing a BTreeMap<&str, &str> cannot fail");
     format!("urn:li:container:{:x}", md5::compute(key_json.as_bytes()))
 }
 
@@ -64,7 +70,7 @@ mod tests {
         };
 
         assert_eq!(
-            urn_for_request(&request, "PROD"),
+            urn_for_request(&request, "PROD").0,
             "urn:li:container:c8531e5a52cacf56768d0bf77ca8787c"
         );
     }
@@ -80,7 +86,7 @@ mod tests {
         };
 
         assert_eq!(
-            urn_for_request(&request, "PROD"),
+            urn_for_request(&request, "PROD").0,
             "urn:li:container:39967cd09b38e2d4736d1eb604cd5247"
         );
     }

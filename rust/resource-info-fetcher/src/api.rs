@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hyper::StatusCode;
 use info_fetcher_commons::http_error;
 use serde::{Deserialize, Serialize};
@@ -26,8 +28,6 @@ pub struct ResourceInfoRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "camelCase")]
-// Soon there will be something else than Trino
-#[expect(clippy::enum_variant_names)]
 pub enum ResourceInfoRequestResource {
     TrinoTable {
         catalog: String,
@@ -41,6 +41,11 @@ pub enum ResourceInfoRequestResource {
     TrinoCatalog {
         catalog: String,
     },
+
+    SupersetChart(String),
+    SupersetDashboard(String),
+
+    RawDataHubUrn(String),
 }
 
 #[derive(Snafu, Debug)]
@@ -53,6 +58,14 @@ pub enum GetResourceInfoError {
         display("failed to get resource information from DataHub")
     )]
     DataHub { source: backend::data_hub::Error },
+
+    #[snafu(
+        visibility(pub(crate)),
+        display("failed to get user information from DataHub")
+    )]
+    GetDataHubUser {
+        source: Arc<backend::data_hub::Error>,
+    },
 }
 
 impl http_error::Error for GetResourceInfoError {
@@ -66,6 +79,7 @@ impl http_error::Error for GetResourceInfoError {
         match self {
             Self::SerializeResponseAsJson { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::DataHub { source } => source.status_code(),
+            Self::GetDataHubUser { source } => source.status_code(),
         }
     }
 }
