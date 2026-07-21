@@ -8,25 +8,41 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::backend::data_hub::{DataHubResourceInfoResponse, Group, Owners, Tag, Urn, User};
+use crate::backend::data_hub::{
+    DataHubResourceInfoResponse, DataProduct, Domain, Group, Owners, Tag, Urn, User,
+};
 
 /// A single query covering every entity kind we build URNs for. We use the generic `entity(urn:)`
 /// resolver plus per-type inline fragments, because a request can target a dataset (Trino table or
 /// Kafka topic), a container (Trino catalog or schema), a chart or a dashboard.
-const RESOURCE_INFO_QUERY: &str = r"
+const RESOURCE_INFO_QUERY: &str = r#"
 query ResourceInfo($urn: String!) {
   entity(urn: $urn) {
     ...ResourceInfo
   }
 }
 fragment ResourceInfo on Entity {
-  ... on Dataset   { tags { ...Tags } ownership { ...Owners } }
-  ... on Container { tags { ...Tags } ownership { ...Owners } }
-  ... on Chart     { tags { ...Tags } ownership { ...Owners } }
-  ... on Dashboard { tags { ...Tags } ownership { ...Owners } }
+  # DataHub has no direct "dataProduct" field on assets; membership is a graph edge that points from
+  # the data product to its assets. From the asset's side it is therefore an INCOMING relationship.
+  dataProducts: relationships(input: {types: ["DataProductContains"], direction: INCOMING, count: 10}) {
+    relationships { ...DataProduct }
+  }
+  ... on Dataset   { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  ... on Container { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  ... on Chart     { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  ... on Dashboard { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
 }
 fragment Tags on GlobalTags {
   tags { tag { urn properties { name } } }
+}
+fragment Domain on DomainAssociation {
+  domain { urn properties { name description } }
+}
+fragment DataProduct on EntityRelationship {
+  entity {
+    urn
+    ... on DataProduct { properties { name description } }
+  }
 }
 fragment Owners on Ownership {
   owners {
@@ -39,7 +55,7 @@ fragment Owners on Ownership {
     type
   }
 }
-";
+"#;
 
 /// Builds the request body for the [`RESOURCE_INFO_QUERY`], parameterized by the entity's URN.
 pub fn request(urn: &Urn) -> GraphQlRequest<'_> {
@@ -86,9 +102,12 @@ pub struct ResponseData {
 /// concrete entity type. [`Default`] yields the "no metadata" entity used when DataHub does not
 /// return an entity for a URN.
 #[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Entity {
     tags: Option<GlobalTags>,
     ownership: Option<Ownership>,
+    domain: Option<DomainAssociation>,
+    data_products: Option<EntityRelationships>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -110,6 +129,47 @@ struct TagNode {
 #[derive(Debug, Deserialize)]
 struct TagProperties {
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DomainAssociation {
+    domain: DomainNode,
+}
+
+#[derive(Debug, Deserialize)]
+struct DomainNode {
+    urn: Urn,
+    properties: Option<DomainProperties>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DomainProperties {
+    name: String,
+    description: Option<String>,
+}
+
+/// The result of the `DataProductContains` relationship query. Each relationship's related entity is
+/// a data product the resource belongs to.
+#[derive(Debug, Deserialize)]
+struct EntityRelationships {
+    relationships: Vec<EntityRelationship>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EntityRelationship {
+    entity: DataProductNode,
+}
+
+#[derive(Debug, Deserialize)]
+struct DataProductNode {
+    urn: Urn,
+    properties: Option<DataProductProperties>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DataProductProperties {
+    name: String,
+    description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -189,6 +249,39 @@ impl Entity {
             })
             .collect();
 
+        let domain = self.domain.map(|association| {
+            let DomainNode { urn, properties } = association.domain;
+            // A domain without a properties aspect has no name; fall back to its URN.
+            let (name, description) = match properties {
+                Some(properties) => (properties.name, properties.description),
+                None => (urn.0.clone(), None),
+            };
+            Domain {
+                urn,
+                name,
+                description,
+            }
+        });
+
+        let data_products = self
+            .data_products
+            .into_iter()
+            .flat_map(|relationships| relationships.relationships)
+            .map(|relationship| {
+                let DataProductNode { urn, properties } = relationship.entity;
+                // A data product without a properties aspect has no name; fall back to its URN.
+                let (name, description) = match properties {
+                    Some(properties) => (properties.name, properties.description),
+                    None => (urn.0.clone(), None),
+                };
+                DataProduct {
+                    urn,
+                    name,
+                    description,
+                }
+            })
+            .collect();
+
         let mut owners: BTreeMap<Urn, Owners> = BTreeMap::new();
         for owner in self
             .ownership
@@ -210,7 +303,13 @@ impl Entity {
             }
         }
 
-        DataHubResourceInfoResponse { urn, tags, owners }
+        DataHubResourceInfoResponse {
+            urn,
+            tags,
+            domain,
+            data_products,
+            owners,
+        }
     }
 }
 

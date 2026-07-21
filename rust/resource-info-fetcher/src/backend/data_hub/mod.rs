@@ -91,6 +91,15 @@ pub struct DataHubResourceInfoResponse {
     urn: Urn,
     tags: Vec<Tag>,
 
+    /// The domain the resource belongs to, e.g. `urn:li:domain:marketing`. A resource is assigned to
+    /// at most one domain, so this is an [`Option`] rather than a list. [`None`] if the resource is
+    /// not assigned to any domain.
+    domain: Option<Domain>,
+
+    /// The data products the resource is part of, e.g. `urn:li:dataProduct:orders`. Modelled as a
+    /// list because DataHub allows an asset to belong to more than one data product.
+    data_products: Vec<DataProduct>,
+
     /// Owners grouped by their ownership type URN, e.g.
     /// `urn:li:ownershipType:__system__technical_owner`. DataHub has no fixed set of ownership
     /// types — users can define custom ones — so this is an open map, not an enum.
@@ -112,6 +121,22 @@ pub struct Owners {
 pub struct Tag {
     urn: Urn,
     name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Domain {
+    urn: Urn,
+    name: String,
+    description: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataProduct {
+    urn: Urn,
+    name: String,
+    description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
