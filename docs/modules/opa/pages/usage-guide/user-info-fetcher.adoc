@@ -191,7 +191,17 @@ NOTE: The Entra backend was marked as non-experimental in SDP 26.3.0.
 
 Fetch groups but not roles for a user from Entra.
 
-NOTE: The client in Entra must use the `client_credentials` flow and requires the `User.ReadAll` and `GroupMemberShip.ReadAll` permissions.
+The client in Entra must use the `client_credentials` flow and requires the `User.Read.All` and `GroupMember.Read.All` permissions.
+To grant these, open your app registration in the Entra portal and go to *API permissions*, then *Add a permission* and *Microsoft Graph*.
+Select *Application permissions* (not *Delegated permissions*) and add `User.Read.All` and `GroupMember.Read.All`.
+
+IMPORTANT: Application permissions require administrator consent. After adding the permissions, click *Grant admin consent for <tenant>*. Without this, the `client_credentials` flow fails with an authorization error even though the permissions are listed.
+
+The values used in the configuration below can be found in the Entra portal as follows:
+
+* `tenantId`: the *Directory (tenant) ID* on the app registration's *Overview* page.
+* `clientId`: the *Application (client) ID* on the app registration's *Overview* page.
+* `clientSecret`: create one under *Certificates & secrets*, then *Client secrets*, then *New client secret*, and copy its *Value* (not the *Secret ID*).
 
 [source,yaml]
 ----

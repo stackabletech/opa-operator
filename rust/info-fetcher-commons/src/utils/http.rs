@@ -1,8 +1,25 @@
+use std::time::Duration;
+
 use hyper::StatusCode;
-use reqwest::{RequestBuilder, Response};
+use reqwest::{ClientBuilder, RequestBuilder, Response};
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use tracing::{instrument, trace};
+
+/// Overall deadline for a single outbound HTTP request.
+/// Backends can issue several requests per lookup, so this bounds each one, not the lookup
+/// as a whole.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Deadline for establishing the connection of an outbound request.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// A [`reqwest::ClientBuilder`] preconfigured with our outbound timeouts.
+pub fn client_builder() -> ClientBuilder {
+    ClientBuilder::new()
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
+}
 
 #[derive(Snafu, Debug)]
 pub enum Error {

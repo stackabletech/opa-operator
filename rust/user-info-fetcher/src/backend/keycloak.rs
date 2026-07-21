@@ -2,7 +2,6 @@ use std::{collections::HashMap, path::Path};
 
 use hyper::StatusCode;
 use info_fetcher_commons::utils::{self, http::send_json_request};
-use reqwest::ClientBuilder;
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
@@ -145,7 +144,7 @@ impl ResolvedKeycloakBackend {
                 path: client_secret_path.display().to_string(),
             })?;
 
-        let mut client_builder = ClientBuilder::new();
+        let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
             .await
             .context(ConfigureTlsSnafu)?;
