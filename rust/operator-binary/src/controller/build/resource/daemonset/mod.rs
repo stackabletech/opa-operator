@@ -17,20 +17,14 @@ use stackable_operator::{
             volume::{SecretOperatorVolumeSourceBuilder, VolumeBuilder},
         },
     },
-    commons::{
-        secret_class::{
-            SecretClassVolume, SecretClassVolumeProvisionParts, SecretClassVolumeScope,
-        },
-        tls_verification::{TlsClientDetails, TlsClientDetailsError},
-    },
-    crd::authentication::ldap,
+    commons::secret_class::SecretClassVolumeProvisionParts,
     k8s_openapi::{
         DeepMerge,
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
                 EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
-                ResourceRequirements, SecretVolumeSource, ServiceAccount,
+                ResourceRequirements, ServiceAccount,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -54,10 +48,15 @@ use stackable_operator::{
 
 use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
-    controller::{OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig, build},
-    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, user_info_fetcher},
+    controller::{
+        OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig,
+        build::{self, resource::daemonset::user_info_fetcher::add_user_info_fetcher_sidecar},
+    },
+    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
+
+mod user_info_fetcher;
 
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
@@ -132,31 +131,6 @@ pub enum Error {
         source: crate::operations::graceful_shutdown::Error,
     },
 
-    #[snafu(display("failed to build volume spec for the User Info Fetcher TLS config"))]
-    UserInfoFetcherKerberosVolume {
-        source: stackable_operator::builder::pod::Error,
-    },
-
-    #[snafu(display("failed to build volume mount spec for the User Info Fetcher TLS config"))]
-    UserInfoFetcherKerberosVolumeMount {
-        source: stackable_operator::builder::pod::container::Error,
-    },
-
-    #[snafu(display("failed to convert the User Info Fetcher Kerberos SecretClass into a volume"))]
-    ConvertUserInfoFetcherKerberosSecretClassVolume {
-        source: stackable_operator::commons::secret_class::SecretClassVolumeError,
-    },
-
-    #[snafu(display(
-        "failed to build volume or volume mount spec for the User Info Fetcher TLS config"
-    ))]
-    UserInfoFetcherTlsVolumeAndMounts { source: TlsClientDetailsError },
-
-    #[snafu(display(
-        "failed to build volume or volume mount spec for the User Info Fetcher LDAP config"
-    ))]
-    UserInfoFetcherLdapVolumeAndMounts { source: ldap::v1alpha1::Error },
-
     #[snafu(display("failed to add needed volume"))]
     AddVolume { source: builder::pod::Error },
 
@@ -169,6 +143,9 @@ pub enum Error {
     TlsVolumeBuild {
         source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
     },
+
+    #[snafu(display("failed to build User Info Fetcher sidecar"))]
+    BuildUserInfoFetcherSidecar { source: user_info_fetcher::Error },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -438,129 +415,14 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeSnafu)?;
     }
 
-    if let Some(user_info) = &cluster.cluster_config.user_info {
-        let user_info_fetcher_container_name = container_name(&Container::UserInfoFetcher);
-        let mut cb_user_info_fetcher = new_container_builder(&user_info_fetcher_container_name);
-
-        cb_user_info_fetcher
-            .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
-            .image(user_info_fetcher_image) // ...override the image
-            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
-            .add_env_var(
-                "CONFIG",
-                format!(
-                    "{CONFIG_DIR}/{file}",
-                    file = build::properties::ConfigFileName::UserInfoFetcher
-                ),
-            )
-            .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
-            .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
-            .context(AddVolumeMountSnafu)?
-            .resources(sidecar_resource_requirements());
-        add_stackable_rust_cli_env_vars(
-            &mut cb_user_info_fetcher,
-            cluster_info,
-            sidecar_container_log_level(merged_config, &Container::UserInfoFetcher).to_string(),
-            &Container::UserInfoFetcher,
-        );
-
-        match &user_info.backend {
-            user_info_fetcher::v1alpha2::Backend::None {} => {}
-            user_info_fetcher::v1alpha2::Backend::ExperimentalXfscAas(_) => {}
-            user_info_fetcher::v1alpha2::Backend::ActiveDirectory(ad) => {
-                pb.add_volume(
-                    SecretClassVolume::new(
-                        ad.kerberos_secret_class_name.to_string(),
-                        Some(SecretClassVolumeScope {
-                            pod: false,
-                            node: false,
-                            services: vec![cluster.name.to_string()],
-                            listener_volumes: Vec::new(),
-                        }),
-                    )
-                    .to_volume(
-                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME.as_ref(),
-                        // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
-                        SecretClassVolumeProvisionParts::PublicPrivate,
-                    )
-                    .context(ConvertUserInfoFetcherKerberosSecretClassVolumeSnafu)?,
-                )
-                .context(UserInfoFetcherKerberosVolumeSnafu)?;
-                cb_user_info_fetcher
-                    .add_volume_mount(
-                        USER_INFO_FETCHER_KERBEROS_VOLUME_NAME.as_ref(),
-                        USER_INFO_FETCHER_KERBEROS_DIR,
-                    )
-                    .context(UserInfoFetcherKerberosVolumeMountSnafu)?;
-                cb_user_info_fetcher.add_env_var(
-                    "KRB5_CONFIG",
-                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
-                );
-                cb_user_info_fetcher.add_env_var(
-                    "KRB5_CLIENT_KTNAME",
-                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
-                );
-                cb_user_info_fetcher.add_env_var("KRB5CCNAME", "MEMORY:".to_string());
-                ad.tls
-                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
-            }
-            user_info_fetcher::v1alpha2::Backend::Keycloak(keycloak) => {
-                pb.add_volume(
-                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref())
-                        .secret(SecretVolumeSource {
-                            secret_name: Some(keycloak.client_credentials_secret.to_string()),
-                            ..Default::default()
-                        })
-                        .build(),
-                )
-                .context(AddVolumeSnafu)?;
-                cb_user_info_fetcher
-                    .add_volume_mount(
-                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
-                        USER_INFO_FETCHER_CREDENTIALS_DIR,
-                    )
-                    .context(AddVolumeMountSnafu)?;
-                keycloak
-                    .tls
-                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
-            }
-            user_info_fetcher::v1alpha2::Backend::Entra(entra) => {
-                pb.add_volume(
-                    VolumeBuilder::new(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref())
-                        .secret(SecretVolumeSource {
-                            secret_name: Some(entra.client_credentials_secret.to_string()),
-                            ..Default::default()
-                        })
-                        .build(),
-                )
-                .context(AddVolumeSnafu)?;
-                cb_user_info_fetcher
-                    .add_volume_mount(
-                        USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
-                        USER_INFO_FETCHER_CREDENTIALS_DIR,
-                    )
-                    .context(AddVolumeMountSnafu)?;
-
-                TlsClientDetails {
-                    tls: entra.tls.clone(),
-                }
-                .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                .context(UserInfoFetcherTlsVolumeAndMountsSnafu)?;
-            }
-            user_info_fetcher::v1alpha2::Backend::OpenLdap(openldap) => {
-                // Reuse the logic from the LDAP `AuthenticationProvider` which handles
-                // volume mounting of TLS secrets and LDAP bind credentials
-                openldap
-                    .to_ldap_provider()
-                    .add_volumes_and_mounts(&mut pb, vec![&mut cb_user_info_fetcher])
-                    .context(UserInfoFetcherLdapVolumeAndMountsSnafu)?;
-            }
-        }
-
-        pb.add_container(cb_user_info_fetcher.build());
-    }
+    add_user_info_fetcher_sidecar(
+        &mut pb,
+        cluster,
+        merged_config,
+        user_info_fetcher_image,
+        cluster_info,
+    )
+    .context(BuildUserInfoFetcherSidecarSnafu)?;
 
     // The Vector logging config was validated up-front (see `ValidatedLogging`); a `Some` here means
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
@@ -850,7 +712,8 @@ mod tests {
     use stackable_operator::{
         commons::networking::DomainName,
         k8s_openapi::{
-            api::core::v1::ServiceAccount, apimachinery::pkg::apis::meta::v1::ObjectMeta,
+            api::core::v1::{Container, ServiceAccount},
+            apimachinery::pkg::apis::meta::v1::ObjectMeta,
         },
     };
 
@@ -1126,6 +989,139 @@ mod tests {
         assert!(
             build_bundle_builder_start_command(&logging, "bundle-builder")
                 .contains("stackable-opa-bundle-builder &")
+        );
+    }
+
+    fn uif_container(ds: &DaemonSet) -> Container {
+        ds.spec
+            .as_ref()
+            .unwrap()
+            .template
+            .spec
+            .as_ref()
+            .unwrap()
+            .containers
+            .iter()
+            .find(|c| c.name == "user-info-fetcher")
+            .expect("the user-info-fetcher container should exist")
+            .clone()
+    }
+
+    fn env_var(container: &Container, name: &str) -> String {
+        container
+            .env
+            .as_ref()
+            .expect("the container should have env vars")
+            .iter()
+            .find(|e| e.name == name)
+            .unwrap_or_else(|| panic!("env var {name} should be set"))
+            .value
+            .clone()
+            .unwrap_or_else(|| panic!("env var {name} should have a literal value"))
+    }
+
+    fn mount_path(container: &Container, volume_name: &str) -> String {
+        container
+            .volume_mounts
+            .as_ref()
+            .expect("the container should have volume mounts")
+            .iter()
+            .find(|m| m.name == volume_name)
+            .unwrap_or_else(|| panic!("volume mount {volume_name} should exist"))
+            .mount_path
+            .clone()
+    }
+
+    #[test]
+    fn user_info_fetcher_container_has_expected_command_and_config_wiring() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "experimentalXfscAas": {
+                            "hostname": "aas.default.svc.cluster.local",
+                            "port": 5000,
+                        }
+                    }
+                }
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let uif = uif_container(&ds);
+        assert_eq!(
+            uif.command,
+            Some(vec!["stackable-opa-user-info-fetcher".to_owned()])
+        );
+        // The sidecar reads its config from the shared config volume, and looks for backend
+        // credentials in a fixed directory (populated by the backend-specific arms below).
+        assert_eq!(
+            env_var(&uif, "CONFIG"),
+            "/stackable/config/user-info-fetcher.json"
+        );
+        assert_eq!(env_var(&uif, "CREDENTIALS_DIR"), "/stackable/credentials");
+        assert_eq!(mount_path(&uif, "config"), "/stackable/config");
+    }
+
+    #[test]
+    fn user_info_fetcher_active_directory_backend_mounts_kerberos_and_sets_krb5_env() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "experimentalActiveDirectory": {
+                            "ldapServer": "ad.example.com",
+                            "baseDistinguishedName": "dc=example,dc=com",
+                            "kerberosSecretClassName": "kerberos",
+                        }
+                    }
+                }
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        // A Kerberos secret volume is provisioned and mounted for the sidecar.
+        assert!(volume_names(&ds).contains(&"kerberos".to_owned()));
+        let uif = uif_container(&ds);
+        assert_eq!(mount_path(&uif, "kerberos"), "/stackable/kerberos");
+        // The krb5 client must find the config and keytab, and keep tickets in memory only.
+        assert_eq!(
+            env_var(&uif, "KRB5_CONFIG"),
+            "/stackable/kerberos/krb5.conf"
+        );
+        assert_eq!(
+            env_var(&uif, "KRB5_CLIENT_KTNAME"),
+            "/stackable/kerberos/keytab"
+        );
+        assert_eq!(env_var(&uif, "KRB5CCNAME"), "MEMORY:");
+    }
+
+    #[test]
+    fn user_info_fetcher_keycloak_backend_mounts_client_credentials_secret() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "keycloak": {
+                            "hostname": "keycloak.example.com",
+                            "clientCredentialsSecret": "keycloak-credentials",
+                            "adminRealm": "master",
+                            "userRealm": "my-realm",
+                        }
+                    }
+                }
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        // The client credentials secret is projected into the sidecar's credentials dir.
+        assert!(volume_names(&ds).contains(&"credentials".to_owned()));
+        assert_eq!(
+            mount_path(&uif_container(&ds), "credentials"),
+            "/stackable/credentials"
         );
     }
 }
