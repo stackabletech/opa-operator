@@ -42,7 +42,7 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> Urn {
         ResourceInfoRequestResource::KafkaTopic { topic } => {
             format!("urn:li:dataset:(urn:li:dataPlatform:{stacklet},{topic},{env})")
         }
-        ResourceInfoRequestResource::RawDataHubUrn(urn) => urn.to_owned(),
+        ResourceInfoRequestResource::DataHubUrn(urn) => urn.to_owned(),
     };
 
     Urn(urn)

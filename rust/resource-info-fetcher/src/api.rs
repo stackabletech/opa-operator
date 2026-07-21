@@ -51,7 +51,7 @@ pub enum ResourceInfoRequestResource {
         topic: String,
     },
 
-    RawDataHubUrn(String),
+    DataHubUrn(String),
 }
 
 #[derive(Snafu, Debug)]
