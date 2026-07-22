@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Internal operator refactoring: introduce a build() step in the reconciler that
+  assembles all relevant Kubernetes resources before anything is applied ([#852]).
+
+[#852]: https://github.com/stackabletech/opa-operator/pull/852
+
+## [26.7.0] - 2026-07-21
+
+## [26.7.0-rc1] - 2026-07-16
+
 ### Added
 
 - Added support for OPA `1.16.2`. `1.12.3` is now deprecated ([#838]).

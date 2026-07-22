@@ -24,12 +24,11 @@ use stackable_operator::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
                 EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
-                ResourceRequirements, ServiceAccount,
+                ResourceRequirements,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
     },
-    kube::ResourceExt,
     memory::{BinaryMultiple, MemoryQuantity},
     product_logging::{
         self,
@@ -222,7 +221,7 @@ pub fn build_server_rolegroup_daemonset(
     role_group: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
-    service_account: &ServiceAccount,
+    service_account_name: &str,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let resolved_product_image = &cluster.image;
@@ -382,7 +381,7 @@ pub fn build_server_rolegroup_daemonset(
                 .build(),
         )
         .context(AddVolumeSnafu)?
-        .service_account_name(service_account.name_any())
+        .service_account_name(service_account_name)
         .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
 
     if let Some(tls) = &cluster.cluster_config.tls {
@@ -710,11 +709,7 @@ fn build_prepare_start_command(
 mod tests {
     use serde_json::json;
     use stackable_operator::{
-        commons::networking::DomainName,
-        k8s_openapi::{
-            api::core::v1::{Container, ServiceAccount},
-            apimachinery::pkg::apis::meta::v1::ObjectMeta,
-        },
+        commons::networking::DomainName, k8s_openapi::api::core::v1::Container,
     };
 
     use super::*;
@@ -725,16 +720,6 @@ mod tests {
     fn cluster_info() -> KubernetesClusterInfo {
         KubernetesClusterInfo {
             cluster_domain: DomainName::try_from("cluster.local").unwrap(),
-        }
-    }
-
-    fn service_account() -> ServiceAccount {
-        ServiceAccount {
-            metadata: ObjectMeta {
-                name: Some("test-opa-serviceaccount".to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
         }
     }
 
@@ -749,7 +734,7 @@ mod tests {
             role_group,
             "bundle-builder-image",
             "user-info-fetcher-image",
-            &service_account(),
+            "test-opa-serviceaccount",
             &cluster_info(),
         )
         .expect("the daemonset should build")
