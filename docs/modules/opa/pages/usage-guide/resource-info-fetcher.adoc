@@ -1,0 +1,120 @@
+= Resource info fetcher
+:description: Resource Info Fetcher for OPA retrieves data from backends like DataHub. Integrate extra resource details into Rego rules for enhanced policy management.
+
+The _Resource info fetcher_ allows for additional information to be obtained from the configured backend (for example, DataHub).
+You can then write Rego rules for OpenPolicyAgent which make an HTTP request to the Resource info fetcher and make use of the additional information returned for the resource, such as Trino tables or Kafka topic.
+
+You can enable the Resource info fetcher sidecar as follows:
+
+[source,yaml]
+----
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: opa
+spec:
+  image:
+    productVersion: 1.0.0
+  clusterConfig:
+    resourceInfo: # <1>
+      backend:
+        dataHub:
+          hostname: datahub-gms.my-namespace.svc.cluster.local
+          port: 8080
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls # <2>
+          credentialsSecretName: resource-info-fetcher-credentials # <3>
+          env: PROD # <4>
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
+  servers:
+    roleGroups:
+      default: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: resource-info-fetcher-credentials
+stringData:
+  token: <datahub-personal-access-token> # <3>
+----
+
+<1> Enable the `resource-info-fetcher` sidecar
+<2> Enable TLS verification using the CA from the `tls` SecretClass.
+<3> Authenticate to DataHub with a Personal Access Token (PAT) read from the specified Secret. The Secret must have a `token` entry. See the DataHub documentation on https://docs.datahub.com/docs/authentication/personal-access-tokens[Personal Access Tokens] for how to create one, and make sure https://docs.datahub.com/docs/authentication/introducing-metadata-service-authentication[Metadata Service Authentication] is enabled on your DataHub.
+<4> The DataHub environment (fabric) to query, e.g. `PROD` or `DEV`. Defaults to `PROD`.
+
+Currently the following backends are supported:
+
+* xref:#backend-data-hub[]
+
+[#backends]
+== Backends
+
+The initial version is tightly modeled to the only supported backend, namely DataHub.
+The API might change as soon as we add support for other backends.
+
+
+[#backend-data-hub]
+=== DataHub
+
+DataHub is currently only supported backend, so the general documentation from above applies.
+
+== Resource info fetcher API
+
+Resource information can be retrieved from regorules using the functions `TODO` in `data.stackable.opa.resourceinfo.v1`.
+
+An example of the returned structure:
+
+[source,json]
+----
+{
+  "dataProducts": [],
+  "domain": null,
+  "owners": {
+    "urn:li:ownershipType:__system__business_owner": {
+      "groups": [
+        {
+          "description": "Customer Service/Analytics (mirrored from the Keycloak demo realm)",
+          "displayName": "Customer Service/Analytics",
+          "urn": "urn:li:corpGroup:customer-service-analytics"
+        }
+      ],
+      "ownershipTypeName": "Business Owner",
+      "users": []
+    }
+  },
+  "tags": [
+    {
+      "name": "PII",
+      "urn": "urn:li:tag:PII"
+    }
+  ],
+  "urn": "urn:li:container:c8531e5a52cacf56768d0bf77ca8787c"
+}
+----
+
+=== Debug request
+
+To debug the resource-info-fetcher you can `curl` it's API for a given resource.
+To achieve this shell into the `opa` container and execute
+
+[source,bash]
+----
+curl --header 'Content-Type: application/json' -d '{"stacklet": "trino", "trinoSchema": {"catalog": "lakehouse", "schema": "customer_analytics"}}' localhost:9477/resource | jq
+
+curl --header 'Content-Type: application/json' -d '{"stacklet": "", "dataHubUrn": "urn:li:chart:(superset,1)"}' localhost:9477/resource | jq
+----
+
+=== Rego rule library
+
+The HTTP API exposed by the resource-info-fetcher can be called directly using the rego function `http.send`.
+However, we provide a convenience rego rule library, which we ship with `OpaClusters` by default.
+
+[source,rego]
+----
+TODO
+----

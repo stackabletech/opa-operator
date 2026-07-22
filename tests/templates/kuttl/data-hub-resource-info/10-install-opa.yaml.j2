@@ -1,0 +1,65 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      kubectl apply -n $NAMESPACE -f - <<EOF
+      ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: test
+        labels:
+          opa.stackable.tech/bundle: "true"
+      data:
+        test.rego: |
+          package test
+
+          import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+          # Thin, input-driven wrappers - the test data (URNs, resource coordinates) lives in
+          # test-regorule.py. Each exercises the resource-info-fetcher end-to-end: it must
+          # authenticate to the (PAT-secured) GMS and return the resource metadata.
+
+          # Resolve a resource by its raw DataHub URN.
+          byUrn := resourceinfo.resourceInfoDataHubUrn(input.urn)
+
+          # Resolve a Kafka topic via the Stackable abstraction (stacklet + topic -> URN).
+          kafkaTopic := resourceinfo.resourceInfoKafkaTopic(input.stacklet, input.topic)
+      ---
+      apiVersion: opa.stackable.tech/v1alpha2
+      kind: OpaCluster
+      metadata:
+        name: test-opa
+      spec:
+        image:
+{% if test_scenario['values']['opa-latest'].find(",") > 0 %}
+          custom: "{{ test_scenario['values']['opa-latest'].split(',')[1] }}"
+          productVersion: "{{ test_scenario['values']['opa-latest'].split(',')[0] }}"
+{% else %}
+          productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+{% endif %}
+          pullPolicy: IfNotPresent
+        clusterConfig:
+          resourceInfo:
+            backend:
+              dataHub:
+                # GMS Service from the datahub Helm release (plain HTTP in this test).
+                hostname: datahub-datahub-gms.$NAMESPACE.svc.cluster.local
+                port: 8080
+                # Secret holding the DataHub Personal Access Token (key \`token\`), created in
+                # 04-load-sample-data. The fetcher sends it as \`Authorization: Bearer\`.
+                credentialsSecretName: datahub-rif-credentials
+                env: PROD
+            cache:
+              entryTimeToLive: 60s
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+          vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+        servers:
+          config:
+            logging:
+              enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+          roleGroups:
+            default: {}
+      EOF

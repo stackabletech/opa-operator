@@ -1,0 +1,64 @@
+# Values for the DataHub "prerequisites" Helm chart (chart 0.3.0).
+#
+# We keep the chart defaults where they are already minimal:
+#   - opensearch.enabled: true   (Apache-2.0 licensed; used as both search AND graph store)
+#   - elasticsearch.enabled: false  (avoided: Elastic/SSPL license is not Apache-2.0 compatible)
+#   - neo4j.enabled: false       (graph is served by OpenSearch, saves a pod)
+#   - mysql.enabled: true
+#   - kafka.enabled: true        (Bitnami Kafka in KRaft mode, so no separate ZooKeeper pod)
+#   - postgresql.enabled: false
+#   - cp-helm-charts.enabled: false
+#
+# This is a throwaway test backend: single replica everywhere, no persistence guarantees,
+# no HA, small resources.
+#
+# HEADS UP (verify on first run): the `mysql` and `kafka` subcharts pull Bitnami images.
+# Bitnami paywalled its free Docker Hub images in 2025, so the pinned tags may fail to pull.
+# If they do, override the image repos to `docker.io/bitnamilegacy/*` here, e.g.:
+#   mysql:
+#     image:
+#       registry: docker.io
+#       repository: bitnamilegacy/mysql
+#   kafka:
+#     image:
+#       registry: docker.io
+#       repository: bitnamilegacy/kafka
+
+opensearch:
+  singleNode: true
+  replicas: 1
+  # Single-node OpenSearch: no dedicated master election needed.
+  opensearchJavaOpts: "-Xms512m -Xmx512m"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+
+mysql:
+  auth:
+    # Root password is read from the `mysql-secrets` Secret created in 02-install-datahub-prerequisites.
+    # This is the same Secret the datahub chart reads (its default global.sql.datasource.password).
+    existingSecret: mysql-secrets
+    database: datahub
+  primary:
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
+kafka:
+  controller:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 1Gi

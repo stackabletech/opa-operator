@@ -167,7 +167,8 @@ async fn main() -> anyhow::Result<()> {
                     Arc::new(opa_controller::Ctx {
                         client: client.clone(),
                         opa_bundle_builder_image: operator_image.clone(),
-                        user_info_fetcher_image: operator_image,
+                        user_info_fetcher_image: operator_image.clone(),
+                        resource_info_fetcher_image: operator_image,
                         operator_environment,
                         cluster_info: kubernetes_cluster_info,
                     }),

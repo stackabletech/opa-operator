@@ -1,10 +1,12 @@
-use crate::crd::cache::Cache;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
     commons::{networking::HostName, tls_verification::TlsClientDetails},
     schemars::{self, JsonSchema},
+    v2::types::kubernetes::SecretName,
     versioned::versioned,
 };
+
+use crate::crd::cache::Cache;
 
 #[versioned(version(name = "v1alpha1"))]
 pub mod versioned {
@@ -38,6 +40,12 @@ pub mod versioned {
         /// Use a TLS connection. If not specified then no TLS will be used.
         #[serde(flatten)]
         pub tls: TlsClientDetails,
+
+        /// Name of a Secret containing a DataHub Personal Access Token (PAT) that is authorized
+        /// to read resource metadata.
+        ///
+        /// Must contain the field `token`.
+        pub credentials_secret_name: SecretName,
 
         /// The env in DataHub, defaults to `PROD`
         #[serde(default = "default_data_hub_env")]

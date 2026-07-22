@@ -46,7 +46,7 @@ stringData:
 
 <1> Enable the `user-info-fetcher` sidecar
 <2> Enable TLS verification using the CA from the `tls` SecretClass.
-<3> Obtain Keycloak API credentials from the specified secret. The Secret must have `clientId` and `clientSecret` entries.
+<3> Obtain Keycloak API credentials from the specified Secret. The Secret must have `clientId` and `clientSecret` entries.
 <4> Refer to the applicable realm in your Keycloak server.
 
 Currently the following backends are supported:

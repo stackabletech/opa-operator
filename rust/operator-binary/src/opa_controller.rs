@@ -47,6 +47,7 @@ pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
+    pub resource_info_fetcher_image: String,
     pub cluster_info: KubernetesClusterInfo,
     pub operator_environment: OperatorEnvironmentOptions,
 }
@@ -228,6 +229,7 @@ pub async fn reconcile_opa(
             rolegroup,
             &ctx.opa_bundle_builder_image,
             &ctx.user_info_fetcher_image,
+            &ctx.resource_info_fetcher_image,
             &rbac_sa,
             &ctx.cluster_info,
         )

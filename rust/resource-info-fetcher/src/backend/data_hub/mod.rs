@@ -25,14 +25,8 @@ mod resource_to_urn_mapping;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
-    #[snafu(display("failed to read client ID from {path:?}"))]
-    ReadClientId {
-        source: std::io::Error,
-        path: String,
-    },
-
-    #[snafu(display("failed to read client secret from {path:?}"))]
-    ReadClientSecret {
+    #[snafu(display("failed to read DataHub token from {path:?}"))]
+    ReadToken {
         source: std::io::Error,
         path: String,
     },
@@ -62,8 +56,7 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::ReadClientId { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::ReadClientSecret { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            Self::ReadToken { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::BuildDataHubEndpoint { .. } => StatusCode::BAD_REQUEST,
@@ -162,8 +155,7 @@ pub struct Group {
 /// internally.
 pub struct ResolvedDataHubBackend {
     config: v1alpha1::DataHubBackend,
-    client_id: String,
-    client_secret: String,
+    token: String,
     http_client: reqwest::Client,
     graphql_url: Url,
 }
@@ -175,19 +167,16 @@ impl ResolvedDataHubBackend {
         config: v1alpha1::DataHubBackend,
         credentials_dir: &Path,
     ) -> Result<Self, Error> {
-        let client_id_path = credentials_dir.join("clientId");
-        let client_secret_path = credentials_dir.join("clientSecret");
+        let token_path = credentials_dir.join("token");
 
-        let client_id = tokio::fs::read_to_string(&client_id_path)
+        // Trim trailing whitespace/newlines so the value is safe to use in an HTTP header.
+        let token = tokio::fs::read_to_string(&token_path)
             .await
-            .with_context(|_| ReadClientIdSnafu {
-                path: client_id_path.display().to_string(),
-            })?;
-        let client_secret = tokio::fs::read_to_string(&client_secret_path)
-            .await
-            .with_context(|_| ReadClientSecretSnafu {
-                path: client_secret_path.display().to_string(),
-            })?;
+            .with_context(|_| ReadTokenSnafu {
+                path: token_path.display().to_string(),
+            })?
+            .trim()
+            .to_owned();
 
         let mut client_builder = ClientBuilder::new();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
@@ -212,8 +201,7 @@ impl ResolvedDataHubBackend {
 
         Ok(Self {
             config,
-            client_id,
-            client_secret,
+            token,
             http_client,
             graphql_url,
         })
@@ -229,14 +217,9 @@ impl ResolvedDataHubBackend {
         let response: graphql::GraphQlResponse = send_json_request(
             self.http_client
                 .post(self.graphql_url.clone())
-                // DataHub's system authenticator strips the leading "Basic " and compares the rest
-                // VERBATIM against "<id>:<secret>" — it is NOT standard RFC 7617 Basic auth. So do
-                // NOT use reqwest's .basic_auth(), which base64-encodes the credentials; set the
-                // header manually so the value goes out unencoded.
-                .header(
-                    reqwest::header::AUTHORIZATION,
-                    format!("Basic {}:{}", self.client_id, self.client_secret),
-                )
+                // Authenticate with a DataHub Personal Access Token (a bearer JWT). DataHub's
+                // Metadata Service Authentication verifies it and resolves it to the token's actor.
+                .bearer_auth(&self.token)
                 .json(&graphql::request(urn)),
         )
         .await

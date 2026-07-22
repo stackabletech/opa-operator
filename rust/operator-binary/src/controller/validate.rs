@@ -231,6 +231,7 @@ pub fn validate(
         image,
         ValidatedClusterConfig {
             user_info: opa.spec.cluster_config.user_info.clone(),
+            resource_info: opa.spec.cluster_config.resource_info.clone(),
             tls: opa.spec.cluster_config.tls.clone(),
             listener_class: opa.spec.cluster_config.listener_class.clone(),
         },

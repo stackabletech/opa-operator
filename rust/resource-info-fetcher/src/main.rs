@@ -25,7 +25,7 @@ pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-pub const APP_NAME: &str = "opa-user-info-fetcher";
+pub const APP_NAME: &str = "opa-resource-info-fetcher";
 
 #[derive(clap::Parser)]
 pub struct Args {
@@ -74,7 +74,7 @@ enum StartupError {
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
 
-    #[snafu(display("failed to resolve Keycloak backend"))]
+    #[snafu(display("failed to resolve DataHub backend"))]
     ResolveDataHubBackend { source: backend::data_hub::Error },
 }
 
