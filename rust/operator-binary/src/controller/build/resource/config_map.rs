@@ -44,7 +44,7 @@ pub fn build_rolegroup_config_map(
     let metadata = cluster
         .object_meta(
             cluster
-                .resource_names(role_group_name)
+                .role_group_resource_names(role_group_name)
                 .role_group_config_map()
                 .to_string(),
             role_group_name,

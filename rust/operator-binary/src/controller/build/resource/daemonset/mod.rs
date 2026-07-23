@@ -352,7 +352,7 @@ pub fn build_server_rolegroup_daemonset(
             VolumeBuilder::new(CONFIG_VOLUME_NAME.as_ref())
                 .with_config_map(
                     cluster
-                        .resource_names(role_group_name)
+                        .role_group_resource_names(role_group_name)
                         .role_group_config_map()
                         .to_string(),
                 )
@@ -382,7 +382,7 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeSnafu)?
         .service_account_name(
             cluster
-                .rbac_resource_names()
+                .cluster_resource_names()
                 .service_account_name()
                 .to_string(),
         )
@@ -400,13 +400,13 @@ pub fn build_server_rolegroup_daemonset(
                     .with_service_scope(cluster.server_role_service_name())
                     .with_service_scope(
                         cluster
-                            .resource_names(role_group_name)
+                            .role_group_resource_names(role_group_name)
                             .headless_service_name()
                             .to_string(),
                     )
                     .with_service_scope(
                         cluster
-                            .resource_names(role_group_name)
+                            .role_group_resource_names(role_group_name)
                             .metrics_service_name()
                             .to_string(),
                     )
@@ -434,7 +434,7 @@ pub fn build_server_rolegroup_daemonset(
             &container_name(&Container::Vector),
             resolved_product_image,
             vector_log_config,
-            &cluster.resource_names(role_group_name),
+            &cluster.role_group_resource_names(role_group_name),
             &CONFIG_VOLUME_NAME,
             &LOG_VOLUME_NAME,
             EnvVarSet::new(),
@@ -449,7 +449,7 @@ pub fn build_server_rolegroup_daemonset(
     let metadata = cluster
         .object_meta(
             cluster
-                .resource_names(role_group_name)
+                .role_group_resource_names(role_group_name)
                 .daemon_set_name()
                 .to_string(),
             role_group_name,

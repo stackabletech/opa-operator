@@ -59,7 +59,7 @@ pub(crate) fn build_rolegroup_headless_service(
     let metadata = cluster
         .object_meta(
             cluster
-                .resource_names(role_group_name)
+                .role_group_resource_names(role_group_name)
                 .headless_service_name()
                 .to_string(),
             role_group_name,
@@ -117,7 +117,7 @@ pub(crate) fn build_rolegroup_metrics_service(
     let metadata = cluster
         .object_meta(
             cluster
-                .resource_names(role_group_name)
+                .role_group_resource_names(role_group_name)
                 .metrics_service_name()
                 .to_string(),
             role_group_name,
