@@ -8,8 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Internal operator refactoring: introduce a build() step in the reconciler that
   assembles all relevant Kubernetes resources before anything is applied ([#852]).
+- Bump `stackable-operator` to 0.114.0 ([#867]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
+[#867]: https://github.com/stackabletech/opa-operator/pull/867
 
 ## [26.7.0] - 2026-07-21
 
