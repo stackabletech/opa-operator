@@ -43,6 +43,9 @@ datahub-gms:
     limits:
       cpu: "2"
       memory: 2Gi
+  extraEnvs:
+    - name: DATAHUB_TELEMETRY_ENABLED
+      value: "false"
 
 datahub-frontend:
   resources:
@@ -52,3 +55,11 @@ datahub-frontend:
     limits:
       cpu: "1"
       memory: 1Gi
+  extraEnvs:
+    - name: DATAHUB_TELEMETRY_ENABLED
+      value: "false"
+
+datahubSystemUpdate:
+  extraEnvs:
+    - name: DATAHUB_TELEMETRY_ENABLED
+      value: "false"

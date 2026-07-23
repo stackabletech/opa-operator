@@ -88,6 +88,8 @@ commands:
                       secretKeyRef:
                         name: datahub-rif-credentials
                         key: token
+                  - name: DATAHUB_TELEMETRY_ENABLED
+                    value: "false"
                 volumeMounts:
                   - name: recipe
                     mountPath: /recipe

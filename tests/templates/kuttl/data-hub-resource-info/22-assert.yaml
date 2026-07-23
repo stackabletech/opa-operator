@@ -1,0 +1,14 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+# Includes a wait for data-product membership edges to index, so allow some headroom.
+timeout: 360
+commands:
+  - script: |
+      if kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=350s job/datahub-create-metadata; then
+        kubectl -n "$NAMESPACE" logs job/datahub-create-metadata --tail=40
+      else
+        echo "datahub-create-metadata Job did not complete:"
+        kubectl -n "$NAMESPACE" logs job/datahub-create-metadata --tail=80 || true
+        exit 1
+      fi

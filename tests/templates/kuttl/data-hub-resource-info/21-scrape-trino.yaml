@@ -1,0 +1,148 @@
+---
+# DataHub ingestion job: scrapes Trino catalog metadata into DataHub GMS so that the
+# resource-info-fetcher (RIF) can resolve Trino catalogs/schemas/tables by URN.
+#
+# Scope is intentionally narrow to keep the run fast and deterministic:
+#   - `database: tpch`            -> only the tpch catalog (the DataHub trino source takes a
+#                                    single catalog per run; tpcds is left out).
+#   - `schema_pattern.allow: sf1` -> only the sf1 schema (TPC-H exposes tiny/sf1/sf100/...;
+#                                    sf1 is the smallest real scale factor and has the 8
+#                                    standard tables customer/orders/lineitem/...).
+#
+# `env: PROD` matters: the SQL ingestion source sets `backcompat_env_as_instance`, so PROD lands
+# in the container key's `instance` field. This must match the OpaCluster's `resourceInfo` env
+# (10-install-opa) and the URN derivation in resource_to_urn_mapping.rs, or RIF lookups miss.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datahub-trino-recipe
+data:
+  recipe.yaml: |
+    source:
+      type: trino
+      config:
+        # Must be an FQDN present in Trino's server-cert SAN (see TLS note on the Job below).
+        # ${TRINO_HOST} is expanded by DataHub from the ingest container's env.
+        host_port: '${TRINO_HOST}:8443'
+        database: tpch
+        username: datahub
+        password: datahubdatahub
+        env: PROD
+        schema_pattern:
+          allow: ["^sf1$"]
+        include_views: true
+        include_tables: true
+        profiling:
+          enabled: false
+        options:
+          connect_args:
+            http_scheme: https
+    sink:
+      type: datahub-rest
+      config:
+        server: 'http://datahub-datahub-gms:8080'
+        # Same DataHub PAT the RIF sidecar uses, minted in 04-load-sample-data.
+        token: '${DATAHUB_GMS_TOKEN}'
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: datahub-ingest-trino
+spec:
+  # Trino may briefly reject queries right after the cluster reports available (worker still
+  # registering); a couple of retries lets the ingestion self-heal.
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        # Trino serves HTTPS with a cert signed by the SDP `tls` SecretClass CA. DataHub's trino
+        # source (v1.6.0) silently ignores `verify: false`, and PYTHONHTTPSVERIFY=0 is overridden
+        # by the Trino Python client's session-level verify. The reliable fix is to trust the CA:
+        # extract it from the secret-operator PKCS12 truststore and point Python's HTTP libs at it
+        # via SSL_CERT_FILE / REQUESTS_CA_BUNDLE below.
+        - name: extract-ca
+          image: acryldata/datahub-ingestion:v1.6.0
+          # secret-operator writes truststore.p12 as root:0 mode 0640, so reading it needs root.
+          # This container only reads the store and writes /trust/ca.crt.
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              # autoTls issues PKCS12 stores with an EMPTY password and RC2-40-CBC encryption;
+              # OpenSSL 3.x needs `-legacy` to read RC2. `pass:` == empty password.
+              openssl pkcs12 -legacy \
+                -in /stackable/tls/truststore.p12 \
+                -passin pass: \
+                -nokeys \
+                -out /trust/ca.crt
+              chmod 0644 /trust/ca.crt
+          volumeMounts:
+            - name: tls
+              mountPath: /stackable/tls
+            - name: trust
+              mountPath: /trust
+      containers:
+        - name: ingest
+          image: acryldata/datahub-ingestion:v1.6.0
+          command: ["datahub", "ingest", "-c", "/recipe/recipe.yaml"]
+          env:
+            # Build the coordinator FQDN (a cert SAN) without templating the recipe: the pod's
+            # namespace comes from the downward API, then $(POD_NAMESPACE) is interpolated here.
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: TRINO_HOST
+              value: "my-trino-coordinator.$(POD_NAMESPACE).svc.cluster.local"
+            # Make every Python HTTP request trust the extracted SDP CA.
+            - name: SSL_CERT_FILE
+              value: /trust/ca.crt
+            - name: REQUESTS_CA_BUNDLE
+              value: /trust/ca.crt
+            - name: DATAHUB_GMS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: datahub-rif-credentials
+                  key: token
+            - name: DATAHUB_TELEMETRY_ENABLED
+              value: "false"
+          volumeMounts:
+            - name: recipe
+              mountPath: /recipe
+            - name: trust
+              mountPath: /trust
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: recipe
+          configMap:
+            name: datahub-trino-recipe
+        - name: trust
+          emptyDir: {}
+        # secret-operator ephemeral volume: PKCS12 truststore from the same `tls` CA that signs
+        # Trino's server cert. No password annotation -> empty PKCS12 password (see extract-ca).
+        - name: tls
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                annotations:
+                  secrets.stackable.tech/class: tls
+                  secrets.stackable.tech/format: tls-pkcs12
+                  secrets.stackable.tech/scope: pod
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: "1"
+                storageClassName: secrets.stackable.tech
+                volumeMode: Filesystem

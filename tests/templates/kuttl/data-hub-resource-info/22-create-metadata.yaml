@@ -1,0 +1,47 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  # Ship the metadata-creation script into the cluster as a ConfigMap (keeps
+  # create-datahub-metadata.py a real, lintable file instead of inlining Python into YAML).
+  # Idempotent so re-runs are safe. The Trino datasets/containers it targets already exist:
+  # kuttl only advances here once 21-assert confirmed the ingestion Job completed.
+  - script: |
+      kubectl -n "$NAMESPACE" create configmap datahub-metadata-script \
+        --from-file=create-datahub-metadata.py \
+        --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: datahub-create-metadata
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: create-metadata
+          image: oci.stackable.tech/sdp/testing-tools:0.3.0-stackable0.0.0-dev
+          command: ["python", "/scripts/create-datahub-metadata.py"]
+          env:
+            # Same DataHub PAT the RIF sidecar uses, minted in 04-load-sample-data.
+            - name: DATAHUB_GMS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: datahub-rif-credentials
+                  key: token
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+      volumes:
+        - name: script
+          configMap:
+            name: datahub-metadata-script

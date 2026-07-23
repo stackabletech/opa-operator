@@ -17,14 +17,11 @@ commands:
 
           import data.stackable.opa.resourceinfo.v1 as resourceinfo
 
-          # Thin, input-driven wrappers - the test data (URNs, resource coordinates) lives in
-          # test-regorule.py. Each exercises the resource-info-fetcher end-to-end: it must
-          # authenticate to the (PAT-secured) GMS and return the resource metadata.
-
-          # Resolve a resource by its raw DataHub URN.
           byUrn := resourceinfo.resourceInfoDataHubUrn(input.urn)
 
-          # Resolve a Kafka topic via the Stackable abstraction (stacklet + topic -> URN).
+          trinoCatalog := resourceinfo.resourceInfoTrinoCatalog(input.stacklet, input.catalog)
+          trinoSchema := resourceinfo.resourceInfoTrinoSchema(input.stacklet, input.catalog, input.schema)
+          trinoTable := resourceinfo.resourceInfoTrinoTable(input.stacklet, input.catalog, input.schema, input.table)
           kafkaTopic := resourceinfo.resourceInfoKafkaTopic(input.stacklet, input.topic)
       ---
       apiVersion: opa.stackable.tech/v1alpha2

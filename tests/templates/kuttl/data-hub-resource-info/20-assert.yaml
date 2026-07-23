@@ -1,15 +1,9 @@
 ---
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
-# The Job's exit code is the verdict. Wait for it to complete and surface its logs either
-# way (on success they show the fetcher response; on failure, the assertion error).
-timeout: 310
+metadata:
+  name: install-trino
+# TPC-H is built into Trino (no data to load), so we only need the cluster to come up.
+timeout: 600
 commands:
-  - script: |
-      if kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=300s job/test-resource-info; then
-        kubectl -n "$NAMESPACE" logs job/test-resource-info
-      else
-        echo "resource-info assertion Job did not complete:"
-        kubectl -n "$NAMESPACE" logs job/test-resource-info || true
-        exit 1
-      fi
+  - script: kubectl -n $NAMESPACE wait --for=condition=available trinoclusters.trino.stackable.tech/my-trino --timeout=590s
