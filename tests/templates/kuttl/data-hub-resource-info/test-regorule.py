@@ -40,7 +40,7 @@ TECHNICAL = "urn:li:ownershipType:__system__technical_owner"
 TRINO_CASES = [
     {
         "rule": "trinoCatalog",
-        "input": {"stacklet": "trino", "catalog": "tpch"},
+        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch"},
         "urn": "urn:li:container:6a39142fc39af8ec4ec5340eb21c1dee",
         "tags": [],
         "domain": None,
@@ -49,7 +49,7 @@ TRINO_CASES = [
     },
     {
         "rule": "trinoSchema",
-        "input": {"stacklet": "trino", "catalog": "tpch", "schema": "sf1"},
+        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1"},
         "urn": "urn:li:container:727821ddae4cbef3856d53190f82489c",
         "tags": [],
         "domain": None,
@@ -64,7 +64,7 @@ TRINO_CASES = [
     },
     {
         "rule": "trinoTable",
-        "input": {"stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "customer"},
+        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "customer"},
         "urn": "urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.customer,PROD)",
         "tags": ["urn:li:tag:pii"],
         "domain": "urn:li:domain:sales",
@@ -73,7 +73,7 @@ TRINO_CASES = [
     },
     {
         "rule": "trinoTable",
-        "input": {"stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "supplier"},
+        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "supplier"},
         "urn": "urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.supplier,PROD)",
         "tags": ["urn:li:tag:pii"],
         "domain": "urn:li:domain:supply-chain",
@@ -83,7 +83,7 @@ TRINO_CASES = [
     {
         # A reference table: tagged public, no domain, in no data product.
         "rule": "trinoTable",
-        "input": {"stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "nation"},
+        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "nation"},
         "urn": "urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.nation,PROD)",
         "tags": ["urn:li:tag:public"],
         "domain": None,
@@ -168,7 +168,7 @@ def main():
     #    DataHub URN and resolves it. It must return the same record as the raw-URN lookup above,
     #    which proves the mapping in resource_to_urn_mapping.rs is correct end-to-end.
     print("Checking kafkaTopic abstraction: kafka / SampleKafkaDataset")
-    kafka_topic = query("kafkaTopic", {"stacklet": "kafka", "topic": "SampleKafkaDataset"})
+    kafka_topic = query("kafkaTopic", {"env": "PROD", "stacklet": "kafka", "topic": "SampleKafkaDataset"})
     assert_resource(
         kafka_topic,
         "urn:li:dataset:(urn:li:dataPlatform:kafka,SampleKafkaDataset,PROD)",

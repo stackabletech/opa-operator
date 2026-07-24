@@ -1,21 +1,21 @@
 package stackable.opa.resourceinfo.v1
 
 # Trino catalog
-resourceInfoTrinoCatalog(stacklet, catalog) := resourceInfo(
+resourceInfoTrinoCatalog(env, stacklet, catalog) := resourceInfo(
     "trinoCatalog",
-    {"stacklet": stacklet, "catalog": catalog}
+    {"env": env, "stacklet": stacklet, "catalog": catalog}
 )
 
 # Trino schema
-resourceInfoTrinoSchema(stacklet, catalog, schema) := resourceInfo(
+resourceInfoTrinoSchema(env, stacklet, catalog, schema) := resourceInfo(
     "trinoSchema",
-    {"stacklet": stacklet, "catalog": catalog, "schema": schema}
+    {"env": env, "stacklet": stacklet, "catalog": catalog, "schema": schema}
 )
 
 # Trino table
-resourceInfoTrinoTable(stacklet, catalog, schema, table) := resourceInfo(
+resourceInfoTrinoTable(env, stacklet, catalog, schema, table) := resourceInfo(
     "trinoTable",
-    {"stacklet": stacklet, "catalog": catalog, "schema": schema, "table": table}
+    {"env": env, "stacklet": stacklet, "catalog": catalog, "schema": schema, "table": table}
 )
 
 # Superset chart
@@ -31,9 +31,9 @@ resourceInfoSupersetDashboard(stacklet, id) := resourceInfo(
 )
 
 # Kafka topic
-resourceInfoKafkaTopic(stacklet, topic) := resourceInfo(
+resourceInfoKafkaTopic(env, stacklet, topic) := resourceInfo(
     "kafkaTopic",
-    {"stacklet": stacklet, "topic": topic}
+    {"env": env, "stacklet": stacklet, "topic": topic}
 )
 
 # Raw DataHub urn

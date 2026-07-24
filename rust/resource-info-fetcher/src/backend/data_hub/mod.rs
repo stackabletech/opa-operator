@@ -154,7 +154,6 @@ pub struct Group {
 /// Credentials, the HTTP client and the GraphQL endpoint are initialized once at startup and stored
 /// internally.
 pub struct ResolvedDataHubBackend {
-    config: v1alpha1::DataHubBackend,
     token: String,
     http_client: reqwest::Client,
     graphql_url: Url,
@@ -200,7 +199,6 @@ impl ResolvedDataHubBackend {
             .with_context(|_| BuildDataHubEndpointSnafu { endpoint: graphql })?;
 
         Ok(Self {
-            config,
             token,
             http_client,
             graphql_url,
@@ -264,7 +262,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
         &self,
         request: &ResourceInfoRequest,
     ) -> Result<Self::Response, GetResourceInfoError> {
-        let urn = urn_for_request(request, &self.config.env);
+        let urn = urn_for_request(request);
         let entity = self.query_entity(&urn).await?;
 
         Ok(entity.into_response(urn))

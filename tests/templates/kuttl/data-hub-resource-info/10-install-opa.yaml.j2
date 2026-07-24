@@ -19,10 +19,10 @@ commands:
 
           byUrn := resourceinfo.resourceInfoDataHubUrn(input.urn)
 
-          trinoCatalog := resourceinfo.resourceInfoTrinoCatalog(input.stacklet, input.catalog)
-          trinoSchema := resourceinfo.resourceInfoTrinoSchema(input.stacklet, input.catalog, input.schema)
-          trinoTable := resourceinfo.resourceInfoTrinoTable(input.stacklet, input.catalog, input.schema, input.table)
-          kafkaTopic := resourceinfo.resourceInfoKafkaTopic(input.stacklet, input.topic)
+          trinoCatalog := resourceinfo.resourceInfoTrinoCatalog(input.env, input.stacklet, input.catalog)
+          trinoSchema := resourceinfo.resourceInfoTrinoSchema(input.env, input.stacklet, input.catalog, input.schema)
+          trinoTable := resourceinfo.resourceInfoTrinoTable(input.env, input.stacklet, input.catalog, input.schema, input.table)
+          kafkaTopic := resourceinfo.resourceInfoKafkaTopic(input.env, input.stacklet, input.topic)
       ---
       apiVersion: opa.stackable.tech/v1alpha2
       kind: OpaCluster
@@ -41,13 +41,9 @@ commands:
           resourceInfo:
             backend:
               dataHub:
-                # GMS Service from the datahub Helm release (plain HTTP in this test).
                 hostname: datahub-datahub-gms.$NAMESPACE.svc.cluster.local
                 port: 8080
-                # Secret holding the DataHub Personal Access Token (key \`token\`), created in
-                # 04-load-sample-data. The fetcher sends it as \`Authorization: Bearer\`.
                 credentialsSecretName: datahub-rif-credentials
-                env: PROD
             cache:
               entryTimeToLive: 60s
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}

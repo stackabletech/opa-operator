@@ -41,6 +41,7 @@ pub enum ResourceInfoRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 pub struct TrinoTable {
+    pub env: String,
     pub stacklet: String,
     pub catalog: String,
     pub schema: String,
@@ -49,6 +50,7 @@ pub struct TrinoTable {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 pub struct TrinoSchema {
+    pub env: String,
     pub stacklet: String,
     pub catalog: String,
     pub schema: String,
@@ -56,6 +58,7 @@ pub struct TrinoSchema {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 pub struct TrinoCatalog {
+    pub env: String,
     pub stacklet: String,
     pub catalog: String,
 }
@@ -74,6 +77,7 @@ pub struct SupersetDashboard {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 pub struct KafkaTopic {
+    pub env: String,
     pub stacklet: String,
     pub topic: String,
 }

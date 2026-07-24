@@ -46,15 +46,5 @@ pub mod versioned {
         ///
         /// Must contain the field `token`.
         pub credentials_secret_name: SecretName,
-
-        /// The env in DataHub, defaults to `PROD`
-        #[serde(default = "default_data_hub_env")]
-        pub env: String,
     }
-}
-
-// We actually use it as serde(default) value, but Rust fails to see that
-#[allow(dead_code)]
-fn default_data_hub_env() -> String {
-    "PROD".to_owned()
 }
