@@ -14,45 +14,99 @@ pub trait ResourceInfoBackend {
     ) -> Result<Self::Response, GetResourceInfoError>;
 }
 
+/// The resource whose metadata was requested, in a backend-agnostic form.
+///
+/// There is one HTTP endpoint per variant (e.g. `GET /metadata/trinoTable`). Each endpoint
+/// deserializes its query parameters into the variant's payload struct and the backend then maps
+/// the request to whatever the concrete backend needs (for DataHub: a URN, see [`urn_for_request`]).
+///
+/// Each variant wraps its own parameter struct rather than inlining the fields, so a single struct
+/// serves as both the HTTP query-parameter target ([`axum::extract::Query`]) and the enum payload —
+/// there is no second copy of the field list to keep in sync.
+///
+/// [`urn_for_request`]: crate::backend::data_hub::resource_to_urn_mapping::urn_for_request
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ResourceInfoRequest {
+    TrinoTable(TrinoTable),
+    TrinoSchema(TrinoSchema),
+    TrinoCatalog(TrinoCatalog),
+    SupersetChart(SupersetChart),
+    SupersetDashboard(SupersetDashboard),
+    KafkaTopic(KafkaTopic),
+    DataHubUrn(DataHubUrn),
+}
+
+// The `stacklet` field, shared by all resources except a raw URN, is the name of the stacklet the
+// resource lives in (used as the DataHub data platform / platform instance).
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceInfoRequest {
-    // Global arguments shared between all resources
+pub struct TrinoTable {
     pub stacklet: String,
-
-    #[serde(flatten)]
-    pub resource: ResourceInfoRequestResource,
+    pub catalog: String,
+    pub schema: String,
+    pub table: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ResourceInfoRequestResource {
-    TrinoTable {
-        catalog: String,
-        schema: String,
-        table: String,
-    },
-    TrinoSchema {
-        catalog: String,
-        schema: String,
-    },
-    TrinoCatalog {
-        catalog: String,
-    },
-
-    SupersetChart {
-        id: u64,
-    },
-    SupersetDashboard {
-        id: u64,
-    },
-
-    KafkaTopic {
-        topic: String,
-    },
-
-    DataHubUrn(String),
+pub struct TrinoSchema {
+    pub stacklet: String,
+    pub catalog: String,
+    pub schema: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct TrinoCatalog {
+    pub stacklet: String,
+    pub catalog: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct SupersetChart {
+    pub stacklet: String,
+    pub id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct SupersetDashboard {
+    pub stacklet: String,
+    pub id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct KafkaTopic {
+    pub stacklet: String,
+    pub topic: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct DataHubUrn {
+    pub urn: String,
+}
+
+/// Generates the trivial `From<Params> for ResourceInfoRequest` conversions, so each HTTP handler
+/// can turn its deserialized query parameters into a [`ResourceInfoRequest`] via `.into()`. Adding a
+/// resource type means adding its struct above and one entry here — no hand-written conversion.
+macro_rules! impl_into_resource_info_request {
+    ($($variant:ident),+ $(,)?) => {
+        $(
+            impl From<$variant> for ResourceInfoRequest {
+                fn from(params: $variant) -> Self {
+                    Self::$variant(params)
+                }
+            }
+        )+
+    };
+}
+
+impl_into_resource_info_request!(
+    TrinoTable,
+    TrinoSchema,
+    TrinoCatalog,
+    SupersetChart,
+    SupersetDashboard,
+    KafkaTopic,
+    DataHubUrn,
+);
 
 #[derive(Snafu, Debug)]
 pub enum GetResourceInfoError {

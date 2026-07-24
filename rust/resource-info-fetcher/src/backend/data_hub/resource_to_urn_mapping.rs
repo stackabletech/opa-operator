@@ -1,18 +1,21 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    api::{ResourceInfoRequest, ResourceInfoRequestResource},
+    api::{
+        DataHubUrn, KafkaTopic, ResourceInfoRequest, SupersetChart, SupersetDashboard,
+        TrinoCatalog, TrinoSchema, TrinoTable,
+    },
     backend::data_hub::Urn,
 };
 
 pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> Urn {
-    let stacklet = &request.stacklet;
-    let urn = match &request.resource {
-        ResourceInfoRequestResource::TrinoTable {
+    let urn = match request {
+        ResourceInfoRequest::TrinoTable(TrinoTable {
+            stacklet,
             catalog,
             schema,
             table,
-        } => {
+        }) => {
             format!(
                 "urn:li:dataset:(urn:li:dataPlatform:{stacklet},{catalog}.{schema}.{table},{env})"
             )
@@ -20,29 +23,33 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &str) -> Urn {
         // Trino catalogs and schemas are modelled as DataHub `Container`s (subtypes `Database` and
         // `Schema` respectively). Unlike datasets, their URN is not human-readable but a GUID derived
         // from the container key - see `container_urn`.
-        ResourceInfoRequestResource::TrinoCatalog { catalog } => container_urn(&BTreeMap::from([
-            ("platform", stacklet.as_str()),
-            ("instance", env),
-            ("database", catalog.as_str()),
-        ])),
-        ResourceInfoRequestResource::TrinoSchema { catalog, schema } => {
+        ResourceInfoRequest::TrinoCatalog(TrinoCatalog { stacklet, catalog }) => {
             container_urn(&BTreeMap::from([
                 ("platform", stacklet.as_str()),
                 ("instance", env),
                 ("database", catalog.as_str()),
-                ("schema", schema.as_str()),
             ]))
         }
-        ResourceInfoRequestResource::SupersetChart { id } => {
+        ResourceInfoRequest::TrinoSchema(TrinoSchema {
+            stacklet,
+            catalog,
+            schema,
+        }) => container_urn(&BTreeMap::from([
+            ("platform", stacklet.as_str()),
+            ("instance", env),
+            ("database", catalog.as_str()),
+            ("schema", schema.as_str()),
+        ])),
+        ResourceInfoRequest::SupersetChart(SupersetChart { stacklet, id }) => {
             format!("urn:li:chart:({stacklet},{id})")
         }
-        ResourceInfoRequestResource::SupersetDashboard { id } => {
+        ResourceInfoRequest::SupersetDashboard(SupersetDashboard { stacklet, id }) => {
             format!("urn:li:dashboard:({stacklet},{id})")
         }
-        ResourceInfoRequestResource::KafkaTopic { topic } => {
+        ResourceInfoRequest::KafkaTopic(KafkaTopic { stacklet, topic }) => {
             format!("urn:li:dataset:(urn:li:dataPlatform:{stacklet},{topic},{env})")
         }
-        ResourceInfoRequestResource::DataHubUrn(urn) => urn.to_owned(),
+        ResourceInfoRequest::DataHubUrn(DataHubUrn { urn }) => urn.to_owned(),
     };
 
     Urn(urn)
@@ -68,13 +75,11 @@ mod tests {
     /// Verified against a live DataHub: the schema `customer_analytics` in catalog `lakehouse`.
     #[test]
     fn trino_schema_urn_matches_data_hub() {
-        let request = ResourceInfoRequest {
+        let request = ResourceInfoRequest::TrinoSchema(TrinoSchema {
             stacklet: "trino".to_owned(),
-            resource: ResourceInfoRequestResource::TrinoSchema {
-                catalog: "lakehouse".to_owned(),
-                schema: "customer_analytics".to_owned(),
-            },
-        };
+            catalog: "lakehouse".to_owned(),
+            schema: "customer_analytics".to_owned(),
+        });
 
         assert_eq!(
             urn_for_request(&request, "PROD").0,
@@ -85,12 +90,10 @@ mod tests {
     /// Verified against a live DataHub: the catalog `lakehouse`.
     #[test]
     fn trino_catalog_urn_matches_data_hub() {
-        let request = ResourceInfoRequest {
+        let request = ResourceInfoRequest::TrinoCatalog(TrinoCatalog {
             stacklet: "trino".to_owned(),
-            resource: ResourceInfoRequestResource::TrinoCatalog {
-                catalog: "lakehouse".to_owned(),
-            },
-        };
+            catalog: "lakehouse".to_owned(),
+        });
 
         assert_eq!(
             urn_for_request(&request, "PROD").0,

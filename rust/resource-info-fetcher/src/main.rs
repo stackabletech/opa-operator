@@ -3,14 +3,21 @@ use std::{
     sync::Arc,
 };
 
-use axum::{Json, Router, extract::State, routing::post};
+use axum::{
+    Json, Router,
+    extract::{FromRequestParts, Query, State},
+    http::request::Parts,
+    routing::get,
+};
 use clap::Parser;
 use futures::{FutureExt, future};
+use hyper::StatusCode;
 use info_fetcher_commons::{
     config::{ConfigError, read_config_file},
     http_error,
 };
 use moka::future::Cache;
+use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1::{self};
 use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
@@ -138,8 +145,22 @@ async fn main() -> Result<(), StartupError> {
             .time_to_live(*config.cache.entry_time_to_live)
             .build()
     };
+    // One GET endpoint per resource type. They all share the same generic `metadata` handler; only
+    // the query-parameter struct (and thus the resulting `ResourceInfoRequest` variant) differs.
     let app = Router::new()
-        .route("/resource", post(get_resource_info))
+        .route("/metadata/trinoTable", get(metadata::<api::TrinoTable>))
+        .route("/metadata/trinoSchema", get(metadata::<api::TrinoSchema>))
+        .route("/metadata/trinoCatalog", get(metadata::<api::TrinoCatalog>))
+        .route(
+            "/metadata/supersetChart",
+            get(metadata::<api::SupersetChart>),
+        )
+        .route(
+            "/metadata/supersetDashboard",
+            get(metadata::<api::SupersetDashboard>),
+        )
+        .route("/metadata/kafkaTopic", get(metadata::<api::KafkaTopic>))
+        .route("/metadata/dataHubUrn", get(metadata::<api::DataHubUrn>))
         .with_state(AppState {
             backend,
             resource_info_cache,
@@ -155,19 +176,72 @@ async fn main() -> Result<(), StartupError> {
     Ok(())
 }
 
-async fn get_resource_info(
+/// The single handler backing every `GET /metadata/<type>` route. It deserializes the request's
+/// query parameters into the per-type params struct `P`, converts them into a [`ResourceInfoRequest`]
+/// and delegates to [`get_resource_info`]. Adding a resource type is therefore just a new params
+/// struct (in [`crate::api`]) plus one route line — there is no per-type handler body.
+async fn metadata<P>(
     State(state): State<AppState>,
-    Json(req): Json<ResourceInfoRequest>,
+    MetadataQuery(params): MetadataQuery<P>,
+) -> Result<Json<serde_json::Value>, http_error::JsonResponse<Arc<GetResourceInfoError>>>
+where
+    P: DeserializeOwned + Into<ResourceInfoRequest>,
+{
+    get_resource_info(state, params.into()).await
+}
+
+/// Like [`axum::extract::Query`], but renders deserialization failures (a missing or malformed query
+/// parameter) through the same JSON error envelope as the rest of the API instead of axum's default
+/// plain-text `400` response.
+struct MetadataQuery<P>(P);
+
+impl<P, S> FromRequestParts<S> for MetadataQuery<P>
+where
+    P: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = http_error::JsonResponse<InvalidQueryParameters>;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Query(params) =
+            Query::<P>::from_request_parts(parts, state)
+                .await
+                .map_err(|rejection| InvalidQueryParameters {
+                    message: rejection.body_text(),
+                })?;
+        Ok(Self(params))
+    }
+}
+
+/// Returned when a request's query parameters cannot be deserialized into the endpoint's params
+/// struct, e.g. a required parameter is missing or a numeric one is malformed.
+#[derive(Snafu, Debug)]
+#[snafu(display("invalid query parameters: {message}"))]
+struct InvalidQueryParameters {
+    message: String,
+}
+
+impl http_error::Error for InvalidQueryParameters {
+    fn status_code(&self) -> StatusCode {
+        StatusCode::BAD_REQUEST
+    }
+}
+
+/// Shared request handling: serve the resource info from cache, or query the backend and cache the
+/// resulting JSON. Independent of how the request was parsed, so all endpoints reuse it.
+async fn get_resource_info(
+    state: AppState,
+    request: ResourceInfoRequest,
 ) -> Result<Json<serde_json::Value>, http_error::JsonResponse<Arc<GetResourceInfoError>>> {
     let AppState {
         backend,
         resource_info_cache,
     } = state;
     let resource_info = resource_info_cache
-        .try_get_with_by_ref(&req, async {
+        .try_get_with_by_ref(&request, async {
             match backend.as_ref() {
                 ResolvedBackend::DataHub(data_hub) => {
-                    let response = data_hub.get_resource_info(&req).await?;
+                    let response = data_hub.get_resource_info(&request).await?;
                     serde_json::to_value(&response).map_err(|err| {
                         GetResourceInfoError::SerializeResponseAsJson { source: err }
                     })

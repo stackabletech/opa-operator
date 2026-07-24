@@ -1,44 +1,52 @@
 package stackable.opa.resourceinfo.v1
 
 # Trino catalog
-resourceInfoTrinoCatalog(stacklet, catalog) := resourceInfoJson(
-    {"stacklet": stacklet, "trinoCatalog": {"catalog": catalog}}
+resourceInfoTrinoCatalog(stacklet, catalog) := resourceInfo(
+    "trinoCatalog",
+    {"stacklet": stacklet, "catalog": catalog}
 )
 
 # Trino schema
-resourceInfoTrinoSchema(stacklet, catalog, schema) := resourceInfoJson(
-    {"stacklet": stacklet, "trinoSchema": {"catalog": catalog, "schema": schema}}
+resourceInfoTrinoSchema(stacklet, catalog, schema) := resourceInfo(
+    "trinoSchema",
+    {"stacklet": stacklet, "catalog": catalog, "schema": schema}
 )
 
 # Trino table
-resourceInfoTrinoTable(stacklet, catalog, schema, table) := resourceInfoJson(
-    {"stacklet": stacklet, "trinoTable": {"catalog": catalog, "schema": schema, "table": table}}
+resourceInfoTrinoTable(stacklet, catalog, schema, table) := resourceInfo(
+    "trinoTable",
+    {"stacklet": stacklet, "catalog": catalog, "schema": schema, "table": table}
 )
 
 # Superset chart
-resourceInfoSupersetChart(stacklet, id) := resourceInfoJson(
-    {"stacklet": stacklet, "supersetChart": {"id": id}}
+resourceInfoSupersetChart(stacklet, id) := resourceInfo(
+    "supersetChart",
+    {"stacklet": stacklet, "id": sprintf("%v", [id])}
 )
 
 # Superset dashboard
-resourceInfoSupersetDashboard(stacklet, id) := resourceInfoJson(
-    {"stacklet": stacklet, "supersetDashboard": {"id": id}}
+resourceInfoSupersetDashboard(stacklet, id) := resourceInfo(
+    "supersetDashboard",
+    {"stacklet": stacklet, "id": sprintf("%v", [id])}
 )
 
 # Kafka topic
-resourceInfoKafkaTopic(stacklet, topic) := resourceInfoJson(
-    {"stacklet": stacklet, "kafkaTopic": {"topic": topic}}
+resourceInfoKafkaTopic(stacklet, topic) := resourceInfo(
+    "kafkaTopic",
+    {"stacklet": stacklet, "topic": topic}
 )
 
 # Raw DataHub urn
-resourceInfoDataHubUrn(urn) := resourceInfoJson(
-    {"stacklet": "dummy", "dataHubUrn": urn}
+resourceInfoDataHubUrn(urn) := resourceInfo(
+    "dataHubUrn",
+    {"urn": urn}
 )
 
-resourceInfoJson(json) := http.send({
-  "method": "POST",
-  "url": "http://127.0.0.1:9477/resource",
-  "body": json,
-  "headers": {"Content-Type": "application/json"},
+# Each resource type has its own `GET /metadata/<type>` endpoint; the parameters are passed as a URL
+# query string. `urlquery.encode_object` URL-encodes the values (e.g. the `:`, `(` and `,` in a raw
+# DataHub URN). `id` is stringified first because the query encoder only accepts string values.
+resourceInfo(endpoint, params) := http.send({
+  "method": "GET",
+  "url": sprintf("http://127.0.0.1:9477/metadata/%s?%s", [endpoint, urlquery.encode_object(params)]),
   "raise_error": true
 }).body
