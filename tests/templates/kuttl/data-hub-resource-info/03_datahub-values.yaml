@@ -14,7 +14,7 @@ global:
   datahub:
     # THE point of this test: require authentication on every GMS request.
     # With this on, GMS returns 401 for unauthenticated calls and only accepts a valid
-    # bearer token (a DataHub Personal Access Token, minted in 04-load-sample-data).
+    # bearer token (a DataHub Personal Access Token, minted in 04-mint-pat).
     metadata_service_authentication:
       enabled: true
       # Signing key + system client secret are read from `datahub-auth-secrets`

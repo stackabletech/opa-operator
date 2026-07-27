@@ -1,56 +1,71 @@
 #!/usr/bin/env python
 import argparse
+import hashlib
 import json
+import os
 
 import requests
-
-# Every dataset in DataHub's built-in sample data (loaded in 04-load-sample-data) carries the
-# same two owners under the "data owner" ownership type.
-SAMPLE_OWNERS = ["urn:li:corpuser:datahub", "urn:li:corpuser:jdoe"]
-
-# Resources looked up by their raw DataHub URN, with the metadata we expect back. Values were
-# captured from a live fetcher response against the sample data.
-BY_URN_CASES = [
-    {
-        "urn": "urn:li:dataset:(urn:li:dataPlatform:hive,SampleHiveDataset,PROD)",
-        "tags": ["urn:li:tag:Legacy"],
-        "owners": SAMPLE_OWNERS,
-    },
-    {
-        "urn": "urn:li:dataset:(urn:li:dataPlatform:kafka,SampleKafkaDataset,PROD)",
-        "tags": [],
-        "owners": SAMPLE_OWNERS,
-    },
-    {
-        "urn": "urn:li:dataset:(urn:li:dataPlatform:hdfs,SampleHdfsDataset,PROD)",
-        "tags": [],
-        "owners": SAMPLE_OWNERS,
-    },
-]
-
 
 BUSINESS = "urn:li:ownershipType:__system__business_owner"
 TECHNICAL = "urn:li:ownershipType:__system__technical_owner"
 
-# Trino resources resolved via the Stackable abstraction (stacklet + coordinates -> URN). The
-# metadata is created in 22-create-metadata. These exercise the full RIF response - tags, domain,
-# data products and owners grouped by ownership type - across the catalog/schema/table levels, and
-# prove the container-URN derivation in resource_to_urn_mapping.rs (catalog/schema URNs are opaque
-# GUIDs, so a wrong derivation would resolve to a different - empty - entity).
-TRINO_CASES = [
+# Every resource is addressed by its DataHub `instance` (platform instance), which the ingestion
+# recipes in 31/32/33 set to `${POD_NAMESPACE}/<cluster>`. The kuttl namespace is only known at
+# runtime, so the instances - and every URN derived from them - are computed here rather than
+# hardcoded.
+NAMESPACE = os.environ["POD_NAMESPACE"]
+TRINO_INSTANCE = f"{NAMESPACE}/my-trino"
+KAFKA_INSTANCE = f"{NAMESPACE}/test-kafka"
+SUPERSET_INSTANCE = f"{NAMESPACE}/my-superset"
+
+
+def container_urn(container_key):
+    """Reproduce DataHub's `datahub_guid` (mirrors `container_urn` in resource_to_urn_mapping.rs):
+    serialize the container key to compact, key-sorted JSON and MD5-hash it."""
+    key_json = json.dumps(container_key, sort_keys=True, separators=(",", ":"))
+    return f"urn:li:container:{hashlib.md5(key_json.encode()).hexdigest()}"
+
+
+def trino_dataset(table):
+    return f"urn:li:dataset:(urn:li:dataPlatform:trino,{TRINO_INSTANCE}.tpch.sf1.{table},PROD)"
+
+
+def kafka_dataset(topic):
+    return f"urn:li:dataset:(urn:li:dataPlatform:kafka,{KAFKA_INSTANCE}.{topic},PROD)"
+
+
+CATALOG_URN = container_urn({"platform": "trino", "instance": TRINO_INSTANCE, "database": "tpch"})
+SCHEMA_URN = container_urn(
+    {"platform": "trino", "instance": TRINO_INSTANCE, "database": "tpch", "schema": "sf1"}
+)
+
+# One case per resource type of the rego library (data.test.<rule>, see the bundle in
+# 10-install-opa). Each case resolves the Stackable abstraction (system + coordinates -> URN) and
+# checks the full RIF response: tags, domain, data products and owners grouped by ownership type.
+# The metadata is created in 34-create-metadata and differs per resource, which is what makes the
+# URN derivation in resource_to_urn_mapping.rs testable: RIF answers with an empty record for a URN
+# that resolves to nothing, so a wrong derivation would show up as missing metadata rather than as
+# an error. The container URNs (database/schema) are opaque GUIDs, so they only match if the
+# GUID computation is reproduced correctly as well.
+CASES = [
     {
-        "rule": "trinoCatalog",
-        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch"},
-        "urn": "urn:li:container:6a39142fc39af8ec4ec5340eb21c1dee",
+        "rule": "database",
+        "input": {"system": "trino", "instance": TRINO_INSTANCE, "database": "tpch"},
+        "urn": CATALOG_URN,
         "tags": [],
         "domain": None,
         "data_products": [],
         "owners": {TECHNICAL: {"users": [], "groups": ["urn:li:corpGroup:data-platform"]}},
     },
     {
-        "rule": "trinoSchema",
-        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1"},
-        "urn": "urn:li:container:727821ddae4cbef3856d53190f82489c",
+        "rule": "schema",
+        "input": {
+            "system": "trino",
+            "instance": TRINO_INSTANCE,
+            "database": "tpch",
+            "schema": "sf1",
+        },
+        "urn": SCHEMA_URN,
         "tags": [],
         "domain": None,
         "data_products": [],
@@ -63,18 +78,30 @@ TRINO_CASES = [
         },
     },
     {
-        "rule": "trinoTable",
-        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "customer"},
-        "urn": "urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.customer,PROD)",
+        "rule": "table",
+        "input": {
+            "system": "trino",
+            "instance": TRINO_INSTANCE,
+            "database": "tpch",
+            "schema": "sf1",
+            "table": "customer",
+        },
+        "urn": trino_dataset("customer"),
         "tags": ["urn:li:tag:pii"],
         "domain": "urn:li:domain:sales",
         "data_products": ["urn:li:dataProduct:order-analytics"],
         "owners": {BUSINESS: {"users": [], "groups": ["urn:li:corpGroup:sales-analytics"]}},
     },
     {
-        "rule": "trinoTable",
-        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "supplier"},
-        "urn": "urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.supplier,PROD)",
+        "rule": "table",
+        "input": {
+            "system": "trino",
+            "instance": TRINO_INSTANCE,
+            "database": "tpch",
+            "schema": "sf1",
+            "table": "supplier",
+        },
+        "urn": trino_dataset("supplier"),
         "tags": ["urn:li:tag:pii"],
         "domain": "urn:li:domain:supply-chain",
         "data_products": ["urn:li:dataProduct:supplier-360"],
@@ -82,10 +109,62 @@ TRINO_CASES = [
     },
     {
         # A reference table: tagged public, no domain, in no data product.
-        "rule": "trinoTable",
-        "input": {"env": "PROD", "stacklet": "trino", "catalog": "tpch", "schema": "sf1", "table": "nation"},
-        "urn": "urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.nation,PROD)",
+        "rule": "table",
+        "input": {
+            "system": "trino",
+            "instance": TRINO_INSTANCE,
+            "database": "tpch",
+            "schema": "sf1",
+            "table": "nation",
+        },
+        "urn": trino_dataset("nation"),
         "tags": ["urn:li:tag:public"],
+        "domain": None,
+        "data_products": [],
+        "owners": {TECHNICAL: {"users": [], "groups": ["urn:li:corpGroup:data-platform"]}},
+    },
+    {
+        # A Kafka topic: a dataset without the database/schema levels.
+        "rule": "stream",
+        "input": {"system": "kafka", "instance": KAFKA_INSTANCE, "queue": "orders"},
+        "urn": kafka_dataset("orders"),
+        "tags": ["urn:li:tag:pii"],
+        "domain": "urn:li:domain:sales",
+        "data_products": [],
+        "owners": {BUSINESS: {"users": [], "groups": ["urn:li:corpGroup:sales-analytics"]}},
+    },
+    {
+        # Ingested but deliberately left unannotated in 34-create-metadata: a resource DataHub knows
+        # about answers with an empty record, it is not an error.
+        "rule": "stream",
+        "input": {"system": "kafka", "instance": KAFKA_INSTANCE, "queue": "page-views"},
+        "urn": kafka_dataset("page-views"),
+        "tags": [],
+        "domain": None,
+        "data_products": [],
+        "owners": {},
+    },
+    {
+        # The Superset seed in 23-install-superset creates exactly one chart and one dashboard in a
+        # fresh Superset, so both have id 1.
+        "rule": "dashboard",
+        "input": {"system": "superset", "instance": SUPERSET_INSTANCE, "id": 1},
+        "urn": f"urn:li:dashboard:(superset,{SUPERSET_INSTANCE}.1)",
+        "tags": ["urn:li:tag:public"],
+        "domain": "urn:li:domain:supply-chain",
+        "data_products": [],
+        "owners": {
+            BUSINESS: {
+                "users": ["urn:li:corpuser:carla.nowak"],
+                "groups": ["urn:li:corpGroup:procurement"],
+            }
+        },
+    },
+    {
+        "rule": "chart",
+        "input": {"system": "superset", "instance": SUPERSET_INSTANCE, "id": 1},
+        "urn": f"urn:li:chart:(superset,{SUPERSET_INSTANCE}.1)",
+        "tags": [],
         "domain": None,
         "data_products": [],
         "owners": {TECHNICAL: {"users": [], "groups": ["urn:li:corpGroup:data-platform"]}},
@@ -95,15 +174,6 @@ TRINO_CASES = [
 
 def tag_urns(resource):
     return sorted(tag["urn"] for tag in resource["tags"])
-
-
-def owner_urns(resource):
-    # `owners` is keyed by ownership type; collect the user and group urns underneath each.
-    urns = []
-    for ownership in resource["owners"].values():
-        urns += [user["urn"] for user in ownership["users"]]
-        urns += [group["urn"] for group in ownership["groups"]]
-    return sorted(urns)
 
 
 def domain_urn(resource):
@@ -149,36 +219,7 @@ def main():
         assert "result" in body, f"{rule}: rule did not evaluate: {body}"
         return body["result"]
 
-    def assert_resource(resource, urn, expected_tags, expected_owners):
-        assert resource["urn"] == urn, f"expected urn {urn}, got {resource['urn']}"
-        assert tag_urns(resource) == sorted(expected_tags), (
-            f"{urn}: tags {tag_urns(resource)} != expected {sorted(expected_tags)}"
-        )
-        assert owner_urns(resource) == sorted(expected_owners), (
-            f"{urn}: owners {owner_urns(resource)} != expected {sorted(expected_owners)}"
-        )
-
-    # 1) Resolve several resources by their raw DataHub URN.
-    for case in BY_URN_CASES:
-        print(f"Checking byUrn: {case['urn']}")
-        resource = query("byUrn", {"urn": case["urn"]})
-        assert_resource(resource, case["urn"], case["tags"], case["owners"])
-
-    # 2) Exercise the Stackable KafkaTopic abstraction: the fetcher maps (stacklet, topic) to a
-    #    DataHub URN and resolves it. It must return the same record as the raw-URN lookup above,
-    #    which proves the mapping in resource_to_urn_mapping.rs is correct end-to-end.
-    print("Checking kafkaTopic abstraction: kafka / SampleKafkaDataset")
-    kafka_topic = query("kafkaTopic", {"env": "PROD", "stacklet": "kafka", "topic": "SampleKafkaDataset"})
-    assert_resource(
-        kafka_topic,
-        "urn:li:dataset:(urn:li:dataPlatform:kafka,SampleKafkaDataset,PROD)",
-        [],
-        SAMPLE_OWNERS,
-    )
-
-    # 3) Exercise the Trino catalog/schema/table abstractions against the metadata from
-    #    22-create-metadata, checking the full RIF response (tags, domain, data products, owners).
-    for case in TRINO_CASES:
+    for case in CASES:
         print(f"Checking {case['rule']}: {case['input']}")
         resource = query(case["rule"], case["input"])
         assert resource["urn"] == case["urn"], (
@@ -196,6 +237,14 @@ def main():
         )
         assert owners_by_type(resource) == case["owners"], (
             f"{case['urn']}: owners {owners_by_type(resource)} != expected {case['owners']}"
+        )
+
+        # The raw-identifier lookup bypasses the URN derivation and asks for the very URN the
+        # abstraction resolved to, so both must return the identical record.
+        raw = query("rawIdentifier", {"identifier": case["urn"]})
+        assert raw == resource, (
+            f"{case['urn']}: rawIdentifier returned {raw}, "
+            f"but {case['rule']} returned {resource}"
         )
 
     print("Test successful!")

@@ -16,3 +16,7 @@ releases:
         operatorVersion: 0.0.0-dev
       trino:
         operatorVersion: 0.0.0-dev
+      kafka:
+        operatorVersion: 0.0.0-dev
+      superset:
+        operatorVersion: 0.0.0-dev

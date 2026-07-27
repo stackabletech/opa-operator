@@ -1,9 +1,6 @@
 ---
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
-metadata:
-  name: install-trino
-# TPC-H is built into Trino (no data to load), so we only need the cluster to come up.
-timeout: 600
+timeout: 610
 commands:
-  - script: kubectl -n $NAMESPACE wait --for=condition=available trinoclusters.trino.stackable.tech/my-trino --timeout=590s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available trinoclusters.trino.stackable.tech/my-trino --timeout=600s

@@ -1,45 +1,51 @@
 package stackable.opa.resourceinfo.v1
 
-# Trino catalog
-resourceInfoTrinoCatalog(env, stacklet, catalog) := resourceInfo(
-    "trinoCatalog",
-    {"env": env, "stacklet": stacklet, "catalog": catalog}
+# Database
+databaseResourceInfo(system, instance, database) := resourceInfo(
+    "database",
+    {"system": system, "instance": instance, "database": database}
 )
 
-# Trino schema
-resourceInfoTrinoSchema(env, stacklet, catalog, schema) := resourceInfo(
-    "trinoSchema",
-    {"env": env, "stacklet": stacklet, "catalog": catalog, "schema": schema}
+# Schema
+schemaResourceInfo(system, instance, database, schema) := resourceInfo(
+    "schema",
+    {"system": system, "instance": instance, "database": database, "schema": schema}
 )
 
-# Trino table
-resourceInfoTrinoTable(env, stacklet, catalog, schema, table) := resourceInfo(
-    "trinoTable",
-    {"env": env, "stacklet": stacklet, "catalog": catalog, "schema": schema, "table": table}
+# Table
+tableResourceInfo(system, instance, database, schema, table) := resourceInfo(
+    "table",
+    {
+        "system": system,
+        "instance": instance,
+        "database": database,
+        "schema": schema,
+        "table": table
+    }
 )
 
-# Superset chart
-resourceInfoSupersetChart(stacklet, id) := resourceInfo(
-    "supersetChart",
-    {"stacklet": stacklet, "id": sprintf("%v", [id])}
+# Stream
+streamResourceInfo(system, instance, queue) := resourceInfo(
+    "stream",
+    {"system": system, "instance": instance, "queue": queue}
 )
 
-# Superset dashboard
-resourceInfoSupersetDashboard(stacklet, id) := resourceInfo(
-    "supersetDashboard",
-    {"stacklet": stacklet, "id": sprintf("%v", [id])}
+# Dashboard
+dashboardResourceInfo(system, instance, id) := resourceInfo(
+    "dashboard",
+    {"system": system, "instance": instance, "id": sprintf("%v", [id])}
 )
 
-# Kafka topic
-resourceInfoKafkaTopic(env, stacklet, topic) := resourceInfo(
-    "kafkaTopic",
-    {"env": env, "stacklet": stacklet, "topic": topic}
+# Chart
+chartResourceInfo(system, instance, id) := resourceInfo(
+    "chart",
+    {"system": system, "instance": instance, "id": sprintf("%v", [id])}
 )
 
-# Raw DataHub urn
-resourceInfoDataHubUrn(urn) := resourceInfo(
-    "dataHubUrn",
-    {"urn": urn}
+# Raw identifier
+rawIdentifierResourceInfo(identifier) := resourceInfo(
+    "rawIdentifier",
+    {"identifier": identifier}
 )
 
 # Each resource type has its own `GET /metadata/<type>` endpoint; the parameters are passed as a URL

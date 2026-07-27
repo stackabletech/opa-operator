@@ -28,6 +28,7 @@ data:
         username: datahub
         password: datahubdatahub
         env: PROD
+        platform_instance: '${POD_NAMESPACE}/my-trino'
         schema_pattern:
           allow: ["^sf1$"]
         include_views: true
@@ -41,7 +42,7 @@ data:
       type: datahub-rest
       config:
         server: 'http://datahub-datahub-gms:8080'
-        # Same DataHub PAT the RIF sidecar uses, minted in 04-load-sample-data.
+        # Same DataHub PAT the RIF sidecar uses, minted in 04-mint-pat.
         token: '${DATAHUB_GMS_TOKEN}'
 ---
 apiVersion: batch/v1

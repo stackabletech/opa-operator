@@ -1,0 +1,9 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 610
+commands:
+  - script: kubectl -n $NAMESPACE wait --for=condition=available supersetclusters.superset.stackable.tech/my-superset --timeout=600s
+  # The seed Job (superset-seed) creates the test database/dataset/chart/dashboard; wait for it so
+  # the ingestion (33) has data.
+  - script: kubectl -n $NAMESPACE wait --for=condition=complete job/superset-seed --timeout=300s

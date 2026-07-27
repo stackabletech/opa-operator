@@ -27,64 +27,67 @@ pub trait ResourceInfoBackend {
 /// [`urn_for_request`]: crate::backend::data_hub::resource_to_urn_mapping::urn_for_request
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResourceInfoRequest {
-    TrinoTable(TrinoTable),
-    TrinoSchema(TrinoSchema),
-    TrinoCatalog(TrinoCatalog),
-    SupersetChart(SupersetChart),
-    SupersetDashboard(SupersetDashboard),
-    KafkaTopic(KafkaTopic),
-    DataHubUrn(DataHubUrn),
+    Database(Database),
+    Schema(Schema),
+    Table(Table),
+    Stream(Stream),
+    Dashboard(Dashboard),
+    Chart(Chart),
+
+    /// Generic fallback to support arbitrary identifiers, e.g. URNs in the case of DataHub.
+    RawIdentifier(RawIdentifier),
 }
 
-// The `stacklet` field, shared by all resources except a raw URN, is the name of the stacklet the
-// resource lives in (used as the DataHub data platform / platform instance).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct Database {
+    pub system: String,
+    pub instance: String,
+    pub database: String,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct TrinoTable {
-    pub env: String,
-    pub stacklet: String,
-    pub catalog: String,
+pub struct Schema {
+    pub system: String,
+    pub instance: String,
+    pub database: String,
+    pub schema: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
+pub struct Table {
+    pub system: String,
+    pub instance: String,
+    pub database: String,
     pub schema: String,
     pub table: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct TrinoSchema {
-    pub env: String,
-    pub stacklet: String,
-    pub catalog: String,
-    pub schema: String,
+pub struct Stream {
+    pub system: String,
+    pub instance: String,
+
+    /// AKA topic
+    pub queue: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct TrinoCatalog {
-    pub env: String,
-    pub stacklet: String,
-    pub catalog: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct SupersetChart {
-    pub stacklet: String,
+pub struct Dashboard {
+    pub system: String,
+    pub instance: String,
     pub id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct SupersetDashboard {
-    pub stacklet: String,
+pub struct Chart {
+    pub system: String,
+    pub instance: String,
     pub id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct KafkaTopic {
-    pub env: String,
-    pub stacklet: String,
-    pub topic: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-pub struct DataHubUrn {
-    pub urn: String,
+pub struct RawIdentifier {
+    pub identifier: String,
 }
 
 /// Generates the trivial `From<Params> for ResourceInfoRequest` conversions, so each HTTP handler
@@ -103,13 +106,13 @@ macro_rules! impl_into_resource_info_request {
 }
 
 impl_into_resource_info_request!(
-    TrinoTable,
-    TrinoSchema,
-    TrinoCatalog,
-    SupersetChart,
-    SupersetDashboard,
-    KafkaTopic,
-    DataHubUrn,
+    Database,
+    Schema,
+    Table,
+    Stream,
+    Dashboard,
+    Chart,
+    RawIdentifier
 );
 
 #[derive(Snafu, Debug)]

@@ -1,21 +1,4 @@
 ---
-# Ingestion recipe: DataHub's built-in bootstrap "demo-data" (datasets, dashboards, tags,
-# users, glossary terms). The token is injected from the environment at run time.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: datahub-sample-data-recipe
-data:
-  recipe.yml: |
-    source:
-      type: demo-data
-      config: {}
-    sink:
-      type: datahub-rest
-      config:
-        server: "http://datahub-datahub-gms:8080"
-        token: "${DATAHUB_GMS_TOKEN}"
----
 apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 timeout: 900
@@ -62,39 +45,6 @@ commands:
 
       # 2) Store the PAT as the Secret the resource-info-fetcher (OPA sidecar) will read.
       #    A PAT is a single bearer token -> single `token` key (NOT clientId/clientSecret).
+      #    Later steps reuse this same Secret to authenticate against GMS.
       kubectl -n "$NAMESPACE" create secret generic datahub-rif-credentials \
         --from-literal=token="$TOKEN"
-
-      # 3) Load the built-in sample data, authenticated with the same PAT.
-      kubectl -n "$NAMESPACE" delete job sample-data-ingest --ignore-not-found
-      kubectl -n "$NAMESPACE" apply -f - <<EOF
-      apiVersion: batch/v1
-      kind: Job
-      metadata:
-        name: sample-data-ingest
-      spec:
-        backoffLimit: 1
-        template:
-          spec:
-            restartPolicy: Never
-            containers:
-              - name: ingest
-                # Matches DataHub app version v1.6.0 (datahub chart 1.0.3).
-                image: acryldata/datahub-ingestion:v1.6.0
-                command: ["datahub", "ingest", "-c", "/recipe/recipe.yml"]
-                env:
-                  - name: DATAHUB_GMS_TOKEN
-                    valueFrom:
-                      secretKeyRef:
-                        name: datahub-rif-credentials
-                        key: token
-                  - name: DATAHUB_TELEMETRY_ENABLED
-                    value: "false"
-                volumeMounts:
-                  - name: recipe
-                    mountPath: /recipe
-            volumes:
-              - name: recipe
-                configMap:
-                  name: datahub-sample-data-recipe
-      EOF

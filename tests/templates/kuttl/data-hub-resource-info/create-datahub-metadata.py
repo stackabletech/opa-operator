@@ -2,9 +2,15 @@
 """Populate DataHub with the test users, groups, tags, domains, data products and assignments
 that the resource-info-fetcher (RIF) test asserts on.
 
-Everything is attached to the Trino `tpch.sf1` catalog/schema/tables ingested in 21-scrape-trino.
-Writes go to the GMS OpenAPI v3 entity endpoint as UPSERTs (createIfNotExists=false), so the
-script is idempotent / re-runnable. async=false makes a rejected write fail loudly.
+The metadata is attached to the entities ingested in 31/32/33: the Trino `tpch.sf1`
+catalog/schema/tables, the Kafka topics and the Superset chart/dashboard. Writes go to the GMS
+OpenAPI v3 entity endpoint as UPSERTs (createIfNotExists=false), so the script is idempotent /
+re-runnable. async=false makes a rejected write fail loudly.
+
+Every resource type gets a *distinct* set of tags/domain/owners on purpose: RIF answers with an
+empty record when a URN resolves to nothing, so assertions on all-empty metadata would pass even
+for a wrong URN. Distinguishable metadata is what makes the URN derivation in
+resource_to_urn_mapping.rs actually testable.
 
 The model (see the RIF response contract in rust/resource-info-fetcher/src/backend/data_hub):
   - 3 groups own the two halves of the TPC-H model plus the shared reference layer.
@@ -14,8 +20,12 @@ The model (see the RIF response contract in rust/resource-info-fetcher/src/backe
   - data products Order Analytics (Sales) and Supplier 360 (Supply Chain).
   - ownership at catalog + schema (technical) and table (business) level; the schema mixes a
     group *and* a user owner so the RIF's owner-by-type resolution is fully exercised.
+  - the Kafka topic `orders` and the Superset chart/dashboard each get their own combination;
+    the topic `page-views` is deliberately left bare as the "no metadata" contrast.
 """
 
+import hashlib
+import json
 import os
 import sys
 import time
@@ -30,14 +40,40 @@ SESSION.headers.update({"Authorization": f"Bearer {TOKEN}", "Content-Type": "app
 BUSINESS = "urn:li:ownershipType:__system__business_owner"
 TECHNICAL = "urn:li:ownershipType:__system__technical_owner"
 
-# Deterministic URNs from the Trino ingestion (platform=trino, env=PROD -> instance=PROD).
-# These match resource_to_urn_mapping.rs and were verified against a live DataHub.
-CATALOG = "urn:li:container:6a39142fc39af8ec4ec5340eb21c1dee"  # tpch
-SCHEMA = "urn:li:container:727821ddae4cbef3856d53190f82489c"  # tpch.sf1
+# URNs from the ingestions in 31/32/33 (env=PROD throughout). Each recipe sets a
+# `platform_instance: ${POD_NAMESPACE}/<cluster>`, so the DataHub `instance` is that value (not the
+# `env`) and it appears in the container GUIDs and as the entity-name prefix. The namespace is only
+# known at runtime, so every URN is computed here rather than hardcoded.
+INSTANCE = f"{os.environ['POD_NAMESPACE']}/my-trino"
+KAFKA_INSTANCE = f"{os.environ['POD_NAMESPACE']}/test-kafka"
+SUPERSET_INSTANCE = f"{os.environ['POD_NAMESPACE']}/my-superset"
+
+
+def container_urn(container_key):
+    """Reproduce DataHub's `datahub_guid` (mirrors `container_urn` in resource_to_urn_mapping.rs):
+    serialize the container key to compact, key-sorted JSON and MD5-hash it."""
+    key_json = json.dumps(container_key, sort_keys=True, separators=(",", ":"))
+    return f"urn:li:container:{hashlib.md5(key_json.encode()).hexdigest()}"
+
+
+CATALOG = container_urn({"platform": "trino", "instance": INSTANCE, "database": "tpch"})  # tpch
+SCHEMA = container_urn(
+    {"platform": "trino", "instance": INSTANCE, "database": "tpch", "schema": "sf1"}
+)  # tpch.sf1
+
+# The Superset seed in 23-install-superset creates exactly one chart and one dashboard in a fresh
+# Superset, so both get id 1. test-regorule.py asserts on the same ids.
+CHART = f"urn:li:chart:(superset,{SUPERSET_INSTANCE}.1)"
+DASHBOARD = f"urn:li:dashboard:(superset,{SUPERSET_INSTANCE}.1)"
 
 
 def dataset(table):
-    return f"urn:li:dataset:(urn:li:dataPlatform:trino,tpch.sf1.{table},PROD)"
+    return f"urn:li:dataset:(urn:li:dataPlatform:trino,{INSTANCE}.tpch.sf1.{table},PROD)"
+
+
+def topic(name):
+    """A Kafka topic is a dataset too, just without the database/schema levels."""
+    return f"urn:li:dataset:(urn:li:dataPlatform:kafka,{KAFKA_INSTANCE}.{name},PROD)"
 
 
 def upsert(entity_type, objects):
@@ -140,6 +176,37 @@ TABLES = {
     "region": (["public"], None, [("urn:li:corpGroup:data-platform", TECHNICAL)]),
 }
 
+# Kafka topic -> same shape as TABLES. The topics come from the `kafka-seed` Job in
+# 21-install-kafka; `page-views` is intentionally absent so the test has an ingested-but-unannotated
+# resource to compare against.
+TOPICS = {
+    "orders": (["pii"], "sales", [("urn:li:corpGroup:sales-analytics", BUSINESS)]),
+}
+
+# Superset chart/dashboard, again the same shape. The dashboard mixes a group and a user owner (like
+# the Trino schema does), the chart carries no tags and no domain - each resource type ends up with
+# a combination no other one has, so a wrong URN cannot accidentally satisfy the assertions.
+DASHBOARD_METADATA = (
+    ["public"],
+    "supply-chain",
+    [
+        ("urn:li:corpGroup:procurement", BUSINESS),
+        ("urn:li:corpuser:carla.nowak", BUSINESS),
+    ],
+)
+CHART_METADATA = ([], None, [("urn:li:corpGroup:data-platform", TECHNICAL)])
+
+
+def asset_object(urn, tags, domain_id, owners):
+    """Build the UPSERT object for an asset (dataset, chart or dashboard): the aspects RIF reads.
+    Tags and domain are only sent when set, so an asset can deliberately have none."""
+    obj = {"urn": urn, "ownership": ownership_aspect(owners)}
+    if tags:
+        obj["globalTags"] = {"value": {"tags": [{"tag": f"urn:li:tag:{t}"} for t in tags]}}
+    if domain_id:
+        obj["domains"] = {"value": {"domains": [f"urn:li:domain:{domain_id}"]}}
+    return obj
+
 
 def main():
     print("==> Waiting for DataHub GMS to be healthy")
@@ -226,16 +293,17 @@ def main():
         ],
     )
 
-    print("==> Table tags / domains / ownership")
-    dataset_objects = []
-    for table, (tags, did, owners) in TABLES.items():
-        obj = {"urn": dataset(table), "ownership": ownership_aspect(owners)}
-        if tags:
-            obj["globalTags"] = {"value": {"tags": [{"tag": f"urn:li:tag:{t}"} for t in tags]}}
-        if did:
-            obj["domains"] = {"value": {"domains": [f"urn:li:domain:{did}"]}}
-        dataset_objects.append(obj)
-    upsert("dataset", dataset_objects)
+    # Trino tables and Kafka topics are both `dataset` entities, so they go in one call.
+    print("==> Table / topic tags / domains / ownership")
+    upsert(
+        "dataset",
+        [asset_object(dataset(table), *metadata) for table, metadata in TABLES.items()]
+        + [asset_object(topic(name), *metadata) for name, metadata in TOPICS.items()],
+    )
+
+    print("==> Superset chart / dashboard tags / domains / ownership")
+    upsert("chart", [asset_object(CHART, *CHART_METADATA)])
+    upsert("dashboard", [asset_object(DASHBOARD, *DASHBOARD_METADATA)])
 
     print("==> Catalog / schema ownership")
     upsert(
@@ -281,6 +349,7 @@ def main():
             sys.exit(f"data product {pid} membership edge never indexed")
 
     print("==> Successfully created all DataHub users, groups, tags, domains, data products")
+    print("    and attached them to the Trino, Kafka and Superset resources")
 
 
 if __name__ == "__main__":

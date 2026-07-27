@@ -148,19 +148,16 @@ async fn main() -> Result<(), StartupError> {
     // One GET endpoint per resource type. They all share the same generic `metadata` handler; only
     // the query-parameter struct (and thus the resulting `ResourceInfoRequest` variant) differs.
     let app = Router::new()
-        .route("/metadata/trinoTable", get(metadata::<api::TrinoTable>))
-        .route("/metadata/trinoSchema", get(metadata::<api::TrinoSchema>))
-        .route("/metadata/trinoCatalog", get(metadata::<api::TrinoCatalog>))
+        .route("/metadata/database", get(metadata::<api::Database>))
+        .route("/metadata/schema", get(metadata::<api::Schema>))
+        .route("/metadata/table", get(metadata::<api::Table>))
+        .route("/metadata/stream", get(metadata::<api::Stream>))
+        .route("/metadata/dashboard", get(metadata::<api::Dashboard>))
+        .route("/metadata/chart", get(metadata::<api::Chart>))
         .route(
-            "/metadata/supersetChart",
-            get(metadata::<api::SupersetChart>),
+            "/metadata/rawIdentifier",
+            get(metadata::<api::RawIdentifier>),
         )
-        .route(
-            "/metadata/supersetDashboard",
-            get(metadata::<api::SupersetDashboard>),
-        )
-        .route("/metadata/kafkaTopic", get(metadata::<api::KafkaTopic>))
-        .route("/metadata/dataHubUrn", get(metadata::<api::DataHubUrn>))
         .with_state(AppState {
             backend,
             resource_info_cache,

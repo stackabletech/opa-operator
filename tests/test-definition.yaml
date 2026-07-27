@@ -16,6 +16,16 @@ dimensions:
       # To use a custom image, add a comma and the full name after the product version
       # 481,oci.stackable.tech/sdp/trino:481-stackable0.0.0-dev
       - "481"
+  - name: kafka-latest
+    values:
+      # To use a custom image, add a comma and the full name after the product version
+      # 4.2.1,oci.stackable.tech/sdp/kafka:4.2.1-stackable0.0.0-dev
+      - "4.2.1"
+  - name: superset-latest
+    values:
+      # To use a custom image, add a comma and the full name after the product version
+      # 6.1.0,oci.stackable.tech/sdp/superset:6.1.0-stackable0.0.0-dev
+      - "6.1.0"
   - name: keycloak
     values:
       - 23.0.1
@@ -77,6 +87,8 @@ tests:
     dimensions:
       - opa-latest
       - trino-latest
+      - kafka-latest
+      - superset-latest
       - data-hub
       - data-hub-prerequisites
       - openshift

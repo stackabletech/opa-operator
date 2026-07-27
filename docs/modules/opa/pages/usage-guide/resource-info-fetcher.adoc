@@ -2,7 +2,7 @@
 :description: Resource Info Fetcher for OPA retrieves data from backends like DataHub. Integrate extra resource details into Rego rules for enhanced policy management.
 
 The _Resource info fetcher_ allows for additional information to be obtained from the configured backend (for example, DataHub).
-You can then write Rego rules for OpenPolicyAgent which make an HTTP request to the Resource info fetcher and make use of the additional information returned for the resource, such as Trino tables or Kafka topic.
+You can then write Rego rules for OpenPolicyAgent which make an HTTP request to the Resource info fetcher and make use of the additional information returned for the resource, such as Trino tables or Apache Kafka topics.
 
 You can enable the Resource info fetcher sidecar as follows:
 
@@ -45,7 +45,7 @@ stringData:
 <1> Enable the `resource-info-fetcher` sidecar
 <2> Enable TLS verification using the CA from the `tls` SecretClass.
 <3> Authenticate to DataHub with a Personal Access Token (PAT) read from the specified Secret. The Secret must have a `token` entry. See the DataHub documentation on https://docs.datahub.com/docs/authentication/personal-access-tokens[Personal Access Tokens] for how to create one, and make sure https://docs.datahub.com/docs/authentication/introducing-metadata-service-authentication[Metadata Service Authentication] is enabled on your DataHub.
-<4> The DataHub environment (fabric) to query, e.g. `PROD` or `DEV`. Defaults to `PROD`.
+<4> The DataHub environment (fabric) to query, e.g. `PROD` or `DEV`. Defaults to `PROD`, which is also what DataHub's ingestion sources default to.
 
 Currently the following backends are supported:
 
@@ -65,7 +65,33 @@ DataHub is currently only supported backend, so the general documentation from a
 
 == Resource info fetcher API
 
-Resource information can be retrieved from regorules using the functions `TODO` in `data.stackable.opa.resourceinfo.v1`.
+Resource information can be retrieved from regorules using the functions in `data.stackable.opa.resourceinfo.v1`.
+There is one function per kind of resource:
+
+[source,rego]
+----
+databaseResourceInfo(system, instance, database)
+schemaResourceInfo(system, instance, database, schema)
+tableResourceInfo(system, instance, database, schema, table)
+streamResourceInfo(system, instance, queue)
+dashboardResourceInfo(system, instance, id)
+chartResourceInfo(system, instance, id)
+
+rawIdentifierResourceInfo(identifier)
+----
+
+The naming is intentionally product-agnostic, so that one function serves the equivalent resource of every product.
+`databaseResourceInfo` addresses what Trino calls a catalog, and `streamResourceInfo` what Apache Kafka calls a topic.
+
+`rawIdentifierResourceInfo` is the escape hatch for resources the functions above do not cover: it passes the identifier to the backend as-is.
+For DataHub that is a URN, such as `urn:li:chart:(superset,my-namespace/my-superset.1)`.
+
+The first two arguments are the same everywhere:
+
+* `system` is the kind of product the resource lives in, for example `trino`, `kafka` or `superset`. DataHub calls this the _data platform_.
+* `instance` identifies _which_ deployment of that product, for example `my-namespace/my-trino`. DataHub calls this the _platform instance_, and the value must match the `platform_instance` of the ingestion source that produced the metadata.
+
+The DataHub environment (fabric) is deliberately *not* an argument: it describes how the catalog was populated rather than the resource being authorized, so it is configured once on the OpaCluster (see `env` above) instead of being passed in by every Rego rule.
 
 An example of the returned structure:
 
@@ -99,14 +125,17 @@ An example of the returned structure:
 
 === Debug request
 
-To debug the resource-info-fetcher you can `curl` it's API for a given resource.
+To debug the resource-info-fetcher you can `curl` its API for a given resource.
+Every Rego function above maps to a `GET /metadata/<resource type>` endpoint that takes its arguments as query parameters.
 To achieve this shell into the `opa` container and execute
 
 [source,bash]
 ----
-curl --header 'Content-Type: application/json' -d '{"stacklet": "trino", "trinoSchema": {"catalog": "lakehouse", "schema": "customer_analytics"}}' localhost:9477/resource | jq
+curl 'localhost:9477/metadata/schema?system=trino&instance=my-namespace/my-trino&database=lakehouse&schema=customer_analytics' | jq
 
-curl --header 'Content-Type: application/json' -d '{"stacklet": "", "dataHubUrn": "urn:li:chart:(superset,1)"}' localhost:9477/resource | jq
+curl 'localhost:9477/metadata/chart?system=superset&instance=my-namespace/my-superset&id=1' | jq
+
+curl 'localhost:9477/metadata/rawIdentifier?identifier=urn:li:chart:(superset,my-namespace/my-superset.1)' | jq
 ----
 
 === Rego rule library
@@ -114,7 +143,23 @@ curl --header 'Content-Type: application/json' -d '{"stacklet": "", "dataHubUrn"
 The HTTP API exposed by the resource-info-fetcher can be called directly using the rego function `http.send`.
 However, we provide a convenience rego rule library, which we ship with `OpaClusters` by default.
 
+For example, the following rule allows access to tables tagged as `public`:
+
 [source,rego]
 ----
-TODO
+package test
+
+import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+default allow := false
+
+allow if {
+    table := resourceinfo.tableResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema, input.table)
+    some tag in table.tags
+    tag.urn == "urn:li:tag:public"
+}
 ----
+
+A resource the backend does not know about is not reported as an error: the resource-info-fetcher returns a record with empty `tags`, `owners` and `dataProducts` and a `null` `domain`.
+Prefer rules that require a positive signal, like the one above, which denies access in that case.
+A rule that merely excludes a tag would instead grant access to every resource missing from the backend.

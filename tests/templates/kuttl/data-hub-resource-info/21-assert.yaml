@@ -1,15 +1,8 @@
 ---
 apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
-# Metadata-only ingestion of a single schema is quick, but the image is large and the first
-# query can wait on a worker; give it headroom. Surface the logs regardless of outcome.
-timeout: 600
+timeout: 610
 commands:
-  - script: |
-      if kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=590s job/datahub-ingest-trino; then
-        kubectl -n "$NAMESPACE" logs job/datahub-ingest-trino --tail=40
-      else
-        echo "Trino ingestion Job did not complete:"
-        kubectl -n "$NAMESPACE" logs job/datahub-ingest-trino --tail=80 || true
-        exit 1
-      fi
+  - script: kubectl -n $NAMESPACE wait --for=condition=available kafkaclusters.kafka.stackable.tech/test-kafka --timeout=600s
+  # The seed Job (kafka-seed) creates the test topics; wait for it so the ingestion (32) has data.
+  - script: kubectl -n $NAMESPACE wait --for=condition=complete job/kafka-seed --timeout=300s

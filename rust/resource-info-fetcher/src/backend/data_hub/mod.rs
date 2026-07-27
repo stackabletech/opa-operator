@@ -157,6 +157,9 @@ pub struct ResolvedDataHubBackend {
     token: String,
     http_client: reqwest::Client,
     graphql_url: Url,
+
+    /// The DataHub fabric the requested resources live in, see [`v1alpha1::DataHubBackend::env`].
+    env: v1alpha1::FabricType,
 }
 
 impl ResolvedDataHubBackend {
@@ -202,6 +205,7 @@ impl ResolvedDataHubBackend {
             token,
             http_client,
             graphql_url,
+            env: config.env,
         })
     }
 
@@ -262,7 +266,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
         &self,
         request: &ResourceInfoRequest,
     ) -> Result<Self::Response, GetResourceInfoError> {
-        let urn = urn_for_request(request);
+        let urn = urn_for_request(request, &self.env);
         let entity = self.query_entity(&urn).await?;
 
         Ok(entity.into_response(urn))

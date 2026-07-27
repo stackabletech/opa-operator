@@ -1,0 +1,15 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+# Metadata-only ingestion of a single schema is quick, but the image is large and the first
+# query can wait on a worker; give it headroom. Surface the logs regardless of outcome.
+timeout: 600
+commands:
+  - script: |
+      if kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=590s job/datahub-ingest-trino; then
+        kubectl -n "$NAMESPACE" logs job/datahub-ingest-trino --tail=40
+      else
+        echo "Trino ingestion Job did not complete:"
+        kubectl -n "$NAMESPACE" logs job/datahub-ingest-trino --tail=80 || true
+        exit 1
+      fi

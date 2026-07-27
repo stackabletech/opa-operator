@@ -26,6 +26,13 @@ spec:
             - /scripts/test-regorule.py
             - -u
             - http://test-opa-server:8081/v1/data/test
+          env:
+            # The Trino URNs the test asserts on embed the namespace (instance =
+            # ${POD_NAMESPACE}/my-trino, see 31-ingest-trino), so the script derives them at runtime.
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           volumeMounts:
             - name: script
               mountPath: /scripts
