@@ -26,8 +26,23 @@ pub(crate) mod test_support {
         crd::v1alpha2,
     };
 
+    /// The expected `app.kubernetes.io/version` label value for the given product version.
+    ///
+    /// The `-stackable` suffix carries the operator's own version, which is `0.0.0-dev` on main
+    /// but rewritten by the release process — so tests must derive it rather than hardcode it,
+    /// or they fail on release branches.
+    pub fn app_version_label(product_version: &str) -> String {
+        format!(
+            "{product_version}-stackable{}",
+            crate::built_info::PKG_VERSION
+        )
+    }
+
     /// Builds an `OpaCluster` from the given `spec` JSON and runs the validate step, returning the
     /// resulting [`ValidatedCluster`].
+    ///
+    /// The cluster name (`test-opa`) deliberately differs from the product name (`opa`), so tests
+    /// asserting recommended labels catch swapped `name`/`instance` values.
     pub fn validated_cluster_from_spec(spec: Value) -> ValidatedCluster {
         let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
             "apiVersion": "opa.stackable.tech/v1alpha2",

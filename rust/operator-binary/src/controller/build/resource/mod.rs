@@ -4,4 +4,5 @@
 pub mod config_map;
 pub mod daemonset;
 pub mod discovery;
+pub mod rbac;
 pub mod service;

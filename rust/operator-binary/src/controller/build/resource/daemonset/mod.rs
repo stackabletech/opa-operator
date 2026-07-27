@@ -221,7 +221,6 @@ pub fn build_server_rolegroup_daemonset(
     role_group: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
-    service_account_name: &str,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let resolved_product_image = &cluster.image;
@@ -353,7 +352,7 @@ pub fn build_server_rolegroup_daemonset(
             VolumeBuilder::new(CONFIG_VOLUME_NAME.as_ref())
                 .with_config_map(
                     cluster
-                        .resource_names(role_group_name)
+                        .role_group_resource_names(role_group_name)
                         .role_group_config_map()
                         .to_string(),
                 )
@@ -381,7 +380,12 @@ pub fn build_server_rolegroup_daemonset(
                 .build(),
         )
         .context(AddVolumeSnafu)?
-        .service_account_name(service_account_name)
+        .service_account_name(
+            cluster
+                .cluster_resource_names()
+                .service_account_name()
+                .to_string(),
+        )
         .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
 
     if let Some(tls) = &cluster.cluster_config.tls {
@@ -396,13 +400,13 @@ pub fn build_server_rolegroup_daemonset(
                     .with_service_scope(cluster.server_role_service_name())
                     .with_service_scope(
                         cluster
-                            .resource_names(role_group_name)
+                            .role_group_resource_names(role_group_name)
                             .headless_service_name()
                             .to_string(),
                     )
                     .with_service_scope(
                         cluster
-                            .resource_names(role_group_name)
+                            .role_group_resource_names(role_group_name)
                             .metrics_service_name()
                             .to_string(),
                     )
@@ -430,7 +434,7 @@ pub fn build_server_rolegroup_daemonset(
             &container_name(&Container::Vector),
             resolved_product_image,
             vector_log_config,
-            &cluster.resource_names(role_group_name),
+            &cluster.role_group_resource_names(role_group_name),
             &CONFIG_VOLUME_NAME,
             &LOG_VOLUME_NAME,
             EnvVarSet::new(),
@@ -442,15 +446,15 @@ pub fn build_server_rolegroup_daemonset(
     let mut pod_template = pb.build_template();
     pod_template.merge_from(rolegroup_config.pod_overrides.clone());
 
-    let metadata = cluster
-        .object_meta(
-            cluster
-                .resource_names(role_group_name)
-                .daemon_set_name()
-                .to_string(),
-            role_group_name,
-        )
-        .build();
+    let metadata = build::object_meta(
+        cluster,
+        cluster
+            .role_group_resource_names(role_group_name)
+            .daemon_set_name()
+            .to_string(),
+        role_group_name,
+    )
+    .build();
 
     let daemonset_spec = DaemonSetSpec {
         selector: LabelSelector {
@@ -734,7 +738,6 @@ mod tests {
             role_group,
             "bundle-builder-image",
             "user-info-fetcher-image",
-            "test-opa-serviceaccount",
             &cluster_info(),
         )
         .expect("the daemonset should build")
