@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use crate::crd::cache::Cache;
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
     commons::{
@@ -12,6 +11,8 @@ use stackable_operator::{
     v2::types::kubernetes::{SecretClassName, SecretName},
     versioned::versioned,
 };
+
+use crate::crd::cache::Cache;
 
 mod v1alpha1_impl;
 mod v1alpha2_impl;
