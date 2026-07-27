@@ -9,7 +9,8 @@ use stackable_operator::{
 };
 
 use crate::controller::{
-    RoleGroupName, ValidatedCluster, build::PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP,
+    RoleGroupName, ValidatedCluster,
+    build::{PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP, object_meta},
 };
 
 pub const APP_PORT: Port = Port(8081);
@@ -21,12 +22,12 @@ pub const METRICS_PORT_NAME: &str = "metrics";
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
 pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
-    let metadata = cluster
-        .object_meta(
-            cluster.server_role_service_name(),
-            &PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP,
-        )
-        .build();
+    let metadata = object_meta(
+        cluster,
+        cluster.server_role_service_name(),
+        &PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP,
+    )
+    .build();
 
     let service_spec = ServiceSpec {
         type_: Some(cluster.cluster_config.listener_class.k8s_service_type()),
@@ -56,15 +57,15 @@ pub(crate) fn build_rolegroup_headless_service(
     cluster: &ValidatedCluster,
     role_group_name: &RoleGroupName,
 ) -> Service {
-    let metadata = cluster
-        .object_meta(
-            cluster
-                .role_group_resource_names(role_group_name)
-                .headless_service_name()
-                .to_string(),
-            role_group_name,
-        )
-        .build();
+    let metadata = object_meta(
+        cluster,
+        cluster
+            .role_group_resource_names(role_group_name)
+            .headless_service_name()
+            .to_string(),
+        role_group_name,
+    )
+    .build();
 
     // Currently we don't offer listener-exposition of OPA mostly due to security concerns.
     // OPA is currently public within the Kubernetes (without authentication).
@@ -114,23 +115,23 @@ pub(crate) fn build_rolegroup_metrics_service(
     } else {
         (Scheme::Http, APP_PORT)
     };
-    let metadata = cluster
-        .object_meta(
-            cluster
-                .role_group_resource_names(role_group_name)
-                .metrics_service_name()
-                .to_string(),
-            role_group_name,
-        )
-        .with_labels(prometheus_labels(&Scraping::Enabled))
-        // The metrics are served on the same port as the HTTP/HTTPS traffic, under `/metrics`.
-        .with_annotations(prometheus_annotations(
-            &Scraping::Enabled,
-            &scheme,
-            "/metrics",
-            &port,
-        ))
-        .build();
+    let metadata = object_meta(
+        cluster,
+        cluster
+            .role_group_resource_names(role_group_name)
+            .metrics_service_name()
+            .to_string(),
+        role_group_name,
+    )
+    .with_labels(prometheus_labels(&Scraping::Enabled))
+    // The metrics are served on the same port as the HTTP/HTTPS traffic, under `/metrics`.
+    .with_annotations(prometheus_annotations(
+        &Scraping::Enabled,
+        &scheme,
+        "/metrics",
+        &port,
+    ))
+    .build();
 
     let service_spec = headless_cluster_ip_service_spec(
         vec![metrics_service_port(tls_enabled)],

@@ -6,7 +6,10 @@ use stackable_operator::{
 };
 
 use super::service::{APP_PORT, APP_TLS_PORT};
-use crate::controller::{ValidatedCluster, build::PLACEHOLDER_DISCOVERY_ROLE_GROUP};
+use crate::controller::{
+    ValidatedCluster,
+    build::{PLACEHOLDER_DISCOVERY_ROLE_GROUP, object_meta},
+};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -39,9 +42,12 @@ pub fn build_discovery_config_map(
 
     // Discovery is a cluster-level object (named after the cluster); `discovery` is used as a
     // placeholder role-group name for the recommended labels.
-    let metadata = cluster
-        .object_meta(cluster.name.to_string(), &PLACEHOLDER_DISCOVERY_ROLE_GROUP)
-        .build();
+    let metadata = object_meta(
+        cluster,
+        cluster.name.to_string(),
+        &PLACEHOLDER_DISCOVERY_ROLE_GROUP,
+    )
+    .build();
 
     let mut cm_builder = ConfigMapBuilder::new();
     cm_builder.metadata(metadata).add_data("OPA", url);

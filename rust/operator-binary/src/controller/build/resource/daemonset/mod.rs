@@ -446,15 +446,15 @@ pub fn build_server_rolegroup_daemonset(
     let mut pod_template = pb.build_template();
     pod_template.merge_from(rolegroup_config.pod_overrides.clone());
 
-    let metadata = cluster
-        .object_meta(
-            cluster
-                .role_group_resource_names(role_group_name)
-                .daemon_set_name()
-                .to_string(),
-            role_group_name,
-        )
-        .build();
+    let metadata = build::object_meta(
+        cluster,
+        cluster
+            .role_group_resource_names(role_group_name)
+            .daemon_set_name()
+            .to_string(),
+        role_group_name,
+    )
+    .build();
 
     let daemonset_spec = DaemonSetSpec {
         selector: LabelSelector {
