@@ -3,7 +3,9 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
   - script: |
-      kubectl apply -n $NAMESPACE -f - <<EOF
+      # Quoted heredoc delimiter: the Rego below must reach kubectl verbatim, without the shell
+      # expanding backticks, $ or backslashes in it.
+      kubectl apply -n $NAMESPACE -f - <<'EOF'
       ---
       apiVersion: v1
       kind: ConfigMap
@@ -29,6 +31,10 @@ commands:
           chart := resourceinfo.chartResourceInfo(input.system, input.instance, input.id)
 
           rawIdentifier := resourceinfo.rawIdentifierResourceInfo(input.identifier)
+      EOF
+
+      # Unquoted delimiter here, because the GMS hostname needs $NAMESPACE expanded.
+      kubectl apply -n $NAMESPACE -f - <<EOF
       ---
       apiVersion: opa.stackable.tech/v1alpha2
       kind: OpaCluster
@@ -50,6 +56,7 @@ commands:
                 hostname: datahub-datahub-gms.$NAMESPACE.svc.cluster.local
                 port: 8080
                 credentialsSecretName: datahub-rif-credentials
+                env: PROD
             cache:
               entryTimeToLive: 60s
 {% if lookup('env', 'VECTOR_AGGREGATOR') %}
