@@ -77,9 +77,6 @@ async fn main() -> anyhow::Result<()> {
                 RunArguments {
                     operator_environment,
                     watch_namespace,
-                    // OPA no longer uses the product-config; the CLI argument is kept for
-                    // backwards compatibility but ignored.
-                    product_config: _,
                     maintenance,
                     common,
                 },

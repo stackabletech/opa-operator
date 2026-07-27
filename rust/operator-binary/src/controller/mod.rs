@@ -11,6 +11,10 @@ use stackable_operator::{
         product_image_selection::ResolvedProductImage,
         resources::{NoRuntimeLimits, Resources},
     },
+    k8s_openapi::api::{
+        apps::v1::DaemonSet,
+        core::v1::{ConfigMap, Service},
+    },
     kube::{Resource as KubeResource, api::ObjectMeta},
     kvp::Labels,
     shared::time::Duration,
@@ -230,6 +234,18 @@ impl KubeResource for ValidatedCluster {
     fn meta_mut(&mut self) -> &mut ObjectMeta {
         &mut self.metadata
     }
+}
+
+/// Every Kubernetes resource produced by the [`build`](build::build) step.
+///
+/// OPA runs as a `DaemonSet` (one Pod per node), so there are no `StatefulSet`s, PDBs or
+/// `Listener`s. `services` holds the role-level `Service` and the per-role-group headless and
+/// metrics `Service`s; `config_maps` holds the per-role-group `ConfigMap`s and the cluster-level
+/// discovery `ConfigMap`.
+pub struct KubernetesResources {
+    pub daemon_sets: Vec<DaemonSet>,
+    pub services: Vec<Service>,
+    pub config_maps: Vec<ConfigMap>,
 }
 
 /// Cluster-wide settings resolved once during validation, so the build steps no longer need the
