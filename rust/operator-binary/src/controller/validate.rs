@@ -240,11 +240,81 @@ pub fn validate(
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use stackable_operator::product_logging::spec::{
         AutomaticContainerLogConfig, ContainerLogConfig, ContainerLogConfigChoice,
     };
 
     use super::*;
+    use crate::controller::build::properties::test_support::app_version_label;
+
+    /// Locks every value the validate step itself derives from the minimal fixture — so a
+    /// validation regression fails here, with a validate-shaped message, instead of surfacing as
+    /// a confusing build-test failure downstream.
+    ///
+    /// The merged per-role-group config (resources, affinity, logging defaults, …) is produced by
+    /// the config merge machinery, whose contracts are tested in operator-rs and the properties
+    /// tests; only the values this module derives on top are re-asserted here.
+    #[test]
+    fn validate_ok_derives_expected_values() {
+        let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
+            "apiVersion": "opa.stackable.tech/v1alpha2",
+            "kind": "OpaCluster",
+            "metadata": {
+                "name": "test-opa",
+                "namespace": "default",
+                "uid": "c27b3971-ca72-42c1-80a4-abdfc1db0ddd",
+            },
+            "spec": {
+                "image": { "productVersion": "1.2.3" },
+                "servers": { "roleGroups": { "default": {} } },
+            },
+        }))
+        .expect("valid test input");
+        let operator_environment = OperatorEnvironmentOptions {
+            operator_namespace: "stackable-operators".to_string(),
+            operator_service_name: "opa-operator".to_string(),
+            image_repository: "oci.example.org".to_string(),
+        };
+
+        let cluster = validate(&opa, &operator_environment).expect("the minimal fixture validates");
+
+        assert_eq!(cluster.name.to_string(), "test-opa");
+        assert_eq!(cluster.namespace.to_string(), "default");
+        assert_eq!(
+            cluster.uid.to_string(),
+            "c27b3971-ca72-42c1-80a4-abdfc1db0ddd"
+        );
+        assert_eq!(
+            cluster.image.image,
+            format!("oci.example.org/opa:{}", app_version_label("1.2.3"))
+        );
+        assert_eq!(cluster.image.product_version, "1.2.3");
+        assert_eq!(
+            cluster.product_version.to_string(),
+            app_version_label("1.2.3")
+        );
+
+        // The minimal fixture configures no user-info fetcher and no TLS; the listener class
+        // falls back to its default.
+        assert_eq!(cluster.cluster_config.user_info, None);
+        assert_eq!(cluster.cluster_config.tls, None);
+        assert_eq!(
+            cluster.cluster_config.listener_class,
+            v1alpha2::CurrentlySupportedListenerClasses::ClusterInternal
+        );
+
+        // A single `server` role with the single `default` role group; the Vector agent is off.
+        assert_eq!(cluster.role_group_configs.len(), 1);
+        let role_groups = &cluster.role_group_configs[&OpaRole::Server];
+        let role_group_names: Vec<String> = role_groups.keys().map(ToString::to_string).collect();
+        assert_eq!(role_group_names, ["default"]);
+        let role_group = role_groups
+            .values()
+            .next()
+            .expect("the default role group exists");
+        assert_eq!(role_group.config.logging.vector_container, None);
+    }
 
     /// A [`Logging`] with an automatic log config for every container, as the (defaulted) merged
     /// config provides at runtime. `validate_logging` validates all containers, so all must be
