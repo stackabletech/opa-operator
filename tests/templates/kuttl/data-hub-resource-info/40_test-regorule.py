@@ -18,7 +18,7 @@ import requests
 BUSINESS = "urn:li:ownershipType:__system__business_owner"
 TECHNICAL = "urn:li:ownershipType:__system__technical_owner"
 
-# The ingestion recipes in 31/32/33 set the DataHub `instance` (platform instance) to
+# The ingestion recipes set the DataHub `instance` (platform instance) to
 # `${POD_NAMESPACE}/<cluster>`, so the instances - and every URN derived from them - are only known
 # at runtime.
 NAMESPACE = os.environ["POD_NAMESPACE"]
@@ -28,7 +28,7 @@ SUPERSET = f"{NAMESPACE}/my-superset"
 
 TRINO_DB = {"system": "trino", "instance": TRINO, "database": "tpch"}
 TRINO_SCHEMA = {**TRINO_DB, "schema": "sf1"}
-# The Superset seed in 23-install-superset creates exactly one chart and one dashboard in a fresh
+# The Superset seed in install-superset creates exactly one chart and one dashboard in a fresh
 # Superset, so both have id 1.
 SUPERSET_ITEM = {"system": "superset", "instance": SUPERSET, "id": 1}
 

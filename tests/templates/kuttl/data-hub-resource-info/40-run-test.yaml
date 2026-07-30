@@ -2,11 +2,11 @@
 apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
-  # Ship the assertion script into the cluster as a ConfigMap (keeps test-regorule.py a
+  # Ship the assertion script into the cluster as a ConfigMap (keeps 40_test-regorule.py a
   # real, lintable file instead of inlining Python into YAML). Idempotent so re-runs are safe.
   - script: |
       kubectl -n "$NAMESPACE" create configmap test-resource-info-script \
-        --from-file=test-regorule.py \
+        --from-file=test-regorule.py=40_test-regorule.py \
         --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
 ---
 apiVersion: batch/v1

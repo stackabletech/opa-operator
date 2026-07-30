@@ -54,9 +54,11 @@ Currently the following backends are supported:
 [#backends]
 == Backends
 
+[WARNING]
+====
 The initial version is tightly modeled to the only supported backend, namely DataHub.
 The API might change as soon as we add support for other backends.
-
+====
 
 [#backend-data-hub]
 === DataHub
@@ -131,19 +133,27 @@ To achieve this shell into the `opa` container and execute
 
 [source,bash]
 ----
-curl 'localhost:9477/metadata/schema?system=trino&instance=my-namespace/my-trino&database=lakehouse&schema=customer_analytics' | jq
+# Query using the abstraction layer
+curl 'localhost:9477/metadata/database?system=trino&instance=kuttl-secure-hermit-wf84/my-trino&database=tpch' | jq
+curl 'localhost:9477/metadata/schema?system=trino&instance=kuttl-secure-hermit-wf84/my-trino&database=tpch&schema=sf1' | jq
+curl 'localhost:9477/metadata/table?system=trino&instance=kuttl-secure-hermit-wf84/my-trino&database=tpch&schema=sf1&table=customer' | jq
+curl 'localhost:9477/metadata/stream?system=kafka&instance=kuttl-secure-hermit-wf84/test-kafka&queue=orders' | jq
+curl 'localhost:9477/metadata/dashboard?system=superset&instance=kuttl-secure-hermit-wf84/my-superset&id=1' | jq
+curl 'localhost:9477/metadata/chart?system=superset&instance=kuttl-secure-hermit-wf84/my-superset&id=1' | jq
 
-curl 'localhost:9477/metadata/chart?system=superset&instance=my-namespace/my-superset&id=1' | jq
-
-curl 'localhost:9477/metadata/rawIdentifier?identifier=urn:li:chart:(superset,my-namespace/my-superset.1)' | jq
+# Query raw identifier (URN in this case)
+curl 'localhost:9477/metadata/rawIdentifier?identifier=urn:li:container:792ce6aace288712a1ef036fbca2bb37' | jq
+curl 'localhost:9477/metadata/rawIdentifier?identifier=urn:li:chart:(superset,kuttl-secure-hermit-wf84/my-superset.1)' | jq
 ----
 
 === Rego rule library
 
 The HTTP API exposed by the resource-info-fetcher can be called directly using the rego function `http.send`.
 However, we provide a convenience rego rule library, which we ship with `OpaClusters` by default.
+We recommend to use it, as it allows us to change the underlying HTTP API without users noticing.
 
-For example, the following rule allows access to tables tagged as `public`:
+For example, the following rule allows access to tables tagged as `public`.
+Please note that this is not a full working example, and serves as demonstration.
 
 [source,rego]
 ----
