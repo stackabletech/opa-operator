@@ -9,8 +9,11 @@ use stackable_operator::{
 
 use crate::controller::{
     OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
-    build::properties::{
-        ConfigFileName, config_json, product_logging, resource_info_fetcher, user_info_fetcher,
+    build::{
+        object_meta,
+        properties::{
+            ConfigFileName, config_json, product_logging, resource_info_fetcher, user_info_fetcher,
+        },
     },
 };
 
@@ -48,15 +51,15 @@ pub fn build_rolegroup_config_map(
 ) -> Result<ConfigMap> {
     let mut cm_builder = ConfigMapBuilder::new();
 
-    let metadata = cluster
-        .object_meta(
-            cluster
-                .resource_names(role_group_name)
-                .role_group_config_map()
-                .to_string(),
-            role_group_name,
-        )
-        .build();
+    let metadata = object_meta(
+        cluster,
+        cluster
+            .role_group_resource_names(role_group_name)
+            .role_group_config_map()
+            .to_string(),
+        role_group_name,
+    )
+    .build();
 
     cm_builder.metadata(metadata).add_data(
         ConfigFileName::ConfigJson.to_string(),

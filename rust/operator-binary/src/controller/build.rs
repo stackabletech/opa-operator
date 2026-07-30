@@ -4,7 +4,11 @@
 use std::str::FromStr;
 
 use snafu::{ResultExt, Snafu};
-use stackable_operator::{utils::cluster_info::KubernetesClusterInfo, v2::types::common::Port};
+use stackable_operator::{
+    builder::meta::ObjectMetaBuilder,
+    utils::cluster_info::KubernetesClusterInfo,
+    v2::{builder::meta::ownerreference_from_resource, types::common::Port},
+};
 
 use crate::controller::{
     KubernetesResources, RoleGroupName, ValidatedCluster,
@@ -12,6 +16,7 @@ use crate::controller::{
         config_map::build_rolegroup_config_map,
         daemonset::build_server_rolegroup_daemonset,
         discovery::build_discovery_config_map,
+        rbac::{build_role_binding, build_service_account},
         service::{
             build_rolegroup_headless_service, build_rolegroup_metrics_service,
             build_server_role_service,
@@ -51,7 +56,6 @@ pub enum Error {
 /// Kubernetes cluster domain used in the discovery URL and the sidecar environment.
 pub fn build(
     cluster: &ValidatedCluster,
-    service_account_name: &str,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     resource_info_fetcher_image: &str,
@@ -83,7 +87,6 @@ pub fn build(
                     opa_bundle_builder_image,
                     user_info_fetcher_image,
                     resource_info_fetcher_image,
-                    service_account_name,
                     cluster_info,
                 )
                 .context(DaemonSetSnafu {
@@ -100,6 +103,8 @@ pub fn build(
         daemon_sets,
         services,
         config_maps,
+        service_accounts: vec![build_service_account(cluster)],
+        role_bindings: vec![build_role_binding(cluster)],
     })
 }
 
@@ -114,6 +119,25 @@ stackable_operator::constant!(pub(crate) PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP: Role
 // Placeholder role-group name for the recommended labels of the discovery `ConfigMap`, which is a
 // cluster-level object not bound to a single role group.
 stackable_operator::constant!(pub(crate) PLACEHOLDER_DISCOVERY_ROLE_GROUP: RoleGroupName = "discovery");
+
+/// Returns an [`ObjectMetaBuilder`] pre-filled with the namespace, an owner reference back to
+/// the cluster, and the recommended labels for a resource named `name` in `role_group_name`.
+///
+/// Consolidates the metadata chain repeated by the child-resource builders. Call sites that
+/// need extra labels/annotations chain them onto the returned builder before calling `build()`.
+pub(crate) fn object_meta(
+    cluster: &ValidatedCluster,
+    name: impl Into<String>,
+    role_group_name: &RoleGroupName,
+) -> ObjectMetaBuilder {
+    let mut builder = ObjectMetaBuilder::new();
+    builder
+        .name_and_namespace(cluster)
+        .name(name)
+        .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
+        .with_labels(cluster.recommended_labels(role_group_name));
+    builder
+}
 
 #[cfg(test)]
 mod tests {
@@ -154,7 +178,6 @@ mod tests {
     fn build_produces_expected_resource_names() {
         let resources = build(
             &cluster(),
-            "test-opa-serviceaccount",
             "bundle-builder-image",
             "user-info-fetcher-image",
             "resource-info-fetcher-image",
@@ -180,6 +203,15 @@ mod tests {
         assert_eq!(
             sorted_names(&resources.config_maps),
             ["test-opa", "test-opa-server-default"]
+        );
+        // The cluster-shared RBAC pair.
+        assert_eq!(
+            sorted_names(&resources.service_accounts),
+            ["test-opa-serviceaccount"]
+        );
+        assert_eq!(
+            sorted_names(&resources.role_bindings),
+            ["test-opa-rolebinding"]
         );
     }
 }

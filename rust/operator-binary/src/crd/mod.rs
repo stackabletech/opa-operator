@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
     commons::{
@@ -21,7 +23,10 @@ use stackable_operator::{
     v2::{
         config_overrides::JsonConfigOverrides,
         role_utils::GenericCommonConfig,
-        types::kubernetes::{ConfigMapName, SecretClassName},
+        types::{
+            kubernetes::{ConfigMapName, SecretClassName},
+            operator::RoleName,
+        },
     },
     versioned::versioned,
 };
@@ -263,6 +268,18 @@ pub enum OpaRole {
     #[serde(rename = "server")]
     #[strum(serialize = "server")]
     Server,
+}
+
+impl From<OpaRole> for RoleName {
+    fn from(value: OpaRole) -> Self {
+        RoleName::from_str(&value.to_string()).expect("an OpaRole is a valid role name")
+    }
+}
+
+impl From<&OpaRole> for RoleName {
+    fn from(value: &OpaRole) -> Self {
+        RoleName::from_str(&value.to_string()).expect("an OpaRole is a valid role name")
+    }
 }
 
 // TODO (@Techassi): Support versioned status

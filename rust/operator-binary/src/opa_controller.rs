@@ -6,13 +6,11 @@ use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     cluster_resources::ClusterResourceApplyStrategy,
-    commons::rbac::build_rbac_resources,
     kube::{
         ResourceExt,
         core::{DeserializeGuard, error_boundary},
         runtime::controller::Action,
     },
-    kvp::LabelError,
     logging::controller::ReconcilerError,
     shared::time::Duration,
     status::condition::{
@@ -26,7 +24,7 @@ use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
     controller::{build, controller_name, operator_name, product_name, validate},
-    crd::{APP_NAME, OPERATOR_NAME, OpaClusterStatus, v1alpha2},
+    crd::{OPERATOR_NAME, OpaClusterStatus, v1alpha2},
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
@@ -72,16 +70,6 @@ pub enum Error {
         name: String,
     },
 
-    #[snafu(display("failed to patch service account"))]
-    ApplyServiceAccount {
-        source: stackable_operator::cluster_resources::Error,
-    },
-
-    #[snafu(display("failed to patch role binding"))]
-    ApplyRoleBinding {
-        source: stackable_operator::cluster_resources::Error,
-    },
-
     #[snafu(display("failed to update status"))]
     ApplyStatus {
         source: stackable_operator::client::Error,
@@ -91,14 +79,6 @@ pub enum Error {
     DeleteOrphans {
         source: stackable_operator::cluster_resources::Error,
     },
-
-    #[snafu(display("failed to build RBAC resources"))]
-    BuildRbacResources {
-        source: stackable_operator::commons::rbac::Error,
-    },
-
-    #[snafu(display("failed to build label"))]
-    BuildLabel { source: LabelError },
 }
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -135,29 +115,8 @@ pub async fn reconcile_opa(
         &opa.spec.object_overrides,
     );
 
-    let required_labels = cluster_resources
-        .get_required_labels()
-        .context(BuildLabelSnafu)?;
-
-    let (rbac_sa, rbac_rolebinding) =
-        build_rbac_resources(opa, APP_NAME, required_labels).context(BuildRbacResourcesSnafu)?;
-
-    // The ServiceAccount name is deterministic on the built object, so the build step does not
-    // depend on the applied ServiceAccount.
-    let service_account_name = rbac_sa.name_any();
-
-    cluster_resources
-        .add(client, rbac_sa)
-        .await
-        .context(ApplyServiceAccountSnafu)?;
-    cluster_resources
-        .add(client, rbac_rolebinding)
-        .await
-        .context(ApplyRoleBindingSnafu)?;
-
     let resources = build::build(
         &validated_cluster,
-        &service_account_name,
         &ctx.opa_bundle_builder_image,
         &ctx.user_info_fetcher_image,
         &ctx.resource_info_fetcher_image,
@@ -169,6 +128,18 @@ pub async fn reconcile_opa(
 
     // Apply order: DaemonSets last, so a changed mounted ConfigMap already exists before the Pods
     // (that would otherwise restart) are updated (commons-operator#111).
+    for service_account in resources.service_accounts {
+        cluster_resources
+            .add(client, service_account)
+            .await
+            .context(ApplyResourceSnafu)?;
+    }
+    for role_binding in resources.role_bindings {
+        cluster_resources
+            .add(client, role_binding)
+            .await
+            .context(ApplyResourceSnafu)?;
+    }
     for service in resources.services {
         cluster_resources
             .add(client, service)
