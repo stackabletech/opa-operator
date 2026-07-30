@@ -29,6 +29,19 @@ opensearch:
   replicas: 1
   # Single-node OpenSearch: no dedicated master election needed.
   opensearchJavaOpts: "-Xms512m -Xmx512m"
+  extraEnvs:
+    # Disable disk-based shard allocation decisions.
+    #
+    # The watermarks are relative (high watermark: 90% used), so on a test machine with a
+    # large-but-fairly-full disk OpenSearch sets `cluster.blocks.create_index: true` even
+    # though it has tens of GB free and its own indices are a few hundred KB. DataHub's
+    # `system-update` Job then fails at BuildIndicesStep with
+    # `FORBIDDEN/10/cluster create-index blocked (api)` and the test times out.
+    #
+    # This is a throwaway single-node backend holding almost no data, so we don't need the
+    # safety net -- and we do need the test to not depend on the host's disk usage.
+    - name: cluster.routing.allocation.disk.threshold_enabled
+      value: "false"
   resources:
     requests:
       cpu: 500m
