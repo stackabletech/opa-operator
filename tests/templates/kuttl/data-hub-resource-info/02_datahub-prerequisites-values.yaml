@@ -1,3 +1,4 @@
+---
 # Values for the DataHub "prerequisites" Helm chart (chart 0.3.0).
 #
 # We keep the chart defaults where they are already minimal:

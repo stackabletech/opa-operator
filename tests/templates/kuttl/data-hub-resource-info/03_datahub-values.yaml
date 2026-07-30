@@ -1,3 +1,4 @@
+---
 # Values for the DataHub Helm chart (chart 1.0.3, app v1.6.0).
 #
 # Installed with release name `datahub`, so the resulting Services are:
