@@ -14,7 +14,7 @@ use crate::backend::data_hub::{
 
 /// A single query covering every entity kind we build URNs for. We use the generic `entity(urn:)`
 /// resolver plus per-type inline fragments, because a request can target a dataset (Trino table or
-/// Kafka topic), a container (Trino catalog or schema), a chart or a dashboard.
+/// Kafka topic), a container (Trino catalog or schema), a chart, a dashboard or something else.
 const RESOURCE_INFO_QUERY: &str = r#"
 query ResourceInfo($urn: String!) {
   entity(urn: $urn) {
@@ -314,9 +314,8 @@ impl Entity {
 }
 
 /// Resolves the map key and human-readable name for an owner's ownership type, preferring the
-/// modern ownership type entity and falling back to the legacy `type` enum. Unlike the previous
-/// REST implementation, this handles arbitrary (including user-defined) ownership types instead of
-/// assuming a fixed enum.
+/// modern ownership type entity and falling back to the legacy `type` enum. This handles arbitrary
+/// (including user-defined) ownership types instead of assuming a fixed enum.
 fn owner_type(
     ownership_type: Option<OwnershipType>,
     legacy_type: Option<String>,
