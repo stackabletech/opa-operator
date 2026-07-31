@@ -14,13 +14,13 @@ use crate::controller::{
     KubernetesResources, RoleGroupName, ValidatedCluster,
     build::resource::{
         config_map::build_rolegroup_config_map,
-        daemonset::build_server_rolegroup_daemonset,
         discovery::build_discovery_config_map,
         rbac::{build_role_binding, build_service_account},
         service::{
             build_rolegroup_headless_service, build_rolegroup_metrics_service,
             build_server_role_service,
         },
+        workload::daemonset::build_server_rolegroup_daemonset,
     },
 };
 
@@ -37,7 +37,7 @@ pub enum Error {
 
     #[snafu(display("failed to build DaemonSet for role group {role_group}"))]
     DaemonSet {
-        source: resource::daemonset::Error,
+        source: resource::workload::Error,
         role_group: RoleGroupName,
     },
 
