@@ -24,7 +24,7 @@ use crate::controller::{
     ValidatedCluster, ValidatedOpaConfig,
     build::{
         self,
-        resource::daemonset::{
+        resource::workload::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, STACKABLE_LOG_DIR,
             USER_INFO_FETCHER_CREDENTIALS_DIR, USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
             USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, container_name,
