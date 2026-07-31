@@ -21,7 +21,7 @@ use crate::{
         ValidatedCluster, ValidatedOpaConfig,
         build::{
             self,
-            resource::daemonset::{
+            resource::workload::{
                 CONFIG_DIR, CONFIG_VOLUME_NAME, USER_INFO_FETCHER_CREDENTIALS_DIR,
                 USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, USER_INFO_FETCHER_KERBEROS_DIR,
                 USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, add_stackable_rust_cli_env_vars,
