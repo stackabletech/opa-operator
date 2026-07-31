@@ -37,6 +37,12 @@ pub mod versioned {
         /// Port of DataHub. If TLS is used defaults to `443`, otherwise to `80`.
         pub port: Option<u16>,
 
+        /// Root HTTP path of DataHub, e.g. `/datahub` if DataHub is served below that path by a
+        /// reverse proxy. The GraphQL endpoint is expected at `api/graphql` below this path.
+        /// Defaults to `/`.
+        #[serde(default = "default_root_path")]
+        pub root_path: String,
+
         /// Use a TLS connection. If not specified then no TLS will be used.
         #[serde(flatten)]
         pub tls: TlsClientDetails,
@@ -133,4 +139,8 @@ pub mod versioned {
         /// Certification fabrics.
         Cert,
     }
+}
+
+fn default_root_path() -> String {
+    "/".to_string()
 }

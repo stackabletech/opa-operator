@@ -127,6 +127,13 @@ spec:
                                 minimum: 0.0
                                 nullable: true
                                 type: integer
+                              rootPath:
+                                default: /
+                                description: |-
+                                  Root HTTP path of DataHub, e.g. `/datahub` if DataHub is served below that path by a
+                                  reverse proxy. The GraphQL endpoint is expected at `api/graphql` below this path.
+                                  Defaults to `/`.
+                                type: string
                               tls:
                                 description: Use a TLS connection. If not specified no TLS will be used.
                                 nullable: true
@@ -2357,6 +2364,13 @@ spec:
                                 minimum: 0.0
                                 nullable: true
                                 type: integer
+                              rootPath:
+                                default: /
+                                description: |-
+                                  Root HTTP path of DataHub, e.g. `/datahub` if DataHub is served below that path by a
+                                  reverse proxy. The GraphQL endpoint is expected at `api/graphql` below this path.
+                                  Defaults to `/`.
+                                type: string
                               tls:
                                 description: Use a TLS connection. If not specified no TLS will be used.
                                 nullable: true

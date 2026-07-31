@@ -21,6 +21,7 @@ spec:
         dataHub:
           hostname: datahub-gms.my-namespace.svc.cluster.local
           port: 8080
+          rootPath: / # optional, defaults to /
           tls:
             verification:
               server:
@@ -64,6 +65,9 @@ The API might change as soon as we add support for other backends.
 === DataHub
 
 DataHub is currently only supported backend, so the general documentation from above applies.
+
+The resource-info-fetcher talks to DataHub's GraphQL endpoint, which it expects at `api/graphql` below the configured `rootPath`.
+`rootPath` only needs to be set if DataHub is served below a sub-path, for example by a reverse proxy: with `rootPath: /datahub` the endpoint used is `/datahub/api/graphql`.
 
 == Resource info fetcher API
 

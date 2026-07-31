@@ -186,25 +186,10 @@ impl ResolvedDataHubBackend {
             .context(ConfigureTlsSnafu)?;
         let http_client = client_builder.build().context(ConstructHttpClientSnafu)?;
 
-        let schema = if config.tls.uses_tls() {
-            "https"
-        } else {
-            "http"
-        };
-        let port = config
-            .port
-            .unwrap_or(if config.tls.uses_tls() { 443 } else { 80 });
-        let graphql = format!(
-            "{schema}://{hostname}:{port}/api/graphql",
-            hostname = config.hostname
-        );
-        let graphql_url = Url::parse(&graphql)
-            .with_context(|_| BuildDataHubEndpointSnafu { endpoint: graphql })?;
-
         Ok(Self {
             token,
             http_client,
-            graphql_url,
+            graphql_url: build_graphql_url(&config)?,
             env: config.env,
         })
     }
@@ -258,6 +243,38 @@ impl ResolvedDataHubBackend {
     }
 }
 
+/// Builds the DataHub GraphQL endpoint from the backend configuration.
+fn build_graphql_url(config: &v1alpha1::DataHubBackend) -> Result<Url, Error> {
+    let schema = if config.tls.uses_tls() {
+        "https"
+    } else {
+        "http"
+    };
+    let port = config
+        .port
+        .unwrap_or(if config.tls.uses_tls() { 443 } else { 80 });
+
+    let base = format!("{schema}://{hostname}:{port}", hostname = config.hostname);
+    let mut graphql_url =
+        Url::parse(&base).with_context(|_| BuildDataHubEndpointSnafu { endpoint: base })?;
+
+    // Appending the segments one by one - instead of formatting them into the path - normalizes
+    // however the user spelled the root path: leading, trailing and repeated slashes are dropped.
+    graphql_url
+        .path_segments_mut()
+        .expect("an http(s) URL can always be used as a base")
+        .clear()
+        .extend(
+            config
+                .root_path
+                .split('/')
+                .filter(|segment| !segment.is_empty()),
+        )
+        .extend(["api", "graphql"]);
+
+    Ok(graphql_url)
+}
+
 impl ResourceInfoBackend for ResolvedDataHubBackend {
     type Response = DataHubResourceInfoResponse;
 
@@ -270,5 +287,92 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
         let entity = self.query_entity(&urn).await?;
 
         Ok(entity.into_response(urn))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use serde_json::json;
+
+    use super::*;
+
+    const HOSTNAME: &str = "datahub-gms.default.svc.cluster.local";
+
+    fn tls() -> serde_json::Value {
+        json!({"verification": {"none": {}}})
+    }
+
+    /// Deserializes a DataHub backend configured with the mandatory fields plus `config_fields`.
+    ///
+    /// The configuration is deserialized rather than constructed, so that the CRD defaults - most
+    /// importantly the default root path - are applied the same way they are for a real OpaCluster.
+    fn config(config_fields: serde_json::Value) -> v1alpha1::DataHubBackend {
+        let mut config = json!({
+            "hostname": HOSTNAME,
+            "credentialsSecretName": "datahub-credentials",
+        });
+        config
+            .as_object_mut()
+            .expect("the mandatory fields are a JSON object")
+            .extend(
+                config_fields
+                    .as_object()
+                    .expect("the config fields of every test case are a JSON object")
+                    .clone(),
+            );
+
+        serde_json::from_value(config)
+            .expect("test config must be a valid DataHub backend configuration")
+    }
+
+    /// [`Url`] omits the port whenever it is the default port of the scheme, hence the expected
+    /// endpoints of the defaulted cases carry no port.
+    #[rstest]
+    #[case::default_scheme_and_port(json!({}), format!("http://{HOSTNAME}/api/graphql"))]
+    #[case::default_tls_scheme_and_port(
+        json!({"tls": tls()}),
+        format!("https://{HOSTNAME}/api/graphql")
+    )]
+    #[case::explicit_port(json!({"port": 8080}), format!("http://{HOSTNAME}:8080/api/graphql"))]
+    #[case::explicit_tls_port(
+        json!({"port": 8443, "tls": tls()}),
+        format!("https://{HOSTNAME}:8443/api/graphql")
+    )]
+    #[case::empty_root_path(json!({"rootPath": ""}), format!("http://{HOSTNAME}/api/graphql"))]
+    #[case::root_path_slash(json!({"rootPath": "/"}), format!("http://{HOSTNAME}/api/graphql"))]
+    #[case::root_path_without_slashes(
+        json!({"rootPath": "datahub"}),
+        format!("http://{HOSTNAME}/datahub/api/graphql")
+    )]
+    #[case::root_path_leading_slash(
+        json!({"rootPath": "/datahub"}),
+        format!("http://{HOSTNAME}/datahub/api/graphql")
+    )]
+    #[case::root_path_trailing_slash(
+        json!({"rootPath": "datahub/"}),
+        format!("http://{HOSTNAME}/datahub/api/graphql")
+    )]
+    #[case::root_path_surrounding_slashes(
+        json!({"rootPath": "/datahub/"}),
+        format!("http://{HOSTNAME}/datahub/api/graphql")
+    )]
+    #[case::root_path_repeated_slashes(
+        json!({"rootPath": "//datahub//"}),
+        format!("http://{HOSTNAME}/datahub/api/graphql")
+    )]
+    #[case::nested_root_path(
+        json!({"rootPath": "/proxy/datahub/"}),
+        format!("http://{HOSTNAME}/proxy/datahub/api/graphql")
+    )]
+    #[case::root_path_with_tls(
+        json!({"rootPath": "/datahub", "tls": tls()}),
+        format!("https://{HOSTNAME}/datahub/api/graphql")
+    )]
+    fn graphql_url(#[case] config_fields: serde_json::Value, #[case] expected_url: String) {
+        let graphql_url = build_graphql_url(&config(config_fields))
+            .expect("GraphQL endpoint must be constructible from the test config");
+
+        assert_eq!(graphql_url.as_str(), expected_url);
     }
 }
