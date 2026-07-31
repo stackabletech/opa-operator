@@ -3480,6 +3480,21 @@ rec {
         };
         resolvedDefaultFeatures = [ "alloc" "std" ];
       };
+      "futures-timer" = rec {
+        crateName = "futures-timer";
+        version = "3.0.4";
+        edition = "2018";
+        sha256 = "0s39in8ivw7g4d37pf31q02y44zd1hpfkd1pgra2slcqibdzlhxg";
+        libName = "futures_timer";
+        authors = [
+          "Alex Crichton <alex@alexcrichton.com>"
+        ];
+        features = {
+          "gloo-timers" = [ "dep:gloo-timers" ];
+          "send_wrapper" = [ "dep:send_wrapper" ];
+          "wasm-bindgen" = [ "gloo-timers" "send_wrapper" ];
+        };
+      };
       "futures-util" = rec {
         crateName = "futures-util";
         version = "0.3.33";
@@ -8851,6 +8866,25 @@ rec {
           "std" = [ "alloc" "elliptic-curve/std" ];
         };
       };
+      "proc-macro-crate" = rec {
+        crateName = "proc-macro-crate";
+        version = "3.5.0";
+        edition = "2021";
+        sha256 = "0kv1g1d1zjwxlgcaba2qlshzyy32j03xic8rskqlcr5mnblsfyz6";
+        libName = "proc_macro_crate";
+        authors = [
+          "Bastian Köcher <git@kchr.de>"
+        ];
+        dependencies = [
+          {
+            name = "toml_edit";
+            packageId = "toml_edit";
+            usesDefaultFeatures = false;
+            features = [ "parse" ];
+          }
+        ];
+
+      };
       "proc-macro2" = rec {
         crateName = "proc-macro2";
         version = "1.0.107";
@@ -9391,6 +9425,20 @@ rec {
         };
         resolvedDefaultFeatures = [ "default" "std" "unicode" "unicode-age" "unicode-bool" "unicode-case" "unicode-gencat" "unicode-perl" "unicode-script" "unicode-segment" ];
       };
+      "relative-path" = rec {
+        crateName = "relative-path";
+        version = "1.9.3";
+        edition = "2021";
+        sha256 = "1limlh8fzwi21g0473fqzd6fln9iqkwvzp3816bxi31pkilz6fds";
+        libName = "relative_path";
+        authors = [
+          "John-John Tedro <udoprog@tedro.se>"
+        ];
+        features = {
+          "serde" = [ "dep:serde" ];
+        };
+        resolvedDefaultFeatures = [ "default" ];
+      };
       "reqwest" = rec {
         crateName = "reqwest";
         version = "0.13.4";
@@ -9866,6 +9914,99 @@ rec {
           "u64_digit" = [ "num-bigint/u64_digit" ];
         };
         resolvedDefaultFeatures = [ "default" "pem" "sha2" "std" "u64_digit" ];
+      };
+      "rstest" = rec {
+        crateName = "rstest";
+        version = "0.26.1";
+        edition = "2021";
+        sha256 = "0jcxhg9mxlr2p9an14algbcq6ax7r0sk1w1kbals5aiv0qy1k8zm";
+        authors = [
+          "Michele d'Amico <michele.damico@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "futures-timer";
+            packageId = "futures-timer";
+            optional = true;
+          }
+          {
+            name = "futures-util";
+            packageId = "futures-util";
+            optional = true;
+          }
+          {
+            name = "rstest_macros";
+            packageId = "rstest_macros";
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "async-timeout" = [ "dep:futures-timer" "dep:futures-util" "rstest_macros/async-timeout" ];
+          "crate-name" = [ "rstest_macros/crate-name" ];
+          "default" = [ "async-timeout" "crate-name" ];
+        };
+        resolvedDefaultFeatures = [ "async-timeout" "crate-name" "default" ];
+      };
+      "rstest_macros" = rec {
+        crateName = "rstest_macros";
+        version = "0.26.1";
+        edition = "2021";
+        sha256 = "185v185wn2x3llp3nn1i7h44vi5ffnnsj8b1a32m2ygzy08m714w";
+        procMacro = true;
+        authors = [
+          "Michele d'Amico <michele.damico@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "cfg-if";
+            packageId = "cfg-if";
+          }
+          {
+            name = "glob";
+            packageId = "glob";
+          }
+          {
+            name = "proc-macro-crate";
+            packageId = "proc-macro-crate";
+            optional = true;
+          }
+          {
+            name = "proc-macro2";
+            packageId = "proc-macro2";
+          }
+          {
+            name = "quote";
+            packageId = "quote";
+          }
+          {
+            name = "regex";
+            packageId = "regex";
+          }
+          {
+            name = "relative-path";
+            packageId = "relative-path";
+          }
+          {
+            name = "syn";
+            packageId = "syn 2.0.119";
+            features = [ "full" "parsing" "extra-traits" "visit" "visit-mut" ];
+          }
+          {
+            name = "unicode-ident";
+            packageId = "unicode-ident";
+          }
+        ];
+        buildDependencies = [
+          {
+            name = "rustc_version";
+            packageId = "rustc_version";
+          }
+        ];
+        features = {
+          "crate-name" = [ "dep:proc-macro-crate" ];
+          "default" = [ "async-timeout" "crate-name" ];
+        };
+        resolvedDefaultFeatures = [ "async-timeout" "crate-name" ];
       };
       "rustc-hash" = rec {
         crateName = "rustc-hash";
@@ -11965,6 +12106,12 @@ rec {
             features = [ "chrono" "git2" ];
           }
         ];
+        devDependencies = [
+          {
+            name = "rstest";
+            packageId = "rstest";
+          }
+        ];
 
       };
       "stackable-opa-user-info-fetcher" = rec {
@@ -13784,6 +13931,82 @@ rec {
           "tracing" = [ "dep:tracing" ];
         };
         resolvedDefaultFeatures = [ "codec" "default" "io" "libc" "slab" "time" ];
+      };
+      "toml_datetime" = rec {
+        crateName = "toml_datetime";
+        version = "1.1.1+spec-1.1.0";
+        edition = "2024";
+        sha256 = "1mws2mkkf46l7inn77azhm0vdwxngv9vsbhbl0ah33p2c9gzcr9i";
+        dependencies = [
+          {
+            name = "serde_core";
+            packageId = "serde_core";
+            optional = true;
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "alloc" = [ "serde_core?/alloc" ];
+          "default" = [ "std" ];
+          "serde" = [ "dep:serde_core" ];
+          "std" = [ "alloc" "serde_core?/std" ];
+        };
+        resolvedDefaultFeatures = [ "alloc" "default" "std" ];
+      };
+      "toml_edit" = rec {
+        crateName = "toml_edit";
+        version = "0.25.13+spec-1.1.0";
+        edition = "2024";
+        sha256 = "16xgmjdnxssdpj7rjyimsk4fqbv29g8zl7zhdbc6dxrf9mz3cxb9";
+        dependencies = [
+          {
+            name = "indexmap";
+            packageId = "indexmap";
+            features = [ "std" ];
+          }
+          {
+            name = "toml_datetime";
+            packageId = "toml_datetime";
+          }
+          {
+            name = "toml_parser";
+            packageId = "toml_parser";
+            optional = true;
+          }
+          {
+            name = "winnow";
+            packageId = "winnow";
+            optional = true;
+          }
+        ];
+        features = {
+          "debug" = [ "toml_parser?/debug" "dep:anstream" "dep:anstyle" "display" ];
+          "default" = [ "parse" "display" ];
+          "display" = [ "dep:toml_writer" ];
+          "parse" = [ "dep:toml_parser" "dep:winnow" ];
+          "serde" = [ "dep:serde_core" "toml_datetime/serde" "dep:serde_spanned" ];
+        };
+        resolvedDefaultFeatures = [ "parse" ];
+      };
+      "toml_parser" = rec {
+        crateName = "toml_parser";
+        version = "1.1.3+spec-1.1.0";
+        edition = "2024";
+        sha256 = "0mjdvihdkmjd4ykh574xgii71hpxw7ns7h4n4bisqpxrz4faqf0x";
+        dependencies = [
+          {
+            name = "winnow";
+            packageId = "winnow";
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "debug" = [ "std" "dep:anstream" "dep:anstyle" ];
+          "default" = [ "std" ];
+          "simd" = [ "winnow/simd" ];
+          "std" = [ "alloc" ];
+        };
+        resolvedDefaultFeatures = [ "alloc" "default" "std" ];
       };
       "tonic" = rec {
         crateName = "tonic";
@@ -17537,6 +17760,31 @@ rec {
           "Microsoft"
         ];
 
+      };
+      "winnow" = rec {
+        crateName = "winnow";
+        version = "1.0.4";
+        edition = "2021";
+        sha256 = "10fzxipa7lx16172p3aca9j60hzbqgjki2f95kqksd5qywcp7f93";
+        dependencies = [
+          {
+            name = "memchr";
+            packageId = "memchr";
+            optional = true;
+            usesDefaultFeatures = false;
+          }
+        ];
+        features = {
+          "ascii" = [ "parser" ];
+          "binary" = [ "parser" ];
+          "debug" = [ "std" "dep:anstream" "dep:anstyle" "dep:is_terminal_polyfill" "dep:terminal_size" ];
+          "default" = [ "std" "ascii" "binary" ];
+          "simd" = [ "dep:memchr" ];
+          "std" = [ "alloc" "memchr?/std" ];
+          "unstable-doc" = [ "alloc" "std" "ascii" "binary" "simd" "unstable-recover" ];
+          "unstable-recover" = [ "parser" ];
+        };
+        resolvedDefaultFeatures = [ "alloc" "ascii" "binary" "default" "parser" "std" ];
       };
       "wiremock" = rec {
         crateName = "wiremock";
