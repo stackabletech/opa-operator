@@ -49,12 +49,19 @@ use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
     controller::{
         OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig,
-        build::{self, resource::daemonset::user_info_fetcher::add_user_info_fetcher_sidecar},
+        build::{
+            self,
+            resource::daemonset::{
+                resource_info_fetcher::add_resource_info_fetcher_sidecar,
+                user_info_fetcher::add_user_info_fetcher_sidecar,
+            },
+        },
     },
     crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
 
+mod resource_info_fetcher;
 mod user_info_fetcher;
 
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
@@ -66,10 +73,13 @@ const CONFIG_DIR: &str = "/stackable/config";
 stackable_operator::constant!(LOG_VOLUME_NAME: VolumeName = "log");
 stackable_operator::constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
 const BUNDLES_DIR: &str = "/bundles";
-stackable_operator::constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "credentials");
+stackable_operator::constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "user-info-fetcher-credentials");
+// As UIF and RIF run in two different containers, the directories won't clash
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 stackable_operator::constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
+stackable_operator::constant!(RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "resource-info-fetcher-credentials");
+const RESOURCE_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 stackable_operator::constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
@@ -145,6 +155,11 @@ pub enum Error {
 
     #[snafu(display("failed to build User Info Fetcher sidecar"))]
     BuildUserInfoFetcherSidecar { source: user_info_fetcher::Error },
+
+    #[snafu(display("failed to build Resource Info Fetcher sidecar"))]
+    BuildResourceInfoFetcherSidecar {
+        source: resource_info_fetcher::Error,
+    },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -221,6 +236,7 @@ pub fn build_server_rolegroup_daemonset(
     role_group: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
+    resource_info_fetcher_image: &str,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let resolved_product_image = &cluster.image;
@@ -426,6 +442,14 @@ pub fn build_server_rolegroup_daemonset(
         cluster_info,
     )
     .context(BuildUserInfoFetcherSidecarSnafu)?;
+    add_resource_info_fetcher_sidecar(
+        &mut pb,
+        cluster,
+        merged_config,
+        resource_info_fetcher_image,
+        cluster_info,
+    )
+    .context(BuildResourceInfoFetcherSidecarSnafu)?;
 
     // The Vector logging config was validated up-front (see `ValidatedLogging`); a `Some` here means
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
@@ -738,6 +762,7 @@ mod tests {
             role_group,
             "bundle-builder-image",
             "user-info-fetcher-image",
+            "resource-info-fetcher-image",
             &cluster_info(),
         )
         .expect("the daemonset should build")
@@ -1106,9 +1131,9 @@ mod tests {
         })));
 
         // The client credentials secret is projected into the sidecar's credentials dir.
-        assert!(volume_names(&ds).contains(&"credentials".to_owned()));
+        assert!(volume_names(&ds).contains(&"user-info-fetcher-credentials".to_owned()));
         assert_eq!(
-            mount_path(&uif_container(&ds), "credentials"),
+            mount_path(&uif_container(&ds), "user-info-fetcher-credentials"),
             "/stackable/credentials"
         );
     }

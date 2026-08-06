@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 stackable-opa-operator = { path = "../operator-binary" }
+info-fetcher-commons = { path = "../info-fetcher-commons" }
 stackable-operator.workspace = true
 krb5.workspace = true
 

@@ -32,6 +32,8 @@ use stackable_operator::{
 };
 use strum::{Display, EnumIter, EnumString};
 
+pub mod cache;
+pub mod resource_info_fetcher;
 pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";
@@ -124,6 +126,14 @@ pub mod versioned {
         #[serde(default)]
         pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
 
+        /// Configures how to fetch additional metadata about resource information from a data
+        /// catalog.
+        ///
+        /// Data catalog could e.g. be DataHub and resources could be Trino catalogs, schemas,
+        /// tables or Kafka topics etc.
+        #[serde(default)]
+        pub resource_info: Option<resource_info_fetcher::v1alpha1::Config>,
+
         /// TLS encryption settings for the OPA server.
         /// When configured, OPA will use HTTPS (port 8443) instead of HTTP (port 8081).
         /// Clients must connect using HTTPS and trust the certificates provided by the configured SecretClass.
@@ -205,6 +215,7 @@ pub enum Container {
     BundleBuilder,
     Opa,
     UserInfoFetcher,
+    ResourceInfoFetcher,
 }
 
 // NOTE (@Techassi): This struct can currently NOT be versioned because it is used via Role which

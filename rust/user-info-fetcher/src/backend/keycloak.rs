@@ -1,27 +1,25 @@
 use std::{collections::HashMap, path::Path};
 
 use hyper::StatusCode;
+use info_fetcher_commons::utils::{self, http::send_json_request};
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::crd::authentication::oidc;
 
-use crate::{
-    UserInfo, UserInfoRequest, http_error,
-    utils::{self, http::send_json_request},
-};
+use crate::{UserInfo, UserInfoRequest, http_error};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to get access_token"))]
-    AccessToken { source: crate::utils::http::Error },
+    AccessToken { source: utils::http::Error },
 
     #[snafu(display("failed to search for user"))]
-    SearchForUser { source: crate::utils::http::Error },
+    SearchForUser { source: utils::http::Error },
 
     #[snafu(display("unable to find user with id {user_id:?}"))]
     UserNotFoundById {
-        source: crate::utils::http::Error,
+        source: utils::http::Error,
         user_id: String,
     },
 
@@ -35,7 +33,7 @@ pub enum Error {
         "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
     ))]
     RequestUserGroups {
-        source: crate::utils::http::Error,
+        source: utils::http::Error,
         username: String,
         user_id: String,
     },

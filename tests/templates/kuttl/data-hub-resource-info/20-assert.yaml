@@ -1,0 +1,6 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 610
+commands:
+  - script: kubectl -n $NAMESPACE wait --for=condition=available trinoclusters.trino.stackable.tech/my-trino --timeout=600s

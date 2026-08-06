@@ -1,0 +1,89 @@
+use std::collections::BTreeMap;
+
+use serde::Serialize;
+use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
+
+use crate::{
+    api::{Chart, Dashboard, Database, RawIdentifier, ResourceInfoRequest, Schema, Stream, Table},
+    backend::data_hub::Urn,
+};
+
+/// Maps a request to the URN of the DataHub entity that holds the resource's metadata.
+///
+/// `env` is DataHub's fabric (e.g. `PROD`) and comes from the backend configuration rather than from
+/// the request - see [`v1alpha1::DataHubBackend::env`] for why. It is part of every dataset URN, so
+/// it has to match the `env` the metadata was ingested with, otherwise the URN does not resolve.
+pub fn urn_for_request(request: &ResourceInfoRequest, env: &v1alpha1::FabricType) -> Urn {
+    let urn = match request {
+        ResourceInfoRequest::Database(Database {
+            system,
+            instance,
+            database,
+        }) => container_urn(&BTreeMap::from([
+            ("platform", system),
+            ("instance", instance),
+            ("database", database),
+        ])),
+        ResourceInfoRequest::Schema(Schema {
+            system,
+            instance,
+            database,
+            schema,
+        }) => container_urn(&BTreeMap::from([
+            ("platform", system),
+            ("instance", instance),
+            ("database", database),
+            ("schema", schema),
+        ])),
+        ResourceInfoRequest::Table(Table {
+            system,
+            instance,
+            database,
+            schema,
+            table,
+        }) => {
+            format!(
+                "urn:li:dataset:(urn:li:dataPlatform:{system},{instance}.{database}.{schema}.{table},{env})"
+            )
+        }
+        ResourceInfoRequest::Stream(Stream {
+            system,
+            instance,
+            queue,
+        }) => format!("urn:li:dataset:(urn:li:dataPlatform:{system},{instance}.{queue},{env})"),
+        ResourceInfoRequest::Dashboard(Dashboard {
+            system,
+            instance,
+            id,
+        }) => {
+            format!("urn:li:dashboard:({system},{instance}.{id})")
+        }
+        ResourceInfoRequest::Chart(Chart {
+            system,
+            instance,
+            id,
+        }) => {
+            format!("urn:li:chart:({system},{instance}.{id})")
+        }
+        ResourceInfoRequest::RawIdentifier(RawIdentifier { identifier }) => identifier.clone(),
+    };
+
+    Urn(urn)
+}
+
+/// Reproduces DataHub's `datahub_guid`: the container key is serialized to compact, key-sorted JSON
+/// and MD5-hashed. A [`BTreeMap`] yields sorted keys and `serde_json` emits no whitespace, which
+/// matches Python's `json.dumps(key, sort_keys=True, separators=(",", ":"))`.
+///
+/// Note that the SQL ingestion source sets `backcompat_env_as_instance`, so the `env` configured for
+/// the ingestion (e.g. `PROD`) ends up in the `instance` field and no `env` field is present in the
+/// key. This is why the callers below build container keys without an `env`, even though the
+/// configured [`v1alpha1::FabricType`] is part of the dataset URNs. The `platform` is the bare
+/// platform name (e.g. `trino`), *not* the `urn:li:dataPlatform:` form.
+fn container_urn(
+    container_key: &BTreeMap<impl AsRef<str> + Serialize, impl AsRef<str> + Serialize>,
+) -> String {
+    let key_json = serde_json::to_string(container_key)
+        .expect("serializing a BTreeMap<&str, &str> cannot fail");
+    format!("urn:li:container:{:x}", md5::compute(key_json.as_bytes()))
+}

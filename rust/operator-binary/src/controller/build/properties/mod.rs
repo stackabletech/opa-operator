@@ -2,6 +2,7 @@
 
 pub mod config_json;
 pub mod product_logging;
+pub mod resource_info_fetcher;
 pub mod user_info_fetcher;
 
 /// The names of the config files assembled into the rolegroup `ConfigMap`.
@@ -14,6 +15,8 @@ pub enum ConfigFileName {
     ConfigJson,
     #[strum(serialize = "user-info-fetcher.json")]
     UserInfoFetcher,
+    #[strum(serialize = "resource-info-fetcher.json")]
+    ResourceInfoFetcher,
 }
 
 #[cfg(test)]

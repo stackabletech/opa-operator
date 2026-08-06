@@ -1,0 +1,9 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+# GMS waits for the system-update bootstrap job (schema + indices) before it goes ready,
+# so give this plenty of headroom.
+timeout: 900
+commands:
+  - script: kubectl -n $NAMESPACE rollout status --timeout=890s deployment/datahub-datahub-gms
+  - script: kubectl -n $NAMESPACE rollout status --timeout=890s deployment/datahub-datahub-frontend

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher, but allows to fetch additional metadata about resource information from a data catalog.
+  For now only DataHub is supported.
+  Also, a rego-rule library has been added to make it easier to call resource-info-fetcher from within OPA.
+  The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
+
 ### Changed
 
 - Internal operator refactoring: introduce a build() step in the reconciler that
@@ -14,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
+[#863]: https://github.com/stackabletech/opa-operator/pull/863
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
 
 ## [26.7.0] - 2026-07-21

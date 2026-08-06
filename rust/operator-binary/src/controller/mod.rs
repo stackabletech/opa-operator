@@ -36,7 +36,7 @@ use stackable_operator::{
 use crate::{
     crd::{
         APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig,
-        user_info_fetcher, v1alpha2,
+        resource_info_fetcher, user_info_fetcher, v1alpha2,
     },
     opa_controller::OPA_CONTROLLER_NAME,
 };
@@ -253,6 +253,7 @@ pub struct KubernetesResources {
 /// raw `OpaCluster` to render config (except for owner references).
 pub struct ValidatedClusterConfig {
     pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
+    pub resource_info: Option<resource_info_fetcher::v1alpha1::Config>,
     pub tls: Option<v1alpha2::OpaTls>,
     pub listener_class: v1alpha2::CurrentlySupportedListenerClasses,
 }

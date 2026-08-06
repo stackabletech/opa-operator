@@ -11,7 +11,9 @@ use crate::controller::{
     OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
     build::{
         object_meta,
-        properties::{ConfigFileName, config_json, product_logging, user_info_fetcher},
+        properties::{
+            ConfigFileName, config_json, product_logging, resource_info_fetcher, user_info_fetcher,
+        },
     },
 };
 
@@ -22,6 +24,11 @@ pub enum Error {
 
     #[snafu(display("failed to build user-info-fetcher.json"))]
     BuildUserInfoFetcher { source: user_info_fetcher::Error },
+
+    #[snafu(display("failed to build resource-info-fetcher.json"))]
+    BuildResourceInfoFetcher {
+        source: resource_info_fetcher::Error,
+    },
 
     #[snafu(display("failed to assemble ConfigMap for role group {role_group}"))]
     Assemble {
@@ -64,6 +71,12 @@ pub fn build_rolegroup_config_map(
         cm_builder.add_data(
             ConfigFileName::UserInfoFetcher.to_string(),
             user_info_fetcher::build(user_info).context(BuildUserInfoFetcherSnafu)?,
+        );
+    }
+    if let Some(resource_info) = &cluster.cluster_config.resource_info {
+        cm_builder.add_data(
+            ConfigFileName::ResourceInfoFetcher.to_string(),
+            resource_info_fetcher::build(resource_info).context(BuildResourceInfoFetcherSnafu)?,
         );
     }
 

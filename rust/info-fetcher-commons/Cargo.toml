@@ -1,0 +1,23 @@
+[package]
+name = "info-fetcher-commons"
+description = "Common shared code between info fetchers"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+stackable-operator.workspace = true
+
+axum.workspace = true
+hyper.workspace = true
+native-tls.workspace = true
+reqwest.workspace = true
+rustls-pki-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+snafu.workspace = true
+tracing.workspace = true
+tokio.workspace = true

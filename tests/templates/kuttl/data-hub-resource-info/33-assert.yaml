@@ -1,0 +1,15 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+# The datahub-ingestion image is already cached by the earlier ingestions, and scraping Superset
+# over plain HTTP is near-instant, so a shorter timeout is fine. Surface the logs either way.
+timeout: 300
+commands:
+  - script: |
+      if kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=290s job/datahub-ingest-superset; then
+        kubectl -n "$NAMESPACE" logs job/datahub-ingest-superset --tail=40
+      else
+        echo "Superset ingestion Job did not complete:"
+        kubectl -n "$NAMESPACE" logs job/datahub-ingest-superset --tail=80 || true
+        exit 1
+      fi
