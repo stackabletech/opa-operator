@@ -51,6 +51,14 @@ pub enum Error {
 
     #[snafu(display("DataHub returned GraphQL errors for URN {urn:?}: {messages}"))]
     GraphQlErrors { messages: String, urn: Urn },
+
+    #[snafu(display(
+        "DataHub reported {total} data products for URN {urn:?}, but the GraphQL query only fetches \
+        up to {received} of them. Refusing to answer with a truncated list of data products, as \
+        policies evaluating data product membership cannot tell it apart from a complete one. \
+        We expect assets to only have a single data product, please report this problem."
+    ))]
+    TruncatedDataProducts { urn: Urn, total: u32, received: u32 },
 }
 
 impl http_error::Error for Error {
@@ -62,6 +70,7 @@ impl http_error::Error for Error {
             Self::BuildDataHubEndpoint { .. } => StatusCode::BAD_REQUEST,
             Self::ExecuteGraphQlQuery { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::GraphQlErrors { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::TruncatedDataProducts { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -235,6 +244,17 @@ impl ResolvedDataHubBackend {
             debug!(%urn, "DataHub returned no entity; responding with empty resource info");
             return Ok(graphql::Entity::default());
         };
+
+        // Fail loudly instead of serving a partial list of data products: a policy that keys off data
+        // product membership would otherwise silently decide based on incomplete metadata.
+        if let Some(truncation) = entity.data_products_truncation() {
+            return TruncatedDataProductsSnafu {
+                urn: urn.clone(),
+                total: truncation.total,
+                received: truncation.received,
+            }
+            .fail();
+        }
 
         debug!(%urn, "Fetched entity from DataHub via GraphQL");
         trace!(?entity, "DataHub entity payload");

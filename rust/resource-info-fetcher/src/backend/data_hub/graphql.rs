@@ -12,11 +12,18 @@ use crate::backend::data_hub::{
     DataHubResourceInfoResponse, DataProduct, Domain, Group, Owners, Tag, Urn, User,
 };
 
+/// The page size of the `DataProductContains` relationship query, passed to DataHub as the
+/// `$dataProductsCount` variable. DataHub paginates the `relationships` resolver, so some page size
+/// has to be picked; an asset normally belongs to a single data product, which leaves ample
+/// headroom. If it is ever exceeded we fail the request instead of answering with a truncated list,
+/// see [`Entity::data_products_truncation`].
+const DATA_PRODUCTS_PAGE_SIZE: u32 = 10;
+
 /// A single query covering every entity kind we build URNs for. We use the generic `entity(urn:)`
 /// resolver plus per-type inline fragments, because a request can target a dataset (Trino table or
 /// Kafka topic), a container (Trino catalog or schema), a chart, a dashboard or something else.
 const RESOURCE_INFO_QUERY: &str = r#"
-query ResourceInfo($urn: String!) {
+query ResourceInfo($urn: String!, $dataProductsCount: Int!) {
   entity(urn: $urn) {
     ...ResourceInfo
   }
@@ -24,7 +31,10 @@ query ResourceInfo($urn: String!) {
 fragment ResourceInfo on Entity {
   # DataHub has no direct "dataProduct" field on assets; membership is a graph edge that points from
   # the data product to its assets. From the asset's side it is therefore an INCOMING relationship.
-  dataProducts: relationships(input: {types: ["DataProductContains"], direction: INCOMING, count: 10}) {
+  # `total` is the number of edges DataHub has, which we compare against the number we received to
+  # detect that the page size was too small.
+  dataProducts: relationships(input: {types: ["DataProductContains"], direction: INCOMING, count: $dataProductsCount}) {
+    total
     relationships { ...DataProduct }
   }
   ... on Dataset   { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
@@ -61,7 +71,10 @@ fragment Owners on Ownership {
 pub fn request(urn: &Urn) -> GraphQlRequest<'_> {
     GraphQlRequest {
         query: RESOURCE_INFO_QUERY,
-        variables: Variables { urn: &urn.0 },
+        variables: Variables {
+            urn: &urn.0,
+            data_products_count: DATA_PRODUCTS_PAGE_SIZE,
+        },
     }
 }
 
@@ -72,8 +85,10 @@ pub struct GraphQlRequest<'a> {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Variables<'a> {
     urn: &'a str,
+    data_products_count: u32,
 }
 
 /// A GraphQL server answers `200 OK` even when the query fails; the failures are reported in
@@ -152,6 +167,10 @@ struct DomainProperties {
 /// a data product the resource belongs to.
 #[derive(Debug, Deserialize)]
 struct EntityRelationships {
+    /// The total number of matching relationships DataHub has, which can exceed the number of
+    /// `relationships` actually returned, as those are capped by [`DATA_PRODUCTS_PAGE_SIZE`].
+    total: Option<u32>,
+
     relationships: Vec<EntityRelationship>,
 }
 
@@ -232,7 +251,33 @@ struct CorpGroupProperties {
     description: Option<String>,
 }
 
+/// A truncated data product list: DataHub has more `DataProductContains` edges for the entity than
+/// [`DATA_PRODUCTS_PAGE_SIZE`] allowed us to fetch.
+#[derive(Debug)]
+pub struct DataProductsTruncation {
+    /// The number of data products DataHub reported in total.
+    pub total: u32,
+
+    /// The number of data products we actually received, i.e. [`DATA_PRODUCTS_PAGE_SIZE`].
+    pub received: u32,
+}
+
 impl Entity {
+    /// Checks whether the data product list was truncated by [`DATA_PRODUCTS_PAGE_SIZE`].
+    ///
+    /// Callers must turn this into an error rather than serving the truncated list: a policy that
+    /// evaluates data product membership cannot distinguish an incomplete list from a complete one,
+    /// so it would silently make decisions on partial metadata.
+    pub fn data_products_truncation(&self) -> Option<DataProductsTruncation> {
+        let data_products = self.data_products.as_ref()?;
+        let total = data_products.total?;
+
+        (total as usize > data_products.relationships.len()).then_some(DataProductsTruncation {
+            total,
+            received: data_products.relationships.len() as u32,
+        })
+    }
+
     /// Flattens the GraphQL response into the crate's public [`DataHubResourceInfoResponse`].
     pub fn into_response(self, urn: Urn) -> DataHubResourceInfoResponse {
         let tags = self
@@ -373,4 +418,52 @@ fn group(urn: Urn, properties: Option<CorpGroupProperties>) -> Group {
 
 fn strip_user_urn(urn: &Urn) -> String {
     urn.0.trim_start_matches("urn:li:corpuser:").to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use serde_json::json;
+
+    use super::*;
+
+    /// Deserializes an entity whose `dataProducts` result reports `total` and contains
+    /// `returned` relationships, mirroring what DataHub answers.
+    fn entity(total: Option<u32>, returned: u32) -> Entity {
+        let relationships = (0..returned)
+            .map(|index| json!({"entity": {"urn": format!("urn:li:dataProduct:{index}")}}))
+            .collect::<Vec<_>>();
+
+        serde_json::from_value(json!({
+            "dataProducts": {"total": total, "relationships": relationships},
+        }))
+        .expect("test entity must be a valid GraphQL entity payload")
+    }
+
+    #[rstest]
+    #[case::no_data_products(Some(0), 0)]
+    #[case::single_data_product(Some(1), 1)]
+    #[case::full_page(Some(DATA_PRODUCTS_PAGE_SIZE), DATA_PRODUCTS_PAGE_SIZE)]
+    // DataHub not reporting a total leaves us nothing to compare against, so we must not fail.
+    #[case::no_total(None, DATA_PRODUCTS_PAGE_SIZE)]
+    fn complete_data_products(#[case] total: Option<u32>, #[case] returned: u32) {
+        assert!(entity(total, returned).data_products_truncation().is_none());
+    }
+
+    /// An entity without any `dataProducts` result at all, e.g. the "no metadata" entity we
+    /// substitute for URNs DataHub does not know.
+    #[test]
+    fn missing_data_products_are_complete() {
+        assert!(Entity::default().data_products_truncation().is_none());
+    }
+
+    #[test]
+    fn truncated_data_products_are_detected() {
+        let truncation = entity(Some(DATA_PRODUCTS_PAGE_SIZE + 1), DATA_PRODUCTS_PAGE_SIZE)
+            .data_products_truncation()
+            .expect("more data products than the page size must be reported as truncated");
+
+        assert_eq!(truncation.total, DATA_PRODUCTS_PAGE_SIZE + 1);
+        assert_eq!(truncation.received, DATA_PRODUCTS_PAGE_SIZE);
+    }
 }
