@@ -11,10 +11,13 @@ All notable changes to this project will be documented in this file.
 - Bump `stackable-operator` to 0.114.0 ([#867]).
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
+- The reconciler now applies resources and derives the cluster status in discrete
+  apply and update_status steps for the `opa_controller` ([#872]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
+[#872]: https://github.com/stackabletech/opa-operator/pull/872
 
 ## [26.7.0] - 2026-07-21
 
