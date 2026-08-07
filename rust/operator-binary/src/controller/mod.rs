@@ -1,7 +1,7 @@
 //! Controller-level vocabulary: the [`ValidatedCluster`] type and the `build` / `validate`
 //! sub-modules.
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, marker::PhantomData, str::FromStr};
 
 // Re-exported so the rest of the controller refers to `crate::controller::RoleGroupName`.
 pub use stackable_operator::v2::types::operator::RoleGroupName;
@@ -41,7 +41,9 @@ use crate::{
     opa_controller::OPA_CONTROLLER_NAME,
 };
 
+pub mod apply;
 pub mod build;
+pub mod update_status;
 pub mod validate;
 
 /// The validated [`v1alpha2::OpaCluster`].
@@ -235,18 +237,29 @@ impl KubeResource for ValidatedCluster {
     }
 }
 
+/// Marker for prepared Kubernetes resources which are not applied yet.
+pub struct Prepared;
+
+/// Marker for applied Kubernetes resources.
+pub struct Applied;
+
 /// Every Kubernetes resource produced by the [`build`](build::build) step.
 ///
 /// OPA runs as a `DaemonSet` (one Pod per node), so there are no `StatefulSet`s, PDBs or
 /// `Listener`s. `services` holds the role-level `Service` and the per-role-group headless and
 /// metrics `Service`s; `config_maps` holds the per-role-group `ConfigMap`s and the cluster-level
 /// discovery `ConfigMap`.
-pub struct KubernetesResources {
+///
+/// `T` is a marker that indicates whether these resources are only [`Prepared`] or already
+/// [`Applied`]. It lets the type system prove that e.g. the cluster status is derived from
+/// applied resources rather than merely built ones.
+pub struct KubernetesResources<T> {
     pub daemon_sets: Vec<DaemonSet>,
     pub services: Vec<Service>,
     pub config_maps: Vec<ConfigMap>,
     pub service_accounts: Vec<ServiceAccount>,
     pub role_bindings: Vec<RoleBinding>,
+    pub status: PhantomData<T>,
 }
 
 /// Cluster-wide settings resolved once during validation, so the build steps no longer need the

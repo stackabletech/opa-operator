@@ -1,7 +1,7 @@
 //! Build steps that turn the [`ValidatedCluster`](super::ValidatedCluster) into
 //! Kubernetes resource specifications.
 
-use std::str::FromStr;
+use std::{marker::PhantomData, str::FromStr};
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
@@ -11,7 +11,7 @@ use stackable_operator::{
 };
 
 use crate::controller::{
-    KubernetesResources, RoleGroupName, ValidatedCluster,
+    KubernetesResources, Prepared, RoleGroupName, ValidatedCluster,
     build::resource::{
         config_map::build_rolegroup_config_map,
         daemonset::build_server_rolegroup_daemonset,
@@ -59,7 +59,7 @@ pub fn build(
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
     cluster_info: &KubernetesClusterInfo,
-) -> Result<KubernetesResources, Error> {
+) -> Result<KubernetesResources<Prepared>, Error> {
     let mut daemon_sets = vec![];
     let mut services = vec![];
     let mut config_maps = vec![];
@@ -103,6 +103,7 @@ pub fn build(
         config_maps,
         service_accounts: vec![build_service_account(cluster)],
         role_bindings: vec![build_role_binding(cluster)],
+        status: PhantomData,
     })
 }
 
