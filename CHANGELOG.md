@@ -14,7 +14,6 @@ All notable changes to this project will be documented in this file.
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
 
-
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
