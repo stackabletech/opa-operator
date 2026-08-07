@@ -6,7 +6,6 @@ metadata:
 spec:
   group: opa.stackable.tech
   names:
-    categories: []
     kind: OpaCluster
     plural: opaclusters
     shortNames:
@@ -14,8 +13,7 @@ spec:
     singular: opacluster
   scope: Namespaced
   versions:
-  - additionalPrinterColumns: []
-    name: v1alpha2
+  - name: v1alpha2
     schema:
       openAPIV3Schema:
         description: An Open Policy Agent (OPA) cluster stacklet. This resource is managed by the Stackable operator for OPA.
@@ -1945,8 +1943,7 @@ spec:
     storage: true
     subresources:
       status: {}
-  - additionalPrinterColumns: []
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: An Open Policy Agent (OPA) cluster stacklet. This resource is managed by the Stackable operator for OPA.
