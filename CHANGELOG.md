@@ -11,18 +11,18 @@ All notable changes to this project will be documented in this file.
 - Bump `stackable-operator` to 0.114.0 ([#867]).
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
-- All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#XXX]).
+- All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#871]).
 
 ### Fixed
 
 - Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
-  See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#XXX]).
+  See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
-[#XXX]: https://github.com/stackabletech/opa-operator/pull/XXX
+[#871]: https://github.com/stackabletech/opa-operator/pull/871
 
 ## [26.7.0] - 2026-07-21
 
