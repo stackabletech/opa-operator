@@ -2,7 +2,7 @@
 //! bundle-builder, optional user-info-fetcher, and Vector sidecars).
 //!
 //! The Pod template is identical regardless of how the rolegroup is deployed, so it is built here
-//! and wrapped by the workload-specific submodules ([`daemonset`]).
+//! and wrapped by the workload-specific submodules ([`daemonset`], [`deployment`]).
 
 use std::{collections::BTreeMap, str::FromStr};
 
@@ -62,6 +62,7 @@ use crate::{
 };
 
 pub mod daemonset;
+pub mod deployment;
 mod resource_info_fetcher;
 mod user_info_fetcher;
 
@@ -226,7 +227,8 @@ fn http_liveness_probe(path: &str, port: IntOrString, scheme: Option<String>) ->
 ///
 /// The template carries the `prepare` init container, the OPA and bundle-builder containers, the
 /// optional user-info-fetcher and Vector sidecars, and all volumes they mount. Callers wrap it in
-/// the workload object of their choice; see [`daemonset::build_server_rolegroup_daemonset`].
+/// the workload object of their choice; see [`daemonset::build_server_rolegroup_daemonset`] and
+/// [`deployment::build_server_rolegroup_deployment`].
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_server_rolegroup_pod_template(
     cluster: &ValidatedCluster,
