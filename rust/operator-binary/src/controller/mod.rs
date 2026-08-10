@@ -59,6 +59,11 @@ pub struct ValidatedCluster {
     pub product_version: ProductVersion,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
+    /// The role-level configuration of every role, keyed the same way as `role_group_configs`.
+    ///
+    /// Role-level rather than role-group-level, because `workloadKind` decides the shape of the
+    /// role Service, which selects across all of a role's role groups.
+    pub role_configs: BTreeMap<OpaRole, v1alpha2::OpaRoleConfig>,
     pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
 }
 
@@ -69,6 +74,7 @@ impl ValidatedCluster {
         uid: Uid,
         image: ResolvedProductImage,
         cluster_config: ValidatedClusterConfig,
+        role_configs: BTreeMap<OpaRole, v1alpha2::OpaRoleConfig>,
         role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
     ) -> Self {
         let product_version = ProductVersion::from_str(&image.app_version_label_value)
@@ -88,8 +94,22 @@ impl ValidatedCluster {
             product_version,
             image,
             cluster_config,
+            role_configs,
             role_group_configs,
         }
+    }
+
+    /// The role-level configuration of `role`.
+    ///
+    /// The validate step inserts an entry for every [`OpaRole`], falling back to the
+    /// `OpaRoleConfig` default for roles the user did not configure.
+    // TODO: Remove the `allow` once the workload dispatch and the Service and PodDisruptionBudget
+    // builders call this. Part of https://github.com/stackabletech/opa-operator/issues/525.
+    #[allow(dead_code)]
+    pub fn role_config(&self, role: &OpaRole) -> &v1alpha2::OpaRoleConfig {
+        self.role_configs
+            .get(role)
+            .expect("the validate step inserts a role config for every role")
     }
 
     /// Whether the cluster serves HTTPS, derived from the validated cluster config.
