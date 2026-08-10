@@ -9,7 +9,7 @@ use info_fetcher_commons::{
     http_error,
     utils::{self, http::send_json_request},
 };
-use reqwest::{ClientBuilder, Url};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
