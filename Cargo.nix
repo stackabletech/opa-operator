@@ -12215,6 +12215,12 @@ rec {
             packageId = "indoc";
           }
           {
+            name = "moka";
+            packageId = "moka";
+            usesDefaultFeatures = false;
+            features = [ "future" ];
+          }
+          {
             name = "pin-project";
             packageId = "pin-project";
           }
