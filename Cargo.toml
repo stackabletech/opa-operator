@@ -10,12 +10,12 @@ edition = "2024"
 repository = "https://github.com/stackabletech/opa-operator"
 
 [workspace.dependencies]
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "stackable-operator-0.114.0", features = ["webhook"] }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "stackable-operator-0.115.0", features = ["webhook"] }
 krb5 = { git = "https://github.com/stackabletech/krb5-rs.git", tag = "v0.1.0" }
 
 anyhow = "1.0"
 axum = "0.8"
-base64 = "0.22"
+base64 = "0.23"
 built = { version = "0.8", features = ["chrono", "git2"] }
 byteorder = "1.5"
 clap = "4.6"
@@ -23,7 +23,7 @@ const_format = "0.2"
 flate2 = "1.0"
 fnv = "1.0"
 futures = { version = "0.3" }
-hyper = "1.4"
+hyper = "1.11"
 indoc = "2.0"
 ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
 md5 = "0.8"
@@ -39,18 +39,18 @@ pin-project = "1.1"
 reqwest = { version = "0.13", default-features = false, features = ["json", "form", "query", "native-tls", "charset", "http2", "system-proxy"] }
 rstest = "0.26"
 rustls = "0.23"
-rustls-pki-types = "1.13"
+rustls-pki-types = "1.15"
 semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 snafu = "0.9"
 strum = { version = "0.28", features = ["derive"] }
 tar = "0.4"
-tokio = { version = "1.52", features = ["full"] }
+tokio = { version = "1.53", features = ["full"] }
 tracing = "0.1"
 url = "2.5"
 urlencoding = "2.1"
-uuid = "1.10"
+uuid = "1.24"
 wiremock = "0.6"
 
 [patch."https://github.com/stackabletech/operator-rs.git"]

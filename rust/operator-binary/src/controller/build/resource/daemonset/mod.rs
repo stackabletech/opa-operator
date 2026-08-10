@@ -402,7 +402,11 @@ pub fn build_server_rolegroup_daemonset(
                 .service_account_name()
                 .to_string(),
         )
-        .security_context(PodSecurityContextBuilder::new().fs_group(1000).build());
+        .security_context(
+            PodSecurityContextBuilder::with_stackable_defaults()
+                .fs_group(1000)
+                .build(),
+        );
 
     if let Some(tls) = &cluster.cluster_config.tls {
         pb.add_volume(
