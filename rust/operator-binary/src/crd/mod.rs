@@ -154,22 +154,11 @@ pub mod versioned {
         #[serde(default)]
         pub workload_kind: WorkloadKind,
 
-        /// The `internalTrafficPolicy` of the role Service.
-        ///
-        /// * `Local`: Only route to OPA Pods on the same node as the client. This avoids
-        ///   cross-node latency, but requests will fail if there is no OPA Pod on the node.
-        ///
-        /// * `Cluster`: Route to any OPA Pod of the role.
-        ///
-        /// Defaults to `Local` when `workloadKind` is a `DaemonSet` and to `Cluster` when it is a
-        /// `Deployment`.
-        // `skip_serializing_if` keeps the `null` out of the schema `default` that is generated for
-        // the enclosing `roleConfig`. The apiserver validates that default against this property's
-        // schema, and rejects a `null` against an `enum`.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[versioned(hint(option))]
-        pub internal_traffic_policy: Option<InternalTrafficPolicy>,
-
+        // `internalTrafficPolicy` is deliberately not a field here: the operator derives it from
+        // `workloadKind` in `OpaRoleConfig::internal_traffic_policy`. Exposing it as a user
+        // override means adding an `Option<InternalTrafficPolicy>` field back and falling back to
+        // that helper's `match`.
+        //
         // We can not #[serde(flatten)] a `GenericRoleConfig` here, as we need a PodDisruptionBudget
         // default that depends on `workloadKind`.
         #[serde(default)]
@@ -189,6 +178,8 @@ pub mod versioned {
     ///
     /// The variants are spelled as Kubernetes spells them, so the value can be passed through to
     /// `Service.spec.internalTrafficPolicy` unchanged.
+    ///
+    /// TODO: Not yet part of the CRD: the operator derives the policy from [`WorkloadKind`].
     #[derive(Clone, Debug, Deserialize, Display, Eq, JsonSchema, PartialEq, Serialize)]
     #[serde(rename_all = "PascalCase")]
     pub enum InternalTrafficPolicy {
@@ -387,15 +378,16 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
 impl v1alpha2::OpaRoleConfig {
     /// The `internalTrafficPolicy` to write into the role Service.
     ///
-    /// Falls back to the [`v1alpha2::WorkloadKind`] default when unset: `Local` for a DaemonSet,
-    /// which covers every node, and `Cluster` for a Deployment, whose Pods do not.
+    /// Derived from the [`v1alpha2::WorkloadKind`]: `Local` for a DaemonSet, which covers every
+    /// node, and `Cluster` for a Deployment, whose Pods do not.
+    ///
+    /// This is the single place the policy is decided, so exposing a user override later means
+    /// adding the CRD field back and wrapping this `match` in an `unwrap_or`; no call site changes.
     pub fn internal_traffic_policy(&self) -> v1alpha2::InternalTrafficPolicy {
-        self.internal_traffic_policy
-            .clone()
-            .unwrap_or(match self.workload_kind {
-                v1alpha2::WorkloadKind::DaemonSet => v1alpha2::InternalTrafficPolicy::Local,
-                v1alpha2::WorkloadKind::Deployment => v1alpha2::InternalTrafficPolicy::Cluster,
-            })
+        match self.workload_kind {
+            v1alpha2::WorkloadKind::DaemonSet => v1alpha2::InternalTrafficPolicy::Local,
+            v1alpha2::WorkloadKind::Deployment => v1alpha2::InternalTrafficPolicy::Cluster,
+        }
     }
 
     /// Whether a PodDisruptionBudget should be written out for this role.
@@ -458,8 +450,9 @@ mod tests {
 
     use super::{v1alpha1, v1alpha2};
 
-    /// The defaults the operator derives from `workloadKind`, which an OpenAPI schema default
-    /// cannot express. Locks the table in the CRD docs of the two fields.
+    /// The values the operator derives from `workloadKind`, which an OpenAPI schema default cannot
+    /// express. `internalTrafficPolicy` is derived outright; `podDisruptionBudget.enabled` is a
+    /// default the user can override.
     #[test]
     fn role_config_defaults_follow_workload_kind() {
         let role_config = |workload_kind| v1alpha2::OpaRoleConfig {
@@ -483,28 +476,28 @@ mod tests {
         assert!(deployment.pod_disruption_budget_enabled());
     }
 
-    /// An explicitly configured value wins over the `workloadKind`-derived default, which is the
-    /// point of exposing the two fields at all (DaemonSet with `Cluster` is used in the field).
+    /// An explicitly configured `podDisruptionBudget.enabled` wins over the `workloadKind`-derived
+    /// default, which is the point of exposing the field as an `Option` at all.
     #[test]
     fn explicit_role_config_overrides_the_derived_defaults() {
         let role_config = v1alpha2::OpaRoleConfig {
             workload_kind: v1alpha2::WorkloadKind::DaemonSet,
-            internal_traffic_policy: Some(v1alpha2::InternalTrafficPolicy::Cluster),
             pod_disruption_budget: v1alpha2::OpaPdbConfig {
                 enabled: Some(true),
                 max_unavailable: None,
             },
         };
 
+        assert!(role_config.pod_disruption_budget_enabled());
+        // `internalTrafficPolicy` is not yet user-configurable, so it stays at the DaemonSet default.
         assert_eq!(
             role_config.internal_traffic_policy(),
-            v1alpha2::InternalTrafficPolicy::Cluster
+            v1alpha2::InternalTrafficPolicy::Local
         );
-        assert!(role_config.pod_disruption_budget_enabled());
     }
 
-    /// Leaving the two fields out and writing them as an explicit `null` must resolve to the same
-    /// unset state, as the derived defaults are applied by the operator rather than by the schema.
+    /// Leaving the PDB fields out and writing them as an explicit `null` must resolve to the same
+    /// unset state, as the derived default is applied by the operator rather than by the schema.
     ///
     /// Only covers what serde does; substituting the `roleConfig` default for an entirely absent
     /// `roleConfig` is the apiserver's job and is not exercised here.
@@ -517,7 +510,6 @@ mod tests {
             json!({ "workloadKind": "DaemonSet" }),
             json!({
                 "workloadKind": "DaemonSet",
-                "internalTrafficPolicy": null,
                 "podDisruptionBudget": { "enabled": null, "maxUnavailable": null },
             }),
         ] {
