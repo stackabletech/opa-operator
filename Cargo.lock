@@ -3701,6 +3701,7 @@ dependencies = [
  "fnv",
  "futures",
  "indoc",
+ "moka",
  "pin-project",
  "rustls",
  "semver",

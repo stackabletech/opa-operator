@@ -187,12 +187,22 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
+                          maxEntries: null
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
                             default: 1m
                             description: How long responses should be cached for.
                             type: string
+                          maxEntries:
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              By default there is no limit.
+                            format: uint64
+                            minimum: 0.0
+                            nullable: true
+                            type: integer
                         type: object
                     required:
                     - backend
@@ -659,12 +669,22 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
+                          maxEntries: null
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
                             default: 1m
                             description: How long responses should be cached for.
                             type: string
+                          maxEntries:
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              By default there is no limit.
+                            format: uint64
+                            minimum: 0.0
+                            nullable: true
+                            type: integer
                         type: object
                     type: object
                   vectorAggregatorConfigMapName:
@@ -2424,12 +2444,22 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
+                          maxEntries: null
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
                             default: 1m
                             description: How long responses should be cached for.
                             type: string
+                          maxEntries:
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              By default there is no limit.
+                            format: uint64
+                            minimum: 0.0
+                            nullable: true
+                            type: integer
                         type: object
                     required:
                     - backend
@@ -2896,12 +2926,22 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
+                          maxEntries: null
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
                             default: 1m
                             description: How long responses should be cached for.
                             type: string
+                          maxEntries:
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              By default there is no limit.
+                            format: uint64
+                            minimum: 0.0
+                            nullable: true
+                            type: integer
                         type: object
                     type: object
                   vectorAggregatorConfigMapName:

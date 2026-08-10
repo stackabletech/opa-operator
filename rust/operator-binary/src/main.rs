@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use clap::Parser;
 use futures::{FutureExt, StreamExt, TryFutureExt};
+use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2};
 use stackable_operator::{
     YamlSchema,
     cli::{Command, RunArguments},
@@ -31,13 +32,10 @@ use stackable_operator::{
 };
 
 use crate::{
-    crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2},
-    opa_controller::OPA_FULL_CONTROLLER_NAME,
-    webhooks::conversion::create_webhook_server,
+    opa_controller::OPA_FULL_CONTROLLER_NAME, webhooks::conversion::create_webhook_server,
 };
 
 mod controller;
-mod crd;
 mod opa_controller;
 mod operations;
 mod webhooks;

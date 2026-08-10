@@ -95,11 +95,10 @@ pub fn build_rolegroup_config_map(
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
+    use stackable_opa_operator::crd::OpaRole;
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     /// Renders the ConfigMap of the `default` server role group of an `OpaCluster` built from `spec`.
     fn build_config_map(spec: Value) -> ConfigMap {

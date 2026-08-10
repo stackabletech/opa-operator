@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT};
 use stackable_operator::{
     builder::{
         self,
@@ -57,7 +58,6 @@ use crate::{
             },
         },
     },
-    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
 
@@ -740,14 +740,13 @@ fn build_prepare_start_command(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use stackable_opa_operator::crd::OpaRole;
     use stackable_operator::{
         commons::networking::DomainName, k8s_openapi::api::core::v1::Container,
     };
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     fn cluster_info() -> KubernetesClusterInfo {
         KubernetesClusterInfo {

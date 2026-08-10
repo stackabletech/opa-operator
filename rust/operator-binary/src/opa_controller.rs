@@ -3,6 +3,7 @@ use std::sync::Arc;
 use const_format::concatcp;
 use serde_json::json;
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{OPERATOR_NAME, OpaClusterStatus, v1alpha2};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     cluster_resources::ClusterResourceApplyStrategy,
@@ -22,10 +23,7 @@ use stackable_operator::{
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
-use crate::{
-    controller::{build, controller_name, operator_name, product_name, validate},
-    crd::{OPERATOR_NAME, OpaClusterStatus, v1alpha2},
-};
+use crate::controller::{build, controller_name, operator_name, product_name, validate};
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
 pub const OPA_FULL_CONTROLLER_NAME: &str = concatcp!(OPA_CONTROLLER_NAME, '.', OPERATOR_NAME);

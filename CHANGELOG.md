@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
   For now only DataHub is supported.
   Also, a rego-rule library has been added to make it easier to call resource-info-fetcher from within OPA.
   The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
+- Allow specifying the maximum number of cached entries in the user-info-fetcher ([#863]).
 
 ### Changed
 

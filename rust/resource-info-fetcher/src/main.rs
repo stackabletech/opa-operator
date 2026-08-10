@@ -139,12 +139,10 @@ async fn main() -> Result<(), StartupError> {
     let config: v1alpha1::Config = read_config_file(&args.config)
         .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
-    let resource_info_cache = {
-        Cache::builder()
-            .name("resource-info")
-            .time_to_live(*config.cache.entry_time_to_live)
-            .build()
-    };
+    let resource_info_cache = config
+        .cache
+        .apply_settings_to_cache_builder(Cache::builder().name("resource-info"))
+        .build();
     // One GET endpoint per resource type. They all share the same generic `metadata` handler; only
     // the query-parameter struct (and thus the resulting `ResourceInfoRequest` variant) differs.
     let app = Router::new()

@@ -3,6 +3,10 @@
 
 use std::{collections::BTreeMap, str::FromStr};
 
+use stackable_opa_operator::crd::{
+    APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig,
+    resource_info_fetcher, user_info_fetcher, v1alpha2,
+};
 // Re-exported so the rest of the controller refers to `crate::controller::RoleGroupName`.
 pub use stackable_operator::v2::types::operator::RoleGroupName;
 use stackable_operator::{
@@ -33,13 +37,7 @@ use stackable_operator::{
     },
 };
 
-use crate::{
-    crd::{
-        APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig,
-        resource_info_fetcher, user_info_fetcher, v1alpha2,
-    },
-    opa_controller::OPA_CONTROLLER_NAME,
-};
+use crate::opa_controller::OPA_CONTROLLER_NAME;
 
 pub mod build;
 pub mod validate;
@@ -284,10 +282,9 @@ impl ValidatedOpaConfig {
 
 #[cfg(test)]
 mod tests {
+    use stackable_opa_operator::crd::OpaRole;
     use stackable_operator::v2::types::operator::RoleName;
     use strum::IntoEnumIterator;
-
-    use crate::crd::OpaRole;
 
     /// Locks the invariant behind the `expect` in the `From<OpaRole> for RoleName` impls:
     /// every `OpaRole` variant (present and future) must serialise to a valid `RoleName`.

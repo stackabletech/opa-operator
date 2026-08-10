@@ -22,12 +22,10 @@ pub enum ConfigFileName {
 #[cfg(test)]
 pub(crate) mod test_support {
     use serde_json::{Value, json};
+    use stackable_opa_operator::crd::v1alpha2;
     use stackable_operator::cli::OperatorEnvironmentOptions;
 
-    use crate::{
-        controller::{ValidatedCluster, validate::validate},
-        crd::v1alpha2,
-    };
+    use crate::controller::{ValidatedCluster, validate::validate};
 
     /// The expected `app.kubernetes.io/version` label value for the given product version.
     ///

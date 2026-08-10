@@ -1,4 +1,5 @@
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{Container, user_info_fetcher};
 use stackable_operator::{
     builder::{
         self,
@@ -16,20 +17,17 @@ use stackable_operator::{
     v2::builder::pod::container::new_container_builder,
 };
 
-use crate::{
-    controller::{
-        ValidatedCluster, ValidatedOpaConfig,
-        build::{
-            self,
-            resource::daemonset::{
-                CONFIG_DIR, CONFIG_VOLUME_NAME, USER_INFO_FETCHER_CREDENTIALS_DIR,
-                USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, USER_INFO_FETCHER_KERBEROS_DIR,
-                USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, add_stackable_rust_cli_env_vars,
-                container_name, sidecar_container_log_level, sidecar_resource_requirements,
-            },
+use crate::controller::{
+    ValidatedCluster, ValidatedOpaConfig,
+    build::{
+        self,
+        resource::daemonset::{
+            CONFIG_DIR, CONFIG_VOLUME_NAME, USER_INFO_FETCHER_CREDENTIALS_DIR,
+            USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, USER_INFO_FETCHER_KERBEROS_DIR,
+            USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, add_stackable_rust_cli_env_vars,
+            container_name, sidecar_container_log_level, sidecar_resource_requirements,
         },
     },
-    crd::{Container, user_info_fetcher},
 };
 
 #[derive(Snafu, Debug)]

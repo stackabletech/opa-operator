@@ -178,12 +178,10 @@ async fn main() -> Result<(), StartupError> {
         .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
 
-    let user_info_cache = {
-        Cache::builder()
-            .name("user-info")
-            .time_to_live(*config.cache.entry_time_to_live)
-            .build()
-    };
+    let user_info_cache = config
+        .cache
+        .apply_settings_to_cache_builder(Cache::builder().name("user-info"))
+        .build();
     let app = Router::new()
         .route("/user", post(get_user_info))
         .with_state(AppState {

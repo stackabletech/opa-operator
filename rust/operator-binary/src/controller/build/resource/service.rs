@@ -176,11 +176,10 @@ fn metrics_service_port(tls_enabled: bool) -> ServicePort {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use stackable_opa_operator::crd::OpaRole;
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     const ROLE_GROUP_LABEL: &str = "app.kubernetes.io/role-group";
 
