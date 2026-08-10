@@ -55,12 +55,13 @@ rules:
       - bind
     resourceNames:
       - {{ include "operator.name" . }}-clusterrole
-  # DaemonSet created per role group. Applied via SSA, tracked for orphan cleanup, and
-  # owned by the controller.
+  # DaemonSet or Deployment created per role group, depending on the role's `workloadKind`.
+  # Applied via SSA, tracked for orphan cleanup, and owned by the controller. 
   - apiGroups:
       - apps
     resources:
       - daemonsets
+      - deployments
     verbs:
       - create
       - delete

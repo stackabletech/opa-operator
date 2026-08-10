@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
   The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
   the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
   evicted least-recently-used first ([#863])
+- The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
+  `spec.servers.roleConfig.workloadKind` ([#873]).
 
 ### Changed
 
@@ -73,6 +75,7 @@ All notable changes to this project will be documented in this file.
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
 
+[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863

@@ -356,8 +356,8 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
     }
 }
 
-// TODO: Remove the `allow` once the Deployment and PodDisruptionBudget builders call these.
-// This change is the CRD half of https://github.com/stackabletech/opa-operator/issues/525.
+// TODO: Remove the `allow` once the PodDisruptionBudget builder calls
+// `pod_disruption_budget_enabled`. Part of https://github.com/stackabletech/opa-operator/issues/525.
 #[allow(dead_code)]
 impl v1alpha2::OpaRoleConfig {
     /// The `internalTrafficPolicy` to write into the role Service.
@@ -528,6 +528,15 @@ mod tests {
         assert_eq!(
             serde_json::to_value(v1alpha2::InternalTrafficPolicy::Cluster).unwrap(),
             json!("Cluster")
+        );
+
+        // The Service builder writes the policy via `Display`, which is derived by strum and does
+        // not honour `#[serde(rename_all)]`. Asserted separately, so renaming a variant cannot
+        // leave serde green while the Service gets a value Kubernetes rejects.
+        assert_eq!(v1alpha2::InternalTrafficPolicy::Local.to_string(), "Local");
+        assert_eq!(
+            v1alpha2::InternalTrafficPolicy::Cluster.to_string(),
+            "Cluster"
         );
     }
 
