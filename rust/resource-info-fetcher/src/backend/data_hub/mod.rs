@@ -189,7 +189,7 @@ impl ResolvedDataHubBackend {
             .trim()
             .to_owned();
 
-        let mut client_builder = ClientBuilder::new();
+        let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
             .await
             .context(ConfigureTlsSnafu)?;
