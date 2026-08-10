@@ -1500,23 +1500,6 @@ spec:
                       workloadKind: DaemonSet
                     description: Role-level configuration for the OPA servers.
                     properties:
-                      internalTrafficPolicy:
-                        description: |-
-                          The `internalTrafficPolicy` of the role Service.
-
-                          * `Local`: Only route to OPA Pods on the same node as the client. This avoids
-                            cross-node latency, but requests will fail if there is no OPA Pod on the node.
-
-                          * `Cluster`: Route to any OPA Pod of the role.
-
-                          Defaults to `Local` when `workloadKind` is a `DaemonSet` and to `Cluster` when it is a
-                          `Deployment`.
-                        enum:
-                        - Local
-                        - Cluster
-                        - null
-                        nullable: true
-                        type: string
                       podDisruptionBudget:
                         default:
                           enabled: null
@@ -3822,23 +3805,6 @@ spec:
                       workloadKind: DaemonSet
                     description: Role-level configuration for the OPA servers.
                     properties:
-                      internalTrafficPolicy:
-                        description: |-
-                          The `internalTrafficPolicy` of the role Service.
-
-                          * `Local`: Only route to OPA Pods on the same node as the client. This avoids
-                            cross-node latency, but requests will fail if there is no OPA Pod on the node.
-
-                          * `Cluster`: Route to any OPA Pod of the role.
-
-                          Defaults to `Local` when `workloadKind` is a `DaemonSet` and to `Cluster` when it is a
-                          `Deployment`.
-                        enum:
-                        - Local
-                        - Cluster
-                        - null
-                        nullable: true
-                        type: string
                       podDisruptionBudget:
                         default:
                           enabled: null
