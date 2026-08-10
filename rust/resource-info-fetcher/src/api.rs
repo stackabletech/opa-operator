@@ -91,7 +91,7 @@ pub struct RawIdentifier {
 }
 
 /// Generates the trivial `From<Params> for ResourceInfoRequest` conversions, so each HTTP handler
-/// can turn its deserialized query parameters into a [`ResourceInfoRequest`] via `.into()`. Adding a
+/// can turn its deserialized query parameters into a [`ResourceInfoRequest`] via `.from()`. Adding a
 /// resource type means adding its struct above and one entry here — no hand-written conversion.
 macro_rules! impl_into_resource_info_request {
     ($($variant:ident),+ $(,)?) => {

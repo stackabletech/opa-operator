@@ -49,7 +49,7 @@ pub struct Args {
 #[derive(Clone)]
 struct AppState {
     backend: Arc<ResolvedBackend>,
-    // Note: Although we might not talk JSON to the underlying backend, we always return JSON as a
+    // Note: Although we might not talk JSON to the underlying backend, we always return JSON as a 
     // result to the caller, so we can cache that.
     resource_info_cache: Cache<ResourceInfoRequest, serde_json::Value>,
 }
