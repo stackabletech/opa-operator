@@ -1,0 +1,43 @@
+---
+# Switching back has to be possible, which means every object the Deployment mode added is removed
+# again. This is the regression test for the orphan cleanup covering both `Deployment` and
+# `PodDisruptionBudget`; an operator-rs that only sweeps DaemonSets would leave them behind and the
+# `30-errors.yaml` next to this file would fail.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 180
+commands:
+  - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 181s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 181s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+spec:
+  # The recreated DaemonSet has to come back with the same labels it had in `10-assert.yaml`, not
+  # merely exist: switching back is only complete if the role Service selects its Pods again.
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/instance: test-opa
+      app.kubernetes.io/name: opa
+      app.kubernetes.io/role-group: default
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/instance: test-opa
+        app.kubernetes.io/name: opa
+        app.kubernetes.io/role-group: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+spec:
+  internalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/name: opa

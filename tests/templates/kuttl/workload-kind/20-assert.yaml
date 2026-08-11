@@ -1,0 +1,72 @@
+---
+# Switching `workloadKind` to `Deployment` swaps the workload object, widens the role Service's
+# traffic policy and adds a PodDisruptionBudget.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 180
+commands:
+  - script: kubectl -n $NAMESPACE rollout status deployment test-opa-server-default --timeout 181s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 181s
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-opa-server-default
+spec:
+  # Unlike a DaemonSet, a Deployment takes the role group's `replicas` verbatim.
+  replicas: 2
+  # Byte-for-byte the labels asserted on the DaemonSet in `10-assert.yaml`. This is the point of the
+  # whole suite: the role Service selects on the role labels only and is not rewritten by the
+  # switch, so a Deployment whose Pods carry different labels would roll out, report
+  # `readyReplicas: 2` and satisfy every other assertion here -- while the Service selected nothing
+  # and OPA was unreachable. Nothing else in this suite would notice.
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/instance: test-opa
+      app.kubernetes.io/name: opa
+      app.kubernetes.io/role-group: default
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/instance: test-opa
+        app.kubernetes.io/name: opa
+        app.kubernetes.io/role-group: default
+status:
+  readyReplicas: 2
+---
+# `Local` would strand products on nodes without an OPA Pod, because a Deployment's Pods do not
+# cover every node.
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+spec:
+  internalTrafficPolicy: Cluster
+  # Unchanged by the switch -- see the Pod labels above.
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/name: opa
+---
+# Role-level, so it is named after the role rather than the role group.
+#
+# `status` is asserted, not just `spec`: `currentHealthy` and `disruptionsAllowed` are only populated
+# once the disruption controller matches the budget's selector against real Pods.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: test-opa-server
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/instance: test-opa
+      app.kubernetes.io/name: opa
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  expectedPods: 2
+  disruptionsAllowed: 1

@@ -10,9 +10,7 @@ use stackable_operator::k8s_openapi::{
 use super::*;
 use crate::controller::build::role_group_selector;
 
-/// Runs a fixed number of replicas, unlike [`daemonset`](super::daemonset), which covers every
-/// node. The Pods therefore do not cover every node and the role Service has to route to any of
-/// them rather than to a node-local one.
+/// Runs a fixed number of replicas, unlike [`daemonset`](super::daemonset).
 #[allow(clippy::too_many_arguments)]
 pub fn build_server_rolegroup_deployment(
     cluster: &ValidatedCluster,
@@ -44,7 +42,7 @@ pub fn build_server_rolegroup_deployment(
     .build();
 
     let deployment_spec = DeploymentSpec {
-        // Left unset so Kubernetes applies its default of one, rather than the operator inventing
+        // Left unset so Kubernetes applies its default of one, rather than the operator guessing
         // a replica count.
         replicas: role_group.replicas.map(i32::from),
         selector: LabelSelector {
