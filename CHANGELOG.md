@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
   The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
 - Allow specifying the maximum number of cached entries in the user-info-fetcher ([#863]).
 - The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
-  `spec.servers.roleConfig.workloadKind`. ([#525]).
+  `spec.servers.roleConfig.workloadKind`. ([#873]).
 
 ### Changed
 
@@ -29,7 +29,7 @@ All notable changes to this project will be documented in this file.
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 
-[#525]: https://github.com/stackabletech/opa-operator/issues/525
+[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863
