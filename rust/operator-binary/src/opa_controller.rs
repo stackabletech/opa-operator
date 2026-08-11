@@ -151,6 +151,12 @@ pub async fn reconcile_opa(
             .await
             .context(ApplyResourceSnafu)?;
     }
+    for pod_disruption_budget in resources.pod_disruption_budgets {
+        cluster_resources
+            .add(client, pod_disruption_budget)
+            .await
+            .context(ApplyResourceSnafu)?;
+    }
     for daemon_set in resources.daemon_sets {
         ds_cond_builder.add(
             cluster_resources

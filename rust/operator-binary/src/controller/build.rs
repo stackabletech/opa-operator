@@ -16,6 +16,7 @@ use crate::controller::{
     build::resource::{
         config_map::build_rolegroup_config_map,
         discovery::build_discovery_config_map,
+        pdb::build_role_pod_disruption_budget,
         rbac::{build_role_binding, build_service_account},
         service::{
             build_rolegroup_headless_service, build_rolegroup_metrics_service,
@@ -75,13 +76,21 @@ pub fn build(
     let mut deployments = vec![];
     let mut services = vec![];
     let mut config_maps = vec![];
+    let mut pod_disruption_budgets = vec![];
 
     // The role-level load-balanced Service, which is not bound to a single role group.
     services.push(build_server_role_service(cluster));
 
     // Iterating with the role key, because the workload kind is configured per role.
     for (opa_role, role_group_configs) in &cluster.role_group_configs {
-        let workload_kind = &cluster.role_config(opa_role).workload_kind;
+        let role_config = cluster.role_config(opa_role);
+        let workload_kind = &role_config.workload_kind;
+
+        pod_disruption_budgets.extend(build_role_pod_disruption_budget(
+            cluster,
+            opa_role,
+            role_config,
+        ));
 
         for (role_group_name, role_group) in role_group_configs {
             config_maps.push(
@@ -137,6 +146,7 @@ pub fn build(
         config_maps,
         service_accounts: vec![build_service_account(cluster)],
         role_bindings: vec![build_role_binding(cluster)],
+        pod_disruption_budgets,
     })
 }
 
@@ -246,6 +256,9 @@ mod tests {
             sorted_names(&resources.role_bindings),
             ["test-opa-rolebinding"]
         );
+        // The default `DaemonSet` gets no PodDisruptionBudget, so existing installations gain no
+        // new object on upgrade.
+        assert!(resources.pod_disruption_budgets.is_empty());
     }
 
     /// `workloadKind` decides which workload object a role group gets. Exactly one kind is built, so
@@ -283,6 +296,14 @@ mod tests {
             ["test-opa-server-default"]
         );
         assert!(deployment_mode.daemon_sets.is_empty());
+
+        // One role-level PodDisruptionBudget for a Deployment, none for a DaemonSet whose Pods
+        // `kubectl drain` skips anyway.
+        assert!(daemon_set_mode.pod_disruption_budgets.is_empty());
+        assert_eq!(
+            sorted_names(&deployment_mode.pod_disruption_budgets),
+            ["test-opa-server"]
+        );
 
         // Products consume the discovery ConfigMap, so it must not depend on the workload kind.
         assert_eq!(

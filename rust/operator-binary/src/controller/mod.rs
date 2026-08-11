@@ -18,6 +18,7 @@ use stackable_operator::{
     k8s_openapi::api::{
         apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service, ServiceAccount},
+        policy::v1::PodDisruptionBudget,
         rbac::v1::RoleBinding,
     },
     kube::{Resource as KubeResource, api::ObjectMeta},
@@ -257,6 +258,9 @@ impl KubeResource for ValidatedCluster {
 /// are no `StatefulSet`s or `Listener`s. `services` holds the role-level `Service` and the
 /// per-role-group headless and metrics `Service`s; `config_maps` holds the per-role-group
 /// `ConfigMap`s and the cluster-level discovery `ConfigMap`.
+///
+/// `pod_disruption_budgets` holds at most one entry per role, and is empty for roles that have it
+/// disabled (the default for a `DaemonSet`).
 pub struct KubernetesResources {
     pub daemon_sets: Vec<DaemonSet>,
     pub deployments: Vec<Deployment>,
@@ -264,6 +268,7 @@ pub struct KubernetesResources {
     pub config_maps: Vec<ConfigMap>,
     pub service_accounts: Vec<ServiceAccount>,
     pub role_bindings: Vec<RoleBinding>,
+    pub pod_disruption_budgets: Vec<PodDisruptionBudget>,
 }
 
 /// Cluster-wide settings resolved once during validation, so the build steps no longer need the

@@ -372,9 +372,6 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
     }
 }
 
-// TODO: Remove the `allow` once the PodDisruptionBudget builder calls
-// `pod_disruption_budget_enabled`. Part of https://github.com/stackabletech/opa-operator/issues/525.
-#[allow(dead_code)]
 impl v1alpha2::OpaRoleConfig {
     /// The `internalTrafficPolicy` to write into the role Service.
     ///

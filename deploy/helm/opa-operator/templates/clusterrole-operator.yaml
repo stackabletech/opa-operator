@@ -77,6 +77,19 @@ rules:
       - list
       - patch
       - watch
+  # PodDisruptionBudget created per role, when the role has it enabled. Also needs `delete`, because
+  # disabling it (or switching to a DaemonSet) must clean the existing budget up.
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - watch
   # Required for maintaining the CRDs within the operator (including the conversion webhook info).
   # Also for the startup condition check before the controller can run.
   - apiGroups:

@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 - Allow specifying the maximum number of cached entries in the user-info-fetcher ([#863]).
 - The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
   `spec.servers.roleConfig.workloadKind`. ([#873]).
+- A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
+  with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 
 ### Changed
 
