@@ -180,12 +180,14 @@ pub fn validate(
             // Merge default <- role <- role group and validate the config fragment, plus merge all
             // four override kinds (config/env/cli/pod) in one shot. Role group wins over role wins
             // over defaults.
-            let merged: RoleGroup<OpaConfig, _, _> =
-                with_validated_config(role_group, role, &OpaConfig::default_config()).context(
-                    ValidateRoleGroupConfigSnafu {
-                        role_group: role_group_name.clone(),
-                    },
-                )?;
+            let merged: RoleGroup<OpaConfig, _, _> = with_validated_config(
+                role_group,
+                role,
+                &OpaConfig::default_config(&name.to_string(), &opa_role),
+            )
+            .context(ValidateRoleGroupConfigSnafu {
+                role_group: role_group_name.clone(),
+            })?;
 
             // `envOverrides` is kept as a `HashMap<String, String>`; lift it into the type-safe
             // `EnvVarSet` consumed by the build step.

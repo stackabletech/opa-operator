@@ -32,6 +32,7 @@ use stackable_operator::{
 };
 use strum::{Display, EnumIter, EnumString};
 
+pub mod affinity;
 pub mod cache;
 pub mod resource_info_fetcher;
 pub mod user_info_fetcher;
@@ -399,7 +400,9 @@ impl v1alpha2::OpaRoleConfig {
 }
 
 impl OpaConfig {
-    pub fn default_config() -> OpaConfigFragment {
+    /// `cluster_name` and `role` are needed for the default affinity, whose selector is specific to
+    /// this cluster's role rather than a static value.
+    pub fn default_config(cluster_name: &str, role: &OpaRole) -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
@@ -413,9 +416,10 @@ impl OpaConfig {
                 },
                 storage: OpaStorageConfigFragment {},
             },
-            // There is no point in having a default affinity, as exactly one OPA Pods should run on every node.
-            // We only have the affinity configurable to let users limit the nodes the OPA Pods run on.
-            affinity: Default::default(),
+            // Spreads the role's Pods across nodes. A no-op for a DaemonSet, which already runs
+            // exactly one Pod per node, but it is what keeps a Deployment's replicas from landing
+            // together. See `affinity::get_affinity`.
+            affinity: affinity::get_affinity(cluster_name, role),
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
     }
