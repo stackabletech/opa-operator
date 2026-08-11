@@ -18,11 +18,14 @@ All notable changes to this project will be documented in this file.
 - Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
+- The reconciler now applies resources and derives the cluster status in discrete
+  apply and update_status steps for the `opa_controller` ([#872]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
 [#871]: https://github.com/stackabletech/opa-operator/pull/871
+[#872]: https://github.com/stackabletech/opa-operator/pull/872
 
 ## [26.7.0] - 2026-07-21
 
