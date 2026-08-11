@@ -1,0 +1,30 @@
+---
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: test-opa
+spec:
+  image:
+{% if test_scenario['values']['opa-latest'].find(",") > 0 %}
+    custom: "{{ test_scenario['values']['opa-latest'].split(',')[1] }}"
+    productVersion: "{{ test_scenario['values']['opa-latest'].split(',')[0] }}"
+{% else %}
+    productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+{% endif %}
+    pullPolicy: IfNotPresent
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+  clusterConfig:
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+  servers:
+    # No `roleConfig`, so `workloadKind` falls back to its `DaemonSet` default. This is the
+    # pre-upgrade shape, and the following steps switch away from and back to it.
+    config:
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+    roleGroups:
+      default:
+        # Set from the start so that switching `workloadKind` below is the only change between the
+        # steps. A DaemonSet has no `spec.replicas` at all, so this is inert here -- it becomes
+        # meaningful in `20-switch-to-deployment`.
+        replicas: 2

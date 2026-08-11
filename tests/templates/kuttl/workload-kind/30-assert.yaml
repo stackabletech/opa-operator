@@ -1,0 +1,23 @@
+---
+# Switching back has to be possible, which means every object the Deployment mode added is removed
+# again. This is the regression test for the orphan cleanup covering both `Deployment` and
+# `PodDisruptionBudget`; an operator-rs that only sweeps DaemonSets would leave them behind and the
+# `30-errors.yaml` next to this file would fail.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 180
+commands:
+  - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 181s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 181s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+spec:
+  internalTrafficPolicy: Local

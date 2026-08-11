@@ -1,0 +1,30 @@
+---
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: test-opa
+spec:
+  image:
+{% if test_scenario['values']['opa-latest'].find(",") > 0 %}
+    custom: "{{ test_scenario['values']['opa-latest'].split(',')[1] }}"
+    productVersion: "{{ test_scenario['values']['opa-latest'].split(',')[0] }}"
+{% else %}
+    productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+{% endif %}
+    pullPolicy: IfNotPresent
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+  clusterConfig:
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+  servers:
+    # Must be spelled out rather than omitted: kuttl applies a step as a merge patch, so an absent
+    # field means "leave it alone", not "remove it". Dropping this block would keep the
+    # `workloadKind: Deployment`. 
+    roleConfig:
+      workloadKind: DaemonSet
+    config:
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+    roleGroups:
+      default:
+        replicas: 2
