@@ -88,6 +88,7 @@ impl<'a> Applier<'a> {
             config_maps,
             service_accounts,
             role_bindings,
+            pod_disruption_budgets,
             status: _,
         } = resources;
 
@@ -102,6 +103,7 @@ impl<'a> Applier<'a> {
         let role_bindings = self.add_resources(role_bindings).await?;
         let services = self.add_resources(services).await?;
         let config_maps = self.add_resources(config_maps).await?;
+        let pod_disruption_budgets = self.add_resources(pod_disruption_budgets).await?;
         let daemon_sets = self.add_resources(daemon_sets).await?;
         let deployments = self.add_resources(deployments).await?;
 
@@ -119,6 +121,7 @@ impl<'a> Applier<'a> {
             config_maps,
             service_accounts,
             role_bindings,
+            pod_disruption_budgets,
             status: PhantomData,
         })
     }

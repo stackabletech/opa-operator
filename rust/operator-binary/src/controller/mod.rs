@@ -18,6 +18,7 @@ use stackable_operator::{
     k8s_openapi::api::{
         apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service, ServiceAccount},
+        policy::v1::PodDisruptionBudget,
         rbac::v1::RoleBinding,
     },
     kube::{Resource as KubeResource, api::ObjectMeta},
@@ -204,6 +205,9 @@ pub struct Applied;
 /// per-role-group headless and metrics `Service`s; `config_maps` holds the per-role-group
 /// `ConfigMap`s and the cluster-level discovery `ConfigMap`.
 ///
+/// `pod_disruption_budgets` holds at most one entry per role, and is empty for roles that have it
+/// disabled (the default for a `DaemonSet`).
+///
 /// `T` is a marker that indicates whether these resources are only [`Prepared`] or already
 /// [`Applied`]. It lets the type system prove that e.g. the cluster status is derived from
 /// applied resources rather than merely built ones.
@@ -214,6 +218,7 @@ pub struct KubernetesResources<T> {
     pub config_maps: Vec<ConfigMap>,
     pub service_accounts: Vec<ServiceAccount>,
     pub role_bindings: Vec<RoleBinding>,
+    pub pod_disruption_budgets: Vec<PodDisruptionBudget>,
     pub status: PhantomData<T>,
 }
 

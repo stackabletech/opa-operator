@@ -15,6 +15,7 @@ use stackable_operator::{
     k8s_openapi::api::{
         apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service, ServiceAccount},
+        policy::v1::PodDisruptionBudget,
         rbac::v1::RoleBinding,
     },
     kube::{
@@ -159,6 +160,11 @@ async fn main() -> anyhow::Result<()> {
                 // becoming ready or unready.
                 .owns(
                     watch_namespace.get_api::<DeserializeGuard<Deployment>>(&client),
+                    watcher::Config::default(),
+                )
+                // Deleting the budget must be noticed.
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<PodDisruptionBudget>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(

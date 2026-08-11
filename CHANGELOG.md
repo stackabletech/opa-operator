@@ -17,9 +17,13 @@ All notable changes to this project will be documented in this file.
   evicted least-recently-used first ([#863])
 - The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
   `spec.servers.roleConfig.workloadKind` ([#873]).
+- A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
+  with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 
 ### Changed
 
+- OPA Pods now default to a soft anti-affinity that spreads them across nodes. This is a no-op for a
+  `DaemonSet`, which already runs one Pod per node, but keeps a `Deployment`'s replicas from being deployed together ([#873]).
 - Internal operator refactoring: introduce a build() step in the reconciler that
   assembles all relevant Kubernetes resources before anything is applied ([#852]).
 - Bump `stackable-operator` to 0.114.0 ([#867]).

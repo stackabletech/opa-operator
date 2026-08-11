@@ -187,4 +187,34 @@ mod tests {
             Some("default")
         );
     }
+
+    /// Replicas are only worth having if they are deployed on different nodes, so the default anti-affinity
+    /// has to survive the config merge into the Pod template.
+    #[test]
+    fn deployment_pods_are_spread_across_nodes_by_default() {
+        let deployment = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "roleConfig": { "workloadKind": "Deployment" },
+                "roleGroups": { "default": { "replicas": 3 } },
+            },
+        })));
+
+        let anti_affinity = deployment
+            .spec
+            .and_then(|spec| spec.template.spec)
+            .and_then(|pod_spec| pod_spec.affinity)
+            .and_then(|affinity| affinity.pod_anti_affinity)
+            .expect("the default affinity spreads the role's Pods");
+
+        let preferred = anti_affinity
+            .preferred_during_scheduling_ignored_during_execution
+            .expect("the spread is a soft term");
+        assert_eq!(preferred.len(), 1);
+        assert_eq!(preferred[0].weight, 70);
+        assert_eq!(
+            preferred[0].pod_affinity_term.topology_key,
+            "kubernetes.io/hostname"
+        );
+    }
 }
