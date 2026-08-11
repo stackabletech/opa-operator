@@ -13,7 +13,7 @@ use stackable_operator::{
     client,
     eos::EndOfSupportChecker,
     k8s_openapi::api::{
-        apps::v1::DaemonSet,
+        apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service},
     },
     kube::{
@@ -145,6 +145,13 @@ async fn main() -> anyhow::Result<()> {
             let controller = controller
                 .owns(
                     watch_namespace.get_api::<DeserializeGuard<DaemonSet>>(&client),
+                    watcher::Config::default(),
+                )
+                // Watched alongside DaemonSets, because a role group runs as either kind. Without
+                // this the cluster's `Available` condition would not follow a Deployment's Pods
+                // becoming ready or unready.
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<Deployment>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(

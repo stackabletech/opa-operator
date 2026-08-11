@@ -16,7 +16,7 @@ use stackable_operator::{
         resources::{NoRuntimeLimits, Resources},
     },
     k8s_openapi::api::{
-        apps::v1::DaemonSet,
+        apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service, ServiceAccount},
         rbac::v1::RoleBinding,
     },
@@ -103,9 +103,6 @@ impl ValidatedCluster {
     ///
     /// The validate step inserts an entry for every [`OpaRole`], falling back to the
     /// `OpaRoleConfig` default for roles the user did not configure.
-    // TODO: Remove the `allow` once the workload dispatch and the Service and PodDisruptionBudget
-    // builders call this. Part of https://github.com/stackabletech/opa-operator/issues/525.
-    #[allow(dead_code)]
     pub fn role_config(&self, role: &OpaRole) -> &v1alpha2::OpaRoleConfig {
         self.role_configs
             .get(role)
@@ -255,12 +252,14 @@ impl KubeResource for ValidatedCluster {
 
 /// Every Kubernetes resource produced by the [`build`](build::build) step.
 ///
-/// OPA runs as a `DaemonSet` (one Pod per node), so there are no `StatefulSet`s, PDBs or
-/// `Listener`s. `services` holds the role-level `Service` and the per-role-group headless and
-/// metrics `Service`s; `config_maps` holds the per-role-group `ConfigMap`s and the cluster-level
-/// discovery `ConfigMap`.
+/// Each role group might run as either a `DaemonSet` or a `Deployment`, depending on its role's
+/// `workloadKind`, so exactly one of `daemon_sets` and `deployments` holds an entry for it. There
+/// are no `StatefulSet`s or `Listener`s. `services` holds the role-level `Service` and the
+/// per-role-group headless and metrics `Service`s; `config_maps` holds the per-role-group
+/// `ConfigMap`s and the cluster-level discovery `ConfigMap`.
 pub struct KubernetesResources {
     pub daemon_sets: Vec<DaemonSet>,
+    pub deployments: Vec<Deployment>,
     pub services: Vec<Service>,
     pub config_maps: Vec<ConfigMap>,
     pub service_accounts: Vec<ServiceAccount>,

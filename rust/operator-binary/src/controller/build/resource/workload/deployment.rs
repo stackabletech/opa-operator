@@ -10,9 +10,6 @@ use super::*;
 /// Runs a fixed number of replicas, unlike [`daemonset`](super::daemonset), which covers every
 /// node. The Pods therefore do not cover every node and the role Service has to route to any of
 /// them rather than to a node-local one.
-// TODO: Remove the `allow` once the workload dispatch calls this.
-// Part of https://github.com/stackabletech/opa-operator/issues/525.
-#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 pub fn build_server_rolegroup_deployment(
     cluster: &ValidatedCluster,

@@ -172,7 +172,7 @@ pub fn validate(
 
         // Carried per role rather than per cluster, so a second role could pick its own
         // `workloadKind`. `serde(default)` on `Role::role_config` means this is the
-        // `OpaRoleConfig` default when the user configured no `roleConfig` at all.
+        // `OpaRoleConfig` default.
         role_configs.insert(opa_role.clone(), role.role_config.clone());
 
         let mut group_configs = BTreeMap::new();
@@ -215,7 +215,8 @@ pub fn validate(
             group_configs.insert(
                 role_group_name,
                 OpaRoleGroupConfig {
-                    // Unused for a DaemonSet, but the `RoleGroupConfig` type requires it.
+                    // Only used in `Deployment` mode; a DaemonSet derives its Pod count from the
+                    // number of nodes.
                     replicas: merged.replicas,
                     config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
                     config_overrides: merged.config.config_overrides,
