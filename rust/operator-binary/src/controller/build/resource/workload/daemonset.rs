@@ -76,7 +76,6 @@ mod tests {
         commons::networking::DomainName, k8s_openapi::api::core::v1::Container,
     };
 
-
     use super::*;
     use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
