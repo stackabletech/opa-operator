@@ -15,6 +15,7 @@ use stackable_operator::{
     k8s_openapi::api::{
         apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service},
+        policy::v1::PodDisruptionBudget,
     },
     kube::{
         CustomResourceExt as _,
@@ -152,6 +153,14 @@ async fn main() -> anyhow::Result<()> {
                 // becoming ready or unready.
                 .owns(
                     watch_namespace.get_api::<DeserializeGuard<Deployment>>(&client),
+                    watcher::Config::default(),
+                )
+                // Watched so that deleting the budget is noticed. Reconciliation is only triggered
+                // by watched objects (`Action::await_change`, no periodic requeue), so without this
+                // a removed PodDisruptionBudget would stay removed until something else changed,
+                // silently dropping the role's disruption protection.
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<PodDisruptionBudget>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(
