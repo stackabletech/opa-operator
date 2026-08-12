@@ -15,25 +15,16 @@ const ANTI_AFFINITY_BETWEEN_ROLE_PODS_WEIGHT: i32 = 70;
 
 /// The default affinity of `role`: prefer to spread its Pods across nodes.
 ///
-/// Soft (`preferred`), so it can never leave a Pod unschedulable, and inert for a `DaemonSet`, which
-/// already places exactly one Pod per node. It matters in `Deployment` mode only.
-//
 // TODO: Revisit once our minimum supported Kubernetes version is 1.35 and the role Service can use
 // `trafficDistribution: PreferSameNode` instead of `internalTrafficPolicy` (see
 // `controller::build::resource::service`).
 //
-// The chance: with node-local routing that degrades gracefully, an affinity attracting OPA Pods
-// towards the products that query them would genuinely pay off, because traffic would prefer a
-// node-local OPA Pod without the current risk of failing outright when there is none.
+// Concerns:
 //
-// The concerns:
+// * `PreferSameNode` falls back to other nodes only when there is no *ready* local endpoint.
+//   A request-heavy client (Trino, Kafka, depending on their config) would keep hitting its local Pod while the others idle.
 //
-// * `PreferSameNode` falls back to other nodes only when there is no *ready* local endpoint, never
-//   because the local one is busy. A request-heavy client (Trino, Kafka, depending on their
-//   config) would keep hitting its local Pod while the others idle.
-//
-// * Field experience points the other way: spreading the load across Pods outperformed avoiding the
-//   network hop by a wide margin.
+// * Field experience: spreading the load across Pods outperformed avoiding the network hop by margin.
 //
 // * The scheduler scores `podAffinity` and `podAntiAffinity` on one scale, so the two weights would
 //   compete. Keeping this one at 70 above a lower attraction weight encodes "spreading wins", where

@@ -225,9 +225,7 @@ fn http_liveness_probe(path: &str, port: IntOrString, scheme: Option<String>) ->
 
 /// Builds the [`PodTemplateSpec`] for a rolegroup, shared by every deployment mode.
 ///
-/// The template carries the `prepare` init container, the OPA and bundle-builder containers, the
-/// optional user-info-fetcher and Vector sidecars, and all volumes they mount. Callers wrap it in
-/// the workload object of their choice; see [`daemonset::build_server_rolegroup_daemonset`] and
+/// Callers wrap it in the workload object of their choice; see [`daemonset::build_server_rolegroup_daemonset`] and
 /// [`deployment::build_server_rolegroup_deployment`].
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_server_rolegroup_pod_template(

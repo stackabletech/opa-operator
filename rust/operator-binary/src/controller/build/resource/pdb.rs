@@ -9,14 +9,11 @@ use stackable_operator::{
 
 use crate::controller::{ValidatedCluster, controller_name, operator_name, product_name};
 
-/// How many Pods of a role may be unavailable when the administrator configured no
-/// `maxUnavailable`.
 const DEFAULT_MAX_UNAVAILABLE: u16 = 1;
 
 /// The role-level [`PodDisruptionBudget`], or `None` when the role has it disabled.
 ///
-/// One per role rather than per role group, because the budget selects on the role's labels and so
-/// covers every role group of that role at once.
+/// One per role rather than per role group. 
 pub fn build_role_pod_disruption_budget(
     cluster: &ValidatedCluster,
     opa_role: &OpaRole,

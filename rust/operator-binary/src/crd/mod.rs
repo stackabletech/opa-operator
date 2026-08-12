@@ -376,11 +376,11 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
 impl v1alpha2::OpaRoleConfig {
     /// The `internalTrafficPolicy` to write into the role Service.
     ///
-    /// Derived from the [`v1alpha2::WorkloadKind`]: `Local` for a DaemonSet, which covers every
-    /// node, and `Cluster` for a Deployment, whose Pods do not.
+    /// Derived from the [`v1alpha2::WorkloadKind`]: `Local` for a DaemonSet
+    /// and `Cluster` for a Deployment.
     ///
-    /// This is the single place the policy is decided, so exposing a user override later means
-    /// adding the CRD field back and wrapping this `match` in an `unwrap_or`; no call site changes.
+    /// TODO: This is the single place the policy is decided, so exposing a user override later means
+    /// adding the CRD field back and wrapping this `match` in an `unwrap_or`.
     pub fn internal_traffic_policy(&self) -> v1alpha2::InternalTrafficPolicy {
         match self.workload_kind {
             v1alpha2::WorkloadKind::DaemonSet => v1alpha2::InternalTrafficPolicy::Local,
@@ -390,8 +390,7 @@ impl v1alpha2::OpaRoleConfig {
 
     /// Whether a PodDisruptionBudget should be written out for this role.
     ///
-    /// Falls back to `true` for a Deployment only: `kubectl drain` requires `--ignore-daemonsets`
-    /// and then leaves those Pods alone, so a PDB would protect nothing in DaemonSet mode.
+    /// Falls back to `true` for a Deployment only.
     pub fn pod_disruption_budget_enabled(&self) -> bool {
         self.pod_disruption_budget
             .enabled
@@ -416,9 +415,7 @@ impl OpaConfig {
                 },
                 storage: OpaStorageConfigFragment {},
             },
-            // Spreads the role's Pods across nodes. A no-op for a DaemonSet, which already runs
-            // exactly one Pod per node, but it is what keeps a Deployment's replicas from landing
-            // together. See `affinity::get_affinity`.
+            // Spreads the role's Pods across nodes. A no-op for a DaemonSet.
             affinity: affinity::get_affinity(cluster_name, role),
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
