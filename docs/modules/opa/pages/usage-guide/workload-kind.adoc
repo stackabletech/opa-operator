@@ -1,0 +1,84 @@
+= Workload kind
+:description: Run the OPA servers as a DaemonSet or as a Deployment, and learn how that choice affects the Pod count, Service routing and changing it later.
+
+By default the `servers` role runs as a DaemonSet, which places one OPA Pod on every Kubernetes node.
+Set `workloadKind` to Deployment to run a fixed number of Pods instead.
+
+[source,yaml]
+----
+spec:
+  servers:
+    roleConfig:
+      workloadKind: Deployment # <1>
+    roleGroups:
+      default:
+        replicas: 3 # <2>
+----
+<1> Either DaemonSet (default) or Deployment.
+<2> Only used by Deployment, DaemonSet derives Pod count from the number of nodes.
+
+The workload kind also decides whether the operator creates a xref:usage-guide/operations/pod-disruptions.adoc[PodDisruptionBudget], and it changes what the default xref:usage-guide/operations/pod-placement.adoc[Pod placement] achieves.
+
+== Choosing a workload kind
+
+Use a DaemonSet when every node runs products that query OPA.
+Each product then queries the OPA Pod on its own node, so no policy query crosses the network.
+The number of OPA Pods grows and shrinks with the node count.
+
+Use a Deployment when the number of OPA Pods should be fixed.
+You set the count with `replicas` and queries are spread across all Pods.
+This fits large clusters, and clusters where only a few nodes run products that query OPA.
+
+== Service routing
+
+The operator derives the role Service's `internalTrafficPolicy` from the workload kind.
+
+* A DaemonSet gets `Local`, so a query only reaches the OPA Pod on the client's own node.
+  This avoids the network hop, and a DaemonSet covers every node, thus such a Pod always exists.
+* A Deployment gets `Cluster`, so a query reaches any OPA Pod of the role.
+  A Deployment's Pods do not cover every node necessarily, so node-local routing would leave products on the remaining nodes unable to reach OPA at all.
+
+If the derived value doesn't suit your cluster, you can override it as described in <<override-the-traffic-policy>>.
+
+[#override-traffic-policy]
+== Override traffic policy
+
+In edge cases (e.g. node autoscaling under load), it is useful to use a DaemonSet with `internalTrafficPolicy: Cluster`.
+This can be achieved using xref:concepts:overrides.adoc#object-overrides[object overrides]:
+
+[source,yaml]
+----
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: simple-opa
+  namespace: default
+spec:
+  image:
+    productVersion: 1.16.2
+  objectOverrides:
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        name: simple-opa-server
+        namespace: default
+      spec:
+        internalTrafficPolicy: Cluster # <1>
+  servers:
+    roleGroups:
+      default: {}
+----
+<1> Changes `internalTrafficPolicy` from Local to Cluster.
+
+== Changing the workload kind
+
+Changing `workloadKind` replaces the workload object, so policy queries can fail while the new Pods start up.
+Products usually treat a failed policy query as a denied request.
+
+Changing to DaemonSet is the more disruptive direction.
+The role Service narrows to Local as soon as you apply the change, while the running Pods still belong to the outgoing Deployment and cover only some nodes.
+Products on the remaining nodes fail until the DaemonSet has rolled out everywhere.
+
+To ease the interruption, pin the traffic policy to Cluster as described in <<override-the-traffic-policy>>, and remove the override once the rollout has finished.
+This keeps every product able to reach any OPA Pod throughout the change.
+A short window in which no Pod is ready can still occur, because the outgoing workload is removed as the new one starts.
