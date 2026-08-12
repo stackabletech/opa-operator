@@ -183,7 +183,7 @@ pub fn validate(
             let merged: RoleGroup<OpaConfig, _, _> = with_validated_config(
                 role_group,
                 role,
-                &OpaConfig::default_config(&name.to_string(), &opa_role),
+                &OpaConfig::default_config(name.as_ref(), &opa_role),
             )
             .context(ValidateRoleGroupConfigSnafu {
                 role_group: role_group_name.clone(),
