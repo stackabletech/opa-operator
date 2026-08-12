@@ -71,11 +71,11 @@ pub fn build_server_rolegroup_daemonset(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use stackable_opa_operator::crd::OpaRole;
     use stackable_operator::{
         commons::networking::DomainName, k8s_openapi::api::core::v1::Container,
     };
 
-    use stackable_opa_operator::crd::OpaRole;
 
     use super::*;
     use crate::controller::build::properties::test_support::validated_cluster_from_spec;

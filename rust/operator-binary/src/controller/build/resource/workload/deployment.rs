@@ -69,9 +69,8 @@ pub fn build_server_rolegroup_deployment(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use stackable_operator::commons::networking::DomainName;
-
     use stackable_opa_operator::crd::OpaRole;
+    use stackable_operator::commons::networking::DomainName;
 
     use super::*;
     use crate::controller::build::properties::test_support::validated_cluster_from_spec;
