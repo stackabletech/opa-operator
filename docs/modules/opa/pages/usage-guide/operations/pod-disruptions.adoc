@@ -7,10 +7,14 @@ What the operator creates depends on the xref:usage-guide/workload-kind.adoc[wor
 
 == DaemonSet
 
-No PodDisruptionBudget is created.
-Draining a node has to be able to remove the OPA Pod on that node, and `kubectl drain` skips DaemonSet Pods, means a budget would block maintenance without adding an upside.
+No PodDisruptionBudget is created, and you should not enable one.
+
+`kubectl drain` skips DaemonSet Pods, a budget is never consulted during a node drain.
+Moreover, PodDisruptionBudgets over DaemonSets can never be evaluated: DaemonSet does not implement the scale subresource.
+Therefore the budget stays at `disruptionsAllowed: 0` with a `SyncFailed` condition and refuses every direct eviction.
 
 Because the role Service routes node-locally in this mode, products on a drained node cannot reach OPA on another node.
+Drain nodes together with the products that query OPA on them.
 
 == Deployment
 
