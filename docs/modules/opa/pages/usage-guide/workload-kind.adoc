@@ -33,12 +33,12 @@ This fits large clusters, and clusters where only a few nodes run products that 
 
 The operator derives the role Service's `internalTrafficPolicy` from the workload kind.
 
-* A DaemonSet gets `Local`, so a query only reaches the OPA Pod on the client's own node.
+* A DaemonSet gets Local, so a query only reaches the OPA Pod on the client's own node.
   This avoids the network hop, and a DaemonSet covers every node, thus such a Pod always exists.
-* A Deployment gets `Cluster`, so a query reaches any OPA Pod of the role.
+* A Deployment gets Cluster, so a query reaches any OPA Pod of the role.
   A Deployment's Pods do not cover every node necessarily, so node-local routing would leave products on the remaining nodes unable to reach OPA at all.
 
-If the derived value doesn't suit your cluster, you can override it as described in <<override-the-traffic-policy>>.
+If the derived value doesn't suit your cluster, you can override it as described in <<override-traffic-policy>>.
 
 [#override-traffic-policy]
 == Override traffic policy
@@ -79,6 +79,6 @@ Changing to DaemonSet is the more disruptive direction.
 The role Service narrows to Local as soon as you apply the change, while the running Pods still belong to the outgoing Deployment and cover only some nodes.
 Products on the remaining nodes fail until the DaemonSet has rolled out everywhere.
 
-To ease the interruption, pin the traffic policy to Cluster as described in <<override-the-traffic-policy>>, and remove the override once the rollout has finished.
+To ease the interruption, pin the traffic policy to Cluster as described in <<override-traffic-policy>>, and remove the override once the rollout has finished.
 This keeps every product able to reach any OPA Pod throughout the change.
 A short window in which no Pod is ready can still occur, because the outgoing workload is removed as the new one starts.
