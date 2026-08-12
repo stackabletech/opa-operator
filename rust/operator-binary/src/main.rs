@@ -155,10 +155,7 @@ async fn main() -> anyhow::Result<()> {
                     watch_namespace.get_api::<DeserializeGuard<Deployment>>(&client),
                     watcher::Config::default(),
                 )
-                // Watched so that deleting the budget is noticed. Reconciliation is only triggered
-                // by watched objects (`Action::await_change`, no periodic requeue), so without this
-                // a removed PodDisruptionBudget would stay removed until something else changed,
-                // silently dropping the role's disruption protection.
+                // Deleting the budget must be noticed.
                 .owns(
                     watch_namespace.get_api::<DeserializeGuard<PodDisruptionBudget>>(&client),
                     watcher::Config::default(),
