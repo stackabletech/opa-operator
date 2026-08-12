@@ -8,10 +8,7 @@
 # only here — `.data` is asserted in 13-assert), ServiceAccount, RoleBinding.
 #
 # Catches drift in labels, owner references, selectors, ports, probe schemes,
-# update strategy, container resources and TLS-dependent fields. This cluster
-# uses the default `workloadKind: DaemonSet`, for which the operator writes no
-# PodDisruptionBudget, so none is asserted here; the `workload-kind` test covers
-# the `Deployment` case.
+# update strategy, container resources and TLS-dependent fields. 
 #
 # `app.kubernetes.io/version` is intentionally omitted from label matchers so
 # that product-version bumps in test-definition.yaml don't force snapshot
