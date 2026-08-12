@@ -1,6 +1,6 @@
 ---
 # A DaemonSet's Pods are skipped by `kubectl drain`, so a PodDisruptionBudget would protect nothing
-# and none is written out. 
+# and none is written out.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

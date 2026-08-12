@@ -19,7 +19,7 @@ spec:
   servers:
     # Must be spelled out rather than omitted: kuttl applies a step as a merge patch, so an absent
     # field means "leave it alone", not "remove it". Dropping this block would keep the
-    # `workloadKind: Deployment`. 
+    # `workloadKind: Deployment`.
     roleConfig:
       workloadKind: DaemonSet
     config:

@@ -7,7 +7,7 @@ use stackable_operator::k8s_openapi::{
 
 use super::*;
 
-/// Runs a fixed number of replicas, unlike [`daemonset`](super::daemonset). 
+/// Runs a fixed number of replicas, unlike [`daemonset`](super::daemonset).
 #[allow(clippy::too_many_arguments)]
 pub fn build_server_rolegroup_deployment(
     cluster: &ValidatedCluster,
@@ -182,7 +182,7 @@ mod tests {
     }
 
     /// Replicas are only worth having if they are deployed on different nodes, so the default anti-affinity
-    /// has to survive the config merge into the Pod template. 
+    /// has to survive the config merge into the Pod template.
     #[test]
     fn deployment_pods_are_spread_across_nodes_by_default() {
         let deployment = build(&validated_cluster_from_spec(json!({

@@ -24,7 +24,7 @@ const ANTI_AFFINITY_BETWEEN_ROLE_PODS_WEIGHT: i32 = 70;
 //
 // The chance: with node-local routing that degrades gracefully, an affinity attracting OPA Pods
 // towards the products that query them would genuinely pay off, because traffic would prefer a
-// node-local OPA Pod without the current risk of failing outright when there is none. 
+// node-local OPA Pod without the current risk of failing outright when there is none.
 //
 // The concerns:
 //
@@ -36,7 +36,7 @@ const ANTI_AFFINITY_BETWEEN_ROLE_PODS_WEIGHT: i32 = 70;
 //   network hop by a wide margin.
 //
 // * The scheduler scores `podAffinity` and `podAntiAffinity` on one scale, so the two weights would
-//   compete. Keeping this one at 70 above a lower attraction weight encodes "spreading wins", where 
+//   compete. Keeping this one at 70 above a lower attraction weight encodes "spreading wins", where
 //   equal weights would cancel out.
 pub fn get_affinity(cluster_name: &str, role: &OpaRole) -> StackableAffinityFragment {
     StackableAffinityFragment {
