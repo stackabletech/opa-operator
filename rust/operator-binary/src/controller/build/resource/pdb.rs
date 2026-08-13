@@ -13,7 +13,7 @@ const DEFAULT_MAX_UNAVAILABLE: u16 = 1;
 
 /// The role-level [`PodDisruptionBudget`], or `None` when the role has it disabled.
 ///
-/// One per role rather than per role group. 
+/// One per role rather than per role group.
 pub fn build_role_pod_disruption_budget(
     cluster: &ValidatedCluster,
     opa_role: &OpaRole,
