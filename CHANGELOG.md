@@ -11,9 +11,15 @@ All notable changes to this project will be documented in this file.
   Also, a rego-rule library has been added to make it easier to call resource-info-fetcher from within OPA.
   The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
 - Allow specifying the maximum number of cached entries in the user-info-fetcher ([#863]).
+- The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
+  `spec.servers.roleConfig.workloadKind`. ([#873]).
+- A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
+  with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 
 ### Changed
 
+- OPA Pods now default to a soft anti-affinity that spreads them across nodes. This is a no-op for a
+  `DaemonSet`, which already runs one Pod per node, but keeps a `Deployment`'s replicas from being deployed together ([#873]).
 - Internal operator refactoring: introduce a build() step in the reconciler that
   assembles all relevant Kubernetes resources before anything is applied ([#852]).
 - Bump `stackable-operator` to 0.114.0 ([#867]).
@@ -27,6 +33,7 @@ All notable changes to this project will be documented in this file.
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 
+[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863

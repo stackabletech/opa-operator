@@ -1,0 +1,21 @@
+---
+# The `DaemonSet` default: unchanged behaviour for existing installations.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 600
+commands:
+  - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 600s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 600s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+---
+# Node-local routing, which is only safe because a DaemonSet covers every node.
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+spec:
+  internalTrafficPolicy: Local

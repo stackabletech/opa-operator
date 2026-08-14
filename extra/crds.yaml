@@ -1490,10 +1490,54 @@ spec:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   roleConfig:
-                    default: {}
-                    description: |-
-                      This is a product-agnostic RoleConfig, with nothing in it. It is used e.g. by products that have
-                      nothing configurable at role level.
+                    default:
+                      podDisruptionBudget:
+                        enabled: null
+                        maxUnavailable: null
+                      workloadKind: DaemonSet
+                    description: Role-level configuration for the OPA servers.
+                    properties:
+                      podDisruptionBudget:
+                        default:
+                          enabled: null
+                          maxUnavailable: null
+                        description: |-
+                          This struct is used to configure:
+
+                          1. If PodDisruptionBudgets are created by the operator
+                          2. The allowed number of Pods to be unavailable (`maxUnavailable`)
+
+                          Documentation:
+                          [allowed Pod disruptions documentation](https://docs.stackable.tech/home/nightly/concepts/operations/pod_disruptions).
+                        properties:
+                          enabled:
+                            description: |-
+                              Whether a PodDisruptionBudget should be written out for this role.
+
+                              Defaults to `true` when `workloadKind` is `Deployment` and to `false` when it is
+                              `DaemonSet`, since a PodDisruptionBudget doesn't make sense for a DaemonSet.
+                            nullable: true
+                            type: boolean
+                          maxUnavailable:
+                            description: The number of Pods that are allowed to be down simultaneous.
+                            format: uint16
+                            maximum: 65535.0
+                            minimum: 0.0
+                            nullable: true
+                            type: integer
+                        type: object
+                      workloadKind:
+                        default: DaemonSet
+                        description: |-
+                          The Kubernetes workload the OPA servers run as.
+
+                          * `DaemonSet`: one Pod per node. `replicas` is ignored.
+
+                          * `Deployment`: fixed number of Pods, configured by `replicas`.
+                        enum:
+                        - DaemonSet
+                        - Deployment
+                        type: string
                     type: object
                   roleGroups:
                     additionalProperties:
@@ -3747,10 +3791,54 @@ spec:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   roleConfig:
-                    default: {}
-                    description: |-
-                      This is a product-agnostic RoleConfig, with nothing in it. It is used e.g. by products that have
-                      nothing configurable at role level.
+                    default:
+                      podDisruptionBudget:
+                        enabled: null
+                        maxUnavailable: null
+                      workloadKind: DaemonSet
+                    description: Role-level configuration for the OPA servers.
+                    properties:
+                      podDisruptionBudget:
+                        default:
+                          enabled: null
+                          maxUnavailable: null
+                        description: |-
+                          This struct is used to configure:
+
+                          1. If PodDisruptionBudgets are created by the operator
+                          2. The allowed number of Pods to be unavailable (`maxUnavailable`)
+
+                          Documentation:
+                          [allowed Pod disruptions documentation](https://docs.stackable.tech/home/nightly/concepts/operations/pod_disruptions).
+                        properties:
+                          enabled:
+                            description: |-
+                              Whether a PodDisruptionBudget should be written out for this role.
+
+                              Defaults to `true` when `workloadKind` is `Deployment` and to `false` when it is
+                              `DaemonSet`, since a PodDisruptionBudget doesn't make sense for a DaemonSet.
+                            nullable: true
+                            type: boolean
+                          maxUnavailable:
+                            description: The number of Pods that are allowed to be down simultaneous.
+                            format: uint16
+                            maximum: 65535.0
+                            minimum: 0.0
+                            nullable: true
+                            type: integer
+                        type: object
+                      workloadKind:
+                        default: DaemonSet
+                        description: |-
+                          The Kubernetes workload the OPA servers run as.
+
+                          * `DaemonSet`: one Pod per node. `replicas` is ignored.
+
+                          * `Deployment`: fixed number of Pods, configured by `replicas`.
+                        enum:
+                        - DaemonSet
+                        - Deployment
+                        type: string
                     type: object
                   roleGroups:
                     additionalProperties:

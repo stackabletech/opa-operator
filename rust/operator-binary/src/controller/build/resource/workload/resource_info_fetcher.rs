@@ -15,7 +15,7 @@ use crate::controller::{
     ValidatedCluster, ValidatedOpaConfig,
     build::{
         self,
-        resource::daemonset::{
+        resource::workload::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
             RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, add_stackable_rust_cli_env_vars,
             container_name, sidecar_container_log_level, sidecar_resource_requirements,

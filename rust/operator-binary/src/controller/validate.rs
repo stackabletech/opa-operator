@@ -165,21 +165,29 @@ pub fn validate(
         .vector_aggregator_config_map_name
         .clone();
 
+    let mut role_configs = BTreeMap::new();
     let mut role_group_configs = BTreeMap::new();
     for opa_role in OpaRole::iter() {
         let role = opa.role(&opa_role);
+
+        // Carried per role rather than per cluster, so a second role could pick its own
+        // `workloadKind`. `serde(default)` on `Role::role_config` means this is the
+        // `OpaRoleConfig` default.
+        role_configs.insert(opa_role.clone(), role.role_config.clone());
 
         let mut group_configs = BTreeMap::new();
         for (role_group_name, role_group) in &role.role_groups {
             // Merge default <- role <- role group and validate the config fragment, plus merge all
             // four override kinds (config/env/cli/pod) in one shot. Role group wins over role wins
             // over defaults.
-            let merged: RoleGroup<OpaConfig, _, _> =
-                with_validated_config(role_group, role, &OpaConfig::default_config()).context(
-                    ValidateRoleGroupConfigSnafu {
-                        role_group: role_group_name.clone(),
-                    },
-                )?;
+            let merged: RoleGroup<OpaConfig, _, _> = with_validated_config(
+                role_group,
+                role,
+                &OpaConfig::default_config(name.as_ref(), &opa_role),
+            )
+            .context(ValidateRoleGroupConfigSnafu {
+                role_group: role_group_name.clone(),
+            })?;
 
             // `envOverrides` is kept as a `HashMap<String, String>`; lift it into the type-safe
             // `EnvVarSet` consumed by the build step.
@@ -209,7 +217,8 @@ pub fn validate(
             group_configs.insert(
                 role_group_name,
                 OpaRoleGroupConfig {
-                    // Unused for a DaemonSet, but the `RoleGroupConfig` type requires it.
+                    // Only used in `Deployment` mode; a DaemonSet derives its Pod count from the
+                    // number of nodes.
                     replicas: merged.replicas,
                     config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
                     config_overrides: merged.config.config_overrides,
@@ -235,6 +244,7 @@ pub fn validate(
             tls: opa.spec.cluster_config.tls.clone(),
             listener_class: opa.spec.cluster_config.listener_class.clone(),
         },
+        role_configs,
         role_group_configs,
     ))
 }
@@ -305,6 +315,12 @@ mod tests {
             v1alpha2::CurrentlySupportedListenerClasses::ClusterInternal
         );
 
+        // The fixture sets no `roleConfig`, so the role falls back to the `OpaRoleConfig` default.
+        assert_eq!(
+            cluster.role_config(&OpaRole::Server),
+            &v1alpha2::OpaRoleConfig::default()
+        );
+
         // A single `server` role with the single `default` role group; the Vector agent is off.
         assert_eq!(cluster.role_group_configs.len(), 1);
         let role_groups = &cluster.role_group_configs[&OpaRole::Server];
@@ -315,6 +331,46 @@ mod tests {
             .next()
             .expect("the default role group exists");
         assert_eq!(role_group.config.logging.vector_container, None);
+    }
+
+    /// A configured `roleConfig` reaches the build step, and every role gets an entry so
+    /// `ValidatedCluster::role_config` cannot panic.
+    #[test]
+    fn validate_carries_the_role_config_of_every_role() {
+        let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
+            "apiVersion": "opa.stackable.tech/v1alpha2",
+            "kind": "OpaCluster",
+            "metadata": {
+                "name": "test-opa",
+                "namespace": "default",
+                "uid": "c27b3971-ca72-42c1-80a4-abdfc1db0ddd",
+            },
+            "spec": {
+                "image": { "productVersion": "1.2.3" },
+                "servers": {
+                    "roleConfig": { "workloadKind": "Deployment" },
+                    "roleGroups": { "default": {} },
+                },
+            },
+        }))
+        .expect("valid test input");
+        let operator_environment = OperatorEnvironmentOptions {
+            operator_namespace: "stackable-operators".to_string(),
+            operator_service_name: "opa-operator".to_string(),
+            image_repository: "oci.example.org".to_string(),
+        };
+
+        let cluster = validate(&opa, &operator_environment).expect("the fixture validates");
+
+        assert_eq!(
+            cluster.role_config(&OpaRole::Server).workload_kind,
+            v1alpha2::WorkloadKind::Deployment
+        );
+        // Every role is present, whether or not the user configured it.
+        assert_eq!(cluster.role_configs.len(), OpaRole::iter().count());
+        for opa_role in OpaRole::iter() {
+            cluster.role_config(&opa_role);
+        }
     }
 
     /// A [`Logging`] with an automatic log config for every container, as the (defaulted) merged

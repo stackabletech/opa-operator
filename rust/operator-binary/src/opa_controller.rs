@@ -16,7 +16,7 @@ use stackable_operator::{
     shared::time::Duration,
     status::condition::{
         compute_conditions, daemonset::DaemonSetConditionBuilder,
-        operations::ClusterOperationsConditionBuilder,
+        deployment::DeploymentConditionBuilder, operations::ClusterOperationsConditionBuilder,
     },
     utils::cluster_info::KubernetesClusterInfo,
     v2::cluster_resources::cluster_resources_new,
@@ -123,9 +123,10 @@ pub async fn reconcile_opa(
     .context(BuildResourcesSnafu)?;
 
     let mut ds_cond_builder = DaemonSetConditionBuilder::default();
+    let mut deployment_cond_builder = DeploymentConditionBuilder::default();
 
-    // Apply order: DaemonSets last, so a changed mounted ConfigMap already exists before the Pods
-    // (that would otherwise restart) are updated (commons-operator#111).
+    // Apply order: the workload objects last, so a changed mounted ConfigMap already exists before
+    // the Pods (that would otherwise restart) are updated (commons-operator#111).
     for service_account in resources.service_accounts {
         cluster_resources
             .add(client, service_account)
@@ -147,6 +148,12 @@ pub async fn reconcile_opa(
     for config_map in resources.config_maps {
         cluster_resources
             .add(client, config_map)
+            .await
+            .context(ApplyResourceSnafu)?;
+    }
+    for pod_disruption_budget in resources.pod_disruption_budgets {
+        cluster_resources
+            .add(client, pod_disruption_budget)
             .await
             .context(ApplyResourceSnafu)?;
     }
@@ -182,11 +189,27 @@ pub async fn reconcile_opa(
             })?;
     }
 
+    for deployment in resources.deployments {
+        deployment_cond_builder.add(
+            cluster_resources
+                .add(client, deployment)
+                .await
+                .context(ApplyResourceSnafu)?,
+        );
+    }
+
     let cluster_operation_cond_builder =
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
     let status = OpaClusterStatus {
-        conditions: compute_conditions(opa, &[&ds_cond_builder, &cluster_operation_cond_builder]),
+        conditions: compute_conditions(
+            opa,
+            &[
+                &ds_cond_builder,
+                &deployment_cond_builder,
+                &cluster_operation_cond_builder,
+            ],
+        ),
     };
 
     client

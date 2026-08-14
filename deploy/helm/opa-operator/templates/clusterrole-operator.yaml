@@ -63,12 +63,26 @@ rules:
       - bind
     resourceNames:
       - {{ include "operator.name" . }}-clusterrole
-  # DaemonSet created per role group. Applied via SSA, tracked for orphan cleanup, and
-  # owned by the controller.
+  # DaemonSet or Deployment created per role group, depending on the role's `workloadKind`.
+  # Applied via SSA, tracked for orphan cleanup, and owned by the controller.
   - apiGroups:
       - apps
     resources:
       - daemonsets
+      - deployments
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - watch
+  # PodDisruptionBudget created per role, when the role has it enabled. Also needs `delete`, because
+  # disabling it (or switching to a DaemonSet) must clean the existing budget up.
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
     verbs:
       - create
       - delete
