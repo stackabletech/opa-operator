@@ -256,14 +256,26 @@ async fn fetch_resource_info(
     backend: &ResolvedBackend,
     request: &ResourceInfoRequest,
 ) -> Result<serde_json::Value, GetResourceInfoError> {
-    match backend {
-        ResolvedBackend::DataHub(data_hub) => {
-            let response = data_hub.get_resource_info(request).await?;
+    let resource_info =
+        match backend {
+            ResolvedBackend::DataHub(data_hub) => data_hub
+                .get_resource_info(request)
+                .await
+                .and_then(|response| {
+                    serde_json::to_value(&response)
+                        .map_err(|source| GetResourceInfoError::SerializeResponseAsJson { source })
+                }),
+        };
 
-            serde_json::to_value(&response)
-                .map_err(|source| GetResourceInfoError::SerializeResponseAsJson { source })
-        }
-    }
+    // Logged here, where the backend was actually queried, rather than while rendering the response.
+    // A failure is cached (see [`CachedResponse`]), so logging it per response would produce a line
+    // for every request that hits the cached failure, which is precisely the burst we cache to avoid.
+    resource_info.inspect_err(|error| {
+        tracing::warn!(
+            error = error as &dyn std::error::Error,
+            "Failed to look up resource information"
+        );
+    })
 }
 
 #[cfg(test)]

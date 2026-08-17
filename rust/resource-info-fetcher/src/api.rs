@@ -196,13 +196,9 @@ pub enum GetResourceInfoError {
 }
 
 impl http_error::Error for GetResourceInfoError {
+    // todo: we should make the log level (warn vs error) of the log line in `fetch_resource_info`
+    // more dynamic, based on the backend's impl `http_error::Error for Error`.
     fn status_code(&self) -> StatusCode {
-        // todo: the warn here loses context about the scope in which the error occurred, eg: stackable_opa_resource_info_fetcher::backend::DATA_HUB
-        // Also, we should make the log level (warn vs error) more dynamic in the backend's impl `http_error::Error for Error`
-        tracing::warn!(
-            error = self as &dyn std::error::Error,
-            "Error while processing request"
-        );
         match self {
             Self::SerializeResponseAsJson { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::DataHub { source } => source.status_code(),
