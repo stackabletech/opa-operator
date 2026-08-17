@@ -149,12 +149,17 @@ const MAX_INFO_FETCHER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 // files: the Vector agent only reads them, and they are written into the shared `log` volume, whose
 // `sizeLimit` evicts the whole Pod (OPA included) once it is exceeded.
 //
-// Note that this bounds the number of files rather than their size, so the budgeted
-// MAX_*_LOG_FILE_SIZE above stays an estimate. The products get a size-based rotating appender from
-// operator-rs, but stackable-telemetry offers no size-based policy, see
-// https://github.com/stackabletech/opa-operator/issues/606. MAX_FILES matches the "x 5" the
-// bundle-builder budget already assumed.
-const FILE_LOG_ROTATION_PERIOD: &str = "hourly";
+// This bounds how many files are kept, not how large they get, so the budgeted MAX_*_LOG_FILE_SIZE
+// above stays an estimate. Products get a size-based rotating appender from operator-rs, but
+// stackable-telemetry has no size-based policy, see
+// https://github.com/stackabletech/opa-operator/issues/606.
+//
+// Hence the short period: the worst case is a sustained backend outage, where the info-fetchers log
+// one line per failed request, and the retained volume is the log rate times the period times the
+// file count. Keeping minutes rather than hours is what makes that survivable. Little is lost by it,
+// because the Vector agent ships the lines as they are written, and the console logs (captured by the
+// container runtime) are unaffected either way.
+const FILE_LOG_ROTATION_PERIOD: &str = "minutely";
 const FILE_LOG_MAX_FILES: u32 = 5;
 
 #[derive(Snafu, Debug)]
@@ -1262,6 +1267,9 @@ mod tests {
     /// Nothing else bounds these files. Vector only reads them, and the products' log frameworks
     /// (which operator-rs configures with a size-based rotating appender) are not involved here, so
     /// the writer has to be told to roll them over.
+    ///
+    /// The period is asserted because it is what caps the damage during a sustained backend outage,
+    /// when the info-fetchers log one line per failed request.
     #[test]
     fn the_rust_containers_rotate_their_file_logs() {
         let ds = build(&cluster_with_both_info_fetchers());
@@ -1272,7 +1280,7 @@ mod tests {
             "resource-info-fetcher",
         ] {
             let container = container_by_name(&ds, container);
-            assert_eq!(env_var(&container, "FILE_LOG_ROTATION_PERIOD"), "hourly");
+            assert_eq!(env_var(&container, "FILE_LOG_ROTATION_PERIOD"), "minutely");
             assert_eq!(env_var(&container, "FILE_LOG_MAX_FILES"), "5");
         }
     }
