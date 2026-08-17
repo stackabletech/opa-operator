@@ -139,6 +139,13 @@ An example of the returned structure:
 }
 ----
 
+[NOTE]
+====
+DataHub models data product membership as graph edges rather than a field on the asset, so `dataProducts` is fetched as a single page of up to 1000 entries.
+An asset is expected to belong to one or two, so this should not be reachable in practice.
+If it ever is, the lookup fails with an error rather than returning the first 1000: a policy evaluating data product membership has no way to tell a truncated list from a complete one, and would silently decide on partial metadata.
+====
+
 === Debug request
 
 To debug the resource-info-fetcher you can `curl` its API for a given resource.

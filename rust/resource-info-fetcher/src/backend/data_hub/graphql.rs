@@ -13,11 +13,18 @@ use crate::backend::data_hub::{
 };
 
 /// The page size of the `DataProductContains` relationship query, passed to DataHub as the
-/// `$dataProductsCount` variable. DataHub paginates the `relationships` resolver, so some page size
-/// has to be picked; an asset normally belongs to a single data product, which leaves ample
-/// headroom. If it is ever exceeded we fail the request instead of answering with a truncated list,
-/// see [`Entity::data_products_truncation`].
-const DATA_PRODUCTS_PAGE_SIZE: u32 = 10;
+/// `$dataProductsCount` variable.
+///
+/// DataHub paginates the `relationships` resolver, so some page size has to be picked. An asset
+/// normally belongs to one or two data products, so this is deliberately set far above anything
+/// realistic rather than at a plausible maximum: exceeding it fails the request (see
+/// [`Entity::data_products_truncation`]), and failing a lookup that should have succeeded is the
+/// worse outcome. It stays a single request at any size, and only costs DataHub more when an asset
+/// really does have that many relationships.
+///
+/// We do not paginate. That would mean one round trip per page for a case that should not occur,
+/// whereas overshooting the page size costs nothing until it is actually needed.
+const DATA_PRODUCTS_PAGE_SIZE: u32 = 1000;
 
 /// A single query covering every entity kind we build URNs for. We use the generic `entity(urn:)`
 /// resolver plus per-type inline fragments, because a request can target a dataset (Trino table or
