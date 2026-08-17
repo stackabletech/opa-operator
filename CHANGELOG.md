@@ -20,6 +20,10 @@ All notable changes to this project will be documented in this file.
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
 - All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#871]).
+- The user-info-fetcher Keycloak and Entra backends now cache their OAuth2 access token for the
+  lifetime the identity provider reports, instead of minting a new one for every user lookup. This
+  removes one round trip per lookup. If the provider rejects the cached token before it expires, it is
+  re-minted and the lookup is retried once ([#863]).
 
 ### Fixed
 
