@@ -98,6 +98,8 @@ const LIVENESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 30;
 const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
 const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
 const FILE_LOG_DIRECTORY_ENV: &str = "FILE_LOG_DIRECTORY";
+const FILE_LOG_ROTATION_PERIOD_ENV: &str = "FILE_LOG_ROTATION_PERIOD";
+const FILE_LOG_MAX_FILES_ENV: &str = "FILE_LOG_MAX_FILES";
 const KUBERNETES_NODE_NAME_ENV: &str = "KUBERNETES_NODE_NAME";
 const KUBERNETES_CLUSTER_DOMAIN_ENV: &str = "KUBERNETES_CLUSTER_DOMAIN";
 
@@ -142,6 +144,18 @@ const MAX_INFO_FETCHER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
     value: 5.0,
     unit: BinaryMultiple::Mebi,
 };
+
+// Rotation of the file logs written by the Stackable Rust containers. Nothing else bounds those
+// files: the Vector agent only reads them, and they are written into the shared `log` volume, whose
+// `sizeLimit` evicts the whole Pod (OPA included) once it is exceeded.
+//
+// Note that this bounds the number of files rather than their size, so the budgeted
+// MAX_*_LOG_FILE_SIZE above stays an estimate. The products get a size-based rotating appender from
+// operator-rs, but stackable-telemetry offers no size-based policy, see
+// https://github.com/stackabletech/opa-operator/issues/606. MAX_FILES matches the "x 5" the
+// bundle-builder budget already assumed.
+const FILE_LOG_ROTATION_PERIOD: &str = "hourly";
+const FILE_LOG_MAX_FILES: u32 = 5;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -552,6 +566,8 @@ fn add_stackable_rust_cli_env_vars(
             FILE_LOG_DIRECTORY_ENV,
             format!("{STACKABLE_LOG_DIR}/{container}",),
         )
+        .add_env_var(FILE_LOG_ROTATION_PERIOD_ENV, FILE_LOG_ROTATION_PERIOD)
+        .add_env_var(FILE_LOG_MAX_FILES_ENV, FILE_LOG_MAX_FILES.to_string())
         .add_env_var_from_source(
             KUBERNETES_NODE_NAME_ENV,
             EnvVarSource {
@@ -1222,8 +1238,8 @@ mod tests {
     }
 
     /// Both sidecars write their file logs below `STACKABLE_LOG_DIR`, so they have to mount the `log`
-    /// volume - otherwise the logs land in the container's own filesystem where the Vector agent,
-    /// which only sees the shared volume, cannot collect them.
+    /// volume. Otherwise the logs land in the container's own filesystem, where the Vector agent
+    /// (which only reads the shared volume) cannot see them.
     #[test]
     fn info_fetcher_sidecars_mount_the_log_volume() {
         let ds = build(&cluster_with_both_info_fetchers());
@@ -1240,6 +1256,24 @@ mod tests {
                 env_var(&container, "FILE_LOG_DIRECTORY"),
                 format!("/stackable/log/{container_name}")
             );
+        }
+    }
+
+    /// Nothing else bounds these files. Vector only reads them, and the products' log frameworks
+    /// (which operator-rs configures with a size-based rotating appender) are not involved here, so
+    /// the writer has to be told to roll them over.
+    #[test]
+    fn the_rust_containers_rotate_their_file_logs() {
+        let ds = build(&cluster_with_both_info_fetchers());
+
+        for container in [
+            "bundle-builder",
+            "user-info-fetcher",
+            "resource-info-fetcher",
+        ] {
+            let container = container_by_name(&ds, container);
+            assert_eq!(env_var(&container, "FILE_LOG_ROTATION_PERIOD"), "hourly");
+            assert_eq!(env_var(&container, "FILE_LOG_MAX_FILES"), "5");
         }
     }
 

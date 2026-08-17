@@ -31,7 +31,7 @@ pub struct MintedToken {
 /// Backends previously minted a token for every single request, which doubled the round trips per
 /// lookup and threw the issuer's `expires_in` away. This caches the token for the lifetime the issuer
 /// reported, and lets the caller drop it early via [`CachedToken::invalidate`] when the backend
-/// rejects it - a token can stop working before its stated expiry, e.g. by being revoked.
+/// rejects it. A token can stop working before its stated expiry, for example by being revoked.
 #[derive(Debug, Default)]
 pub struct CachedToken {
     cached: RwLock<Option<Entry>>,
@@ -65,7 +65,7 @@ impl CachedToken {
             return Ok(token);
         }
 
-        // The read lock is released above, so another caller may have minted in between - hence the
+        // The read lock is released above, so another caller may have minted in between. Hence the
         // second look before minting ourselves.
         let mut cached = self.cached.write().await;
         if let Some(token) = Self::usable_token(&cached) {

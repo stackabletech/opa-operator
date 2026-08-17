@@ -205,8 +205,8 @@ impl ResolvedEntraBackend {
         {
             Err(error) if utils::http::is_unauthorized(&error) => {
                 // The token was accepted when it was minted, so it has stopped being valid ahead of
-                // its stated expiry - it was revoked, or the issuer's and our clock disagree. Drop it
-                // and give the lookup exactly one more go with a fresh one.
+                // its stated expiry. It was revoked, or the issuer's and our clock disagree. Drop
+                // it and give the lookup exactly one more go with a fresh one.
                 tracing::warn!(
                     error = &error as &dyn std::error::Error,
                     "Entra rejected the cached access token; re-authenticating and retrying once"
@@ -597,8 +597,8 @@ mod tests {
     }
 
     /// A token can stop being accepted before it expires, e.g. by being revoked. The rejection is the
-    /// only way to find that out, so it has to trigger exactly one re-authentication - not none
-    /// (the lookup would keep failing until the token expired) and not a retry loop.
+    /// only way to find that out, so it has to trigger exactly one re-authentication. Not none
+    /// (the lookup would keep failing until the token expired), and not a retry loop.
     #[tokio::test]
     async fn test_entra_reauthenticates_once_when_the_token_is_rejected() {
         let mock_server = MockServer::start().await;

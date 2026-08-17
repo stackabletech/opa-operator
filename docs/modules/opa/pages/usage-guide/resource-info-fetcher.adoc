@@ -92,9 +92,9 @@ The naming is intentionally product-agnostic, so that one function serves the eq
 `rawIdentifierResourceInfo` is the escape hatch for resources the functions above do not cover: it passes the identifier to the backend as-is.
 For DataHub that is a URN, such as `urn:li:chart:(superset,my-namespace/my-superset.1)`.
 
-It lets you address any URN, but metadata is only read from the DataHub entity types the functions above map to: datasets, containers, charts and dashboards.
-A URN of any other type - a `dataJob`, a `dataFlow` or one of the ML entities, for example - resolves to a record with empty `tags`, `owners` and `dataProducts`, which is indistinguishable from a resource that has no metadata.
-The resource-info-fetcher logs a warning naming the entity type whenever this happens, so check its logs if a `rawIdentifierResourceInfo` lookup unexpectedly comes back empty.
+Note that metadata is only read from the entity types the functions above map to: datasets, containers, charts and dashboards.
+Any other type (a `dataJob` or one of the ML entities, say) comes back empty, which looks just like a resource that has no metadata.
+The resource-info-fetcher logs a warning naming the entity type when this happens.
 
 The first two arguments are the same everywhere:
 
@@ -104,12 +104,9 @@ The first two arguments are the same everywhere:
 The `id` taken by `dashboardResourceInfo` and `chartResourceInfo` is whatever the product identifies the resource by, and is passed through as an opaque string.
 Superset numbers its dashboards and charts, but products that name them instead work just as well.
 
-Every argument is limited to 1024 bytes, which is far more than any real identifier needs.
-A longer value is rejected with `400 Bad Request` rather than looked up, because arguments end up in the response cache key.
-
-Arguments are likewise rejected if they contain `,`, `(` or `)`.
-DataHub uses those characters to delimit the parts of a URN, so a resource whose name contains one cannot be addressed at all — sending it to DataHub would only produce an error there.
-`rawIdentifierResourceInfo` is exempt, since a URN necessarily contains them.
+Arguments are limited to 1024 bytes, and may not contain `,`, `(` or `)`.
+DataHub delimits the parts of a URN with those characters, so a resource whose name contains one cannot be addressed at all.
+Either way the lookup is rejected with `400 Bad Request` instead of being sent to DataHub. `rawIdentifierResourceInfo` is exempt, as a URN necessarily contains them.
 
 The DataHub environment (fabric) is deliberately *not* an argument: it describes how the catalog was populated rather than the resource being authorized, so it is configured once on the OpaCluster (see `env` above) instead of being passed in by every Rego rule.
 
@@ -197,15 +194,14 @@ allow if {
 
 === Metadata is not inherited from parent containers
 
-Every function returns the metadata of the resource it addresses, and only of that resource.
-Nothing is inherited along the containment hierarchy: tagging the schema `tpch.sf1` as `pii` does not make `tableResourceInfo` report `pii` for the tables inside it, and the same holds for domains and data products.
+Tags, domains and data products are read from the addressed resource only.
+Tagging the schema `tpch.sf1` as `pii` does not make `tableResourceInfo` report `pii` for the tables inside it.
 
-This is deliberate.
-Whether a tag applies to the children of a container is a property of your policy, not of the resource: `pii` or `confidential` plausibly cascade, while `deprecated`, `verified` or an owning team just as plausibly do not.
-The resource-info-fetcher cannot tell which is which, and merging a parent's tags into the child's would destroy the distinction — a rule could no longer ask whether _this_ table is tagged, only whether anything above it is.
+This is deliberate: whether a tag applies to a container's children is a property of your policy, not of the resource.
+`pii` plausibly cascades, `deprecated` or an owning team plausibly do not, and we cannot tell which is which.
+Merging them would also leave a rule unable to ask whether _this_ table is tagged.
 
-Express the inheritance you want in the rule instead.
-There is one function per level, so a rule can consult as many of them as it needs:
+Express the inheritance you want in the rule instead, using one function per level:
 
 [source,rego]
 ----
@@ -237,33 +233,25 @@ Each lookup is cached and served over the loopback interface, so consulting an e
 [WARNING]
 ====
 A failed metadata lookup does not deny access by itself.
-Only rules that require a positive signal deny access when the lookup fails - see below.
+Only the shape of your rule decides that.
 ====
 
-There are two ways a lookup can come back without the metadata a rule expects.
+A lookup comes back without the metadata a rule expects in two cases:
 
 Unknown resource::
-The backend does not know the resource.
-This is not an error: the resource-info-fetcher answers `200 OK` with a record whose `tags`, `owners` and `dataProducts` are empty and whose `domain` is `null`.
-It is the normal answer for a resource that was never ingested into the catalog.
+The resource was never ingested into the catalog.
+This is not an error, so the answer is `200 OK` with empty `tags`, `owners` and `dataProducts`, and a `null` `domain`.
 
 Backend unavailable::
-The backend cannot be reached or rejects the request, for example because DataHub is down or unreachable, or because the Personal Access Token has expired or been revoked.
-The resource-info-fetcher then answers with an HTTP error status and an error envelope instead of a metadata record:
-+
-[source,json]
-----
-{"error": {"message": "...", "causes": ["..."]}}
-----
+DataHub is down or unreachable, or the Personal Access Token expired or was revoked.
+The answer is then an HTTP error status with `{"error": {"message": "...", "causes": ["..."]}}` instead of a metadata record.
 
-In both cases the rule finds no `tags` (and no `owners`, `domain` or `dataProducts`) to match on, so every expression reading them becomes undefined.
-What that means for the decision depends entirely on how the rule is written:
+Either way the rule finds no `tags` to match on, so any expression reading them becomes undefined:
 
-* A rule that grants access on a *positive* signal - such as the `allow` rule above, which requires the `public` tag - becomes undefined and therefore denies access. This is what you want.
-* A rule that grants access through the *absence* of a signal - `deny` if the resource is tagged `pii`, everything else allowed - also becomes undefined, and an undefined `deny` means *not denied*. A DataHub outage or an expired token then grants access to every resource, including the ones tagged `pii`.
+* A rule keyed on a *positive* signal, like the `allow` example above, becomes undefined and therefore denies. This is what you want.
+* A rule keyed on the *absence* of a signal (`deny` if tagged `pii`, everything else allowed) also becomes undefined, and an undefined `deny` means *not denied*. A DataHub outage then grants access to every resource, `pii` included.
 
-So always write rules that require a positive signal.
-The resource-info-fetcher deliberately does not paper over the difference between the two cases, because it cannot know whether an empty record should mean allow or deny for a given policy.
-This holds for a resource that is simply not in the catalog just as much as for a backend outage: neither can be turned into a denial by the resource-info-fetcher, only by the shape of the rule.
+So always require a positive signal.
+The resource-info-fetcher cannot know whether an empty record should mean allow or deny for your policy, so it does not paper over the difference.
 
-Every failed lookup is logged by the resource-info-fetcher sidecar at `WARN` level, so a backend that has become unavailable is visible in the logs (see xref:opa:usage-guide/logging.adoc[]).
+Every failed lookup is logged at `WARN` level by the sidecar, so an unavailable backend shows up in the logs (see xref:opa:usage-guide/logging.adoc[]).

@@ -93,15 +93,15 @@ pub fn urn_for_request(
 
 /// The characters DataHub's URN grammar uses to delimit the parts of a URN.
 ///
-/// A resource name containing one of these cannot be expressed as a URN at all - DataHub's own parser
-/// would split the name apart - so no URN we could build for it would ever resolve.
+/// A resource name containing one of these cannot be expressed as a URN at all, because DataHub's own
+/// parser would split the name apart. No URN we build for it would ever resolve.
 const URN_DELIMITERS: [char; 3] = [',', '(', ')'];
 
 /// Fails if any of `names` contains a [`URN_DELIMITERS`] character.
 ///
 /// This is checked before querying DataHub rather than after: the query is guaranteed to fail, and any
 /// caller who can name a resource could otherwise turn every such name into a round trip to DataHub
-/// plus a log line - for a Trino table, `SELECT * FROM tpch.sf1."a,PROD)"` is enough.
+/// plus a log line. For a Trino table, `SELECT * FROM tpch.sf1."a,PROD)"` is enough.
 fn reject_urn_delimiters(names: &[&ParamValue]) -> Result<(), Error> {
     for name in names {
         if let Some(delimiter) = name.as_ref().find(URN_DELIMITERS) {
@@ -178,8 +178,8 @@ mod tests {
     }
 
     /// A name containing a URN delimiter cannot be expressed as a DataHub URN at all, so querying
-    /// DataHub with it is guaranteed to fail. Rejecting it here keeps a caller who can name a table -
-    /// e.g. via Trino's `SELECT * FROM tpch.sf1."a,PROD)"` - from turning every such query into a
+    /// DataHub with it is guaranteed to fail. Rejecting it here stops a caller who can name a table
+    /// (via Trino's `SELECT * FROM tpch.sf1."a,PROD)"`, say) from turning every such query into a
     /// round trip to DataHub.
     #[rstest]
     #[case::comma("a,PROD)")]
@@ -206,7 +206,7 @@ mod tests {
         urn_of(table_named(table)).expect("an ordinary name must be accepted");
     }
 
-    /// `rawIdentifier` is passed through verbatim, and for DataHub it *is* a URN - so it necessarily
+    /// `rawIdentifier` is passed through verbatim, and for DataHub it *is* a URN, so it necessarily
     /// contains the very delimiters the other endpoints reject.
     #[test]
     fn raw_identifiers_may_contain_urn_delimiters() {
@@ -225,7 +225,7 @@ mod tests {
     ///
     /// The expected values were computed with Python's
     /// `json.dumps(key, sort_keys=True, separators=(",", ":"))` and `hashlib.md5`, mirroring what
-    /// DataHub's `datahub_guid` does - not read back out of this implementation.
+    /// DataHub's `datahub_guid` does. They were not read back out of this implementation.
     #[rstest]
     #[case::database(
         ResourceInfoRequest::Database(Database {
@@ -252,7 +252,7 @@ mod tests {
     }
 
     /// The dataset URNs are built by string interpolation rather than hashed, so these pin the exact
-    /// layout - including that the fabric is appended and that a table's four name segments are
+    /// layout, including that the fabric is appended and that a table's four name segments are
     /// dot-joined in order.
     #[rstest]
     #[case::table(

@@ -26,7 +26,7 @@ mod resource_to_urn_mapping;
 /// Errors that can occur while resolving the backend, which happens once at startup.
 ///
 /// Kept apart from [`Error`] because these never reach a caller: a failure here means the process
-/// does not come up at all, so - unlike [`Error`] - they have no HTTP status code to map to.
+/// does not come up at all, so (unlike [`Error`]) they have no HTTP status code to map to.
 #[derive(Snafu, Debug)]
 pub enum ResolveError {
     #[snafu(display("failed to read DataHub token from {path:?}"))]
@@ -268,7 +268,7 @@ impl ResolvedDataHubBackend {
         };
 
         // The query only reads tags, owners and domains off the entity types it has inline fragments
-        // for. Anything else - reachable through `rawIdentifier`, which accepts any URN - resolves to
+        // for. Anything else (reachable through `rawIdentifier`, which accepts any URN) resolves to
         // a response that looks just like that of a resource with no metadata, so say so rather than
         // letting a policy silently decide on an empty record.
         if let Some(entity_type) = entity.uncovered_type() {
@@ -391,7 +391,7 @@ mod tests {
 
     /// The status code tells the caller whose problem a failure is. The URN we query is built
     /// entirely from the caller's parameters, so a URN DataHub refuses to parse or resolve is a bad
-    /// request - reachable by any user who can name a table, e.g. via Trino's
+    /// request. Any user who can name a table can reach it, for example through Trino's
     /// `SELECT * FROM tpch.sf1."a,PROD)"`. A backend we could not reach at all, or a limitation of
     /// our own query, is not something the caller can do anything about.
     #[rstest]

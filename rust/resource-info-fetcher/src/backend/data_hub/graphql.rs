@@ -145,8 +145,8 @@ pub struct Entity {
 /// The entity types [`RESOURCE_INFO_QUERY`] has an inline fragment for, and whose tags, owners and
 /// domain we therefore read.
 ///
-/// Anything else still resolves - `rawIdentifier` accepts any URN - but only the fields common to
-/// every `Entity` come back, so the response looks exactly like that of a resource without metadata.
+/// Anything else still resolves, because `rawIdentifier` accepts any URN, but only the fields common
+/// to every `Entity` come back. The response then looks just like that of a resource with no metadata.
 const COVERED_ENTITY_TYPES: &[&str] = &["Dataset", "Container", "Chart", "Dashboard"];
 
 #[derive(Debug, Deserialize)]
@@ -289,8 +289,8 @@ pub struct DataProductsTruncation {
 impl Entity {
     /// The entity's DataHub type, if [`RESOURCE_INFO_QUERY`] does not cover it.
     ///
-    /// [`None`] means the type is covered, or that DataHub did not report one - in which case there
-    /// is nothing to compare against and we must not report a problem we cannot substantiate.
+    /// [`None`] means the type is covered, or that DataHub did not report one. In the latter case
+    /// there is nothing to compare against, so we must not report a problem we cannot substantiate.
     ///
     /// Callers should surface this: the response for an uncovered type is empty, and a policy has no
     /// way to distinguish that from a resource that carries no tags, owners or domain at all.
@@ -511,7 +511,7 @@ mod tests {
     }
 
     /// Any other type deserializes into an entity with no tags, owners or domain, which a policy
-    /// cannot tell apart from a resource that genuinely has none - so it has to be reported.
+    /// cannot tell apart from a resource that genuinely has none, so it has to be reported.
     #[rstest]
     #[case::data_job("DataJob")]
     #[case::data_flow("DataFlow")]
