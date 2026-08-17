@@ -271,10 +271,17 @@ async fn fetch_resource_info(
     // A failure is cached (see [`CachedResponse`]), so logging it per response would produce a line
     // for every request that hits the cached failure, which is precisely the burst we cache to avoid.
     resource_info.inspect_err(|error| {
-        tracing::warn!(
-            error = error as &dyn std::error::Error,
-            "Failed to look up resource information"
-        );
+        let source = error as &dyn std::error::Error;
+
+        if http_error::Error::status_code(error).is_client_error() {
+            // The caller asked for something that cannot be looked up, such as a name no DataHub URN
+            // can express. That is their problem and says nothing about the health of this process or
+            // of the backend, so it does not belong in the log by default. Any user who can name a
+            // resource can produce these at will.
+            tracing::debug!(error = source, "Rejected a resource information request");
+        } else {
+            tracing::warn!(error = source, "Failed to look up resource information");
+        }
     })
 }
 

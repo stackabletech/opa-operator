@@ -255,4 +255,5 @@ So always require a positive signal.
 The resource-info-fetcher cannot know whether an empty record should mean allow or deny for your policy, so it does not paper over the difference.
 
 A failure is cached for a few seconds, well below `entryTimeToLive`, so a lookup that keeps failing neither queries the backend nor logs on every request.
-Each attempt that does reach the backend is logged at `WARN` level, so an unavailable backend shows up in the logs (see xref:opa:usage-guide/logging.adoc[]).
+An attempt that reaches the backend and fails is logged at `WARN`, so an unavailable backend shows up in the logs (see xref:opa:usage-guide/logging.adoc[]).
+A lookup rejected because of the request itself, such as an identifier no URN can express, is logged at `DEBUG` instead: it says nothing about the health of the backend, and any user who can name a resource can produce those at will.

@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 /// A token is minted, then travels to the backend and is validated there, so handing out one that is
 /// about to expire risks it being rejected mid-request. Refreshing slightly early avoids that without
 /// needing to know anything about the backend's clock.
-const EXPIRY_MARGIN: Duration = Duration::from_secs(30);
+pub const EXPIRY_MARGIN: Duration = Duration::from_secs(30);
 
 /// A freshly minted bearer token.
 #[derive(Debug, Clone, PartialEq, Eq)]

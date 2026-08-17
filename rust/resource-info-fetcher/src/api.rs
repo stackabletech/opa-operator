@@ -196,8 +196,9 @@ pub enum GetResourceInfoError {
 }
 
 impl http_error::Error for GetResourceInfoError {
-    // todo: we should make the log level (warn vs error) of the log line in `fetch_resource_info`
-    // more dynamic, based on the backend's impl `http_error::Error for Error`.
+    /// The status code also decides at which level a failure is logged, see `fetch_resource_info`.
+    /// Should the client/server split ever prove too coarse for that, the level can be made a
+    /// property of the individual error instead.
     fn status_code(&self) -> StatusCode {
         match self {
             Self::SerializeResponseAsJson { .. } => StatusCode::INTERNAL_SERVER_ERROR,

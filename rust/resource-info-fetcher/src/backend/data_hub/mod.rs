@@ -21,7 +21,7 @@ use crate::{
 };
 
 mod graphql;
-mod resource_to_urn_mapping;
+pub(crate) mod resource_to_urn_mapping;
 
 /// Errors that can occur while resolving the backend, which happens once at startup.
 ///
