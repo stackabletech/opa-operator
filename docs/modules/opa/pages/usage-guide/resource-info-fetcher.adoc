@@ -191,6 +191,43 @@ allow if {
 }
 ----
 
+=== Metadata is not inherited from parent containers
+
+Every function returns the metadata of the resource it addresses, and only of that resource.
+Nothing is inherited along the containment hierarchy: tagging the schema `tpch.sf1` as `pii` does not make `tableResourceInfo` report `pii` for the tables inside it, and the same holds for domains and data products.
+
+This is deliberate.
+Whether a tag applies to the children of a container is a property of your policy, not of the resource: `pii` or `confidential` plausibly cascade, while `deprecated`, `verified` or an owning team just as plausibly do not.
+The resource-info-fetcher cannot tell which is which, and merging a parent's tags into the child's would destroy the distinction — a rule could no longer ask whether _this_ table is tagged, only whether anything above it is.
+
+Express the inheritance you want in the rule instead.
+There is one function per level, so a rule can consult as many of them as it needs:
+
+[source,rego]
+----
+package test
+
+import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+default allow := false
+
+# The table itself is marked public, ...
+allow if {
+    table := resourceinfo.tableResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema, input.table)
+    some tag in table.tags
+    tag.urn == "urn:li:tag:public"
+}
+
+# ... or the schema containing it is, which this rule chooses to extend to its tables.
+allow if {
+    schema := resourceinfo.schemaResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema)
+    some tag in schema.tags
+    tag.urn == "urn:li:tag:public"
+}
+----
+
+Each lookup is cached and served over the loopback interface, so consulting an extra level costs little.
+
 === Behaviour when metadata is unavailable
 
 [WARNING]
