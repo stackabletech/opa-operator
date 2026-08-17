@@ -73,8 +73,15 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
+            // We could not talk to DataHub at all, which is not something the caller can fix.
             Self::ExecuteGraphQlQuery { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::GraphQlErrors { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+
+            // The URN is built entirely from the caller's parameters, so a URN DataHub refuses to
+            // parse or resolve is a bad request rather than a server fault. Any user who can name a
+            // table can reach this, e.g. through Trino's `SELECT * FROM tpch.sf1."a,PROD)"`.
+            Self::GraphQlErrors { .. } => StatusCode::BAD_REQUEST,
+
+            // A limitation of our own query, see the variant's message.
             Self::TruncatedDataProducts { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -319,6 +326,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
 mod tests {
     use rstest::rstest;
     use serde_json::json;
+    use snafu::IntoError;
 
     use super::*;
 
@@ -353,6 +361,39 @@ mod tests {
 
     /// [`Url`] omits the port whenever it is the default port of the scheme, hence the expected
     /// endpoints of the defaulted cases carry no port.
+    fn urn() -> Urn {
+        Urn("urn:li:dataset:(urn:li:dataPlatform:trino,a,PROD)".to_owned())
+    }
+
+    /// The status code tells the caller whose problem a failure is. The URN we query is built
+    /// entirely from the caller's parameters, so a URN DataHub refuses to parse or resolve is a bad
+    /// request - reachable by any user who can name a table, e.g. via Trino's
+    /// `SELECT * FROM tpch.sf1."a,PROD)"`. A backend we could not reach at all, or a limitation of
+    /// our own query, is not something the caller can do anything about.
+    #[rstest]
+    #[case::graphql_errors(
+        GraphQlErrorsSnafu { messages: "Failed to parse urn", urn: urn() }.build(),
+        StatusCode::BAD_REQUEST
+    )]
+    #[case::unreachable_backend(
+        ExecuteGraphQlQuerySnafu { urn: urn() }.into_error(utils::http::Error::HttpErrorResponse {
+            status: StatusCode::UNAUTHORIZED,
+            url: "http://datahub-gms/api/graphql".to_owned(),
+            text: "Unauthorized".to_owned(),
+        }),
+        StatusCode::INTERNAL_SERVER_ERROR
+    )]
+    #[case::truncated_data_products(
+        TruncatedDataProductsSnafu { urn: urn(), total: 11u32, received: 10u32 }.build(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    )]
+    fn status_code(#[case] error: Error, #[case] expected_status_code: StatusCode) {
+        assert_eq!(
+            info_fetcher_commons::http_error::Error::status_code(&error),
+            expected_status_code
+        );
+    }
+
     #[rstest]
     #[case::default_scheme_and_port(json!({}), format!("http://{HOSTNAME}/api/graphql"))]
     #[case::default_tls_scheme_and_port(
