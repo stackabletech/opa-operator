@@ -59,6 +59,28 @@ pub async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Resu
     serde_json::from_str(&json).context(ParseJsonSnafu)
 }
 
+/// Whether `error`, or any error it wraps, is a `401 Unauthorized` answer from a backend.
+///
+/// Walks the source chain because backends wrap [`Error`] in their own error types, so the 401 is
+/// never the outermost error by the time a caller gets to decide whether to re-authenticate.
+pub fn is_unauthorized(error: &(dyn std::error::Error + 'static)) -> bool {
+    std::iter::successors(Some(error), |error| error.source())
+        .filter_map(|error| error.downcast_ref::<Error>())
+        .any(|error| error.status() == Some(StatusCode::UNAUTHORIZED))
+}
+
+impl Error {
+    /// The status code the backend answered with, or [`None`] if the failure happened before there was
+    /// a response to read a status off.
+    pub fn status(&self) -> Option<StatusCode> {
+        match self {
+            Self::HttpErrorResponse { status, .. } => Some(*status),
+            Self::HttpErrorResponseUndecodableText { status, .. } => Some(*status),
+            Self::HttpRequest { .. } | Self::ParseJson { .. } => None,
+        }
+    }
+}
+
 /// Wraps a Response into a Result. If there is an HTTP Client or Server error,
 /// extract the HTTP body (if possible) to be used as context in the returned Err.
 /// This is done this because the `Response::error_for_status()` method Err variant
@@ -83,4 +105,63 @@ async fn error_for_status(response: Response) -> Result<Response, Error> {
         };
     }
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use snafu::IntoError;
+
+    use super::*;
+
+    /// Backends wrap transport errors in their own error types, sometimes several layers deep, so the
+    /// check has to walk the source chain instead of inspecting the outermost error.
+    #[derive(Snafu, Debug)]
+    #[snafu(display("failed to fetch the user"))]
+    struct FetchUser {
+        source: Error,
+    }
+
+    #[derive(Snafu, Debug)]
+    #[snafu(display("failed to get user info"))]
+    struct GetUserInfo {
+        source: FetchUser,
+    }
+
+    /// A backend response with `status`, wrapped the way a backend would wrap it.
+    fn wrapped_response(status: StatusCode) -> GetUserInfo {
+        let response = Error::HttpErrorResponse {
+            status,
+            url: "https://keycloak.example.com/admin/realms/my-realm/users/".to_owned(),
+            text: "denied".to_owned(),
+        };
+
+        GetUserInfoSnafu.into_error(FetchUserSnafu.into_error(response))
+    }
+
+    #[test]
+    fn a_wrapped_unauthorized_response_is_detected() {
+        assert!(is_unauthorized(&wrapped_response(StatusCode::UNAUTHORIZED)));
+    }
+
+    /// Only a 401 means "your token is no good". A 403 says the token was understood and the actor is
+    /// not allowed, which re-minting cannot fix.
+    #[test]
+    fn other_error_responses_are_not_unauthorized() {
+        assert!(!is_unauthorized(&wrapped_response(StatusCode::FORBIDDEN)));
+        assert!(!is_unauthorized(&wrapped_response(
+            StatusCode::INTERNAL_SERVER_ERROR
+        )));
+    }
+
+    /// A request that never got an answer has no status to look at.
+    #[test]
+    fn errors_without_a_response_are_not_unauthorized() {
+        let error = Error::ParseJson {
+            source: serde_json::from_str::<serde_json::Value>("not json")
+                .expect_err("the input is not valid JSON"),
+        };
+
+        assert_eq!(error.status(), None);
+        assert!(!is_unauthorized(&error));
+    }
 }

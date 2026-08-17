@@ -1699,6 +1699,7 @@ name = "info-fetcher-commons"
 version = "0.0.0-dev"
 dependencies = [
  "axum",
+ "futures",
  "hyper",
  "native-tls",
  "reqwest",

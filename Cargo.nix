@@ -5497,6 +5497,12 @@ rec {
             packageId = "tracing";
           }
         ];
+        devDependencies = [
+          {
+            name = "futures";
+            packageId = "futures";
+          }
+        ];
 
       };
       "ipnet" = rec {
