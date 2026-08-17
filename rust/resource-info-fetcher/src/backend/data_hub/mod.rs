@@ -62,6 +62,13 @@ pub enum Error {
     GraphQlErrors { messages: String, urn: Urn },
 
     #[snafu(display(
+        "the resource name {name:?} contains {delimiter:?}, which DataHub uses to delimit the parts \
+        of a URN. No URN containing it can resolve, so the request is rejected without querying \
+        DataHub."
+    ))]
+    InvalidResourceName { name: String, delimiter: char },
+
+    #[snafu(display(
         "DataHub reported {total} data products for URN {urn:?}, but the GraphQL query only fetches \
         up to {received} of them. Refusing to answer with a truncated list of data products, as \
         policies evaluating data product membership cannot tell it apart from a complete one. \
@@ -80,6 +87,9 @@ impl http_error::Error for Error {
             // parse or resolve is a bad request rather than a server fault. Any user who can name a
             // table can reach this, e.g. through Trino's `SELECT * FROM tpch.sf1."a,PROD)"`.
             Self::GraphQlErrors { .. } => StatusCode::BAD_REQUEST,
+
+            // The caller named a resource that cannot be expressed as a URN at all.
+            Self::InvalidResourceName { .. } => StatusCode::BAD_REQUEST,
 
             // A limitation of our own query, see the variant's message.
             Self::TruncatedDataProducts { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -329,7 +339,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
         &self,
         request: &ResourceInfoRequest,
     ) -> Result<Self::Response, GetResourceInfoError> {
-        let urn = urn_for_request(request, &self.env);
+        let urn = urn_for_request(request, &self.env)?;
         let entity = self.query_entity(&urn).await?;
 
         Ok(entity.into_response(urn))

@@ -107,6 +107,10 @@ Superset numbers its dashboards and charts, but products that name them instead 
 Every argument is limited to 1024 bytes, which is far more than any real identifier needs.
 A longer value is rejected with `400 Bad Request` rather than looked up, because arguments end up in the response cache key.
 
+Arguments are likewise rejected if they contain `,`, `(` or `)`.
+DataHub uses those characters to delimit the parts of a URN, so a resource whose name contains one cannot be addressed at all — sending it to DataHub would only produce an error there.
+`rawIdentifierResourceInfo` is exempt, since a URN necessarily contains them.
+
 The DataHub environment (fabric) is deliberately *not* an argument: it describes how the catalog was populated rather than the resource being authorized, so it is configured once on the OpaCluster (see `env` above) instead of being passed in by every Rego rule.
 
 An example of the returned structure:
