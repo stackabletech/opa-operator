@@ -75,14 +75,22 @@ pub struct Stream {
 pub struct Dashboard {
     pub system: String,
     pub instance: String,
-    pub id: u64,
+
+    /// The dashboard's identifier within its product, treated as an opaque string.
+    ///
+    /// Superset numbers its dashboards, but other products (e.g. Looker or Tableau) identify them by
+    /// name, so this must not be narrowed to an integer. It is only ever spliced into the URN.
+    pub id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 pub struct Chart {
     pub system: String,
     pub instance: String,
-    pub id: u64,
+
+    /// The chart's identifier within its product, treated as an opaque string. See
+    /// [`Dashboard::id`].
+    pub id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]

@@ -97,6 +97,9 @@ The first two arguments are the same everywhere:
 * `system` is the kind of product the resource lives in, for example `trino`, `kafka` or `superset`. DataHub calls this the _data platform_.
 * `instance` identifies _which_ deployment of that product, for example `my-namespace/my-trino`. DataHub calls this the _platform instance_, and the value must match the `platform_instance` of the ingestion source that produced the metadata.
 
+The `id` taken by `dashboardResourceInfo` and `chartResourceInfo` is whatever the product identifies the resource by, and is passed through as an opaque string.
+Superset numbers its dashboards and charts, but products that name them instead work just as well.
+
 The DataHub environment (fabric) is deliberately *not* an argument: it describes how the catalog was populated rather than the resource being authorized, so it is configured once on the OpaCluster (see `env` above) instead of being passed in by every Rego rule.
 
 An example of the returned structure:

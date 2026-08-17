@@ -87,3 +87,50 @@ fn container_urn(
         .expect("serializing a BTreeMap<&str, &str> cannot fail");
     format!("urn:li:container:{:x}", md5::compute(key_json.as_bytes()))
 }
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    /// Dashboard and chart ids are opaque to us. Superset happens to number them, but other
+    /// platforms (e.g. Looker or Tableau) identify their dashboards by name, so neither the API nor
+    /// the URN construction may assume an integer.
+    ///
+    /// Neither URN carries the fabric, so the configured [`v1alpha1::FabricType`] is irrelevant here.
+    #[rstest]
+    #[case::numeric_id("1", "urn:li:chart:(superset,my-superset.1)")]
+    #[case::non_numeric_id(
+        "orders-by-region",
+        "urn:li:chart:(superset,my-superset.orders-by-region)"
+    )]
+    fn chart_urn(#[case] id: &str, #[case] expected_urn: &str) {
+        let request = ResourceInfoRequest::Chart(Chart {
+            system: "superset".to_owned(),
+            instance: "my-superset".to_owned(),
+            id: id.to_owned(),
+        });
+
+        assert_eq!(
+            urn_for_request(&request, &v1alpha1::FabricType::Prod).0,
+            expected_urn
+        );
+    }
+
+    #[rstest]
+    #[case::numeric_id("1", "urn:li:dashboard:(superset,my-superset.1)")]
+    #[case::non_numeric_id("sales", "urn:li:dashboard:(superset,my-superset.sales)")]
+    fn dashboard_urn(#[case] id: &str, #[case] expected_urn: &str) {
+        let request = ResourceInfoRequest::Dashboard(Dashboard {
+            system: "superset".to_owned(),
+            instance: "my-superset".to_owned(),
+            id: id.to_owned(),
+        });
+
+        assert_eq!(
+            urn_for_request(&request, &v1alpha1::FabricType::Prod).0,
+            expected_urn
+        );
+    }
+}
