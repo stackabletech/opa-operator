@@ -92,6 +92,10 @@ The naming is intentionally product-agnostic, so that one function serves the eq
 `rawIdentifierResourceInfo` is the escape hatch for resources the functions above do not cover: it passes the identifier to the backend as-is.
 For DataHub that is a URN, such as `urn:li:chart:(superset,my-namespace/my-superset.1)`.
 
+It lets you address any URN, but metadata is only read from the DataHub entity types the functions above map to: datasets, containers, charts and dashboards.
+A URN of any other type - a `dataJob`, a `dataFlow` or one of the ML entities, for example - resolves to a record with empty `tags`, `owners` and `dataProducts`, which is indistinguishable from a resource that has no metadata.
+The resource-info-fetcher logs a warning naming the entity type whenever this happens, so check its logs if a `rawIdentifierResourceInfo` lookup unexpectedly comes back empty.
+
 The first two arguments are the same everywhere:
 
 * `system` is the kind of product the resource lives in, for example `trino`, `kafka` or `superset`. DataHub calls this the _data platform_.

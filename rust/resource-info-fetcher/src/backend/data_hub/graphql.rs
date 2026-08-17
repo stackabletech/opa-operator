@@ -29,6 +29,11 @@ query ResourceInfo($urn: String!, $dataProductsCount: Int!) {
   }
 }
 fragment ResourceInfo on Entity {
+  # The concrete type DataHub resolved the URN to. Only the types with an inline fragment below carry
+  # tags, owners and a domain in our response, so this lets us tell an entity we cannot read from one
+  # that genuinely has no metadata, see `Entity::uncovered_type`.
+  __typename
+
   # DataHub has no direct "dataProduct" field on assets; membership is a graph edge that points from
   # the data product to its assets. From the asset's side it is therefore an INCOMING relationship.
   # `total` is the number of edges DataHub has, which we compare against the number we received to
@@ -119,11 +124,23 @@ pub struct ResponseData {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Entity {
+    /// The concrete DataHub type the URN resolved to, e.g. `Dataset`. [`None`] for the substituted
+    /// "no metadata" entity, and for a DataHub that does not report it.
+    #[serde(rename = "__typename")]
+    typename: Option<String>,
+
     tags: Option<GlobalTags>,
     ownership: Option<Ownership>,
     domain: Option<DomainAssociation>,
     data_products: Option<EntityRelationships>,
 }
+
+/// The entity types [`RESOURCE_INFO_QUERY`] has an inline fragment for, and whose tags, owners and
+/// domain we therefore read.
+///
+/// Anything else still resolves - `rawIdentifier` accepts any URN - but only the fields common to
+/// every `Entity` come back, so the response looks exactly like that of a resource without metadata.
+const COVERED_ENTITY_TYPES: &[&str] = &["Dataset", "Container", "Chart", "Dashboard"];
 
 #[derive(Debug, Deserialize)]
 struct GlobalTags {
@@ -263,6 +280,19 @@ pub struct DataProductsTruncation {
 }
 
 impl Entity {
+    /// The entity's DataHub type, if [`RESOURCE_INFO_QUERY`] does not cover it.
+    ///
+    /// [`None`] means the type is covered, or that DataHub did not report one - in which case there
+    /// is nothing to compare against and we must not report a problem we cannot substantiate.
+    ///
+    /// Callers should surface this: the response for an uncovered type is empty, and a policy has no
+    /// way to distinguish that from a resource that carries no tags, owners or domain at all.
+    pub fn uncovered_type(&self) -> Option<&str> {
+        let typename = self.typename.as_deref()?;
+
+        (!COVERED_ENTITY_TYPES.contains(&typename)).then_some(typename)
+    }
+
     /// Checks whether the data product list was truncated by [`DATA_PRODUCTS_PAGE_SIZE`].
     ///
     /// Callers must turn this into an error rather than serving the truncated list: a policy that
@@ -455,6 +485,43 @@ mod tests {
     #[test]
     fn missing_data_products_are_complete() {
         assert!(Entity::default().data_products_truncation().is_none());
+    }
+
+    /// Deserializes an entity of the given DataHub type, as reported by `__typename`.
+    fn entity_of_type(typename: Option<&str>) -> Entity {
+        serde_json::from_value(json!({"__typename": typename}))
+            .expect("test entity must be a valid GraphQL entity payload")
+    }
+
+    /// An entity type the query has an inline fragment for is read normally.
+    #[rstest]
+    #[case::dataset("Dataset")]
+    #[case::container("Container")]
+    #[case::chart("Chart")]
+    #[case::dashboard("Dashboard")]
+    fn covered_entity_types(#[case] typename: &str) {
+        assert_eq!(entity_of_type(Some(typename)).uncovered_type(), None);
+    }
+
+    /// Any other type deserializes into an entity with no tags, owners or domain, which a policy
+    /// cannot tell apart from a resource that genuinely has none - so it has to be reported.
+    #[rstest]
+    #[case::data_job("DataJob")]
+    #[case::data_flow("DataFlow")]
+    #[case::notebook("Notebook")]
+    #[case::ml_model("MLModel")]
+    fn uncovered_entity_types(#[case] typename: &str) {
+        assert_eq!(
+            entity_of_type(Some(typename)).uncovered_type(),
+            Some(typename)
+        );
+    }
+
+    /// Without a `__typename` there is nothing to check against, so we must not cry wolf.
+    #[test]
+    fn entities_without_a_typename_are_not_reported() {
+        assert_eq!(entity_of_type(None).uncovered_type(), None);
+        assert_eq!(Entity::default().uncovered_type(), None);
     }
 
     #[test]

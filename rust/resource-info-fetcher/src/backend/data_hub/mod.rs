@@ -13,7 +13,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::{
     api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest},
@@ -256,6 +256,20 @@ impl ResolvedDataHubBackend {
             debug!(%urn, "DataHub returned no entity; responding with empty resource info");
             return Ok(graphql::Entity::default());
         };
+
+        // The query only reads tags, owners and domains off the entity types it has inline fragments
+        // for. Anything else - reachable through `rawIdentifier`, which accepts any URN - resolves to
+        // a response that looks just like that of a resource with no metadata, so say so rather than
+        // letting a policy silently decide on an empty record.
+        if let Some(entity_type) = entity.uncovered_type() {
+            warn!(
+                %urn,
+                entity_type,
+                "DataHub resolved this URN to an entity type the resource-info-fetcher cannot read \
+                metadata from; answering with empty tags, owners and data products. A policy cannot \
+                tell this apart from a resource that has no metadata, so do not rely on it"
+            );
+        }
 
         // Fail loudly instead of serving a partial list of data products: a policy that keys off data
         // product membership would otherwise silently decide based on incomplete metadata.
