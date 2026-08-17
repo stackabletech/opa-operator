@@ -65,7 +65,7 @@ pub fn urn_for_request(request: &ResourceInfoRequest, env: &v1alpha1::FabricType
         }) => {
             format!("urn:li:chart:({system},{instance}.{id})")
         }
-        ResourceInfoRequest::RawIdentifier(RawIdentifier { identifier }) => identifier.clone(),
+        ResourceInfoRequest::RawIdentifier(RawIdentifier { identifier }) => identifier.to_string(),
     };
 
     Urn(urn)
@@ -107,9 +107,9 @@ mod tests {
     )]
     fn chart_urn(#[case] id: &str, #[case] expected_urn: &str) {
         let request = ResourceInfoRequest::Chart(Chart {
-            system: "superset".to_owned(),
-            instance: "my-superset".to_owned(),
-            id: id.to_owned(),
+            system: "superset".into(),
+            instance: "my-superset".into(),
+            id: id.into(),
         });
 
         assert_eq!(
@@ -118,14 +118,34 @@ mod tests {
         );
     }
 
+    /// Guards the container hash, which DataHub computes independently on ingestion: it has to keep
+    /// matching byte for byte, or every database and schema lookup silently stops resolving. The
+    /// expected value was computed with Python's
+    /// `json.dumps(key, sort_keys=True, separators=(",", ":"))` and `hashlib.md5`, mirroring what
+    /// DataHub's `datahub_guid` does.
+    #[test]
+    fn schema_container_urn_matches_datahubs_guid() {
+        let request = ResourceInfoRequest::Schema(Schema {
+            system: "trino".into(),
+            instance: "my-namespace/my-trino".into(),
+            database: "tpch".into(),
+            schema: "sf1".into(),
+        });
+
+        assert_eq!(
+            urn_for_request(&request, &v1alpha1::FabricType::Prod).0,
+            "urn:li:container:fb46bf1f985e130eeceeee8a51317cd9"
+        );
+    }
+
     #[rstest]
     #[case::numeric_id("1", "urn:li:dashboard:(superset,my-superset.1)")]
     #[case::non_numeric_id("sales", "urn:li:dashboard:(superset,my-superset.sales)")]
     fn dashboard_urn(#[case] id: &str, #[case] expected_urn: &str) {
         let request = ResourceInfoRequest::Dashboard(Dashboard {
-            system: "superset".to_owned(),
-            instance: "my-superset".to_owned(),
-            id: id.to_owned(),
+            system: "superset".into(),
+            instance: "my-superset".into(),
+            id: id.into(),
         });
 
         assert_eq!(

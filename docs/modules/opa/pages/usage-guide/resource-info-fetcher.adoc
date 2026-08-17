@@ -100,6 +100,9 @@ The first two arguments are the same everywhere:
 The `id` taken by `dashboardResourceInfo` and `chartResourceInfo` is whatever the product identifies the resource by, and is passed through as an opaque string.
 Superset numbers its dashboards and charts, but products that name them instead work just as well.
 
+Every argument is limited to 1024 bytes, which is far more than any real identifier needs.
+A longer value is rejected with `400 Bad Request` rather than looked up, because arguments end up in the response cache key.
+
 The DataHub environment (fabric) is deliberately *not* an argument: it describes how the catalog was populated rather than the resource being authorized, so it is configured once on the OpaCluster (see `env` above) instead of being passed in by every Rego rule.
 
 An example of the returned structure:
