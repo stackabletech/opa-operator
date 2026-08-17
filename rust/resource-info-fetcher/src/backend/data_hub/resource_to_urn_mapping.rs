@@ -220,23 +220,86 @@ mod tests {
         assert_eq!(urn.0, identifier);
     }
 
-    /// Guards the container hash, which DataHub computes independently on ingestion: it has to keep
-    /// matching byte for byte, or every database and schema lookup silently stops resolving. The
-    /// expected value was computed with Python's
+    /// Guards the container hashes, which DataHub computes independently on ingestion: they have to
+    /// keep matching byte for byte, or every database and schema lookup silently stops resolving.
+    ///
+    /// The expected values were computed with Python's
     /// `json.dumps(key, sort_keys=True, separators=(",", ":"))` and `hashlib.md5`, mirroring what
-    /// DataHub's `datahub_guid` does.
-    #[test]
-    fn schema_container_urn_matches_datahubs_guid() {
-        let request = ResourceInfoRequest::Schema(Schema {
+    /// DataHub's `datahub_guid` does - not read back out of this implementation.
+    #[rstest]
+    #[case::database(
+        ResourceInfoRequest::Database(Database {
+            system: "trino".into(),
+            instance: "my-namespace/my-trino".into(),
+            database: "tpch".into(),
+        }),
+        "urn:li:container:9c4275840ebdb59d3b21b4b4102e8999"
+    )]
+    #[case::schema(
+        ResourceInfoRequest::Schema(Schema {
             system: "trino".into(),
             instance: "my-namespace/my-trino".into(),
             database: "tpch".into(),
             schema: "sf1".into(),
+        }),
+        "urn:li:container:fb46bf1f985e130eeceeee8a51317cd9"
+    )]
+    fn container_urns_match_datahubs_guid(
+        #[case] request: ResourceInfoRequest,
+        #[case] expected_urn: &str,
+    ) {
+        assert_eq!(urn_of(request).expect("the name is valid").0, expected_urn);
+    }
+
+    /// The dataset URNs are built by string interpolation rather than hashed, so these pin the exact
+    /// layout - including that the fabric is appended and that a table's four name segments are
+    /// dot-joined in order.
+    #[rstest]
+    #[case::table(
+        ResourceInfoRequest::Table(Table {
+            system: "trino".into(),
+            instance: "my-namespace/my-trino".into(),
+            database: "tpch".into(),
+            schema: "sf1".into(),
+            table: "customer".into(),
+        }),
+        "urn:li:dataset:(urn:li:dataPlatform:trino,my-namespace/my-trino.tpch.sf1.customer,PROD)"
+    )]
+    #[case::stream(
+        ResourceInfoRequest::Stream(Stream {
+            system: "kafka".into(),
+            instance: "my-namespace/my-kafka".into(),
+            queue: "orders".into(),
+        }),
+        "urn:li:dataset:(urn:li:dataPlatform:kafka,my-namespace/my-kafka.orders,PROD)"
+    )]
+    #[case::dashboard(
+        ResourceInfoRequest::Dashboard(Dashboard {
+            system: "superset".into(),
+            instance: "my-namespace/my-superset".into(),
+            id: "1".into(),
+        }),
+        "urn:li:dashboard:(superset,my-namespace/my-superset.1)"
+    )]
+    fn interpolated_urns(#[case] request: ResourceInfoRequest, #[case] expected_urn: &str) {
+        assert_eq!(urn_of(request).expect("the name is valid").0, expected_urn);
+    }
+
+    /// The fabric is part of every dataset URN, so a mismatch with the ingestion's `env` is what makes
+    /// an otherwise correct lookup return nothing.
+    #[test]
+    fn the_configured_fabric_ends_up_in_dataset_urns() {
+        let request = ResourceInfoRequest::Stream(Stream {
+            system: "kafka".into(),
+            instance: "my-kafka".into(),
+            queue: "orders".into(),
         });
 
+        let urn = urn_for_request(&request, &v1alpha1::FabricType::Dev).expect("the name is valid");
+
         assert_eq!(
-            urn_of(request).expect("the name is valid").0,
-            "urn:li:container:fb46bf1f985e130eeceeee8a51317cd9"
+            urn.0,
+            "urn:li:dataset:(urn:li:dataPlatform:kafka,my-kafka.orders,DEV)"
         );
     }
 

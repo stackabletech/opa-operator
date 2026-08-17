@@ -540,4 +540,221 @@ mod tests {
         assert_eq!(truncation.total, DATA_PRODUCTS_PAGE_SIZE + 1);
         assert_eq!(truncation.received, DATA_PRODUCTS_PAGE_SIZE);
     }
+
+    fn urn() -> Urn {
+        Urn("urn:li:dataset:(urn:li:dataPlatform:trino,my-trino.tpch.sf1.customer,PROD)".to_owned())
+    }
+
+    /// Deserializes an entity from the payload DataHub would return.
+    fn entity_from(payload: serde_json::Value) -> Entity {
+        serde_json::from_value(payload).expect("test entity must be a valid GraphQL entity payload")
+    }
+
+    /// The mapping when DataHub populated every `properties` aspect, i.e. the case the fallbacks below
+    /// are fallbacks for.
+    #[test]
+    fn a_fully_populated_entity_maps_every_field() {
+        let response = entity_from(json!({
+            "__typename": "Dataset",
+            "tags": {"tags": [{"tag": {"urn": "urn:li:tag:PII", "properties": {"name": "PII"}}}]},
+            "domain": {"domain": {"urn": "urn:li:domain:finance", "properties": {
+                "name": "Finance", "description": "Financial data",
+            }}},
+            "dataProducts": {"total": 1, "relationships": [{"entity": {
+                "urn": "urn:li:dataProduct:orders",
+                "properties": {"name": "Orders", "description": "Order data"},
+            }}]},
+            "ownership": {"owners": [
+                {
+                    "owner": {
+                        "__typename": "CorpUser",
+                        "urn": "urn:li:corpuser:alice",
+                        "properties": {
+                            "fullName": "Alice Example", "displayName": "Alice",
+                            "email": "alice@example.com", "active": true,
+                        },
+                    },
+                    "ownershipType": {
+                        "urn": "urn:li:ownershipType:__system__technical_owner",
+                        "info": {"name": "Technical Owner"},
+                    },
+                },
+                {
+                    "owner": {
+                        "__typename": "CorpGroup",
+                        "urn": "urn:li:corpGroup:analytics",
+                        "properties": {"displayName": "Analytics", "description": "The team"},
+                    },
+                    "ownershipType": {
+                        "urn": "urn:li:ownershipType:__system__technical_owner",
+                        "info": {"name": "Technical Owner"},
+                    },
+                },
+            ]},
+        }))
+        .into_response(urn());
+
+        assert_eq!(
+            response.tags,
+            vec![Tag {
+                urn: Urn("urn:li:tag:PII".to_owned()),
+                name: "PII".to_owned(),
+            }]
+        );
+        assert_eq!(
+            response.domain,
+            Some(Domain {
+                urn: Urn("urn:li:domain:finance".to_owned()),
+                name: "Finance".to_owned(),
+                description: Some("Financial data".to_owned()),
+            })
+        );
+        assert_eq!(
+            response.data_products,
+            vec![DataProduct {
+                urn: Urn("urn:li:dataProduct:orders".to_owned()),
+                name: "Orders".to_owned(),
+                description: Some("Order data".to_owned()),
+            }]
+        );
+
+        // Both owners share an ownership type, so they land in the same bucket rather than two.
+        let technical_owner = Urn("urn:li:ownershipType:__system__technical_owner".to_owned());
+        assert_eq!(response.owners.len(), 1);
+        let owners = &response.owners[&technical_owner];
+        assert_eq!(
+            owners.ownership_type_name.as_deref(),
+            Some("Technical Owner")
+        );
+        assert_eq!(
+            owners.users,
+            vec![User {
+                urn: Urn("urn:li:corpuser:alice".to_owned()),
+                full_name: Some("Alice Example".to_owned()),
+                display_name: "Alice".to_owned(),
+                email: Some("alice@example.com".to_owned()),
+                active: true,
+            }]
+        );
+        assert_eq!(
+            owners.groups,
+            vec![Group {
+                urn: Urn("urn:li:corpGroup:analytics".to_owned()),
+                display_name: "Analytics".to_owned(),
+                description: Some("The team".to_owned()),
+            }]
+        );
+    }
+
+    /// An entity whose referenced tag, domain and data product have no `properties` aspect. There is no
+    /// name to show, so each falls back to its URN rather than to an empty string, which would render
+    /// as a nameless entry in a policy decision.
+    #[test]
+    fn entities_without_properties_fall_back_to_urns() {
+        let response = entity_from(json!({
+            "tags": {"tags": [{"tag": {"urn": "urn:li:tag:PII"}}]},
+            "domain": {"domain": {"urn": "urn:li:domain:finance"}},
+            "dataProducts": {
+                "total": 1,
+                "relationships": [{"entity": {"urn": "urn:li:dataProduct:orders"}}],
+            },
+        }))
+        .into_response(urn());
+
+        assert_eq!(response.tags[0].name, "urn:li:tag:PII");
+
+        let domain = response.domain.expect("the domain is present");
+        assert_eq!(domain.name, "urn:li:domain:finance");
+        assert_eq!(domain.description, None);
+
+        assert_eq!(response.data_products[0].name, "urn:li:dataProduct:orders");
+        assert_eq!(response.data_products[0].description, None);
+    }
+
+    /// Owners whose `properties` aspect is missing entirely, and owners where it exists but carries no
+    /// display name. A user's display name is derived from the URN; a group's falls back to the whole
+    /// URN, as there is no group-name convention to strip.
+    #[rstest]
+    #[case::no_properties_aspect(json!({"__typename": "CorpUser", "urn": "urn:li:corpuser:alice"}))]
+    #[case::no_display_name(
+        json!({"__typename": "CorpUser", "urn": "urn:li:corpuser:alice", "properties": {}})
+    )]
+    fn users_without_a_display_name_are_named_after_their_urn(#[case] owner: serde_json::Value) {
+        let response =
+            entity_from(json!({"ownership": {"owners": [{"owner": owner}]}})).into_response(urn());
+
+        let owners = response
+            .owners
+            .values()
+            .next()
+            .expect("the owner is present");
+        assert_eq!(owners.users[0].display_name, "alice");
+        assert_eq!(owners.users[0].full_name, None);
+        assert_eq!(owners.users[0].email, None);
+        // Absent `active` means we must not report the user as deactivated.
+        assert!(owners.users[0].active);
+    }
+
+    #[rstest]
+    #[case::no_properties_aspect(
+        json!({"__typename": "CorpGroup", "urn": "urn:li:corpGroup:analytics"})
+    )]
+    #[case::no_display_name(
+        json!({"__typename": "CorpGroup", "urn": "urn:li:corpGroup:analytics", "properties": {}})
+    )]
+    fn groups_without_a_display_name_are_named_after_their_urn(#[case] owner: serde_json::Value) {
+        let response =
+            entity_from(json!({"ownership": {"owners": [{"owner": owner}]}})).into_response(urn());
+
+        let owners = response
+            .owners
+            .values()
+            .next()
+            .expect("the owner is present");
+        assert_eq!(owners.groups[0].display_name, "urn:li:corpGroup:analytics");
+        assert_eq!(owners.groups[0].description, None);
+    }
+
+    /// Owners predating ownership type entities only carry the legacy `type` enum, and some carry
+    /// neither. The key has to stay stable either way, because it is what a policy looks owners up by.
+    #[rstest]
+    #[case::legacy_type_only(json!({"type": "TECHNICAL_OWNER"}), "TECHNICAL_OWNER")]
+    #[case::no_type_at_all(json!({}), "unknown")]
+    fn owners_without_an_ownership_type_entity_fall_back_to_the_legacy_type(
+        #[case] extra_owner_fields: serde_json::Value,
+        #[case] expected_key: &str,
+    ) {
+        let mut owner = json!({
+            "owner": {"__typename": "CorpUser", "urn": "urn:li:corpuser:alice"},
+        });
+        owner
+            .as_object_mut()
+            .expect("the owner is a JSON object")
+            .extend(
+                extra_owner_fields
+                    .as_object()
+                    .expect("the extra fields are a JSON object")
+                    .clone(),
+            );
+
+        let response = entity_from(json!({"ownership": {"owners": [owner]}})).into_response(urn());
+
+        let (key, owners) = response.owners.iter().next().expect("the owner is present");
+        assert_eq!(key.0, expected_key);
+        // There is no ownership type entity, so there is no human-readable name for it either.
+        assert_eq!(owners.ownership_type_name, None);
+    }
+
+    /// The "no metadata" entity we substitute for a URN DataHub does not know must map to a response
+    /// that is empty rather than one that fails to build.
+    #[test]
+    fn the_default_entity_maps_to_an_empty_response() {
+        let response = Entity::default().into_response(urn());
+
+        assert_eq!(response.urn, urn());
+        assert!(response.tags.is_empty());
+        assert_eq!(response.domain, None);
+        assert!(response.data_products.is_empty());
+        assert!(response.owners.is_empty());
+    }
 }
