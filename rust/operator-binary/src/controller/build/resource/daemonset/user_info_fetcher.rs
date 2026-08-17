@@ -22,10 +22,11 @@ use crate::controller::{
     build::{
         self,
         resource::daemonset::{
-            CONFIG_DIR, CONFIG_VOLUME_NAME, USER_INFO_FETCHER_CREDENTIALS_DIR,
-            USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, USER_INFO_FETCHER_KERBEROS_DIR,
-            USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, add_stackable_rust_cli_env_vars,
-            container_name, sidecar_container_log_level, sidecar_resource_requirements,
+            CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, STACKABLE_LOG_DIR,
+            USER_INFO_FETCHER_CREDENTIALS_DIR, USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
+            USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
+            add_stackable_rust_cli_env_vars, container_name, sidecar_container_log_level,
+            sidecar_resource_requirements,
         },
     },
 };
@@ -92,6 +93,11 @@ pub fn add_user_info_fetcher_sidecar(
             )
             .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
+            .context(AddVolumeMountSnafu)?
+            // The sidecar writes its file logs below this directory (see
+            // `add_stackable_rust_cli_env_vars`). They have to land on the shared log volume,
+            // because that is the only place the Vector agent collects them from.
+            .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
             .context(AddVolumeMountSnafu)?
             .resources(sidecar_resource_requirements());
         add_stackable_rust_cli_env_vars(

@@ -20,7 +20,7 @@ sources:
     include:
       - ${LOG_DIR}/*/*.stderr.log
 
-  # Logs of the Stackable Rust sidecars (bundle-builder, user-info-fetcher)
+  # Logs of the Stackable Rust sidecars (bundle-builder, user-info-fetcher, resource-info-fetcher)
   files_tracing_rs:
     type: file
     include:

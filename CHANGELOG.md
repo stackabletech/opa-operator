@@ -26,6 +26,9 @@ All notable changes to this project will be documented in this file.
 - Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
+- The file logs of the user-info-fetcher and resource-info-fetcher sidecars are now collected by the
+  Vector agent. Both sidecars log below `/stackable/log`, but did not mount the shared `log` volume,
+  so their logs were unreachable for Vector and not accounted for in the volume's size limit ([#863]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
