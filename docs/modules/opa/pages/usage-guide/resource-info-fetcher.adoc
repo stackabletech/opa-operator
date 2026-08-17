@@ -174,6 +174,38 @@ allow if {
 }
 ----
 
-A resource the backend does not know about is not reported as an error: the resource-info-fetcher returns a record with empty `tags`, `owners` and `dataProducts` and a `null` `domain`.
-Prefer rules that require a positive signal, like the one above, which denies access in that case.
-A rule that merely excludes a tag would instead grant access to every resource missing from the backend.
+=== Behaviour when metadata is unavailable
+
+[WARNING]
+====
+A failed metadata lookup does not deny access by itself.
+Only rules that require a positive signal deny access when the lookup fails - see below.
+====
+
+There are two ways a lookup can come back without the metadata a rule expects.
+
+Unknown resource::
+The backend does not know the resource.
+This is not an error: the resource-info-fetcher answers `200 OK` with a record whose `tags`, `owners` and `dataProducts` are empty and whose `domain` is `null`.
+It is the normal answer for a resource that was never ingested into the catalog.
+
+Backend unavailable::
+The backend cannot be reached or rejects the request, for example because DataHub is down or unreachable, or because the Personal Access Token has expired or been revoked.
+The resource-info-fetcher then answers with an HTTP error status and an error envelope instead of a metadata record:
++
+[source,json]
+----
+{"error": {"message": "...", "causes": ["..."]}}
+----
+
+In both cases the rule finds no `tags` (and no `owners`, `domain` or `dataProducts`) to match on, so every expression reading them becomes undefined.
+What that means for the decision depends entirely on how the rule is written:
+
+* A rule that grants access on a *positive* signal - such as the `allow` rule above, which requires the `public` tag - becomes undefined and therefore denies access. This is what you want.
+* A rule that grants access through the *absence* of a signal - `deny` if the resource is tagged `pii`, everything else allowed - also becomes undefined, and an undefined `deny` means *not denied*. A DataHub outage or an expired token then grants access to every resource, including the ones tagged `pii`.
+
+So always write rules that require a positive signal.
+The resource-info-fetcher deliberately does not paper over the difference between the two cases, because it cannot know whether an empty record should mean allow or deny for a given policy.
+This holds for a resource that is simply not in the catalog just as much as for a backend outage: neither can be turned into a denial by the resource-info-fetcher, only by the shape of the rule.
+
+Every failed lookup is logged by the resource-info-fetcher sidecar at `WARN` level, so a backend that has become unavailable is visible in the logs (see xref:opa:usage-guide/logging.adoc[]).
