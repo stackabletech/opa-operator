@@ -16,17 +16,20 @@ use info_fetcher_commons::{
     config::{ConfigError, read_config_file},
     http_error,
 };
-use moka::future::Cache;
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1::{self};
 use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
 use tokio::net::TcpListener;
 
-use crate::api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest};
+use crate::{
+    api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest},
+    cache::{CachedResponse, ResourceInfoCache},
+};
 
 mod api;
 mod backend;
+mod cache;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -51,7 +54,7 @@ struct AppState {
     backend: Arc<ResolvedBackend>,
     // Note: Although we might not talk JSON to the underlying backend, we always return JSON as a
     // result to the caller, so we can cache that.
-    resource_info_cache: Cache<ResourceInfoRequest, serde_json::Value>,
+    resource_info_cache: ResourceInfoCache,
 }
 
 /// Backend with resolved credentials.
@@ -141,10 +144,7 @@ async fn main() -> Result<(), StartupError> {
     let config: v1alpha1::Config = read_config_file(&args.config)
         .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
-    let resource_info_cache = config
-        .cache
-        .apply_settings_to_cache_builder(Cache::builder().name("resource-info"))
-        .build();
+    let resource_info_cache = cache::build(&config.cache);
     // One GET endpoint per resource type. They all share the same generic `metadata` handler; only
     // the query-parameter struct (and thus the resulting `ResourceInfoRequest` variant) differs.
     let app = Router::new()
@@ -234,18 +234,87 @@ async fn get_resource_info(
         backend,
         resource_info_cache,
     } = state;
-    let resource_info = resource_info_cache
-        .try_get_with_by_ref(&request, async {
-            match backend.as_ref() {
-                ResolvedBackend::DataHub(data_hub) => {
-                    let response = data_hub.get_resource_info(&request).await?;
-                    serde_json::to_value(&response).map_err(|err| {
-                        GetResourceInfoError::SerializeResponseAsJson { source: err }
-                    })
-                }
+    // A failed lookup is cached as well, see [`CachedResponse`], so nothing fails here: the error is
+    // part of the cached value rather than something the cache passes through.
+    let cached = resource_info_cache
+        .get_with_by_ref(&request, async {
+            match fetch_resource_info(&backend, &request).await {
+                Ok(resource_info) => CachedResponse::Found(resource_info),
+                Err(error) => CachedResponse::Failed(Arc::new(error)),
             }
         })
-        .await?;
+        .await;
 
-    Ok(Json(resource_info))
+    match cached {
+        CachedResponse::Found(resource_info) => Ok(Json(resource_info)),
+        CachedResponse::Failed(error) => Err(error.into()),
+    }
+}
+
+/// Queries the backend for a single resource and serializes the answer into the JSON we return.
+async fn fetch_resource_info(
+    backend: &ResolvedBackend,
+    request: &ResourceInfoRequest,
+) -> Result<serde_json::Value, GetResourceInfoError> {
+    match backend {
+        ResolvedBackend::DataHub(data_hub) => {
+            let response = data_hub.get_resource_info(request).await?;
+
+            serde_json::to_value(&response)
+                .map_err(|source| GetResourceInfoError::SerializeResponseAsJson { source })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+
+    use super::*;
+    use crate::api::RawIdentifier;
+
+    /// State whose backend queries `mock_server`, with the cache a cluster gets by default.
+    fn state_for(mock_server: &MockServer) -> AppState {
+        let graphql_url = format!("{}/api/graphql", mock_server.uri())
+            .parse()
+            .expect("the mock server's address must be a valid URL");
+
+        AppState {
+            backend: Arc::new(ResolvedBackend::DataHub(
+                backend::data_hub::ResolvedDataHubBackend::for_tests(graphql_url),
+            )),
+            resource_info_cache: cache::build(&Default::default()),
+        }
+    }
+
+    fn request() -> ResourceInfoRequest {
+        ResourceInfoRequest::RawIdentifier(RawIdentifier {
+            identifier: "urn:li:dataset:(urn:li:dataPlatform:trino,broken,PROD)".into(),
+        })
+    }
+
+    /// A lookup that keeps failing must not query the backend again on every request. Anyone who can
+    /// name a resource could otherwise amplify their requests against DataHub, and worst of all
+    /// exactly while DataHub is already unwell.
+    #[tokio::test]
+    async fn a_failing_lookup_queries_the_backend_only_once() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/graphql"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("GMS is having a bad day"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let state = state_for(&mock_server);
+        for _ in 0..5 {
+            let result = get_resource_info(state.clone(), request()).await;
+            assert!(result.is_err(), "the lookup must keep failing");
+        }
+
+        // The mock's `.expect(1)` is verified when `mock_server` is dropped.
+    }
 }

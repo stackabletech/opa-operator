@@ -299,6 +299,20 @@ impl ResolvedDataHubBackend {
     }
 }
 
+#[cfg(test)]
+impl ResolvedDataHubBackend {
+    /// A backend querying `graphql_url`, bypassing [`ResolvedDataHubBackend::resolve`] so that no
+    /// credentials have to be read from disk.
+    pub fn for_tests(graphql_url: Url) -> Self {
+        Self {
+            token: "not-a-real-token".to_owned(),
+            http_client: reqwest::Client::new(),
+            graphql_url,
+            env: v1alpha1::FabricType::Prod,
+        }
+    }
+}
+
 /// Builds the DataHub GraphQL endpoint from the backend configuration.
 fn build_graphql_url(config: &v1alpha1::DataHubBackend) -> Result<Url, ResolveError> {
     let schema = if config.tls.uses_tls() {

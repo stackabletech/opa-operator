@@ -255,3 +255,4 @@ So always require a positive signal.
 The resource-info-fetcher cannot know whether an empty record should mean allow or deny for your policy, so it does not paper over the difference.
 
 Every failed lookup is logged at `WARN` level by the sidecar, so an unavailable backend shows up in the logs (see xref:opa:usage-guide/logging.adoc[]).
+A failure is also cached for a few seconds, well below `entryTimeToLive`, so a lookup that keeps failing does not query the backend on every single request.

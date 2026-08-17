@@ -12391,6 +12391,10 @@ rec {
             name = "rstest";
             packageId = "rstest";
           }
+          {
+            name = "wiremock";
+            packageId = "wiremock";
+          }
         ];
 
       };
