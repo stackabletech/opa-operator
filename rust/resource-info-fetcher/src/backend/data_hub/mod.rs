@@ -23,8 +23,12 @@ use crate::{
 mod graphql;
 mod resource_to_urn_mapping;
 
+/// Errors that can occur while resolving the backend, which happens once at startup.
+///
+/// Kept apart from [`Error`] because these never reach a caller: a failure here means the process
+/// does not come up at all, so - unlike [`Error`] - they have no HTTP status code to map to.
 #[derive(Snafu, Debug)]
-pub enum Error {
+pub enum ResolveError {
     #[snafu(display("failed to read DataHub token from {path:?}"))]
     ReadToken {
         source: std::io::Error,
@@ -42,7 +46,12 @@ pub enum Error {
         source: url::ParseError,
         endpoint: String,
     },
+}
 
+/// Errors that can occur while answering a request, and which are therefore rendered as an HTTP
+/// response to the caller.
+#[derive(Snafu, Debug)]
+pub enum Error {
     #[snafu(display("failed to execute GraphQL query for URN {urn:?}"))]
     ExecuteGraphQlQuery {
         source: utils::http::Error,
@@ -64,10 +73,6 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::ReadToken { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::BuildDataHubEndpoint { .. } => StatusCode::BAD_REQUEST,
             Self::ExecuteGraphQlQuery { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::GraphQlErrors { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::TruncatedDataProducts { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -177,7 +182,7 @@ impl ResolvedDataHubBackend {
     pub async fn resolve(
         config: v1alpha1::DataHubBackend,
         credentials_dir: &Path,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ResolveError> {
         let token_path = credentials_dir.join("token");
 
         // Trim trailing whitespace/newlines so the value is safe to use in an HTTP header.
@@ -264,7 +269,7 @@ impl ResolvedDataHubBackend {
 }
 
 /// Builds the DataHub GraphQL endpoint from the backend configuration.
-fn build_graphql_url(config: &v1alpha1::DataHubBackend) -> Result<Url, Error> {
+fn build_graphql_url(config: &v1alpha1::DataHubBackend) -> Result<Url, ResolveError> {
     let schema = if config.tls.uses_tls() {
         "https"
     } else {

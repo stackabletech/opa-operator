@@ -82,7 +82,9 @@ enum StartupError {
     RunServer { source: std::io::Error },
 
     #[snafu(display("failed to resolve DataHub backend"))]
-    ResolveDataHubBackend { source: backend::data_hub::Error },
+    ResolveDataHubBackend {
+        source: backend::data_hub::ResolveError,
+    },
 }
 
 /// Resolves a backend configuration by loading credentials and creating the appropriate backend implementation.
