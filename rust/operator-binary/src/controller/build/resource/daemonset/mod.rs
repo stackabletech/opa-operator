@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::OpaRole;
 use stackable_operator::{
     builder::{
         self,
@@ -49,7 +50,11 @@ use super::service::{self, APP_PORT, APP_PORT_NAME};
 use crate::{
     controller::{
         OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig,
-        build::{self, resource::daemonset::user_info_fetcher::add_user_info_fetcher_sidecar},
+        build::{
+            self, recommended_labels_for_role_group_resources,
+            resource::daemonset::user_info_fetcher::add_user_info_fetcher_sidecar,
+            role_group_selector,
+        },
     },
     crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT},
     operations::graceful_shutdown::add_graceful_shutdown_config,
@@ -339,7 +344,11 @@ pub fn build_server_rolegroup_daemonset(
         ));
 
     let pb_metadata = ObjectMetaBuilder::new()
-        .with_labels(cluster.recommended_labels(role_group_name))
+        .with_labels(recommended_labels_for_role_group_resources(
+            cluster,
+            &OpaRole::Server,
+            role_group_name,
+        ))
         .build();
 
     pb.metadata(pb_metadata)
@@ -462,7 +471,9 @@ pub fn build_server_rolegroup_daemonset(
 
     let daemonset_spec = DaemonSetSpec {
         selector: LabelSelector {
-            match_labels: Some(cluster.role_group_selector(role_group_name).into()),
+            match_labels: Some(
+                role_group_selector(cluster, &OpaRole::Server, role_group_name).into(),
+            ),
             ..LabelSelector::default()
         },
         template: pod_template,

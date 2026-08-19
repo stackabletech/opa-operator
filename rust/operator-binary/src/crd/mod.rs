@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{ops::Deref, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use stackable_operator::{
@@ -12,17 +12,18 @@ use stackable_operator::{
         },
     },
     config::{fragment::Fragment, merge::Merge},
+    constant,
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
     product_logging::{self, spec::Logging},
-    role_utils::{EmptyRoleConfig, Role},
+    role_utils::EmptyRoleConfig,
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
     v2::{
         config_overrides::JsonConfigOverrides,
-        role_utils::GenericCommonConfig,
+        role_utils::{GenericCommonConfig, Role},
         types::{
             kubernetes::{ConfigMapName, SecretClassName},
             operator::RoleName,
@@ -30,12 +31,12 @@ use stackable_operator::{
     },
     versioned::versioned,
 };
-use strum::{Display, EnumIter, EnumString};
+use strum::{Display, EnumIter};
 
 pub mod user_info_fetcher;
 
 pub const APP_NAME: &str = "opa";
-pub const OPERATOR_NAME: &str = "opa.stackable.tech";
+pub const OPA_OPERATOR_NAME: &str = "opa.stackable.tech";
 pub const FIELD_MANAGER: &str = "opa-operator";
 
 pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_minutes_unchecked(2);
@@ -238,36 +239,20 @@ pub struct OpaConfig {
     pub graceful_shutdown_timeout: Option<Duration>,
 }
 
-#[derive(
-    EnumIter,
-    Clone,
-    Debug,
-    Hash,
-    Deserialize,
-    Eq,
-    JsonSchema,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Display,
-    EnumString,
-)]
+constant!(SERVER_ROLE_NAME: RoleName = "server");
+
+#[derive(Clone, Debug, EnumIter, Eq, Ord, PartialOrd, PartialEq)]
 pub enum OpaRole {
-    #[serde(rename = "server")]
-    #[strum(serialize = "server")]
     Server,
 }
 
-impl From<OpaRole> for RoleName {
-    fn from(value: OpaRole) -> Self {
-        RoleName::from_str(&value.to_string()).expect("an OpaRole is a valid role name")
-    }
-}
+impl Deref for OpaRole {
+    type Target = RoleName;
 
-impl From<&OpaRole> for RoleName {
-    fn from(value: &OpaRole) -> Self {
-        RoleName::from_str(&value.to_string()).expect("an OpaRole is a valid role name")
+    fn deref(&self) -> &Self::Target {
+        match self {
+            OpaRole::Server => &SERVER_ROLE_NAME,
+        }
     }
 }
 

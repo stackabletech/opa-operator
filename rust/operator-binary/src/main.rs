@@ -31,7 +31,7 @@ use stackable_operator::{
 };
 
 use crate::{
-    crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2},
+    crd::{OPA_OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2},
     opa_controller::OPA_FULL_CONTROLLER_NAME,
     webhooks::conversion::create_webhook_server,
 };
@@ -114,9 +114,11 @@ async fn main() -> anyhow::Result<()> {
                     .run(sigterm_watcher.handle())
                     .map(anyhow::Ok);
 
-            let client =
-                client::initialize_operator(Some(OPERATOR_NAME.to_string()), &common.cluster_info)
-                    .await?;
+            let client = client::initialize_operator(
+                Some(OPA_OPERATOR_NAME.to_string()),
+                &common.cluster_info,
+            )
+            .await?;
 
             let kubernetes_cluster_info = client.kubernetes_cluster_info.clone();
 

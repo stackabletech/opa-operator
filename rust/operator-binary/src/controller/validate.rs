@@ -11,15 +11,13 @@ use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection,
     product_logging::spec::Logging,
-    role_utils::RoleGroup,
     v2::{
-        builder::pod::container::{EnvVarName, EnvVarSet},
         controller_utils::{get_cluster_name, get_namespace, get_uid},
         product_logging::framework::{
             ValidatedContainerLogConfigChoice, VectorContainerLogConfig,
             validate_logging_configuration_for_container,
         },
-        role_utils::with_validated_config,
+        role_utils::{RoleGroup, with_validated_config},
         types::{kubernetes::ConfigMapName, operator::RoleGroupName},
     },
 };
@@ -181,17 +179,6 @@ pub fn validate(
                     },
                 )?;
 
-            // `envOverrides` is kept as a `HashMap<String, String>`; lift it into the type-safe
-            // `EnvVarSet` consumed by the build step.
-            let mut env_overrides = EnvVarSet::new();
-            for (name, value) in merged.config.env_overrides {
-                env_overrides = env_overrides.with_value(
-                    &EnvVarName::from_str(&name)
-                        .context(ParseEnvVarNameSnafu { name: name.clone() })?,
-                    value,
-                );
-            }
-
             // Validate the logging configuration up-front (borrows the merged config before it is
             // moved into the `OpaRoleGroupConfig` below).
             let logging = validate_logging(
@@ -213,7 +200,7 @@ pub fn validate(
                     replicas: merged.replicas,
                     config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
                     config_overrides: merged.config.config_overrides,
-                    env_overrides,
+                    env_overrides: merged.config.env_overrides.into(),
                     cli_overrides: merged.config.cli_overrides,
                     pod_overrides: merged.config.pod_overrides,
                     product_specific_common_config: merged.config.product_specific_common_config,
