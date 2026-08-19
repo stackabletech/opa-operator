@@ -12,7 +12,7 @@ use stackable_operator::{
         meta::ObjectMetaBuilder,
         pod::{
             PodBuilder,
-            container::{ContainerBuilder, FieldPathEnvVar},
+            container::FieldPathEnvVar,
             resources::ResourceRequirementsBuilder,
             security::PodSecurityContextBuilder,
             volume::{SecretOperatorVolumeSourceBuilder, VolumeBuilder},
@@ -25,8 +25,8 @@ use stackable_operator::{
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
-                EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
-                ResourceRequirements,
+                EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector,
+                Probe, ResourceRequirements,
             },
         },
         apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
@@ -92,11 +92,11 @@ const READINESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 5;
 const READINESS_PROBE_FAILURE_THRESHOLD: i32 = 5;
 const LIVENESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 30;
 
-const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
-const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
-const FILE_LOG_DIRECTORY_ENV: &str = "FILE_LOG_DIRECTORY";
-const KUBERNETES_NODE_NAME_ENV: &str = "KUBERNETES_NODE_NAME";
-const KUBERNETES_CLUSTER_DOMAIN_ENV: &str = "KUBERNETES_CLUSTER_DOMAIN";
+constant!(CONSOLE_LOG_LEVEL: EnvVarName = "CONSOLE_LOG_LEVEL");
+constant!(FILE_LOG_LEVEL: EnvVarName = "FILE_LOG_LEVEL");
+constant!(FILE_LOG_DIRECTORY: EnvVarName = "FILE_LOG_DIRECTORY");
+constant!(KUBERNETES_NODE_NAME: EnvVarName = "KUBERNETES_NODE_NAME");
+constant!(KUBERNETES_CLUSTER_DOMAIN: EnvVarName = "KUBERNETES_CLUSTER_DOMAIN");
 
 // logging defaults
 const DEFAULT_FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
@@ -261,6 +261,16 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
+    // All operator-set environment variables of the bundle-builder container, collected into an
+    // `EnvVarSet` so that every name occurs only once.
+    let bundle_builder_env_vars = EnvVarSet::new()
+        .with_field_path(&WATCH_NAMESPACE, &FieldPathEnvVar::Namespace)
+        .merge(stackable_rust_cli_env_vars(
+            cluster_info,
+            sidecar_container_log_level(merged_config, &Container::BundleBuilder).to_string(),
+            &Container::BundleBuilder,
+        ));
+
     cb_bundle_builder
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
@@ -269,7 +279,7 @@ pub fn build_server_rolegroup_daemonset(
             merged_config,
             bundle_builder_container_name.as_ref(),
         )])
-        .add_env_var_from_field_path(WATCH_NAMESPACE.as_ref(), &FieldPathEnvVar::Namespace)
+        .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
@@ -285,12 +295,6 @@ pub fn build_server_rolegroup_daemonset(
             IntOrString::Int(build::BUNDLE_BUILDER_PORT.into()),
             None,
         ));
-    add_stackable_rust_cli_env_vars(
-        &mut cb_bundle_builder,
-        cluster_info,
-        sidecar_container_log_level(merged_config, &Container::BundleBuilder).to_string(),
-        &Container::BundleBuilder,
-    );
 
     // All operator-set environment variables of the OPA container, collected into an
     // `EnvVarSet` so that every name occurs only once.
@@ -511,39 +515,41 @@ pub fn build_server_rolegroup_daemonset(
 /// Env variables that are need to run stackable Rust binaries, such as
 /// * opa-bundle-builder
 /// * user-info-fetcher
-fn add_stackable_rust_cli_env_vars(
-    container_builder: &mut ContainerBuilder,
+fn stackable_rust_cli_env_vars(
     cluster_info: &KubernetesClusterInfo,
     log_level: impl Into<String>,
     container: &Container,
-) {
+) -> EnvVarSet {
     let log_level = log_level.into();
-    container_builder
-        .add_env_var(CONSOLE_LOG_LEVEL_ENV, log_level.clone())
-        .add_env_var(FILE_LOG_LEVEL_ENV, log_level)
-        .add_env_var(
-            FILE_LOG_DIRECTORY_ENV,
-            format!("{STACKABLE_LOG_DIR}/{container}",),
+    EnvVarSet::new()
+        .with_value(&CONSOLE_LOG_LEVEL, log_level.clone())
+        .with_value(&FILE_LOG_LEVEL, log_level)
+        .with_value(
+            &FILE_LOG_DIRECTORY,
+            format!("{STACKABLE_LOG_DIR}/{container}"),
         )
-        .add_env_var_from_source(
-            KUBERNETES_NODE_NAME_ENV,
-            EnvVarSource {
+        // `FieldPathEnvVar` has no variant for `spec.nodeName`, so the `EnvVar` is built by hand.
+        .with_env_var(EnvVar {
+            name: KUBERNETES_NODE_NAME.to_string(),
+            value_from: Some(EnvVarSource {
                 field_ref: Some(ObjectFieldSelector {
                     field_path: "spec.nodeName".to_owned(),
                     ..Default::default()
                 }),
                 ..Default::default()
-            },
-        )
+            }),
+            ..Default::default()
+        })
+        .expect("KUBERNETES_NODE_NAME is a valid environment variable name")
         // We set the cluster domain always explicitly, because the product Pods does not have the
         // RBAC permission to get the `nodes/proxy` resource at cluster scope. This is likely
         // because it only has a RoleBinding and no ClusterRoleBinding.
         // By setting the cluster domain explicitly we avoid that the sidecars try to look it up
         // based on some information coming from the node.
-        .add_env_var(
-            KUBERNETES_CLUSTER_DOMAIN_ENV,
+        .with_value(
+            &KUBERNETES_CLUSTER_DOMAIN,
             cluster_info.cluster_domain.to_string(),
-        );
+        )
 }
 
 fn build_opa_start_command(
@@ -767,6 +773,11 @@ mod tests {
         let _ = *TLS_VOLUME_NAME;
         let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
         let _ = *WATCH_NAMESPACE;
+        let _ = *CONSOLE_LOG_LEVEL;
+        let _ = *FILE_LOG_LEVEL;
+        let _ = *FILE_LOG_DIRECTORY;
+        let _ = *KUBERNETES_NODE_NAME;
+        let _ = *KUBERNETES_CLUSTER_DOMAIN;
     }
 
     fn build(cluster: &ValidatedCluster) -> DaemonSet {
@@ -1153,6 +1164,50 @@ mod tests {
             mount_path(&uif_container(&ds), "credentials"),
             "/stackable/credentials"
         );
+    }
+
+    /// The bundle-builder sidecar must carry the Stackable Rust CLI environment variables and
+    /// `WATCH_NAMESPACE`, each exactly once.
+    #[test]
+    fn bundle_builder_has_cli_env_vars_exactly_once() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let env = ds
+            .spec
+            .expect("the DaemonSet has a spec")
+            .template
+            .spec
+            .expect("the pod template has a spec")
+            .containers
+            .into_iter()
+            .find(|container| container.name == "bundle-builder")
+            .expect("the bundle-builder container exists")
+            .env
+            .expect("the bundle-builder container has env vars");
+
+        for name in [
+            "WATCH_NAMESPACE",
+            "CONSOLE_LOG_LEVEL",
+            "FILE_LOG_LEVEL",
+            "FILE_LOG_DIRECTORY",
+            "KUBERNETES_NODE_NAME",
+            "KUBERNETES_CLUSTER_DOMAIN",
+        ] {
+            assert_eq!(
+                env.iter().filter(|env_var| env_var.name == name).count(),
+                1,
+                "the env var {name} should be set exactly once"
+            );
+        }
+
+        let cluster_domain = env
+            .iter()
+            .find(|env_var| env_var.name == "KUBERNETES_CLUSTER_DOMAIN")
+            .expect("KUBERNETES_CLUSTER_DOMAIN is set");
+        assert_eq!(cluster_domain.value.as_deref(), Some("cluster.local"));
     }
 
     /// The user-supplied `envOverrides` must be merged in after all operator-set environment

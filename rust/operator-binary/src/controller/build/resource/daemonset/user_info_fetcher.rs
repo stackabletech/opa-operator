@@ -16,7 +16,7 @@ use stackable_operator::{
     crd::authentication::ldap,
     k8s_openapi::api::core::v1::SecretVolumeSource,
     utils::cluster_info::KubernetesClusterInfo,
-    v2::builder::pod::container::{EnvVarName, new_container_builder},
+    v2::builder::pod::container::{EnvVarName, EnvVarSet, new_container_builder},
 };
 
 use crate::{
@@ -27,8 +27,9 @@ use crate::{
             resource::daemonset::{
                 CONFIG_DIR, CONFIG_VOLUME_NAME, USER_INFO_FETCHER_CREDENTIALS_DIR,
                 USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, USER_INFO_FETCHER_KERBEROS_DIR,
-                USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, add_stackable_rust_cli_env_vars,
-                container_name, sidecar_container_log_level, sidecar_resource_requirements,
+                USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, container_name,
+                sidecar_container_log_level, sidecar_resource_requirements,
+                stackable_rust_cli_env_vars,
             },
         },
     },
@@ -90,27 +91,31 @@ pub fn add_user_info_fetcher_sidecar(
         let user_info_fetcher_container_name = container_name(&Container::UserInfoFetcher);
         let mut cb_user_info_fetcher = new_container_builder(&user_info_fetcher_container_name);
 
-        cb_user_info_fetcher
-            .image_from_product_image(&cluster.image) // inherit the pull policy and pull secrets, and then...
-            .image(user_info_fetcher_image) // ...override the image
-            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
-            .add_env_var(
-                CONFIG.as_ref(),
+        // All operator-set environment variables of the user-info-fetcher container, collected
+        // into an `EnvVarSet` so that every name occurs only once. The backend match below may
+        // extend it before it is added to the container.
+        let mut env_vars = EnvVarSet::new()
+            .with_value(
+                &CONFIG,
                 format!(
                     "{CONFIG_DIR}/{file}",
                     file = build::properties::ConfigFileName::UserInfoFetcher
                 ),
             )
-            .add_env_var(CREDENTIALS_DIR.as_ref(), USER_INFO_FETCHER_CREDENTIALS_DIR)
+            .with_value(&CREDENTIALS_DIR, USER_INFO_FETCHER_CREDENTIALS_DIR)
+            .merge(stackable_rust_cli_env_vars(
+                cluster_info,
+                sidecar_container_log_level(merged_config, &Container::UserInfoFetcher).to_string(),
+                &Container::UserInfoFetcher,
+            ));
+
+        cb_user_info_fetcher
+            .image_from_product_image(&cluster.image) // inherit the pull policy and pull secrets, and then...
+            .image(user_info_fetcher_image) // ...override the image
+            .command(vec!["stackable-opa-user-info-fetcher".to_string()])
             .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
             .context(AddVolumeMountSnafu)?
             .resources(sidecar_resource_requirements());
-        add_stackable_rust_cli_env_vars(
-            &mut cb_user_info_fetcher,
-            cluster_info,
-            sidecar_container_log_level(merged_config, &Container::UserInfoFetcher).to_string(),
-            &Container::UserInfoFetcher,
-        );
 
         match &user_info.backend {
             user_info_fetcher::v1alpha2::Backend::None {} => {}
@@ -140,15 +145,16 @@ pub fn add_user_info_fetcher_sidecar(
                         USER_INFO_FETCHER_KERBEROS_DIR,
                     )
                     .context(KerberosVolumeMountSnafu)?;
-                cb_user_info_fetcher.add_env_var(
-                    KRB5_CONFIG.as_ref(),
-                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
-                );
-                cb_user_info_fetcher.add_env_var(
-                    KRB5_CLIENT_KTNAME.as_ref(),
-                    format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
-                );
-                cb_user_info_fetcher.add_env_var(KRB5CCNAME.as_ref(), "MEMORY:".to_string());
+                env_vars = env_vars
+                    .with_value(
+                        &KRB5_CONFIG,
+                        format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
+                    )
+                    .with_value(
+                        &KRB5_CLIENT_KTNAME,
+                        format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
+                    )
+                    .with_value(&KRB5CCNAME, "MEMORY:");
                 ad.tls
                     .add_volumes_and_mounts(pb, vec![&mut cb_user_info_fetcher])
                     .context(TlsVolumeAndMountsSnafu)?;
@@ -207,6 +213,7 @@ pub fn add_user_info_fetcher_sidecar(
             }
         }
 
+        cb_user_info_fetcher.add_env_vars(env_vars);
         pb.add_container(cb_user_info_fetcher.build());
     }
 
