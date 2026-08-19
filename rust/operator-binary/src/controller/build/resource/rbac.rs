@@ -52,9 +52,10 @@ mod tests {
                 "apiVersion": "v1",
                 "kind": "ServiceAccount",
                 "metadata": {
-                    // The RBAC resources are cluster-shared, so role and role group are `none`.
+                    // The RBAC resources are cluster-shared, so they carry the cluster-level
+                    // recommended labels (no role or role-group label).
                     "labels": {
-                         "app.kubernetes.io/instance": "test-opa",
+                        "app.kubernetes.io/instance": "test-opa",
                         "app.kubernetes.io/managed-by": "opa.stackable.tech_opacluster",
                         "app.kubernetes.io/name": "opa",
                         "app.kubernetes.io/version": app_version_label("1.2.3"),
