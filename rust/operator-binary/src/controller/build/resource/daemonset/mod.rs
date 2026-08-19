@@ -465,7 +465,11 @@ pub fn build_server_rolegroup_daemonset(
             .role_group_resource_names(role_group_name)
             .daemon_set_name()
             .to_string(),
-        role_group_name,
+        build::recommended_labels_for_role_group_resources(
+            cluster,
+            &OpaRole::Server,
+            role_group_name,
+        ),
     )
     .build();
 

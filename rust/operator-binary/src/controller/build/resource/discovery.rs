@@ -6,9 +6,12 @@ use stackable_operator::{
 };
 
 use super::service::{APP_PORT, APP_TLS_PORT};
-use crate::controller::{
-    ValidatedCluster,
-    build::{PLACEHOLDER_DISCOVERY_ROLE_GROUP, object_meta},
+use crate::{
+    controller::{
+        ValidatedCluster,
+        build::{object_meta, recommended_labels_for_role_resources},
+    },
+    crd::OpaRole,
 };
 
 #[derive(Snafu, Debug)]
@@ -40,12 +43,12 @@ pub fn build_discovery_config_map(
         cluster_domain = cluster_info.cluster_domain,
     );
 
-    // Discovery is a cluster-level object (named after the cluster); `discovery` is used as a
-    // placeholder role-group name for the recommended labels.
+    // The discovery ConfigMap is named after the cluster and exposes the server role, so it
+    // carries the role-level recommended labels (no `app.kubernetes.io/role-group` label).
     let metadata = object_meta(
         cluster,
         cluster.name.to_string(),
-        &PLACEHOLDER_DISCOVERY_ROLE_GROUP,
+        recommended_labels_for_role_resources(cluster, &OpaRole::Server),
     )
     .build();
 

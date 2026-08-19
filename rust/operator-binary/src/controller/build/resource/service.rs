@@ -12,7 +12,8 @@ use crate::{
     controller::{
         RoleGroupName, ValidatedCluster,
         build::{
-            PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP, object_meta, role_group_selector, role_selector,
+            object_meta, recommended_labels_for_role_group_resources,
+            recommended_labels_for_role_resources, role_group_selector, role_selector,
         },
     },
     crd::OpaRole,
@@ -27,10 +28,12 @@ pub const METRICS_PORT_NAME: &str = "metrics";
 /// The server-role service is the primary endpoint that should be used by clients that do not perform internal load balancing,
 /// including targets outside of the cluster.
 pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
+    // The role-level Service is not bound to a single role group, so it carries the role-level
+    // recommended labels (no `app.kubernetes.io/role-group` label).
     let metadata = object_meta(
         cluster,
         cluster.server_role_service_name(),
-        &PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP,
+        recommended_labels_for_role_resources(cluster, &OpaRole::Server),
     )
     .build();
 
@@ -68,7 +71,7 @@ pub(crate) fn build_rolegroup_headless_service(
             .role_group_resource_names(role_group_name)
             .headless_service_name()
             .to_string(),
-        role_group_name,
+        recommended_labels_for_role_group_resources(cluster, &OpaRole::Server, role_group_name),
     )
     .build();
 
@@ -126,7 +129,7 @@ pub(crate) fn build_rolegroup_metrics_service(
             .role_group_resource_names(role_group_name)
             .metrics_service_name()
             .to_string(),
-        role_group_name,
+        recommended_labels_for_role_group_resources(cluster, &OpaRole::Server, role_group_name),
     )
     .with_labels(prometheus_labels(&Scraping::Enabled))
     // The metrics are served on the same port as the HTTP/HTTPS traffic, under `/metrics`.
