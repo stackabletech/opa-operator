@@ -19,6 +19,7 @@ use stackable_operator::{
         },
     },
     commons::secret_class::SecretClassVolumeProvisionParts,
+    constant,
     k8s_openapi::{
         DeepMerge,
         api::{
@@ -38,7 +39,7 @@ use stackable_operator::{
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
     v2::{
-        builder::pod::container::{EnvVarSet, new_container_builder},
+        builder::pod::container::{EnvVarName, EnvVarSet, new_container_builder},
         product_logging::framework::{
             STACKABLE_LOG_DIR, ValidatedContainerLogConfigChoice, vector_container,
         },
@@ -66,17 +67,20 @@ pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 
-stackable_operator::constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
+constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
 const CONFIG_DIR: &str = "/stackable/config";
-stackable_operator::constant!(LOG_VOLUME_NAME: VolumeName = "log");
-stackable_operator::constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
+constant!(LOG_VOLUME_NAME: VolumeName = "log");
+constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
 const BUNDLES_DIR: &str = "/bundles";
-stackable_operator::constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "credentials");
+constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "credentials");
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
-stackable_operator::constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
+constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
-stackable_operator::constant!(TLS_VOLUME_NAME: VolumeName = "tls");
+constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
+
+constant!(CONTAINERDEBUG_LOG_DIRECTORY: EnvVarName = "CONTAINERDEBUG_LOG_DIRECTORY");
+constant!(WATCH_NAMESPACE: EnvVarName = "WATCH_NAMESPACE");
 
 // HTTP probe configuration shared by the bundle-builder and OPA containers. They differ in the
 // probed path (the bundle-builder exposes `/status`, OPA's HTTP server answers `/`), the port and,
@@ -265,7 +269,7 @@ pub fn build_server_rolegroup_daemonset(
             merged_config,
             bundle_builder_container_name.as_ref(),
         )])
-        .add_env_var_from_field_path("WATCH_NAMESPACE", &FieldPathEnvVar::Namespace)
+        .add_env_var_from_field_path(WATCH_NAMESPACE.as_ref(), &FieldPathEnvVar::Namespace)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
@@ -288,6 +292,16 @@ pub fn build_server_rolegroup_daemonset(
         &Container::BundleBuilder,
     );
 
+    // All operator-set environment variables of the OPA container, collected into an
+    // `EnvVarSet` so that every name occurs only once.
+    let opa_env_vars = EnvVarSet::new().with_value(
+        &CONTAINERDEBUG_LOG_DIRECTORY,
+        format!("{STACKABLE_LOG_DIR}/containerdebug"),
+    );
+    // Environment variable overrides (highest precedence), merged from role and role group.
+    // They are merged in last so that they override any operator-set environment variable.
+    let opa_env_vars = opa_env_vars.merge(rolegroup_config.env_overrides.clone());
+
     cb_opa
         .image_from_product_image(resolved_product_image)
         .command(bash_entrypoint_command())
@@ -297,11 +311,7 @@ pub fn build_server_rolegroup_daemonset(
             cluster.is_tls_enabled(),
             &rolegroup_config.cli_overrides,
         )])
-        .add_env_vars(rolegroup_config.env_overrides.clone())
-        .add_env_var(
-            "CONTAINERDEBUG_LOG_DIRECTORY",
-            format!("{STACKABLE_LOG_DIR}/containerdebug"),
-        );
+        .add_env_vars(opa_env_vars);
 
     // Add appropriate container port based on TLS configuration
     // If we also add a container port "metrics" pointing to the same port number, we get a
@@ -746,6 +756,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *CONFIG_VOLUME_NAME;
+        let _ = *LOG_VOLUME_NAME;
+        let _ = *BUNDLES_VOLUME_NAME;
+        let _ = *USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
+        let _ = *USER_INFO_FETCHER_KERBEROS_VOLUME_NAME;
+        let _ = *TLS_VOLUME_NAME;
+        let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
+        let _ = *WATCH_NAMESPACE;
+    }
+
     fn build(cluster: &ValidatedCluster) -> DaemonSet {
         let (role_group_name, role_group) = cluster.role_group_configs[&OpaRole::Server]
             .iter()
@@ -1130,5 +1153,63 @@ mod tests {
             mount_path(&uif_container(&ds), "credentials"),
             "/stackable/credentials"
         );
+    }
+
+    /// The user-supplied `envOverrides` must be merged in after all operator-set environment
+    /// variables, so that they can override any of them. `CONTAINERDEBUG_LOG_DIRECTORY` is used
+    /// as the example here because it is set unconditionally by the operator.
+    #[test]
+    fn env_overrides_override_operator_set_env_vars() {
+        use std::str::FromStr;
+
+        use stackable_operator::v2::builder::pod::container::EnvVarName;
+
+        let cluster = validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        }));
+        let (role_group_name, role_group) = cluster.role_group_configs[&OpaRole::Server]
+            .iter()
+            .next()
+            .expect("the default role group should exist");
+        let mut role_group = role_group.clone();
+        role_group.env_overrides = EnvVarSet::new().with_value(
+            &EnvVarName::from_str("CONTAINERDEBUG_LOG_DIRECTORY").expect("valid env var name"),
+            "/custom/log/dir",
+        );
+
+        let ds = build_server_rolegroup_daemonset(
+            &cluster,
+            role_group_name,
+            &role_group,
+            "bundle-builder-image",
+            "user-info-fetcher-image",
+            &cluster_info(),
+        )
+        .expect("the daemonset should build");
+
+        let env = ds
+            .spec
+            .expect("the DaemonSet has a spec")
+            .template
+            .spec
+            .expect("the pod template has a spec")
+            .containers
+            .into_iter()
+            .find(|container| container.name == "opa")
+            .expect("the opa container exists")
+            .env
+            .expect("the opa container has env vars");
+
+        let containerdebug: Vec<_> = env
+            .iter()
+            .filter(|env_var| env_var.name == "CONTAINERDEBUG_LOG_DIRECTORY")
+            .collect();
+        assert_eq!(
+            containerdebug.len(),
+            1,
+            "the override must replace the operator-set value, not duplicate it"
+        );
+        assert_eq!(containerdebug[0].value.as_deref(), Some("/custom/log/dir"));
     }
 }

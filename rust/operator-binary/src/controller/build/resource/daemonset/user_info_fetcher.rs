@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::{
@@ -10,10 +12,11 @@ use stackable_operator::{
         },
         tls_verification::{TlsClientDetails, TlsClientDetailsError},
     },
+    constant,
     crd::authentication::ldap,
     k8s_openapi::api::core::v1::SecretVolumeSource,
     utils::cluster_info::KubernetesClusterInfo,
-    v2::builder::pod::container::new_container_builder,
+    v2::builder::pod::container::{EnvVarName, new_container_builder},
 };
 
 use crate::{
@@ -31,6 +34,12 @@ use crate::{
     },
     crd::{Container, user_info_fetcher},
 };
+
+constant!(CONFIG: EnvVarName = "CONFIG");
+constant!(CREDENTIALS_DIR: EnvVarName = "CREDENTIALS_DIR");
+constant!(KRB5_CONFIG: EnvVarName = "KRB5_CONFIG");
+constant!(KRB5_CLIENT_KTNAME: EnvVarName = "KRB5_CLIENT_KTNAME");
+constant!(KRB5CCNAME: EnvVarName = "KRB5CCNAME");
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -86,13 +95,13 @@ pub fn add_user_info_fetcher_sidecar(
             .image(user_info_fetcher_image) // ...override the image
             .command(vec!["stackable-opa-user-info-fetcher".to_string()])
             .add_env_var(
-                "CONFIG",
+                CONFIG.as_ref(),
                 format!(
                     "{CONFIG_DIR}/{file}",
                     file = build::properties::ConfigFileName::UserInfoFetcher
                 ),
             )
-            .add_env_var("CREDENTIALS_DIR", USER_INFO_FETCHER_CREDENTIALS_DIR)
+            .add_env_var(CREDENTIALS_DIR.as_ref(), USER_INFO_FETCHER_CREDENTIALS_DIR)
             .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
             .context(AddVolumeMountSnafu)?
             .resources(sidecar_resource_requirements());
@@ -132,14 +141,14 @@ pub fn add_user_info_fetcher_sidecar(
                     )
                     .context(KerberosVolumeMountSnafu)?;
                 cb_user_info_fetcher.add_env_var(
-                    "KRB5_CONFIG",
+                    KRB5_CONFIG.as_ref(),
                     format!("{USER_INFO_FETCHER_KERBEROS_DIR}/krb5.conf"),
                 );
                 cb_user_info_fetcher.add_env_var(
-                    "KRB5_CLIENT_KTNAME",
+                    KRB5_CLIENT_KTNAME.as_ref(),
                     format!("{USER_INFO_FETCHER_KERBEROS_DIR}/keytab"),
                 );
-                cb_user_info_fetcher.add_env_var("KRB5CCNAME", "MEMORY:".to_string());
+                cb_user_info_fetcher.add_env_var(KRB5CCNAME.as_ref(), "MEMORY:".to_string());
                 ad.tls
                     .add_volumes_and_mounts(pb, vec![&mut cb_user_info_fetcher])
                     .context(TlsVolumeAndMountsSnafu)?;
@@ -202,4 +211,19 @@ pub fn add_user_info_fetcher_sidecar(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *CONFIG;
+        let _ = *CREDENTIALS_DIR;
+        let _ = *KRB5_CONFIG;
+        let _ = *KRB5_CLIENT_KTNAME;
+        let _ = *KRB5CCNAME;
+    }
 }

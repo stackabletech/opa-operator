@@ -136,3 +136,16 @@ pub fn error_policy(
         _ => Action::requeue(*Duration::from_secs(10)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *PRODUCT_NAME;
+        let _ = *OPERATOR_NAME;
+        let _ = *CONTROLLER_NAME;
+    }
+}

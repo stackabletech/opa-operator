@@ -322,7 +322,13 @@ mod tests {
     use indoc::formatdoc;
     use stackable_operator::versioned::test_utils::RoundtripTestData;
 
-    use super::{v1alpha1, v1alpha2};
+    use super::{SERVER_ROLE_NAME, v1alpha1, v1alpha2};
+
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *SERVER_ROLE_NAME;
+    }
 
     impl RoundtripTestData for v1alpha1::OpaClusterSpec {
         fn roundtrip_test_data() -> Vec<Self> {
