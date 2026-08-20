@@ -5,13 +5,14 @@
 //! [`crate::controller`] module tree; this file is kept next to `main.rs` for consistency with
 //! the other Stackable operators.
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use const_format::concatcp;
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     cluster_resources::ClusterResourceApplyStrategy,
+    constant,
     kube::{
         core::{DeserializeGuard, error_boundary},
         runtime::controller::Action,
@@ -19,6 +20,7 @@ use stackable_operator::{
     logging::controller::ReconcilerError,
     shared::time::Duration,
     utils::cluster_info::KubernetesClusterInfo,
+    v2::types::operator::{ControllerName, OperatorName, ProductName},
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
@@ -29,11 +31,15 @@ use crate::{
         update_status::{self, update_status},
         validate,
     },
-    crd::{OPERATOR_NAME, v1alpha2},
+    crd::{APP_NAME, OPA_OPERATOR_NAME, v1alpha2},
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
-pub const OPA_FULL_CONTROLLER_NAME: &str = concatcp!(OPA_CONTROLLER_NAME, '.', OPERATOR_NAME);
+pub const OPA_FULL_CONTROLLER_NAME: &str = concatcp!(OPA_CONTROLLER_NAME, '.', OPA_OPERATOR_NAME);
+
+constant!(pub(crate) PRODUCT_NAME: ProductName = APP_NAME);
+constant!(pub(crate) OPERATOR_NAME: OperatorName = OPA_OPERATOR_NAME);
+constant!(pub(crate) CONTROLLER_NAME: ControllerName = OPA_CONTROLLER_NAME);
 
 pub(crate) const CONTAINER_IMAGE_BASE_NAME: &str = "opa";
 
@@ -128,5 +134,18 @@ pub fn error_policy(
         Error::InvalidOpaCluster { .. } => Action::await_change(),
 
         _ => Action::requeue(*Duration::from_secs(10)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *PRODUCT_NAME;
+        let _ = *OPERATOR_NAME;
+        let _ = *CONTROLLER_NAME;
     }
 }

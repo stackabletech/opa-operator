@@ -12,7 +12,7 @@ use strum::{EnumDiscriminants, IntoStaticStr};
 
 use crate::{
     controller::{Applied, KubernetesResources},
-    crd::{OPERATOR_NAME, OpaClusterStatus, v1alpha2},
+    crd::{OPA_OPERATOR_NAME, OpaClusterStatus, v1alpha2},
 };
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
@@ -47,7 +47,7 @@ pub async fn update_status(
     };
 
     client
-        .apply_patch_status(OPERATOR_NAME, opa, &status)
+        .apply_patch_status(OPA_OPERATOR_NAME, opa, &status)
         .await
         .context(ApplyStatusSnafu)?;
 

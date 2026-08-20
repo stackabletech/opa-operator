@@ -7,12 +7,16 @@ use stackable_operator::{
     product_logging::framework::VECTOR_CONFIG_FILE,
 };
 
-use crate::controller::{
-    OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
-    build::{
-        object_meta,
-        properties::{ConfigFileName, config_json, product_logging, user_info_fetcher},
+use crate::{
+    controller::{
+        OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
+        build::{
+            object_meta,
+            properties::{ConfigFileName, config_json, product_logging, user_info_fetcher},
+            recommended_labels_for_role_group_resources,
+        },
     },
+    crd::OpaRole,
 };
 
 #[derive(Snafu, Debug)]
@@ -50,7 +54,7 @@ pub fn build_rolegroup_config_map(
             .role_group_resource_names(role_group_name)
             .role_group_config_map()
             .to_string(),
-        role_group_name,
+        recommended_labels_for_role_group_resources(cluster, &OpaRole::Server, role_group_name),
     )
     .build();
 
