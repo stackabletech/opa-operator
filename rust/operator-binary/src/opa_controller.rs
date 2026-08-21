@@ -9,6 +9,7 @@ use std::{str::FromStr, sync::Arc};
 
 use const_format::concatcp;
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{APP_NAME, OPA_OPERATOR_NAME, v1alpha2};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     cluster_resources::ClusterResourceApplyStrategy,
@@ -24,14 +25,11 @@ use stackable_operator::{
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
-use crate::{
-    controller::{
-        apply::{self, Applier},
-        build,
-        update_status::{self, update_status},
-        validate,
-    },
-    crd::{APP_NAME, OPA_OPERATOR_NAME, v1alpha2},
+use crate::controller::{
+    apply::{self, Applier},
+    build,
+    update_status::{self, update_status},
+    validate,
 };
 
 pub const OPA_CONTROLLER_NAME: &str = "opacluster";
@@ -49,6 +47,7 @@ pub struct Ctx {
     pub client: stackable_operator::client::Client,
     pub opa_bundle_builder_image: String,
     pub user_info_fetcher_image: String,
+    pub resource_info_fetcher_image: String,
     pub cluster_info: KubernetesClusterInfo,
     pub operator_environment: OperatorEnvironmentOptions,
 }
@@ -103,6 +102,7 @@ pub async fn reconcile_opa(
         &validated_cluster,
         &ctx.opa_bundle_builder_image,
         &ctx.user_info_fetcher_image,
+        &ctx.resource_info_fetcher_image,
         &ctx.cluster_info,
     )
     .context(BuildResourcesSnafu)?;

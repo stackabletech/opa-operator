@@ -8,6 +8,10 @@ use std::{
 use axum::{Json, Router, extract::State, routing::post};
 use clap::Parser;
 use futures::{FutureExt, future, pin_mut};
+use info_fetcher_commons::{
+    config::{ConfigError, read_config_file},
+    http_error,
+};
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
@@ -16,8 +20,6 @@ use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
 use tokio::net::TcpListener;
 
 mod backend;
-mod http_error;
-mod utils;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -64,14 +66,8 @@ enum ResolvedBackend {
 
 #[derive(Snafu, Debug)]
 enum StartupError {
-    #[snafu(display("unable to read config file from {path:?}"))]
-    ReadConfigFile {
-        source: std::io::Error,
-        path: PathBuf,
-    },
-
-    #[snafu(display("failed to parse config file"))]
-    ParseConfig { source: serde_json::Error },
+    #[snafu(display("unable to parse config file from {path:?}"))]
+    ParseConfigFile { source: ConfigError, path: PathBuf },
 
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
@@ -98,12 +94,6 @@ enum StartupError {
 
     #[snafu(display("failed to resolve XFSC AAS backend"))]
     ResolveXfscAasBackend { source: backend::xfsc_aas::Error },
-}
-
-async fn read_config_file(path: &Path) -> Result<String, StartupError> {
-    tokio::fs::read_to_string(path)
-        .await
-        .context(ReadConfigFileSnafu { path })
 }
 
 /// Resolves a backend configuration by loading credentials and creating the appropriate backend implementation.
@@ -184,18 +174,14 @@ async fn main() -> Result<(), StartupError> {
         }
     };
 
-    let config: v1alpha2::Config =
-        serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?;
-
+    let config: v1alpha2::Config = read_config_file(&args.config)
+        .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
 
-    let user_info_cache = {
-        let v1alpha2::Cache { entry_time_to_live } = config.cache;
-        Cache::builder()
-            .name("user-info")
-            .time_to_live(*entry_time_to_live)
-            .build()
-    };
+    let user_info_cache = config
+        .cache
+        .apply_settings_to_cache_builder(Cache::builder().name("user-info"))
+        .build();
     let app = Router::new()
         .route("/user", post(get_user_info))
         .with_state(AppState {

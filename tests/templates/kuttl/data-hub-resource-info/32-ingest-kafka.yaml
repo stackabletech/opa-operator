@@ -1,0 +1,135 @@
+---
+# DataHub ingestion job: scrapes Kafka topic metadata into DataHub GMS so that the
+# resource-info-fetcher (RIF) can resolve Kafka topics by URN.
+#
+# Unlike Trino, Kafka needs no auth here (the KafkaCluster has an empty `authentication` list), but
+# the SDP default still serves the broker listener over TLS (server cert from the `tls` SecretClass,
+# port 9093). So the same CA-trust dance as the Trino ingestion applies: extract the CA and hand it
+# to librdkafka via `ssl.ca.location`. Hostname verification is disabled because the broker
+# advertises a per-broker listener FQDN (test-kafka-broker-default-0-listener-broker...) that we
+# don't want to pin here; trusting the CA is enough for this test.
+#
+# `env: PROD` matters: it lands in the topic dataset URN's `env` position and must match the
+# OpaCluster's `resourceInfo` env and the URN derivation in resource_to_urn_mapping.rs, or RIF
+# lookups miss. `platform_instance` (${POD_NAMESPACE}/test-kafka) is likewise embedded in the URN.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datahub-kafka-recipe
+data:
+  recipe.yaml: |
+    source:
+      type: kafka
+      config:
+        platform_instance: '${POD_NAMESPACE}/test-kafka'
+        env: PROD
+        connection:
+          # Bootstrap FQDN:port comes from the Kafka discovery ConfigMap (see the Job env below).
+          bootstrap: '${KAFKA_BOOTSTRAP}'
+          consumer_config:
+            security.protocol: SSL
+            ssl.ca.location: /trust/ca.crt
+            # The advertised broker listener FQDN is not worth pinning here; trusting the SDP CA
+            # (above) is sufficient for this test, so skip hostname verification.
+            ssl.endpoint.identification.algorithm: none
+    sink:
+      type: datahub-rest
+      config:
+        server: 'http://datahub-datahub-gms:8080'
+        # Same DataHub PAT the RIF sidecar uses, minted in 04-mint-pat.
+        token: '${DATAHUB_GMS_TOKEN}'
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: datahub-ingest-kafka
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        # Same pattern as the Trino ingestion: extract the `tls` SecretClass CA from the
+        # secret-operator PKCS12 truststore so librdkafka can trust the broker's server cert.
+        - name: extract-ca
+          image: acryldata/datahub-ingestion:v1.6.0
+          # secret-operator writes truststore.p12 as root:0 mode 0640, so reading it needs root.
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              # autoTls issues PKCS12 stores with an EMPTY password and RC2-40-CBC encryption;
+              # OpenSSL 3.x needs `-legacy` to read RC2. `pass:` == empty password.
+              openssl pkcs12 -legacy \
+                -in /stackable/tls/truststore.p12 \
+                -passin pass: \
+                -nokeys \
+                -out /trust/ca.crt
+              chmod 0644 /trust/ca.crt
+          volumeMounts:
+            - name: tls
+              mountPath: /stackable/tls
+            - name: trust
+              mountPath: /trust
+      containers:
+        - name: ingest
+          image: acryldata/datahub-ingestion:v1.6.0
+          command: ["datahub", "ingest", "-c", "/recipe/recipe.yaml"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Kafka bootstrap address, read straight from the SDP discovery ConfigMap so the broker
+            # listener naming does not have to be reproduced here.
+            - name: KAFKA_BOOTSTRAP
+              valueFrom:
+                configMapKeyRef:
+                  name: test-kafka
+                  key: KAFKA
+            - name: DATAHUB_GMS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: datahub-rif-credentials
+                  key: token
+            - name: DATAHUB_TELEMETRY_ENABLED
+              value: "false"
+          volumeMounts:
+            - name: recipe
+              mountPath: /recipe
+            - name: trust
+              mountPath: /trust
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: recipe
+          configMap:
+            name: datahub-kafka-recipe
+        - name: trust
+          emptyDir: {}
+        # secret-operator ephemeral volume: PKCS12 truststore from the same `tls` CA that signs the
+        # Kafka broker's server cert. No password annotation -> empty PKCS12 password (see extract-ca).
+        - name: tls
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                annotations:
+                  secrets.stackable.tech/class: tls
+                  secrets.stackable.tech/format: tls-pkcs12
+                  secrets.stackable.tech/scope: pod
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: "1"
+                storageClassName: secrets.stackable.tech
+                volumeMode: Filesystem

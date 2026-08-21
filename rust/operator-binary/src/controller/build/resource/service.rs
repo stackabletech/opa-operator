@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use stackable_opa_operator::crd::OpaRole;
 use stackable_operator::{
     k8s_openapi::api::core::v1::{Service, ServicePort, ServiceSpec},
     v2::{
@@ -8,15 +9,12 @@ use stackable_operator::{
     },
 };
 
-use crate::{
-    controller::{
-        RoleGroupName, ValidatedCluster,
-        build::{
-            object_meta, recommended_labels_for_role_group_resources,
-            recommended_labels_for_role_resources, role_group_selector, role_selector,
-        },
+use crate::controller::{
+    RoleGroupName, ValidatedCluster,
+    build::{
+        object_meta, recommended_labels_for_role_group_resources,
+        recommended_labels_for_role_resources, role_group_selector, role_selector,
     },
-    crd::OpaRole,
 };
 
 pub const APP_PORT: Port = Port(8081);
@@ -184,11 +182,10 @@ fn metrics_service_port(tls_enabled: bool) -> ServicePort {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use stackable_opa_operator::crd::OpaRole;
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     const ROLE_GROUP_LABEL: &str = "app.kubernetes.io/role-group";
 

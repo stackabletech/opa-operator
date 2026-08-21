@@ -1,0 +1,66 @@
+---
+# Values for the DataHub Helm chart (chart 1.0.3, app v1.6.0).
+#
+# Installed with release name `datahub`, so the resulting Services are:
+#   - datahub-datahub-gms:8080        (GMS / metadata service, what the resource-info-fetcher talks to)
+#   - datahub-datahub-frontend:9002   (React frontend; needed here to mint a Personal Access Token)
+#
+# The chart's default connection settings already point at a `prerequisites`-named release
+# (opensearch / mysql / kafka), so we only override what we need for a minimal, secured test.
+
+global:
+  # Use OpenSearch for the graph store too, so we don't need Neo4j.
+  graph_service_impl: elasticsearch
+
+  datahub:
+    # THE point of this test: require authentication on every GMS request.
+    # With this on, GMS returns 401 for unauthenticated calls and only accepts a valid
+    # bearer token (a DataHub Personal Access Token, minted in 04-mint-pat).
+    metadata_service_authentication:
+      enabled: true
+      # Signing key + system client secret are read from `datahub-auth-secrets`
+      # (created in 02-install-datahub-prerequisites). These are the chart's default
+      # secretRef names/keys; kept explicit for clarity.
+      systemClientSecret:
+        secretRef: datahub-auth-secrets
+        secretKey: system_client_secret
+      tokenService:
+        signingKey:
+          secretRef: datahub-auth-secrets
+          secretKey: token_service_signing_key
+
+# --- Trim optional components to keep the test light ---
+acryl-datahub-actions:
+  enabled: false
+datahub-ingestion-cron:
+  enabled: false
+
+# --- Small resources for the core components ---
+datahub-gms:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  extraEnvs:
+    - name: DATAHUB_TELEMETRY_ENABLED
+      value: "false"
+
+datahub-frontend:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  extraEnvs:
+    - name: DATAHUB_TELEMETRY_ENABLED
+      value: "false"
+
+datahubSystemUpdate:
+  extraEnvs:
+    - name: DATAHUB_TELEMETRY_ENABLED
+      value: "false"

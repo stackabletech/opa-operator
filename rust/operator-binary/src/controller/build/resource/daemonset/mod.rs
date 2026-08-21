@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::OpaRole;
+use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaRole};
 use stackable_operator::{
     builder::{
         self,
@@ -29,7 +29,9 @@ use stackable_operator::{
                 Probe, ResourceRequirements,
             },
         },
-        apimachinery::pkg::{apis::meta::v1::LabelSelector, util::intstr::IntOrString},
+        apimachinery::pkg::{
+            api::resource::Quantity, apis::meta::v1::LabelSelector, util::intstr::IntOrString,
+        },
     },
     memory::{BinaryMultiple, MemoryQuantity},
     product_logging::{
@@ -53,14 +55,17 @@ use crate::{
         OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig,
         build::{
             self, recommended_labels_for_role_group_resources,
-            resource::daemonset::user_info_fetcher::add_user_info_fetcher_sidecar,
+            resource::daemonset::{
+                resource_info_fetcher::add_resource_info_fetcher_sidecar,
+                user_info_fetcher::add_user_info_fetcher_sidecar,
+            },
             role_group_selector,
         },
     },
-    crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT},
     operations::graceful_shutdown::add_graceful_shutdown_config,
 };
 
+mod resource_info_fetcher;
 mod user_info_fetcher;
 
 pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
@@ -72,10 +77,13 @@ const CONFIG_DIR: &str = "/stackable/config";
 constant!(LOG_VOLUME_NAME: VolumeName = "log");
 constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
 const BUNDLES_DIR: &str = "/bundles";
-constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "credentials");
+constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "user-info-fetcher-credentials");
+// As UIF and RIF run in two different containers, the directories won't clash
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
+constant!(RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "resource-info-fetcher-credentials");
+const RESOURCE_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
@@ -95,6 +103,8 @@ const LIVENESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 30;
 constant!(CONSOLE_LOG_LEVEL: EnvVarName = "CONSOLE_LOG_LEVEL");
 constant!(FILE_LOG_LEVEL: EnvVarName = "FILE_LOG_LEVEL");
 constant!(FILE_LOG_DIRECTORY: EnvVarName = "FILE_LOG_DIRECTORY");
+constant!(FILE_LOG_ROTATION_PERIOD: EnvVarName = "FILE_LOG_ROTATION_PERIOD");
+constant!(FILE_LOG_MAX_FILES: EnvVarName = "FILE_LOG_MAX_FILES");
 constant!(KUBERNETES_NODE_NAME: EnvVarName = "KUBERNETES_NODE_NAME");
 constant!(KUBERNETES_CLUSTER_DOMAIN: EnvVarName = "KUBERNETES_CLUSTER_DOMAIN");
 
@@ -132,6 +142,31 @@ const MAX_PREPARE_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
     unit: BinaryMultiple::Mebi,
 };
 
+// The info-fetcher sidecars log one line per startup and one per failed request, so they are far
+// less chatty than the bundle-builder. They are only budgeted for when the corresponding sidecar is
+// actually part of the Pod, see `log_volume_size_limit`.
+const MAX_INFO_FETCHER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
+    value: 5.0,
+    unit: BinaryMultiple::Mebi,
+};
+
+// Rotation of the file logs written by the Stackable Rust containers. Nothing else bounds those
+// files: the Vector agent only reads them, and they are written into the shared `log` volume, whose
+// `sizeLimit` evicts the whole Pod (OPA included) once it is exceeded.
+//
+// This bounds how many files are kept, not how large they get, so the budgeted MAX_*_LOG_FILE_SIZE
+// above stays an estimate. Products get a size-based rotating appender from operator-rs, but
+// stackable-telemetry has no size-based policy, see
+// https://github.com/stackabletech/opa-operator/issues/606.
+//
+// Hence the short period: the worst case is a sustained backend outage, where the info-fetchers log
+// one line per failed request, and the retained volume is the log rate times the period times the
+// file count. Keeping minutes rather than hours is what makes that survivable. Little is lost by it,
+// because the Vector agent ships the lines as they are written, and the console logs (captured by the
+// container runtime) are unaffected either way.
+const DEFAULT_FILE_LOG_ROTATION_PERIOD: &str = "minutely";
+const DEFAULT_FILE_LOG_MAX_FILES: u32 = 5;
+
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to configure graceful shutdown"))]
@@ -154,6 +189,11 @@ pub enum Error {
 
     #[snafu(display("failed to build User Info Fetcher sidecar"))]
     BuildUserInfoFetcherSidecar { source: user_info_fetcher::Error },
+
+    #[snafu(display("failed to build Resource Info Fetcher sidecar"))]
+    BuildResourceInfoFetcherSidecar {
+        source: resource_info_fetcher::Error,
+    },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -230,6 +270,7 @@ pub fn build_server_rolegroup_daemonset(
     role_group: &OpaRoleGroupConfig,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
+    resource_info_fetcher_image: &str,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<DaemonSet> {
     let resolved_product_image = &cluster.image;
@@ -392,13 +433,7 @@ pub fn build_server_rolegroup_daemonset(
             VolumeBuilder::new(LOG_VOLUME_NAME.as_ref())
                 .empty_dir(EmptyDirVolumeSource {
                     medium: None,
-                    size_limit: Some(product_logging::framework::calculate_log_volume_size_limit(
-                        &[
-                            MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
-                            MAX_OPA_LOG_FILE_SIZE,
-                            MAX_PREPARE_LOG_FILE_SIZE,
-                        ],
-                    )),
+                    size_limit: Some(log_volume_size_limit(cluster)),
                 })
                 .build(),
         )
@@ -453,6 +488,14 @@ pub fn build_server_rolegroup_daemonset(
         cluster_info,
     )
     .context(BuildUserInfoFetcherSidecarSnafu)?;
+    add_resource_info_fetcher_sidecar(
+        &mut pb,
+        cluster,
+        merged_config,
+        resource_info_fetcher_image,
+        cluster_info,
+    )
+    .context(BuildResourceInfoFetcherSidecarSnafu)?;
 
     // The Vector logging config was validated up-front (see `ValidatedLogging`); a `Some` here means
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
@@ -512,9 +555,33 @@ pub fn build_server_rolegroup_daemonset(
     })
 }
 
+/// The size limit of the shared `log` [`EmptyDirVolumeSource`], which has to accommodate the log
+/// files of every container that mounts it. The always-present containers are budgeted for
+/// unconditionally; the optional info-fetcher sidecars only when the cluster configures them.
+fn log_volume_size_limit(cluster: &ValidatedCluster) -> Quantity {
+    let mut max_log_file_sizes = vec![
+        MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
+        MAX_OPA_LOG_FILE_SIZE,
+        MAX_PREPARE_LOG_FILE_SIZE,
+    ];
+
+    if cluster.cluster_config.user_info.is_some() {
+        max_log_file_sizes.push(MAX_INFO_FETCHER_LOG_FILE_SIZE);
+    }
+    if cluster.cluster_config.resource_info.is_some() {
+        max_log_file_sizes.push(MAX_INFO_FETCHER_LOG_FILE_SIZE);
+    }
+
+    product_logging::framework::calculate_log_volume_size_limit(&max_log_file_sizes)
+}
+
 /// Env variables that are need to run stackable Rust binaries, such as
 /// * opa-bundle-builder
 /// * user-info-fetcher
+/// * resource-info-fetcher
+///
+/// Note that [`FILE_LOG_DIRECTORY`] points below [`STACKABLE_LOG_DIR`], so every container these are
+/// added to has to mount the `log` volume for the Vector agent to see its logs.
 fn stackable_rust_cli_env_vars(
     cluster_info: &KubernetesClusterInfo,
     log_level: impl Into<String>,
@@ -528,6 +595,8 @@ fn stackable_rust_cli_env_vars(
             &FILE_LOG_DIRECTORY,
             format!("{STACKABLE_LOG_DIR}/{container}"),
         )
+        .with_value(&FILE_LOG_ROTATION_PERIOD, DEFAULT_FILE_LOG_ROTATION_PERIOD)
+        .with_value(&FILE_LOG_MAX_FILES, DEFAULT_FILE_LOG_MAX_FILES.to_string())
         // `FieldPathEnvVar` has no variant for `spec.nodeName`, so the `EnvVar` is built by hand.
         .with_env_var(EnvVar {
             name: KUBERNETES_NODE_NAME.to_string(),
@@ -747,14 +816,13 @@ fn build_prepare_start_command(
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use stackable_opa_operator::crd::OpaRole;
     use stackable_operator::{
         commons::networking::DomainName, k8s_openapi::api::core::v1::Container,
     };
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     fn cluster_info() -> KubernetesClusterInfo {
         KubernetesClusterInfo {
@@ -776,6 +844,8 @@ mod tests {
         let _ = *CONSOLE_LOG_LEVEL;
         let _ = *FILE_LOG_LEVEL;
         let _ = *FILE_LOG_DIRECTORY;
+        let _ = *FILE_LOG_ROTATION_PERIOD;
+        let _ = *FILE_LOG_MAX_FILES;
         let _ = *KUBERNETES_NODE_NAME;
         let _ = *KUBERNETES_CLUSTER_DOMAIN;
     }
@@ -791,6 +861,7 @@ mod tests {
             role_group,
             "bundle-builder-image",
             "user-info-fetcher-image",
+            "resource-info-fetcher-image",
             &cluster_info(),
         )
         .expect("the daemonset should build")
@@ -1033,7 +1104,7 @@ mod tests {
         );
     }
 
-    fn uif_container(ds: &DaemonSet) -> Container {
+    fn container_by_name(ds: &DaemonSet, name: &str) -> Container {
         ds.spec
             .as_ref()
             .unwrap()
@@ -1043,9 +1114,13 @@ mod tests {
             .unwrap()
             .containers
             .iter()
-            .find(|c| c.name == "user-info-fetcher")
-            .expect("the user-info-fetcher container should exist")
+            .find(|c| c.name == name)
+            .unwrap_or_else(|| panic!("the {name} container should exist"))
             .clone()
+    }
+
+    fn uif_container(ds: &DaemonSet) -> Container {
+        container_by_name(ds, "user-info-fetcher")
     }
 
     fn env_var(container: &Container, name: &str) -> String {
@@ -1159,10 +1234,123 @@ mod tests {
         })));
 
         // The client credentials secret is projected into the sidecar's credentials dir.
-        assert!(volume_names(&ds).contains(&"credentials".to_owned()));
+        assert!(volume_names(&ds).contains(&"user-info-fetcher-credentials".to_owned()));
         assert_eq!(
-            mount_path(&uif_container(&ds), "credentials"),
+            mount_path(&uif_container(&ds), "user-info-fetcher-credentials"),
             "/stackable/credentials"
+        );
+    }
+
+    /// A cluster running both info-fetcher sidecars, so their shared wiring can be asserted in one go.
+    fn cluster_with_both_info_fetchers() -> ValidatedCluster {
+        validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "experimentalXfscAas": {
+                            "hostname": "aas.default.svc.cluster.local",
+                            "port": 5000,
+                        }
+                    }
+                },
+                "resourceInfo": {
+                    "backend": {
+                        "dataHub": {
+                            "hostname": "datahub-gms.default.svc.cluster.local",
+                            "credentialsSecretName": "datahub-credentials",
+                        }
+                    }
+                },
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        }))
+    }
+
+    fn log_volume_size_limit(ds: &DaemonSet) -> Quantity {
+        ds.spec
+            .as_ref()
+            .unwrap()
+            .template
+            .spec
+            .as_ref()
+            .unwrap()
+            .volumes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find(|volume| volume.name == LOG_VOLUME_NAME.as_ref())
+            .expect("the log volume should exist")
+            .empty_dir
+            .as_ref()
+            .expect("the log volume should be an emptyDir")
+            .size_limit
+            .clone()
+            .expect("the log volume should have a size limit")
+    }
+
+    /// Both sidecars write their file logs below `STACKABLE_LOG_DIR`, so they have to mount the `log`
+    /// volume. Otherwise the logs land in the container's own filesystem, where the Vector agent
+    /// (which only reads the shared volume) cannot see them.
+    #[test]
+    fn info_fetcher_sidecars_mount_the_log_volume() {
+        let ds = build(&cluster_with_both_info_fetchers());
+
+        for container_name in ["user-info-fetcher", "resource-info-fetcher"] {
+            let container = container_by_name(&ds, container_name);
+            assert_eq!(
+                mount_path(&container, "log"),
+                "/stackable/log",
+                "{container_name} should mount the log volume"
+            );
+            // The directory the sidecar logs into must be inside the mounted volume.
+            assert_eq!(
+                env_var(&container, "FILE_LOG_DIRECTORY"),
+                format!("/stackable/log/{container_name}")
+            );
+        }
+    }
+
+    /// Nothing else bounds these files. Vector only reads them, and the products' log frameworks
+    /// (which operator-rs configures with a size-based rotating appender) are not involved here, so
+    /// the writer has to be told to roll them over.
+    ///
+    /// The period is asserted because it is what caps the damage during a sustained backend outage,
+    /// when the info-fetchers log one line per failed request.
+    #[test]
+    fn the_rust_containers_rotate_their_file_logs() {
+        let ds = build(&cluster_with_both_info_fetchers());
+
+        for container in [
+            "bundle-builder",
+            "user-info-fetcher",
+            "resource-info-fetcher",
+        ] {
+            let container = container_by_name(&ds, container);
+            assert_eq!(env_var(&container, "FILE_LOG_ROTATION_PERIOD"), "minutely");
+            assert_eq!(env_var(&container, "FILE_LOG_MAX_FILES"), "5");
+        }
+    }
+
+    /// The sidecars share the `log` volume with the other containers, so their log files have to be
+    /// budgeted for in its size limit as well.
+    #[test]
+    fn log_volume_size_limit_accounts_for_the_info_fetcher_sidecars() {
+        let without_sidecars = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+        let with_sidecars = build(&cluster_with_both_info_fetchers());
+
+        // prepare + opa + bundle-builder
+        assert_eq!(
+            log_volume_size_limit(&without_sidecars),
+            Quantity("108Mi".to_owned())
+        );
+        // ... plus the two info-fetcher sidecars
+        assert_eq!(
+            log_volume_size_limit(&with_sidecars),
+            Quantity("138Mi".to_owned())
         );
     }
 
@@ -1239,6 +1427,7 @@ mod tests {
             &role_group,
             "bundle-builder-image",
             "user-info-fetcher-image",
+            "resource-info-fetcher-image",
             &cluster_info(),
         )
         .expect("the daemonset should build");

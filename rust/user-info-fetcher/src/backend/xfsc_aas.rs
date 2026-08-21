@@ -13,12 +13,13 @@
 use std::collections::HashMap;
 
 use hyper::StatusCode;
+use info_fetcher_commons::utils::{self, http::send_json_request};
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use url::Url;
 
-use crate::{UserInfo, UserInfoRequest, http_error, utils::http::send_json_request};
+use crate::{UserInfo, UserInfoRequest, http_error};
 
 static API_PATH: &str = "/cip/claims";
 static SUB_CLAIM: &str = "sub";
@@ -34,7 +35,7 @@ pub enum Error {
     },
 
     #[snafu(display("request failed"))]
-    Request { source: crate::utils::http::Error },
+    Request { source: utils::http::Error },
 
     #[snafu(display("the XFSC AAS does not support querying by username, only by user ID"))]
     UserInfoByUsernameNotSupported {},
@@ -90,7 +91,7 @@ pub struct ResolvedXfscAasBackend {
 impl ResolvedXfscAasBackend {
     /// Resolves an XFSC AAS backend by initializing the HTTP client.
     pub fn resolve(config: v1alpha2::AasBackend) -> Result<Self, Error> {
-        let http_client = crate::utils::http::client_builder()
+        let http_client = utils::http::client_builder()
             .build()
             .context(ConstructHttpClientSnafu)?;
 

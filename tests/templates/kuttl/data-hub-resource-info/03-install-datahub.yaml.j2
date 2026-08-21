@@ -1,0 +1,12 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  # The chart runs a `datahub-system-update` bootstrap job (creates the MySQL schema and
+  # the OpenSearch indices) before GMS starts; 03-assert waits for GMS to become ready.
+  - script: >-
+      helm install datahub datahub
+      --namespace $NAMESPACE
+      --version {{ test_scenario['values']['data-hub'] }}
+      --repo https://helm.datahubproject.io
+      --values 03_datahub-values.yaml

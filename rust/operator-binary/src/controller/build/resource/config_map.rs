@@ -2,21 +2,21 @@
 //! per-file builders in [`crate::controller::build::properties`].
 
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::OpaRole;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
     product_logging::framework::VECTOR_CONFIG_FILE,
 };
 
-use crate::{
-    controller::{
-        OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
-        build::{
-            object_meta,
-            properties::{ConfigFileName, config_json, product_logging, user_info_fetcher},
-            recommended_labels_for_role_group_resources,
+use crate::controller::{
+    OpaRoleGroupConfig, RoleGroupName, ValidatedCluster,
+    build::{
+        object_meta,
+        properties::{
+            ConfigFileName, config_json, product_logging, resource_info_fetcher, user_info_fetcher,
         },
+        recommended_labels_for_role_group_resources,
     },
-    crd::OpaRole,
 };
 
 #[derive(Snafu, Debug)]
@@ -26,6 +26,11 @@ pub enum Error {
 
     #[snafu(display("failed to build user-info-fetcher.json"))]
     BuildUserInfoFetcher { source: user_info_fetcher::Error },
+
+    #[snafu(display("failed to build resource-info-fetcher.json"))]
+    BuildResourceInfoFetcher {
+        source: resource_info_fetcher::Error,
+    },
 
     #[snafu(display("failed to assemble ConfigMap for role group {role_group}"))]
     Assemble {
@@ -70,6 +75,12 @@ pub fn build_rolegroup_config_map(
             user_info_fetcher::build(user_info).context(BuildUserInfoFetcherSnafu)?,
         );
     }
+    if let Some(resource_info) = &cluster.cluster_config.resource_info {
+        cm_builder.add_data(
+            ConfigFileName::ResourceInfoFetcher.to_string(),
+            resource_info_fetcher::build(resource_info).context(BuildResourceInfoFetcherSnafu)?,
+        );
+    }
 
     if rolegroup_config.config.logging.vector_container.is_some() {
         cm_builder.add_data(
@@ -86,11 +97,10 @@ pub fn build_rolegroup_config_map(
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
+    use stackable_opa_operator::crd::OpaRole;
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     /// Renders the ConfigMap of the `default` server role group of an `OpaCluster` built from `spec`.
     fn build_config_map(spec: Value) -> ConfigMap {

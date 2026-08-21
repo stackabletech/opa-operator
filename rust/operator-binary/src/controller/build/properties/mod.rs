@@ -2,6 +2,7 @@
 
 pub mod config_json;
 pub mod product_logging;
+pub mod resource_info_fetcher;
 pub mod user_info_fetcher;
 
 /// The names of the config files assembled into the rolegroup `ConfigMap`.
@@ -14,17 +15,17 @@ pub enum ConfigFileName {
     ConfigJson,
     #[strum(serialize = "user-info-fetcher.json")]
     UserInfoFetcher,
+    #[strum(serialize = "resource-info-fetcher.json")]
+    ResourceInfoFetcher,
 }
 
 #[cfg(test)]
 pub(crate) mod test_support {
     use serde_json::{Value, json};
+    use stackable_opa_operator::crd::v1alpha2;
     use stackable_operator::cli::OperatorEnvironmentOptions;
 
-    use crate::{
-        controller::{ValidatedCluster, validate::validate},
-        crd::v1alpha2,
-    };
+    use crate::controller::{ValidatedCluster, validate::validate};
 
     /// The expected `app.kubernetes.io/version` label value for the given product version.
     ///

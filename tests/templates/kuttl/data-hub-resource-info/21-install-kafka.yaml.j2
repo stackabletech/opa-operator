@@ -1,0 +1,120 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+timeout: 600
+---
+apiVersion: kafka.stackable.tech/v1alpha1
+kind: KafkaCluster
+metadata:
+  name: test-kafka
+spec:
+  image:
+{% if test_scenario['values']['kafka-latest'].find(",") > 0 %}
+    custom: "{{ test_scenario['values']['kafka-latest'].split(',')[1] }}"
+    productVersion: "{{ test_scenario['values']['kafka-latest'].split(',')[0] }}"
+{% else %}
+    productVersion: "{{ test_scenario['values']['kafka-latest'] }}"
+{% endif %}
+    pullPolicy: IfNotPresent
+  clusterConfig:
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+  controllers:
+    config:
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+    roleGroups:
+      default:
+        replicas: 1
+  brokers:
+    config:
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+    roleGroups:
+      default:
+        replicas: 1
+---
+# Test data for the DataHub Kafka ingestion (32-ingest-kafka): a couple of topics, since a fresh
+# KafkaCluster has none and the ingestion would otherwise scrape nothing. Runs as a Job with the
+# Kafka image (for kafka-topics.sh). The broker listener is TLS-only (no auth), so a PKCS12
+# truststore from the `tls` SecretClass is mounted; fsGroup 1000 matches the image user so the
+# store is readable. The script retries until the broker is up, so this can be applied alongside
+# the KafkaCluster above.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-seed
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: seed
+{% if test_scenario['values']['kafka-latest'].find(",") > 0 %}
+          image: "{{ test_scenario['values']['kafka-latest'].split(',')[1] }}"
+{% else %}
+          image: "oci.stackable.tech/sdp/kafka:{{ test_scenario['values']['kafka-latest'] }}-stackable0.0.0-dev"
+{% endif %}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              cat > /tmp/client.properties <<EOF
+              security.protocol=SSL
+              ssl.truststore.location=/stackable/tls/truststore.p12
+              ssl.truststore.type=PKCS12
+              ssl.truststore.password=
+              ssl.endpoint.identification.algorithm=
+              EOF
+              BOOT=test-kafka-broker-default-bootstrap:9093
+              BIN=/stackable/kafka/bin/kafka-topics.sh
+              # The KafkaCluster is applied in the same step, so wait until the broker accepts
+              # admin requests before creating topics.
+              ok=0
+              for i in $(seq 1 60); do
+                if "$BIN" --bootstrap-server "$BOOT" --command-config /tmp/client.properties --list >/dev/null 2>&1; then
+                  ok=1; break
+                fi
+                echo "attempt $i: Kafka not ready yet, retrying in 5s"; sleep 5
+              done
+              [ "$ok" = 1 ] || { echo "Kafka never became ready"; exit 1; }
+              for topic in orders page-views; do
+                "$BIN" --bootstrap-server "$BOOT" --command-config /tmp/client.properties \
+                  --create --if-not-exists --partitions 1 --replication-factor 1 --topic "$topic"
+              done
+              echo "--- topics ---"
+              "$BIN" --bootstrap-server "$BOOT" --command-config /tmp/client.properties --list
+          volumeMounts:
+            - name: tls
+              mountPath: /stackable/tls
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        # secret-operator ephemeral volume: PKCS12 truststore from the `tls` CA that signs the Kafka
+        # broker's server cert. No password annotation -> empty PKCS12 password.
+        - name: tls
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                annotations:
+                  secrets.stackable.tech/class: tls
+                  secrets.stackable.tech/format: tls-pkcs12
+                  secrets.stackable.tech/scope: pod
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: "1"
+                storageClassName: secrets.stackable.tech
+                volumeMode: Filesystem

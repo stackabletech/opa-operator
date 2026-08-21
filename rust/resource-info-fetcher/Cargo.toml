@@ -1,0 +1,35 @@
+[package]
+name = "stackable-opa-resource-info-fetcher"
+description = "Fetches resource metadata"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+stackable-opa-operator = { path = "../operator-binary" }
+info-fetcher-commons = { path = "../info-fetcher-commons" }
+stackable-operator.workspace = true
+
+axum.workspace = true
+clap.workspace = true
+futures.workspace = true
+hyper.workspace = true
+md5.workspace = true
+moka.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+snafu.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+wiremock.workspace = true
+
+[build-dependencies]
+built.workspace = true

@@ -66,6 +66,7 @@ pub fn build(
     cluster: &ValidatedCluster,
     opa_bundle_builder_image: &str,
     user_info_fetcher_image: &str,
+    resource_info_fetcher_image: &str,
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<KubernetesResources<Prepared>, Error> {
     let mut daemon_sets = vec![];
@@ -93,6 +94,7 @@ pub fn build(
                     role_group,
                     opa_bundle_builder_image,
                     user_info_fetcher_image,
+                    resource_info_fetcher_image,
                     cluster_info,
                 )
                 .context(DaemonSetSnafu {
@@ -232,6 +234,7 @@ mod tests {
             &cluster(),
             "bundle-builder-image",
             "user-info-fetcher-image",
+            "resource-info-fetcher-image",
             &cluster_info(),
         )
         .expect("build succeeds");

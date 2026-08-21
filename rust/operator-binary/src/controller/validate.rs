@@ -7,6 +7,7 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use snafu::{OptionExt, ResultExt, Snafu};
+use stackable_opa_operator::crd::{Container, OpaConfig, OpaRole, v1alpha2};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection,
@@ -24,7 +25,6 @@ use stackable_operator::{
 use strum::IntoEnumIterator;
 
 use super::{OpaRoleGroupConfig, ValidatedCluster, ValidatedClusterConfig, ValidatedOpaConfig};
-use crate::crd::{Container, OpaConfig, OpaRole, v1alpha2};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -218,6 +218,7 @@ pub fn validate(
         image,
         ValidatedClusterConfig {
             user_info: opa.spec.cluster_config.user_info.clone(),
+            resource_info: opa.spec.cluster_config.resource_info.clone(),
             tls: opa.spec.cluster_config.tls.clone(),
             listener_class: opa.spec.cluster_config.listener_class.clone(),
         },

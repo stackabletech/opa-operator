@@ -3,6 +3,10 @@
 
 use std::{collections::BTreeMap, marker::PhantomData, str::FromStr};
 
+use stackable_opa_operator::crd::{
+    OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig, resource_info_fetcher,
+    user_info_fetcher, v1alpha2,
+};
 // Re-exported so the rest of the controller refers to `crate::controller::RoleGroupName`.
 pub use stackable_operator::v2::types::operator::RoleGroupName;
 use stackable_operator::{
@@ -29,10 +33,7 @@ use stackable_operator::{
     },
 };
 
-use crate::{
-    crd::{OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig, user_info_fetcher, v1alpha2},
-    opa_controller::PRODUCT_NAME,
-};
+use crate::opa_controller::PRODUCT_NAME;
 
 pub mod apply;
 pub mod build;
@@ -201,6 +202,7 @@ pub struct KubernetesResources<T> {
 /// raw `OpaCluster` to render config (except for owner references).
 pub struct ValidatedClusterConfig {
     pub user_info: Option<user_info_fetcher::v1alpha2::Config>,
+    pub resource_info: Option<resource_info_fetcher::v1alpha1::Config>,
     pub tls: Option<v1alpha2::OpaTls>,
     pub listener_class: v1alpha2::CurrentlySupportedListenerClasses,
 }

@@ -1,0 +1,31 @@
+---
+# Secrets consumed by both the prerequisites chart (MySQL root password) and the
+# DataHub chart (token service signing key + system client secret for metadata auth).
+# These are the canonical secret names/keys from the datahub-helm quickstart.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysql-secrets
+stringData:
+  mysql-root-password: datahub
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datahub-auth-secrets
+stringData:
+  # In a real deployment these would be strong random values.
+  token_service_signing_key: "WnEdIeTG/VVCLQqGwC/BAkqyY0k+H8NEAtWGejrBI94="
+  system_client_secret: "changemeplease"
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  # Release name is `prerequisites` (the datahub chart's defaults point at it);
+  # the chart itself is named `datahub-prerequisites`.
+  - script: >-
+      helm install prerequisites datahub-prerequisites
+      --namespace $NAMESPACE
+      --version {{ test_scenario['values']['data-hub-prerequisites'] }}
+      --repo https://helm.datahubproject.io
+      --values 02_datahub-prerequisites-values.yaml

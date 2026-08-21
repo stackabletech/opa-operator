@@ -1,0 +1,6 @@
+---
+# The credentials Secret for the resource-info-fetcher exists.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datahub-rif-credentials

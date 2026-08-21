@@ -1,6 +1,7 @@
 //! The update_status step in the OpaCluster controller.
 
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{OPA_OPERATOR_NAME, OpaClusterStatus, v1alpha2};
 use stackable_operator::{
     client::Client,
     status::condition::{
@@ -10,10 +11,7 @@ use stackable_operator::{
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
 
-use crate::{
-    controller::{Applied, KubernetesResources},
-    crd::{OPA_OPERATOR_NAME, OpaClusterStatus, v1alpha2},
-};
+use crate::controller::{Applied, KubernetesResources};
 
 #[derive(Snafu, Debug, EnumDiscriminants)]
 #[strum_discriminants(derive(IntoStaticStr))]

@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
 use hyper::StatusCode;
+use info_fetcher_commons::utils;
 use ldap3::{LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::crd::authentication::ldap;
 
-use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error, utils};
+use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
