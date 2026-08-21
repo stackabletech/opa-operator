@@ -5,27 +5,28 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
-use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT};
+use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaRole};
 use stackable_operator::{
     builder::{
         self,
         meta::ObjectMetaBuilder,
         pod::{
             PodBuilder,
-            container::{ContainerBuilder, FieldPathEnvVar},
+            container::FieldPathEnvVar,
             resources::ResourceRequirementsBuilder,
             security::PodSecurityContextBuilder,
             volume::{SecretOperatorVolumeSourceBuilder, VolumeBuilder},
         },
     },
     commons::secret_class::SecretClassVolumeProvisionParts,
+    constant,
     k8s_openapi::{
         DeepMerge,
         api::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
-                EmptyDirVolumeSource, EnvVarSource, HTTPGetAction, ObjectFieldSelector, Probe,
-                ResourceRequirements,
+                EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector,
+                Probe, ResourceRequirements,
             },
         },
         apimachinery::pkg::{
@@ -40,7 +41,7 @@ use stackable_operator::{
     },
     utils::{COMMON_BASH_TRAP_FUNCTIONS, cluster_info::KubernetesClusterInfo},
     v2::{
-        builder::pod::container::{EnvVarSet, new_container_builder},
+        builder::pod::container::{EnvVarName, EnvVarSet, new_container_builder},
         product_logging::framework::{
             STACKABLE_LOG_DIR, ValidatedContainerLogConfigChoice, vector_container,
         },
@@ -53,11 +54,12 @@ use crate::{
     controller::{
         OpaRoleGroupConfig, RoleGroupName, ValidatedCluster, ValidatedOpaConfig,
         build::{
-            self,
+            self, recommended_labels_for_role_group_resources,
             resource::daemonset::{
                 resource_info_fetcher::add_resource_info_fetcher_sidecar,
                 user_info_fetcher::add_user_info_fetcher_sidecar,
             },
+            role_group_selector,
         },
     },
     operations::graceful_shutdown::add_graceful_shutdown_config,
@@ -70,20 +72,23 @@ pub const BUNDLES_ACTIVE_DIR: &str = "/bundles/active";
 pub const BUNDLES_INCOMING_DIR: &str = "/bundles/incoming";
 pub const BUNDLES_TMP_DIR: &str = "/bundles/tmp";
 
-stackable_operator::constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
+constant!(CONFIG_VOLUME_NAME: VolumeName = "config");
 const CONFIG_DIR: &str = "/stackable/config";
-stackable_operator::constant!(LOG_VOLUME_NAME: VolumeName = "log");
-stackable_operator::constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
+constant!(LOG_VOLUME_NAME: VolumeName = "log");
+constant!(BUNDLES_VOLUME_NAME: VolumeName = "bundles");
 const BUNDLES_DIR: &str = "/bundles";
-stackable_operator::constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "user-info-fetcher-credentials");
+constant!(USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "user-info-fetcher-credentials");
 // As UIF and RIF run in two different containers, the directories won't clash
 const USER_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
-stackable_operator::constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
+constant!(USER_INFO_FETCHER_KERBEROS_VOLUME_NAME: VolumeName = "kerberos");
 const USER_INFO_FETCHER_KERBEROS_DIR: &str = "/stackable/kerberos";
-stackable_operator::constant!(RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "resource-info-fetcher-credentials");
+constant!(RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME: VolumeName = "resource-info-fetcher-credentials");
 const RESOURCE_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
-stackable_operator::constant!(TLS_VOLUME_NAME: VolumeName = "tls");
+constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
+
+constant!(CONTAINERDEBUG_LOG_DIRECTORY: EnvVarName = "CONTAINERDEBUG_LOG_DIRECTORY");
+constant!(WATCH_NAMESPACE: EnvVarName = "WATCH_NAMESPACE");
 
 // HTTP probe configuration shared by the bundle-builder and OPA containers. They differ in the
 // probed path (the bundle-builder exposes `/status`, OPA's HTTP server answers `/`), the port and,
@@ -95,13 +100,13 @@ const READINESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 5;
 const READINESS_PROBE_FAILURE_THRESHOLD: i32 = 5;
 const LIVENESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 30;
 
-const CONSOLE_LOG_LEVEL_ENV: &str = "CONSOLE_LOG_LEVEL";
-const FILE_LOG_LEVEL_ENV: &str = "FILE_LOG_LEVEL";
-const FILE_LOG_DIRECTORY_ENV: &str = "FILE_LOG_DIRECTORY";
-const FILE_LOG_ROTATION_PERIOD_ENV: &str = "FILE_LOG_ROTATION_PERIOD";
-const FILE_LOG_MAX_FILES_ENV: &str = "FILE_LOG_MAX_FILES";
-const KUBERNETES_NODE_NAME_ENV: &str = "KUBERNETES_NODE_NAME";
-const KUBERNETES_CLUSTER_DOMAIN_ENV: &str = "KUBERNETES_CLUSTER_DOMAIN";
+constant!(CONSOLE_LOG_LEVEL: EnvVarName = "CONSOLE_LOG_LEVEL");
+constant!(FILE_LOG_LEVEL: EnvVarName = "FILE_LOG_LEVEL");
+constant!(FILE_LOG_DIRECTORY: EnvVarName = "FILE_LOG_DIRECTORY");
+constant!(FILE_LOG_ROTATION_PERIOD: EnvVarName = "FILE_LOG_ROTATION_PERIOD");
+constant!(FILE_LOG_MAX_FILES: EnvVarName = "FILE_LOG_MAX_FILES");
+constant!(KUBERNETES_NODE_NAME: EnvVarName = "KUBERNETES_NODE_NAME");
+constant!(KUBERNETES_CLUSTER_DOMAIN: EnvVarName = "KUBERNETES_CLUSTER_DOMAIN");
 
 // logging defaults
 const DEFAULT_FILE_LOG_LEVEL: LogLevel = LogLevel::INFO;
@@ -159,8 +164,8 @@ const MAX_INFO_FETCHER_LOG_FILE_SIZE: MemoryQuantity = MemoryQuantity {
 // file count. Keeping minutes rather than hours is what makes that survivable. Little is lost by it,
 // because the Vector agent ships the lines as they are written, and the console logs (captured by the
 // container runtime) are unaffected either way.
-const FILE_LOG_ROTATION_PERIOD: &str = "minutely";
-const FILE_LOG_MAX_FILES: u32 = 5;
+const DEFAULT_FILE_LOG_ROTATION_PERIOD: &str = "minutely";
+const DEFAULT_FILE_LOG_MAX_FILES: u32 = 5;
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -297,6 +302,16 @@ pub fn build_server_rolegroup_daemonset(
         .context(AddVolumeMountSnafu)?
         .resources(merged_config.resources.to_owned().into());
 
+    // All operator-set environment variables of the bundle-builder container, collected into an
+    // `EnvVarSet` so that every name occurs only once.
+    let bundle_builder_env_vars = EnvVarSet::new()
+        .with_field_path(&WATCH_NAMESPACE, &FieldPathEnvVar::Namespace)
+        .merge(stackable_rust_cli_env_vars(
+            cluster_info,
+            sidecar_container_log_level(merged_config, &Container::BundleBuilder).to_string(),
+            &Container::BundleBuilder,
+        ));
+
     cb_bundle_builder
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
@@ -305,7 +320,7 @@ pub fn build_server_rolegroup_daemonset(
             merged_config,
             bundle_builder_container_name.as_ref(),
         )])
-        .add_env_var_from_field_path("WATCH_NAMESPACE", &FieldPathEnvVar::Namespace)
+        .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .context(AddVolumeMountSnafu)?
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
@@ -321,12 +336,16 @@ pub fn build_server_rolegroup_daemonset(
             IntOrString::Int(build::BUNDLE_BUILDER_PORT.into()),
             None,
         ));
-    add_stackable_rust_cli_env_vars(
-        &mut cb_bundle_builder,
-        cluster_info,
-        sidecar_container_log_level(merged_config, &Container::BundleBuilder).to_string(),
-        &Container::BundleBuilder,
+
+    // All operator-set environment variables of the OPA container, collected into an
+    // `EnvVarSet` so that every name occurs only once.
+    let opa_env_vars = EnvVarSet::new().with_value(
+        &CONTAINERDEBUG_LOG_DIRECTORY,
+        format!("{STACKABLE_LOG_DIR}/containerdebug"),
     );
+    // Environment variable overrides (highest precedence), merged from role and role group.
+    // They are merged in last so that they override any operator-set environment variable.
+    let opa_env_vars = opa_env_vars.merge(rolegroup_config.env_overrides.clone());
 
     cb_opa
         .image_from_product_image(resolved_product_image)
@@ -337,11 +356,7 @@ pub fn build_server_rolegroup_daemonset(
             cluster.is_tls_enabled(),
             &rolegroup_config.cli_overrides,
         )])
-        .add_env_vars(rolegroup_config.env_overrides.clone())
-        .add_env_var(
-            "CONTAINERDEBUG_LOG_DIRECTORY",
-            format!("{STACKABLE_LOG_DIR}/containerdebug"),
-        );
+        .add_env_vars(opa_env_vars);
 
     // Add appropriate container port based on TLS configuration
     // If we also add a container port "metrics" pointing to the same port number, we get a
@@ -384,7 +399,11 @@ pub fn build_server_rolegroup_daemonset(
         ));
 
     let pb_metadata = ObjectMetaBuilder::new()
-        .with_labels(cluster.recommended_labels(role_group_name))
+        .with_labels(recommended_labels_for_role_group_resources(
+            cluster,
+            &OpaRole::Server,
+            role_group_name,
+        ))
         .build();
 
     pb.metadata(pb_metadata)
@@ -503,13 +522,19 @@ pub fn build_server_rolegroup_daemonset(
             .role_group_resource_names(role_group_name)
             .daemon_set_name()
             .to_string(),
-        role_group_name,
+        build::recommended_labels_for_role_group_resources(
+            cluster,
+            &OpaRole::Server,
+            role_group_name,
+        ),
     )
     .build();
 
     let daemonset_spec = DaemonSetSpec {
         selector: LabelSelector {
-            match_labels: Some(cluster.role_group_selector(role_group_name).into()),
+            match_labels: Some(
+                role_group_selector(cluster, &OpaRole::Server, role_group_name).into(),
+            ),
             ..LabelSelector::default()
         },
         template: pod_template,
@@ -555,43 +580,45 @@ fn log_volume_size_limit(cluster: &ValidatedCluster) -> Quantity {
 /// * user-info-fetcher
 /// * resource-info-fetcher
 ///
-/// Note that [`FILE_LOG_DIRECTORY_ENV`] points below [`STACKABLE_LOG_DIR`], so every container this
-/// is applied to has to mount the `log` volume for the Vector agent to see its logs.
-fn add_stackable_rust_cli_env_vars(
-    container_builder: &mut ContainerBuilder,
+/// Note that [`FILE_LOG_DIRECTORY`] points below [`STACKABLE_LOG_DIR`], so every container these are
+/// added to has to mount the `log` volume for the Vector agent to see its logs.
+fn stackable_rust_cli_env_vars(
     cluster_info: &KubernetesClusterInfo,
     log_level: impl Into<String>,
     container: &Container,
-) {
+) -> EnvVarSet {
     let log_level = log_level.into();
-    container_builder
-        .add_env_var(CONSOLE_LOG_LEVEL_ENV, log_level.clone())
-        .add_env_var(FILE_LOG_LEVEL_ENV, log_level)
-        .add_env_var(
-            FILE_LOG_DIRECTORY_ENV,
-            format!("{STACKABLE_LOG_DIR}/{container}",),
+    EnvVarSet::new()
+        .with_value(&CONSOLE_LOG_LEVEL, log_level.clone())
+        .with_value(&FILE_LOG_LEVEL, log_level)
+        .with_value(
+            &FILE_LOG_DIRECTORY,
+            format!("{STACKABLE_LOG_DIR}/{container}"),
         )
-        .add_env_var(FILE_LOG_ROTATION_PERIOD_ENV, FILE_LOG_ROTATION_PERIOD)
-        .add_env_var(FILE_LOG_MAX_FILES_ENV, FILE_LOG_MAX_FILES.to_string())
-        .add_env_var_from_source(
-            KUBERNETES_NODE_NAME_ENV,
-            EnvVarSource {
+        .with_value(&FILE_LOG_ROTATION_PERIOD, DEFAULT_FILE_LOG_ROTATION_PERIOD)
+        .with_value(&FILE_LOG_MAX_FILES, DEFAULT_FILE_LOG_MAX_FILES.to_string())
+        // `FieldPathEnvVar` has no variant for `spec.nodeName`, so the `EnvVar` is built by hand.
+        .with_env_var(EnvVar {
+            name: KUBERNETES_NODE_NAME.to_string(),
+            value_from: Some(EnvVarSource {
                 field_ref: Some(ObjectFieldSelector {
                     field_path: "spec.nodeName".to_owned(),
                     ..Default::default()
                 }),
                 ..Default::default()
-            },
-        )
+            }),
+            ..Default::default()
+        })
+        .expect("KUBERNETES_NODE_NAME is a valid environment variable name")
         // We set the cluster domain always explicitly, because the product Pods does not have the
         // RBAC permission to get the `nodes/proxy` resource at cluster scope. This is likely
         // because it only has a RoleBinding and no ClusterRoleBinding.
         // By setting the cluster domain explicitly we avoid that the sidecars try to look it up
         // based on some information coming from the node.
-        .add_env_var(
-            KUBERNETES_CLUSTER_DOMAIN_ENV,
+        .with_value(
+            &KUBERNETES_CLUSTER_DOMAIN,
             cluster_info.cluster_domain.to_string(),
-        );
+        )
 }
 
 fn build_opa_start_command(
@@ -801,6 +828,26 @@ mod tests {
         KubernetesClusterInfo {
             cluster_domain: DomainName::try_from("cluster.local").unwrap(),
         }
+    }
+
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *CONFIG_VOLUME_NAME;
+        let _ = *LOG_VOLUME_NAME;
+        let _ = *BUNDLES_VOLUME_NAME;
+        let _ = *USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
+        let _ = *USER_INFO_FETCHER_KERBEROS_VOLUME_NAME;
+        let _ = *TLS_VOLUME_NAME;
+        let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
+        let _ = *WATCH_NAMESPACE;
+        let _ = *CONSOLE_LOG_LEVEL;
+        let _ = *FILE_LOG_LEVEL;
+        let _ = *FILE_LOG_DIRECTORY;
+        let _ = *FILE_LOG_ROTATION_PERIOD;
+        let _ = *FILE_LOG_MAX_FILES;
+        let _ = *KUBERNETES_NODE_NAME;
+        let _ = *KUBERNETES_CLUSTER_DOMAIN;
     }
 
     fn build(cluster: &ValidatedCluster) -> DaemonSet {
@@ -1305,5 +1352,108 @@ mod tests {
             log_volume_size_limit(&with_sidecars),
             Quantity("138Mi".to_owned())
         );
+    }
+
+    /// The bundle-builder sidecar must carry the Stackable Rust CLI environment variables and
+    /// `WATCH_NAMESPACE`, each exactly once.
+    #[test]
+    fn bundle_builder_has_cli_env_vars_exactly_once() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let env = ds
+            .spec
+            .expect("the DaemonSet has a spec")
+            .template
+            .spec
+            .expect("the pod template has a spec")
+            .containers
+            .into_iter()
+            .find(|container| container.name == "bundle-builder")
+            .expect("the bundle-builder container exists")
+            .env
+            .expect("the bundle-builder container has env vars");
+
+        for name in [
+            "WATCH_NAMESPACE",
+            "CONSOLE_LOG_LEVEL",
+            "FILE_LOG_LEVEL",
+            "FILE_LOG_DIRECTORY",
+            "KUBERNETES_NODE_NAME",
+            "KUBERNETES_CLUSTER_DOMAIN",
+        ] {
+            assert_eq!(
+                env.iter().filter(|env_var| env_var.name == name).count(),
+                1,
+                "the env var {name} should be set exactly once"
+            );
+        }
+
+        let cluster_domain = env
+            .iter()
+            .find(|env_var| env_var.name == "KUBERNETES_CLUSTER_DOMAIN")
+            .expect("KUBERNETES_CLUSTER_DOMAIN is set");
+        assert_eq!(cluster_domain.value.as_deref(), Some("cluster.local"));
+    }
+
+    /// The user-supplied `envOverrides` must be merged in after all operator-set environment
+    /// variables, so that they can override any of them. `CONTAINERDEBUG_LOG_DIRECTORY` is used
+    /// as the example here because it is set unconditionally by the operator.
+    #[test]
+    fn env_overrides_override_operator_set_env_vars() {
+        use std::str::FromStr;
+
+        use stackable_operator::v2::builder::pod::container::EnvVarName;
+
+        let cluster = validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        }));
+        let (role_group_name, role_group) = cluster.role_group_configs[&OpaRole::Server]
+            .iter()
+            .next()
+            .expect("the default role group should exist");
+        let mut role_group = role_group.clone();
+        role_group.env_overrides = EnvVarSet::new().with_value(
+            &EnvVarName::from_str("CONTAINERDEBUG_LOG_DIRECTORY").expect("valid env var name"),
+            "/custom/log/dir",
+        );
+
+        let ds = build_server_rolegroup_daemonset(
+            &cluster,
+            role_group_name,
+            &role_group,
+            "bundle-builder-image",
+            "user-info-fetcher-image",
+            "resource-info-fetcher-image",
+            &cluster_info(),
+        )
+        .expect("the daemonset should build");
+
+        let env = ds
+            .spec
+            .expect("the DaemonSet has a spec")
+            .template
+            .spec
+            .expect("the pod template has a spec")
+            .containers
+            .into_iter()
+            .find(|container| container.name == "opa")
+            .expect("the opa container exists")
+            .env
+            .expect("the opa container has env vars");
+
+        let containerdebug: Vec<_> = env
+            .iter()
+            .filter(|env_var| env_var.name == "CONTAINERDEBUG_LOG_DIRECTORY")
+            .collect();
+        assert_eq!(
+            containerdebug.len(),
+            1,
+            "the override must replace the operator-set value, not duplicate it"
+        );
+        assert_eq!(containerdebug[0].value.as_deref(), Some("/custom/log/dir"));
     }
 }

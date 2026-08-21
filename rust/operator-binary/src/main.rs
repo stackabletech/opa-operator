@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use clap::Parser;
 use futures::{FutureExt, StreamExt, TryFutureExt};
-use stackable_opa_operator::crd::{OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2};
+use stackable_opa_operator::crd::{OPA_OPERATOR_NAME, OpaCluster, OpaClusterVersion, v1alpha2};
 use stackable_operator::{
     YamlSchema,
     cli::{Command, RunArguments},
@@ -112,9 +112,11 @@ async fn main() -> anyhow::Result<()> {
                     .run(sigterm_watcher.handle())
                     .map(anyhow::Ok);
 
-            let client =
-                client::initialize_operator(Some(OPERATOR_NAME.to_string()), &common.cluster_info)
-                    .await?;
+            let client = client::initialize_operator(
+                Some(OPA_OPERATOR_NAME.to_string()),
+                &common.cluster_info,
+            )
+            .await?;
 
             let kubernetes_cluster_info = client.kubernetes_cluster_info.clone();
 

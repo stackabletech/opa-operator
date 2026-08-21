@@ -1,27 +1,35 @@
 //! Build steps that turn the [`ValidatedCluster`](super::ValidatedCluster) into
 //! Kubernetes resource specifications.
 
-use std::str::FromStr;
+use std::marker::PhantomData;
 
 use snafu::{ResultExt, Snafu};
 use stackable_operator::{
     builder::meta::ObjectMetaBuilder,
+    kvp::Labels,
     utils::cluster_info::KubernetesClusterInfo,
-    v2::{builder::meta::ownerreference_from_resource, types::common::Port},
+    v2::{
+        builder::meta::ownerreference_from_resource,
+        kvp::label,
+        types::{common::Port, operator::RoleName},
+    },
 };
 
-use crate::controller::{
-    KubernetesResources, RoleGroupName, ValidatedCluster,
-    build::resource::{
-        config_map::build_rolegroup_config_map,
-        daemonset::build_server_rolegroup_daemonset,
-        discovery::build_discovery_config_map,
-        rbac::{build_role_binding, build_service_account},
-        service::{
-            build_rolegroup_headless_service, build_rolegroup_metrics_service,
-            build_server_role_service,
+use crate::{
+    controller::{
+        KubernetesResources, Prepared, RoleGroupName, ValidatedCluster,
+        build::resource::{
+            config_map::build_rolegroup_config_map,
+            daemonset::build_server_rolegroup_daemonset,
+            discovery::build_discovery_config_map,
+            rbac::{build_role_binding, build_service_account},
+            service::{
+                build_rolegroup_headless_service, build_rolegroup_metrics_service,
+                build_server_role_service,
+            },
         },
     },
+    opa_controller::{CONTROLLER_NAME, OPERATOR_NAME, PRODUCT_NAME},
 };
 
 pub mod properties;
@@ -60,7 +68,7 @@ pub fn build(
     user_info_fetcher_image: &str,
     resource_info_fetcher_image: &str,
     cluster_info: &KubernetesClusterInfo,
-) -> Result<KubernetesResources, Error> {
+) -> Result<KubernetesResources<Prepared>, Error> {
     let mut daemon_sets = vec![];
     let mut services = vec![];
     let mut config_maps = vec![];
@@ -105,38 +113,84 @@ pub fn build(
         config_maps,
         service_accounts: vec![build_service_account(cluster)],
         role_bindings: vec![build_role_binding(cluster)],
+        status: PhantomData,
     })
 }
 
 /// The port the bundle-builder sidecar listens on, and which OPA connects to for bundle polling.
 pub(crate) const BUNDLE_BUILDER_PORT: Port = Port(3030);
 
-// Placeholder role-group name for the recommended labels of the role-level `Service`, which is not
-// bound to a single role group. `global` matches the historical `app.kubernetes.io/role-group`
-// value.
-stackable_operator::constant!(pub(crate) PLACEHOLDER_ROLE_LEVEL_ROLE_GROUP: RoleGroupName = "global");
-
-// Placeholder role-group name for the recommended labels of the discovery `ConfigMap`, which is a
-// cluster-level object not bound to a single role group.
-stackable_operator::constant!(pub(crate) PLACEHOLDER_DISCOVERY_ROLE_GROUP: RoleGroupName = "discovery");
-
 /// Returns an [`ObjectMetaBuilder`] pre-filled with the namespace, an owner reference back to
-/// the cluster, and the recommended labels for a resource named `name` in `role_group_name`.
+/// the cluster, and the given recommended `labels` for a resource named `name`.
 ///
 /// Consolidates the metadata chain repeated by the child-resource builders. Call sites that
 /// need extra labels/annotations chain them onto the returned builder before calling `build()`.
 pub(crate) fn object_meta(
     cluster: &ValidatedCluster,
     name: impl Into<String>,
-    role_group_name: &RoleGroupName,
+    labels: Labels,
 ) -> ObjectMetaBuilder {
     let mut builder = ObjectMetaBuilder::new();
     builder
         .name_and_namespace(cluster)
         .name(name)
         .ownerreference(ownerreference_from_resource(cluster, None, Some(true)))
-        .with_labels(cluster.recommended_labels(role_group_name));
+        .with_labels(labels);
     builder
+}
+
+pub(crate) fn recommended_labels_for_cluster_resources(cluster: &ValidatedCluster) -> Labels {
+    label::recommended_labels_for_cluster_resources(
+        &cluster.name,
+        &PRODUCT_NAME,
+        &cluster.product_version,
+        &OPERATOR_NAME,
+        &CONTROLLER_NAME,
+    )
+}
+
+pub(crate) fn recommended_labels_for_role_resources(
+    cluster: &ValidatedCluster,
+    role_name: &RoleName,
+) -> Labels {
+    label::recommended_labels_for_role_resources(
+        &cluster.name,
+        &PRODUCT_NAME,
+        &cluster.product_version,
+        &OPERATOR_NAME,
+        &CONTROLLER_NAME,
+        role_name,
+    )
+}
+
+pub(crate) fn recommended_labels_for_role_group_resources(
+    cluster: &ValidatedCluster,
+    role_name: &RoleName,
+    role_group_name: &RoleGroupName,
+) -> Labels {
+    label::recommended_labels_for_role_group_resources(
+        &cluster.name,
+        &PRODUCT_NAME,
+        &cluster.product_version,
+        &OPERATOR_NAME,
+        &CONTROLLER_NAME,
+        role_name,
+        role_group_name,
+    )
+}
+
+/// Selector labels matching the pods of a role.
+pub(crate) fn role_selector(cluster: &ValidatedCluster, role_name: &RoleName) -> Labels {
+    label::role_selector(&cluster.name, &PRODUCT_NAME, role_name)
+}
+
+/// Selector labels matching the pods of a role group.
+pub(crate) fn role_group_selector(
+    cluster: &ValidatedCluster,
+    role_name: &RoleName,
+    role_group_name: &RoleGroupName,
+) -> Labels {
+    label::role_group_selector(&cluster.name, &PRODUCT_NAME, role_name, role_group_name)
 }
 
 #[cfg(test)]

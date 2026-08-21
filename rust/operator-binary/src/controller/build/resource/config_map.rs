@@ -2,6 +2,7 @@
 //! per-file builders in [`crate::controller::build::properties`].
 
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::OpaRole;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
     product_logging::framework::VECTOR_CONFIG_FILE,
@@ -14,6 +15,7 @@ use crate::controller::{
         properties::{
             ConfigFileName, config_json, product_logging, resource_info_fetcher, user_info_fetcher,
         },
+        recommended_labels_for_role_group_resources,
     },
 };
 
@@ -57,7 +59,7 @@ pub fn build_rolegroup_config_map(
             .role_group_resource_names(role_group_name)
             .role_group_config_map()
             .to_string(),
-        role_group_name,
+        recommended_labels_for_role_group_resources(cluster, &OpaRole::Server, role_group_name),
     )
     .build();
 

@@ -1,11 +1,11 @@
 //! Controller-level vocabulary: the [`ValidatedCluster`] type and the `build` / `validate`
 //! sub-modules.
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, marker::PhantomData, str::FromStr};
 
 use stackable_opa_operator::crd::{
-    APP_NAME, OPERATOR_NAME, OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig,
-    resource_info_fetcher, user_info_fetcher, v1alpha2,
+    OpaConfig, OpaConfigOverrides, OpaRole, OpaStorageConfig, resource_info_fetcher,
+    user_info_fetcher, v1alpha2,
 };
 // Re-exported so the rest of the controller refers to `crate::controller::RoleGroupName`.
 pub use stackable_operator::v2::types::operator::RoleGroupName;
@@ -21,25 +21,23 @@ use stackable_operator::{
         rbac::v1::RoleBinding,
     },
     kube::{Resource as KubeResource, api::ObjectMeta},
-    kvp::Labels,
     shared::time::Duration,
     v2::{
         HasName, HasUid, NameIsValidLabelValue,
-        kvp::label::{recommended_labels, role_group_selector, role_selector},
         role_group_utils::ResourceNames,
         role_utils::{self, GenericCommonConfig, RoleGroupConfig},
         types::{
             kubernetes::{NamespaceName, Uid},
-            operator::{
-                ClusterName, ControllerName, OperatorName, ProductName, ProductVersion, RoleName,
-            },
+            operator::{ClusterName, ProductVersion, RoleName},
         },
     },
 };
 
-use crate::opa_controller::OPA_CONTROLLER_NAME;
+use crate::opa_controller::PRODUCT_NAME;
 
+pub mod apply;
 pub mod build;
+pub mod update_status;
 pub mod validate;
 
 /// The validated [`v1alpha2::OpaCluster`].
@@ -99,7 +97,11 @@ impl ValidatedCluster {
 
     /// The name of the role-level load-balanced Kubernetes `Service`, as used in the discovery URL.
     pub fn server_role_service_name(&self) -> String {
-        format!("{name}-{role}", name = self.name, role = OpaRole::Server)
+        format!(
+            "{name}-{role}",
+            name = self.name,
+            role = OpaRole::Server.as_ref(),
+        )
     }
 
     /// Type-safe names for the per-cluster RBAC resources: the ServiceAccount shared by all
@@ -107,7 +109,7 @@ impl ValidatedCluster {
     pub fn cluster_resource_names(&self) -> role_utils::ResourceNames {
         role_utils::ResourceNames {
             cluster_name: self.name.clone(),
-            product_name: product_name(),
+            product_name: PRODUCT_NAME.clone(),
         }
     }
 
@@ -118,72 +120,10 @@ impl ValidatedCluster {
     ) -> ResourceNames {
         ResourceNames {
             cluster_name: self.name.clone(),
-            role_name: OpaRole::Server.into(),
+            role_name: RoleName::clone(&OpaRole::Server),
             role_group_name: role_group_name.clone(),
         }
     }
-
-    pub fn recommended_labels(&self, role_group_name: &RoleGroupName) -> Labels {
-        self.recommended_labels_for(&OpaRole::Server.into(), role_group_name)
-    }
-
-    /// Recommended labels for a resource that is not tied to a concrete role,
-    /// using a free-form role/role-group label value.
-    pub fn recommended_labels_for(
-        &self,
-        role_name: &RoleName,
-        role_group_name: &RoleGroupName,
-    ) -> Labels {
-        self.recommended_labels_with(&self.product_version, role_name, role_group_name)
-    }
-
-    fn recommended_labels_with(
-        &self,
-        product_version: &ProductVersion,
-        role_name: &RoleName,
-        role_group_name: &RoleGroupName,
-    ) -> Labels {
-        recommended_labels(
-            self,
-            &product_name(),
-            product_version,
-            &operator_name(),
-            &controller_name(),
-            role_name,
-            role_group_name,
-        )
-    }
-
-    /// Selector labels matching the pods of a role group.
-    pub fn role_group_selector(&self, role_group_name: &RoleGroupName) -> Labels {
-        role_group_selector(
-            self,
-            &product_name(),
-            &OpaRole::Server.into(),
-            role_group_name,
-        )
-    }
-
-    /// Selector labels matching all pods of the (single) OPA role.
-    pub fn role_selector(&self) -> Labels {
-        role_selector(self, &product_name(), &OpaRole::Server.into())
-    }
-}
-
-/// The product name (`opa`) as a type-safe label value.
-pub(crate) fn product_name() -> ProductName {
-    ProductName::from_str(APP_NAME).expect("'opa' is a valid product name")
-}
-
-/// The operator name as a type-safe label value.
-pub(crate) fn operator_name() -> OperatorName {
-    OperatorName::from_str(OPERATOR_NAME).expect("the operator name is a valid label value")
-}
-
-/// The controller name as a type-safe label value.
-pub(crate) fn controller_name() -> ControllerName {
-    ControllerName::from_str(OPA_CONTROLLER_NAME)
-        .expect("the controller name is a valid label value")
 }
 
 impl HasName for ValidatedCluster {
@@ -233,18 +173,29 @@ impl KubeResource for ValidatedCluster {
     }
 }
 
+/// Marker for prepared Kubernetes resources which are not applied yet.
+pub struct Prepared;
+
+/// Marker for applied Kubernetes resources.
+pub struct Applied;
+
 /// Every Kubernetes resource produced by the [`build`](build::build) step.
 ///
 /// OPA runs as a `DaemonSet` (one Pod per node), so there are no `StatefulSet`s, PDBs or
 /// `Listener`s. `services` holds the role-level `Service` and the per-role-group headless and
 /// metrics `Service`s; `config_maps` holds the per-role-group `ConfigMap`s and the cluster-level
 /// discovery `ConfigMap`.
-pub struct KubernetesResources {
+///
+/// `T` is a marker that indicates whether these resources are only [`Prepared`] or already
+/// [`Applied`]. It lets the type system prove that e.g. the cluster status is derived from
+/// applied resources rather than merely built ones.
+pub struct KubernetesResources<T> {
     pub daemon_sets: Vec<DaemonSet>,
     pub services: Vec<Service>,
     pub config_maps: Vec<ConfigMap>,
     pub service_accounts: Vec<ServiceAccount>,
     pub role_bindings: Vec<RoleBinding>,
+    pub status: PhantomData<T>,
 }
 
 /// Cluster-wide settings resolved once during validation, so the build steps no longer need the
@@ -276,23 +227,6 @@ impl ValidatedOpaConfig {
             logging,
             affinity: merged.affinity,
             graceful_shutdown_timeout: merged.graceful_shutdown_timeout,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use stackable_opa_operator::crd::OpaRole;
-    use stackable_operator::v2::types::operator::RoleName;
-    use strum::IntoEnumIterator;
-
-    /// Locks the invariant behind the `expect` in the `From<OpaRole> for RoleName` impls:
-    /// every `OpaRole` variant (present and future) must serialise to a valid `RoleName`.
-    #[test]
-    fn every_opa_role_serialises_to_a_valid_role_name() {
-        for role in OpaRole::iter() {
-            let _: RoleName = (&role).into();
-            let _: RoleName = role.into();
         }
     }
 }

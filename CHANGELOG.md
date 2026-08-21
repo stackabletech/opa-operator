@@ -24,6 +24,15 @@ All notable changes to this project will be documented in this file.
   lifetime the identity provider reports, instead of minting a new one for every user lookup. This
   removes one round trip per lookup. If the provider rejects the cached token before it expires, it is
   re-minted and the lookup is retried once ([#863]).
+- Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
+- Environment variable overrides (`envOverrides`) are now applied after all environment
+  variables set by the operator. In particular, `CONTAINERDEBUG_LOG_DIRECTORY` can now be
+  overridden, whereas previously the operator's value always took precedence ([#880]).
+- BREAKING: Remove the `app.kubernetes.io/component` and `app.kubernetes.io/role-group` labels
+  from the resources they don't apply to (previously set to `none` or a placeholder value):
+  the role-level Service (`<cluster>-server`) and the discovery ConfigMap lose
+  `app.kubernetes.io/role-group`, and the RBAC ServiceAccount and RoleBinding lose both labels (previously `none`). Anything selecting on these label values must be adjusted. All resources can be updated in place; no manual
+  deletion is required ([#880]).
 
 ### Fixed
 
@@ -33,12 +42,16 @@ All notable changes to this project will be documented in this file.
 - The file logs of the user-info-fetcher and resource-info-fetcher sidecars are now collected by the
   Vector agent. Both sidecars log below `/stackable/log`, but did not mount the shared `log` volume,
   so their logs were unreachable for Vector and not accounted for in the volume's size limit ([#863]).
+- The reconciler now applies resources and derives the cluster status in discrete
+  apply and update_status steps for the `opa_controller` ([#872]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
 [#871]: https://github.com/stackabletech/opa-operator/pull/871
+[#872]: https://github.com/stackabletech/opa-operator/pull/872
+[#880]: https://github.com/stackabletech/opa-operator/pull/880
 
 ## [26.7.0] - 2026-07-21
 
