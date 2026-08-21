@@ -29,6 +29,7 @@ url.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+wiremock.workspace = true
 
 [build-dependencies]
 built.workspace = true

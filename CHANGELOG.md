@@ -20,12 +20,19 @@ All notable changes to this project will be documented in this file.
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
 - All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#871]).
+- The user-info-fetcher Keycloak and Entra backends now cache their OAuth2 access token for the
+  lifetime the identity provider reports, instead of minting a new one for every user lookup. This
+  removes one round trip per lookup. If the provider rejects the cached token before it expires, it is
+  re-minted and the lookup is retried once ([#863]).
 
 ### Fixed
 
 - Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
+- The file logs of the user-info-fetcher and resource-info-fetcher sidecars are now collected by the
+  Vector agent. Both sidecars log below `/stackable/log`, but did not mount the shared `log` volume,
+  so their logs were unreachable for Vector and not accounted for in the volume's size limit ([#863]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861

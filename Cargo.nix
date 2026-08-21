@@ -5497,6 +5497,12 @@ rec {
             packageId = "tracing";
           }
         ];
+        devDependencies = [
+          {
+            name = "futures";
+            packageId = "futures";
+          }
+        ];
 
       };
       "ipnet" = rec {
@@ -12384,6 +12390,10 @@ rec {
           {
             name = "rstest";
             packageId = "rstest";
+          }
+          {
+            name = "wiremock";
+            packageId = "wiremock";
           }
         ];
 

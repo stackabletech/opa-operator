@@ -13,11 +13,18 @@ use crate::backend::data_hub::{
 };
 
 /// The page size of the `DataProductContains` relationship query, passed to DataHub as the
-/// `$dataProductsCount` variable. DataHub paginates the `relationships` resolver, so some page size
-/// has to be picked; an asset normally belongs to a single data product, which leaves ample
-/// headroom. If it is ever exceeded we fail the request instead of answering with a truncated list,
-/// see [`Entity::data_products_truncation`].
-const DATA_PRODUCTS_PAGE_SIZE: u32 = 10;
+/// `$dataProductsCount` variable.
+///
+/// DataHub paginates the `relationships` resolver, so some page size has to be picked. An asset
+/// normally belongs to one or two data products, so this is deliberately set far above anything
+/// realistic rather than at a plausible maximum: exceeding it fails the request (see
+/// [`Entity::data_products_truncation`]), and failing a lookup that should have succeeded is the
+/// worse outcome. It stays a single request at any size, and only costs DataHub more when an asset
+/// really does have that many relationships.
+///
+/// We do not paginate. That would mean one round trip per page for a case that should not occur,
+/// whereas overshooting the page size costs nothing until it is actually needed.
+const DATA_PRODUCTS_PAGE_SIZE: u32 = 1000;
 
 /// A single query covering every entity kind we build URNs for. We use the generic `entity(urn:)`
 /// resolver plus per-type inline fragments, because a request can target a dataset (Trino table or
@@ -29,6 +36,11 @@ query ResourceInfo($urn: String!, $dataProductsCount: Int!) {
   }
 }
 fragment ResourceInfo on Entity {
+  # The concrete type DataHub resolved the URN to. Only the types with an inline fragment below carry
+  # tags, owners and a domain in our response, so this lets us tell an entity we cannot read from one
+  # that genuinely has no metadata, see `Entity::uncovered_type`.
+  __typename
+
   # DataHub has no direct "dataProduct" field on assets; membership is a graph edge that points from
   # the data product to its assets. From the asset's side it is therefore an INCOMING relationship.
   # `total` is the number of edges DataHub has, which we compare against the number we received to
@@ -119,11 +131,23 @@ pub struct ResponseData {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Entity {
+    /// The concrete DataHub type the URN resolved to, e.g. `Dataset`. [`None`] for the substituted
+    /// "no metadata" entity, and for a DataHub that does not report it.
+    #[serde(rename = "__typename")]
+    typename: Option<String>,
+
     tags: Option<GlobalTags>,
     ownership: Option<Ownership>,
     domain: Option<DomainAssociation>,
     data_products: Option<EntityRelationships>,
 }
+
+/// The entity types [`RESOURCE_INFO_QUERY`] has an inline fragment for, and whose tags, owners and
+/// domain we therefore read.
+///
+/// Anything else still resolves, because `rawIdentifier` accepts any URN, but only the fields common
+/// to every `Entity` come back. The response then looks just like that of a resource with no metadata.
+const COVERED_ENTITY_TYPES: &[&str] = &["Dataset", "Container", "Chart", "Dashboard"];
 
 #[derive(Debug, Deserialize)]
 struct GlobalTags {
@@ -263,6 +287,19 @@ pub struct DataProductsTruncation {
 }
 
 impl Entity {
+    /// The entity's DataHub type, if [`RESOURCE_INFO_QUERY`] does not cover it.
+    ///
+    /// [`None`] means the type is covered, or that DataHub did not report one. In the latter case
+    /// there is nothing to compare against, so we must not report a problem we cannot substantiate.
+    ///
+    /// Callers should surface this: the response for an uncovered type is empty, and a policy has no
+    /// way to distinguish that from a resource that carries no tags, owners or domain at all.
+    pub fn uncovered_type(&self) -> Option<&str> {
+        let typename = self.typename.as_deref()?;
+
+        (!COVERED_ENTITY_TYPES.contains(&typename)).then_some(typename)
+    }
+
     /// Checks whether the data product list was truncated by [`DATA_PRODUCTS_PAGE_SIZE`].
     ///
     /// Callers must turn this into an error rather than serving the truncated list: a policy that
@@ -457,6 +494,43 @@ mod tests {
         assert!(Entity::default().data_products_truncation().is_none());
     }
 
+    /// Deserializes an entity of the given DataHub type, as reported by `__typename`.
+    fn entity_of_type(typename: Option<&str>) -> Entity {
+        serde_json::from_value(json!({"__typename": typename}))
+            .expect("test entity must be a valid GraphQL entity payload")
+    }
+
+    /// An entity type the query has an inline fragment for is read normally.
+    #[rstest]
+    #[case::dataset("Dataset")]
+    #[case::container("Container")]
+    #[case::chart("Chart")]
+    #[case::dashboard("Dashboard")]
+    fn covered_entity_types(#[case] typename: &str) {
+        assert_eq!(entity_of_type(Some(typename)).uncovered_type(), None);
+    }
+
+    /// Any other type deserializes into an entity with no tags, owners or domain, which a policy
+    /// cannot tell apart from a resource that genuinely has none, so it has to be reported.
+    #[rstest]
+    #[case::data_job("DataJob")]
+    #[case::data_flow("DataFlow")]
+    #[case::notebook("Notebook")]
+    #[case::ml_model("MLModel")]
+    fn uncovered_entity_types(#[case] typename: &str) {
+        assert_eq!(
+            entity_of_type(Some(typename)).uncovered_type(),
+            Some(typename)
+        );
+    }
+
+    /// Without a `__typename` there is nothing to check against, so we must not cry wolf.
+    #[test]
+    fn entities_without_a_typename_are_not_reported() {
+        assert_eq!(entity_of_type(None).uncovered_type(), None);
+        assert_eq!(Entity::default().uncovered_type(), None);
+    }
+
     #[test]
     fn truncated_data_products_are_detected() {
         let truncation = entity(Some(DATA_PRODUCTS_PAGE_SIZE + 1), DATA_PRODUCTS_PAGE_SIZE)
@@ -465,5 +539,222 @@ mod tests {
 
         assert_eq!(truncation.total, DATA_PRODUCTS_PAGE_SIZE + 1);
         assert_eq!(truncation.received, DATA_PRODUCTS_PAGE_SIZE);
+    }
+
+    fn urn() -> Urn {
+        Urn("urn:li:dataset:(urn:li:dataPlatform:trino,my-trino.tpch.sf1.customer,PROD)".to_owned())
+    }
+
+    /// Deserializes an entity from the payload DataHub would return.
+    fn entity_from(payload: serde_json::Value) -> Entity {
+        serde_json::from_value(payload).expect("test entity must be a valid GraphQL entity payload")
+    }
+
+    /// The mapping when DataHub populated every `properties` aspect, i.e. the case the fallbacks below
+    /// are fallbacks for.
+    #[test]
+    fn a_fully_populated_entity_maps_every_field() {
+        let response = entity_from(json!({
+            "__typename": "Dataset",
+            "tags": {"tags": [{"tag": {"urn": "urn:li:tag:PII", "properties": {"name": "PII"}}}]},
+            "domain": {"domain": {"urn": "urn:li:domain:finance", "properties": {
+                "name": "Finance", "description": "Financial data",
+            }}},
+            "dataProducts": {"total": 1, "relationships": [{"entity": {
+                "urn": "urn:li:dataProduct:orders",
+                "properties": {"name": "Orders", "description": "Order data"},
+            }}]},
+            "ownership": {"owners": [
+                {
+                    "owner": {
+                        "__typename": "CorpUser",
+                        "urn": "urn:li:corpuser:alice",
+                        "properties": {
+                            "fullName": "Alice Example", "displayName": "Alice",
+                            "email": "alice@example.com", "active": true,
+                        },
+                    },
+                    "ownershipType": {
+                        "urn": "urn:li:ownershipType:__system__technical_owner",
+                        "info": {"name": "Technical Owner"},
+                    },
+                },
+                {
+                    "owner": {
+                        "__typename": "CorpGroup",
+                        "urn": "urn:li:corpGroup:analytics",
+                        "properties": {"displayName": "Analytics", "description": "The team"},
+                    },
+                    "ownershipType": {
+                        "urn": "urn:li:ownershipType:__system__technical_owner",
+                        "info": {"name": "Technical Owner"},
+                    },
+                },
+            ]},
+        }))
+        .into_response(urn());
+
+        assert_eq!(
+            response.tags,
+            vec![Tag {
+                urn: Urn("urn:li:tag:PII".to_owned()),
+                name: "PII".to_owned(),
+            }]
+        );
+        assert_eq!(
+            response.domain,
+            Some(Domain {
+                urn: Urn("urn:li:domain:finance".to_owned()),
+                name: "Finance".to_owned(),
+                description: Some("Financial data".to_owned()),
+            })
+        );
+        assert_eq!(
+            response.data_products,
+            vec![DataProduct {
+                urn: Urn("urn:li:dataProduct:orders".to_owned()),
+                name: "Orders".to_owned(),
+                description: Some("Order data".to_owned()),
+            }]
+        );
+
+        // Both owners share an ownership type, so they land in the same bucket rather than two.
+        let technical_owner = Urn("urn:li:ownershipType:__system__technical_owner".to_owned());
+        assert_eq!(response.owners.len(), 1);
+        let owners = &response.owners[&technical_owner];
+        assert_eq!(
+            owners.ownership_type_name.as_deref(),
+            Some("Technical Owner")
+        );
+        assert_eq!(
+            owners.users,
+            vec![User {
+                urn: Urn("urn:li:corpuser:alice".to_owned()),
+                full_name: Some("Alice Example".to_owned()),
+                display_name: "Alice".to_owned(),
+                email: Some("alice@example.com".to_owned()),
+                active: true,
+            }]
+        );
+        assert_eq!(
+            owners.groups,
+            vec![Group {
+                urn: Urn("urn:li:corpGroup:analytics".to_owned()),
+                display_name: "Analytics".to_owned(),
+                description: Some("The team".to_owned()),
+            }]
+        );
+    }
+
+    /// An entity whose referenced tag, domain and data product have no `properties` aspect. There is no
+    /// name to show, so each falls back to its URN rather than to an empty string, which would render
+    /// as a nameless entry in a policy decision.
+    #[test]
+    fn entities_without_properties_fall_back_to_urns() {
+        let response = entity_from(json!({
+            "tags": {"tags": [{"tag": {"urn": "urn:li:tag:PII"}}]},
+            "domain": {"domain": {"urn": "urn:li:domain:finance"}},
+            "dataProducts": {
+                "total": 1,
+                "relationships": [{"entity": {"urn": "urn:li:dataProduct:orders"}}],
+            },
+        }))
+        .into_response(urn());
+
+        assert_eq!(response.tags[0].name, "urn:li:tag:PII");
+
+        let domain = response.domain.expect("the domain is present");
+        assert_eq!(domain.name, "urn:li:domain:finance");
+        assert_eq!(domain.description, None);
+
+        assert_eq!(response.data_products[0].name, "urn:li:dataProduct:orders");
+        assert_eq!(response.data_products[0].description, None);
+    }
+
+    /// Owners whose `properties` aspect is missing entirely, and owners where it exists but carries no
+    /// display name. A user's display name is derived from the URN; a group's falls back to the whole
+    /// URN, as there is no group-name convention to strip.
+    #[rstest]
+    #[case::no_properties_aspect(json!({"__typename": "CorpUser", "urn": "urn:li:corpuser:alice"}))]
+    #[case::no_display_name(
+        json!({"__typename": "CorpUser", "urn": "urn:li:corpuser:alice", "properties": {}})
+    )]
+    fn users_without_a_display_name_are_named_after_their_urn(#[case] owner: serde_json::Value) {
+        let response =
+            entity_from(json!({"ownership": {"owners": [{"owner": owner}]}})).into_response(urn());
+
+        let owners = response
+            .owners
+            .values()
+            .next()
+            .expect("the owner is present");
+        assert_eq!(owners.users[0].display_name, "alice");
+        assert_eq!(owners.users[0].full_name, None);
+        assert_eq!(owners.users[0].email, None);
+        // Absent `active` means we must not report the user as deactivated.
+        assert!(owners.users[0].active);
+    }
+
+    #[rstest]
+    #[case::no_properties_aspect(
+        json!({"__typename": "CorpGroup", "urn": "urn:li:corpGroup:analytics"})
+    )]
+    #[case::no_display_name(
+        json!({"__typename": "CorpGroup", "urn": "urn:li:corpGroup:analytics", "properties": {}})
+    )]
+    fn groups_without_a_display_name_are_named_after_their_urn(#[case] owner: serde_json::Value) {
+        let response =
+            entity_from(json!({"ownership": {"owners": [{"owner": owner}]}})).into_response(urn());
+
+        let owners = response
+            .owners
+            .values()
+            .next()
+            .expect("the owner is present");
+        assert_eq!(owners.groups[0].display_name, "urn:li:corpGroup:analytics");
+        assert_eq!(owners.groups[0].description, None);
+    }
+
+    /// Owners predating ownership type entities only carry the legacy `type` enum, and some carry
+    /// neither. The key has to stay stable either way, because it is what a policy looks owners up by.
+    #[rstest]
+    #[case::legacy_type_only(json!({"type": "TECHNICAL_OWNER"}), "TECHNICAL_OWNER")]
+    #[case::no_type_at_all(json!({}), "unknown")]
+    fn owners_without_an_ownership_type_entity_fall_back_to_the_legacy_type(
+        #[case] extra_owner_fields: serde_json::Value,
+        #[case] expected_key: &str,
+    ) {
+        let mut owner = json!({
+            "owner": {"__typename": "CorpUser", "urn": "urn:li:corpuser:alice"},
+        });
+        owner
+            .as_object_mut()
+            .expect("the owner is a JSON object")
+            .extend(
+                extra_owner_fields
+                    .as_object()
+                    .expect("the extra fields are a JSON object")
+                    .clone(),
+            );
+
+        let response = entity_from(json!({"ownership": {"owners": [owner]}})).into_response(urn());
+
+        let (key, owners) = response.owners.iter().next().expect("the owner is present");
+        assert_eq!(key.0, expected_key);
+        // There is no ownership type entity, so there is no human-readable name for it either.
+        assert_eq!(owners.ownership_type_name, None);
+    }
+
+    /// The "no metadata" entity we substitute for a URN DataHub does not know must map to a response
+    /// that is empty rather than one that fails to build.
+    #[test]
+    fn the_default_entity_maps_to_an_empty_response() {
+        let response = Entity::default().into_response(urn());
+
+        assert_eq!(response.urn, urn());
+        assert!(response.tags.is_empty());
+        assert_eq!(response.domain, None);
+        assert!(response.data_products.is_empty());
+        assert!(response.owners.is_empty());
     }
 }

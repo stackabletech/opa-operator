@@ -13,7 +13,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, instrument, trace, warn};
 
 use crate::{
     api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest},
@@ -21,10 +21,14 @@ use crate::{
 };
 
 mod graphql;
-mod resource_to_urn_mapping;
+pub(crate) mod resource_to_urn_mapping;
 
+/// Errors that can occur while resolving the backend, which happens once at startup.
+///
+/// Kept apart from [`Error`] because these never reach a caller: a failure here means the process
+/// does not come up at all, so (unlike [`Error`]) they have no HTTP status code to map to.
 #[derive(Snafu, Debug)]
-pub enum Error {
+pub enum ResolveError {
     #[snafu(display("failed to read DataHub token from {path:?}"))]
     ReadToken {
         source: std::io::Error,
@@ -42,7 +46,12 @@ pub enum Error {
         source: url::ParseError,
         endpoint: String,
     },
+}
 
+/// Errors that can occur while answering a request, and which are therefore rendered as an HTTP
+/// response to the caller.
+#[derive(Snafu, Debug)]
+pub enum Error {
     #[snafu(display("failed to execute GraphQL query for URN {urn:?}"))]
     ExecuteGraphQlQuery {
         source: utils::http::Error,
@@ -51,6 +60,13 @@ pub enum Error {
 
     #[snafu(display("DataHub returned GraphQL errors for URN {urn:?}: {messages}"))]
     GraphQlErrors { messages: String, urn: Urn },
+
+    #[snafu(display(
+        "the resource name {name:?} contains {delimiter:?}, which DataHub uses to delimit the parts \
+        of a URN. No URN containing it can resolve, so the request is rejected without querying \
+        DataHub."
+    ))]
+    InvalidResourceName { name: String, delimiter: char },
 
     #[snafu(display(
         "DataHub reported {total} data products for URN {urn:?}, but the GraphQL query only fetches \
@@ -64,12 +80,18 @@ pub enum Error {
 impl http_error::Error for Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::ReadToken { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            Self::BuildDataHubEndpoint { .. } => StatusCode::BAD_REQUEST,
+            // We could not talk to DataHub at all, which is not something the caller can fix.
             Self::ExecuteGraphQlQuery { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::GraphQlErrors { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+
+            // The URN is built entirely from the caller's parameters, so a URN DataHub refuses to
+            // parse or resolve is a bad request rather than a server fault. Any user who can name a
+            // table can reach this, e.g. through Trino's `SELECT * FROM tpch.sf1."a,PROD)"`.
+            Self::GraphQlErrors { .. } => StatusCode::BAD_REQUEST,
+
+            // The caller named a resource that cannot be expressed as a URN at all.
+            Self::InvalidResourceName { .. } => StatusCode::BAD_REQUEST,
+
+            // A limitation of our own query, see the variant's message.
             Self::TruncatedDataProducts { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -177,7 +199,7 @@ impl ResolvedDataHubBackend {
     pub async fn resolve(
         config: v1alpha1::DataHubBackend,
         credentials_dir: &Path,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ResolveError> {
         let token_path = credentials_dir.join("token");
 
         // Trim trailing whitespace/newlines so the value is safe to use in an HTTP header.
@@ -245,6 +267,20 @@ impl ResolvedDataHubBackend {
             return Ok(graphql::Entity::default());
         };
 
+        // The query only reads tags, owners and domains off the entity types it has inline fragments
+        // for. Anything else (reachable through `rawIdentifier`, which accepts any URN) resolves to
+        // a response that looks just like that of a resource with no metadata, so say so rather than
+        // letting a policy silently decide on an empty record.
+        if let Some(entity_type) = entity.uncovered_type() {
+            warn!(
+                %urn,
+                entity_type,
+                "DataHub resolved this URN to an entity type the resource-info-fetcher cannot read \
+                metadata from; answering with empty tags, owners and data products. A policy cannot \
+                tell this apart from a resource that has no metadata, so do not rely on it"
+            );
+        }
+
         // Fail loudly instead of serving a partial list of data products: a policy that keys off data
         // product membership would otherwise silently decide based on incomplete metadata.
         if let Some(truncation) = entity.data_products_truncation() {
@@ -263,8 +299,22 @@ impl ResolvedDataHubBackend {
     }
 }
 
+#[cfg(test)]
+impl ResolvedDataHubBackend {
+    /// A backend querying `graphql_url`, bypassing [`ResolvedDataHubBackend::resolve`] so that no
+    /// credentials have to be read from disk.
+    pub fn for_tests(graphql_url: Url) -> Self {
+        Self {
+            token: "not-a-real-token".to_owned(),
+            http_client: reqwest::Client::new(),
+            graphql_url,
+            env: v1alpha1::FabricType::Prod,
+        }
+    }
+}
+
 /// Builds the DataHub GraphQL endpoint from the backend configuration.
-fn build_graphql_url(config: &v1alpha1::DataHubBackend) -> Result<Url, Error> {
+fn build_graphql_url(config: &v1alpha1::DataHubBackend) -> Result<Url, ResolveError> {
     let schema = if config.tls.uses_tls() {
         "https"
     } else {
@@ -303,7 +353,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
         &self,
         request: &ResourceInfoRequest,
     ) -> Result<Self::Response, GetResourceInfoError> {
-        let urn = urn_for_request(request, &self.env);
+        let urn = urn_for_request(request, &self.env)?;
         let entity = self.query_entity(&urn).await?;
 
         Ok(entity.into_response(urn))
@@ -314,6 +364,7 @@ impl ResourceInfoBackend for ResolvedDataHubBackend {
 mod tests {
     use rstest::rstest;
     use serde_json::json;
+    use snafu::IntoError;
 
     use super::*;
 
@@ -348,6 +399,39 @@ mod tests {
 
     /// [`Url`] omits the port whenever it is the default port of the scheme, hence the expected
     /// endpoints of the defaulted cases carry no port.
+    fn urn() -> Urn {
+        Urn("urn:li:dataset:(urn:li:dataPlatform:trino,a,PROD)".to_owned())
+    }
+
+    /// The status code tells the caller whose problem a failure is. The URN we query is built
+    /// entirely from the caller's parameters, so a URN DataHub refuses to parse or resolve is a bad
+    /// request. Any user who can name a table can reach it, for example through Trino's
+    /// `SELECT * FROM tpch.sf1."a,PROD)"`. A backend we could not reach at all, or a limitation of
+    /// our own query, is not something the caller can do anything about.
+    #[rstest]
+    #[case::graphql_errors(
+        GraphQlErrorsSnafu { messages: "Failed to parse urn", urn: urn() }.build(),
+        StatusCode::BAD_REQUEST
+    )]
+    #[case::unreachable_backend(
+        ExecuteGraphQlQuerySnafu { urn: urn() }.into_error(utils::http::Error::HttpErrorResponse {
+            status: StatusCode::UNAUTHORIZED,
+            url: "http://datahub-gms/api/graphql".to_owned(),
+            text: "Unauthorized".to_owned(),
+        }),
+        StatusCode::INTERNAL_SERVER_ERROR
+    )]
+    #[case::truncated_data_products(
+        TruncatedDataProductsSnafu { urn: urn(), total: 11u32, received: 10u32 }.build(),
+        StatusCode::INTERNAL_SERVER_ERROR
+    )]
+    fn status_code(#[case] error: Error, #[case] expected_status_code: StatusCode) {
+        assert_eq!(
+            info_fetcher_commons::http_error::Error::status_code(&error),
+            expected_status_code
+        );
+    }
+
     #[rstest]
     #[case::default_scheme_and_port(json!({}), format!("http://{HOSTNAME}/api/graphql"))]
     #[case::default_tls_scheme_and_port(
