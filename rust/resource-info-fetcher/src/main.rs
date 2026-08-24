@@ -142,6 +142,7 @@ async fn main() -> Result<(), StartupError> {
     };
 
     let config: v1alpha1::Config = read_config_file(&args.config)
+        .await
         .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
     let resource_info_cache = cache::build(&config.cache);
