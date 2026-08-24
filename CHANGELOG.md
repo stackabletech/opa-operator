@@ -10,7 +10,10 @@ All notable changes to this project will be documented in this file.
   For now only DataHub is supported.
   Also, a rego-rule library has been added to make it easier to call resource-info-fetcher from within OPA.
   The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
-- Allow specifying the maximum number of cached entries in the user-info-fetcher ([#863]).
+- Allow specifying the maximum number of cached entries in the user-info-fetcher, defaulting to `10000`
+  ([#863]). The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
+  the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
+  evicted least-recently-used first.
 
 ### Changed
 

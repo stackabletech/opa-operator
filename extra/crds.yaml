@@ -187,7 +187,7 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
-                          maxEntries: null
+                          maxEntries: 10000
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
@@ -195,13 +195,14 @@ spec:
                             description: How long responses should be cached for.
                             type: string
                           maxEntries:
+                            default: 10000
                             description: |-
                               Maximum number of entries to cache.
 
-                              By default there is no limit.
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
                             format: uint64
                             minimum: 0.0
-                            nullable: true
                             type: integer
                         type: object
                     required:
@@ -669,7 +670,7 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
-                          maxEntries: null
+                          maxEntries: 10000
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
@@ -677,13 +678,14 @@ spec:
                             description: How long responses should be cached for.
                             type: string
                           maxEntries:
+                            default: 10000
                             description: |-
                               Maximum number of entries to cache.
 
-                              By default there is no limit.
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
                             format: uint64
                             minimum: 0.0
-                            nullable: true
                             type: integer
                         type: object
                     type: object
@@ -2446,7 +2448,7 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
-                          maxEntries: null
+                          maxEntries: 10000
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
@@ -2454,13 +2456,14 @@ spec:
                             description: How long responses should be cached for.
                             type: string
                           maxEntries:
+                            default: 10000
                             description: |-
                               Maximum number of entries to cache.
 
-                              By default there is no limit.
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
                             format: uint64
                             minimum: 0.0
-                            nullable: true
                             type: integer
                         type: object
                     required:
@@ -2928,7 +2931,7 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
-                          maxEntries: null
+                          maxEntries: 10000
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
@@ -2936,13 +2939,14 @@ spec:
                             description: How long responses should be cached for.
                             type: string
                           maxEntries:
+                            default: 10000
                             description: |-
                               Maximum number of entries to cache.
 
-                              By default there is no limit.
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
                             format: uint64
                             minimum: 0.0
-                            nullable: true
                             type: integer
                         type: object
                     type: object
