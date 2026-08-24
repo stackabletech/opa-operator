@@ -54,7 +54,11 @@ pub async fn send_json_request<T: DeserializeOwned>(req: RequestBuilder) -> Resu
     // parse the result
     let json = non_error_response.text().await.context(HttpRequestSnafu)?;
 
-    trace!(%url, json, "Got HTTP JSON response");
+    // Deliberately *not* logging the body: the OAuth token endpoints of the Keycloak and Entra
+    // backends go through this same function, so doing so would write bearer tokens (and the PII
+    // of every user lookup) into the console and file logs of anyone debugging at TRACE level.
+    // Backends log their own parsed, secret-free payload where that is useful.
+    trace!(%url, bytes = json.len(), "Got HTTP JSON response");
 
     serde_json::from_str(&json).context(ParseJsonSnafu)
 }
