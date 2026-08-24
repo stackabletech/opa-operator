@@ -31,6 +31,10 @@ All notable changes to this project will be documented in this file.
 - Environment variable overrides (`envOverrides`) are now applied after all environment
   variables set by the operator. In particular, `CONTAINERDEBUG_LOG_DIRECTORY` can now be
   overridden, whereas previously the operator's value always took precedence ([#880]).
+- BREAKING: The volume holding the user-info-fetcher credentials is now called
+  `user-info-fetcher-credentials` instead of `credentials`, so that it does not collide with the
+  resource-info-fetcher's. A `podOverrides` patching that volume or its volume mount by name must be
+  adjusted, otherwise it silently stops applying ([#863]).
 - BREAKING: Remove the `app.kubernetes.io/component` and `app.kubernetes.io/role-group` labels
   from the resources they don't apply to (previously set to `none` or a placeholder value):
   the role-level Service (`<cluster>-server`) and the discovery ConfigMap lose
