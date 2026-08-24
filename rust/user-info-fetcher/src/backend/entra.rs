@@ -1,10 +1,10 @@
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{collections::HashMap, path::Path};
 
 use hyper::StatusCode;
 use info_fetcher_commons::utils::{
     self,
     http::send_json_request,
-    token::{CachedToken, MintedToken},
+    token::{CachedToken, MintedToken, OAuthResponse},
 };
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
@@ -80,16 +80,6 @@ impl http_error::Error for Error {
         }
     }
 }
-
-#[derive(Deserialize)]
-struct OAuthResponse {
-    access_token: String,
-
-    /// How many seconds the token stays valid, which lets us cache it rather than mint one per
-    /// lookup. Treated as optional so a response without it degrades to minting per lookup.
-    expires_in: Option<u64>,
-}
-
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserMetadata {
@@ -198,50 +188,29 @@ impl ResolvedEntraBackend {
             TlsClientDetails { tls: tls.clone() }.uses_tls(),
         )?;
 
-        let access_token = self.access_token(&entra_backend).await?;
-        match self
-            .get_user_info_with(req, &entra_backend, &access_token)
+        self.access_token
+            .get_with_retry(
+                "Entra",
+                || self.mint_access_token(&entra_backend),
+                |access_token| self.get_user_info_with(req, &entra_backend, access_token),
+            )
             .await
-        {
-            Err(error) if utils::http::is_unauthorized(&error) => {
-                // The token was accepted when it was minted, so it has stopped being valid ahead of
-                // its stated expiry. It was revoked, or the issuer's and our clock disagree. Drop
-                // it and give the lookup exactly one more go with a fresh one.
-                tracing::warn!(
-                    error = &error as &dyn std::error::Error,
-                    "Entra rejected the cached access token; re-authenticating and retrying once"
-                );
-                self.access_token.invalidate().await;
-
-                let access_token = self.access_token(&entra_backend).await?;
-                self.get_user_info_with(req, &entra_backend, &access_token)
-                    .await
-            }
-            result => result,
-        }
     }
 
-    /// The cached access token, minting one if there is none or it is about to expire.
-    async fn access_token(&self, entra_backend: &EntraBackend) -> Result<String, Error> {
-        self.access_token
-            .get(|| async {
-                let response = send_json_request::<OAuthResponse>(
-                    self.http_client.post(entra_backend.oauth2_token()).form(&[
-                        ("client_id", self.client_id.as_str()),
-                        ("client_secret", self.client_secret.as_str()),
-                        ("scope", "https://graph.microsoft.com/.default"),
-                        ("grant_type", "client_credentials"),
-                    ]),
-                )
-                .await
-                .context(AccessTokenSnafu)?;
+    /// Mints an access token through the `client_credentials` grant of the tenant.
+    async fn mint_access_token(&self, entra_backend: &EntraBackend) -> Result<MintedToken, Error> {
+        let response = send_json_request::<OAuthResponse>(
+            self.http_client.post(entra_backend.oauth2_token()).form(&[
+                ("client_id", self.client_id.as_str()),
+                ("client_secret", self.client_secret.as_str()),
+                ("scope", "https://graph.microsoft.com/.default"),
+                ("grant_type", "client_credentials"),
+            ]),
+        )
+        .await
+        .context(AccessTokenSnafu)?;
 
-                Ok(MintedToken {
-                    token: response.access_token,
-                    lifetime: response.expires_in.map(Duration::from_secs),
-                })
-            })
-            .await
+        Ok(response.into())
     }
 
     /// Looks the user up with an already-obtained `access_token`, so the caller can retry with a fresh
@@ -250,7 +219,7 @@ impl ResolvedEntraBackend {
         &self,
         req: &UserInfoRequest,
         entra_backend: &EntraBackend,
-        access_token: &str,
+        access_token: String,
     ) -> Result<UserInfo, Error> {
         let user_info = match req {
             UserInfoRequest::UserInfoRequestById(req) => {
@@ -258,7 +227,7 @@ impl ResolvedEntraBackend {
                 send_json_request::<UserMetadata>(
                     self.http_client
                         .get(entra_backend.user_info(user_id))
-                        .bearer_auth(access_token),
+                        .bearer_auth(&access_token),
                 )
                 .await
                 .with_context(|_| UserNotFoundByIdSnafu {
@@ -270,7 +239,7 @@ impl ResolvedEntraBackend {
                 send_json_request::<UserMetadata>(
                     self.http_client
                         .get(entra_backend.user_info(username))
-                        .bearer_auth(access_token),
+                        .bearer_auth(&access_token),
                 )
                 .await
                 .with_context(|_| SearchForUserSnafu {
@@ -298,7 +267,7 @@ impl ResolvedEntraBackend {
             pages_remaining -= 1;
 
             let response = send_json_request::<GroupMembershipResponse>(
-                self.http_client.get(url).bearer_auth(access_token),
+                self.http_client.get(url).bearer_auth(&access_token),
             )
             .await
             .with_context(|_| RequestUserGroupsSnafu {
@@ -434,36 +403,27 @@ mod tests {
         }
     }
 
-    /// Mounts the OAuth2 token endpoint, answering with a token that is valid for `expires_in`
-    /// seconds. Without an `expires_in` the token is deliberately not cached, see
-    /// [`utils::token::CachedToken`].
-    ///
-    /// `expected_calls` asserts how often the endpoint is hit; wiremock verifies it when the server
-    /// is dropped.
+    /// Mounts Entra's token endpoint, see [`crate::backend::test_mocks::mock_token`].
     async fn mock_token(mock_server: &MockServer, expires_in: Option<u64>, expected_calls: u64) {
-        let mut body = serde_json::json!({"access_token": "access-token"});
-        if let Some(expires_in) = expires_in {
-            body["expires_in"] = expires_in.into();
-        }
-
-        Mock::given(method("POST"))
-            .and(path(format!("/{TENANT_ID}/oauth2/v2.0/token")))
-            .respond_with(ResponseTemplate::new(200).set_body_json(body))
-            .expect(expected_calls)
-            .mount(mock_server)
-            .await;
+        crate::backend::test_mocks::mock_token(
+            mock_server,
+            format!("/{TENANT_ID}/oauth2/v2.0/token"),
+            expires_in,
+            Some(expected_calls),
+        )
+        .await;
     }
 
     /// Mocks the OAuth2 token and user metadata endpoints, which every `get_user_info` call hits
     /// before it gets to the group memberships we actually care about.
     async fn mock_token_and_user(mock_server: &MockServer) {
-        Mock::given(method("POST"))
-            .and(path(format!("/{TENANT_ID}/oauth2/v2.0/token")))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "access_token": "access-token",
-            })))
-            .mount(mock_server)
-            .await;
+        crate::backend::test_mocks::mock_token(
+            mock_server,
+            format!("/{TENANT_ID}/oauth2/v2.0/token"),
+            None,
+            None,
+        )
+        .await;
 
         Mock::given(method("GET"))
             .and(path(format!("/v1.0/users/{USER_ID}")))

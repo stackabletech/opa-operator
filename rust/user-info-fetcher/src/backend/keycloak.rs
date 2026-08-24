@@ -1,10 +1,10 @@
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{collections::HashMap, path::Path};
 
 use hyper::StatusCode;
 use info_fetcher_commons::utils::{
     self,
     http::send_json_request,
-    token::{CachedToken, MintedToken},
+    token::{CachedToken, MintedToken, OAuthResponse},
 };
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -86,16 +86,6 @@ impl http_error::Error for Error {
         }
     }
 }
-
-#[derive(Deserialize)]
-struct OAuthResponse {
-    access_token: String,
-
-    /// How many seconds the token stays valid, which lets us cache it rather than mint one per
-    /// lookup. Treated as optional so a response without it degrades to minting per lookup.
-    expires_in: Option<u64>,
-}
-
 /// The minimal structure of [UserRepresentation] that is returned by [`/users`][users] and [`/users/{id}`][user-by-id].
 /// <div class="warning">Some fields, such as `groups` are never present. See [keycloak/keycloak#20292][issue-20292]</div>
 ///
@@ -174,27 +164,13 @@ impl ResolvedKeycloakBackend {
     pub(crate) async fn get_user_info(&self, req: &UserInfoRequest) -> Result<UserInfo, Error> {
         let keycloak_url = self.keycloak_url()?;
 
-        let access_token = self.access_token(&keycloak_url).await?;
-        match self
-            .get_user_info_with(req, &keycloak_url, &access_token)
+        self.access_token
+            .get_with_retry(
+                "Keycloak",
+                || self.mint_access_token(&keycloak_url),
+                |access_token| self.get_user_info_with(req, &keycloak_url, access_token),
+            )
             .await
-        {
-            Err(error) if utils::http::is_unauthorized(&error) => {
-                // The token was accepted when it was minted, so it has stopped being valid ahead of
-                // its stated expiry. It was revoked, or the issuer's and our clock disagree. Drop
-                // it and give the lookup exactly one more go with a fresh one.
-                tracing::warn!(
-                    error = &error as &dyn std::error::Error,
-                    "Keycloak rejected the cached access token; re-authenticating and retrying once"
-                );
-                self.access_token.invalidate().await;
-
-                let access_token = self.access_token(&keycloak_url).await?;
-                self.get_user_info_with(req, &keycloak_url, &access_token)
-                    .await
-            }
-            result => result,
-        }
     }
 
     /// The base URL of the configured Keycloak.
@@ -224,33 +200,26 @@ impl ResolvedKeycloakBackend {
             .context(ParseOidcEndpointUrlSnafu)
     }
 
-    /// The cached access token, minting one if there is none or it is about to expire.
-    async fn access_token(&self, keycloak_url: &Url) -> Result<String, Error> {
+    /// Mints an access token through the `client_credentials` grant of the admin realm.
+    async fn mint_access_token(&self, keycloak_url: &Url) -> Result<MintedToken, Error> {
         let admin_realm = &self.config.admin_realm;
 
-        self.access_token
-            .get(|| async {
-                let response = send_json_request::<OAuthResponse>(
-                    self.http_client
-                        .post(
-                            keycloak_url
-                                .join(&format!(
-                                    "realms/{admin_realm}/protocol/openid-connect/token"
-                                ))
-                                .context(ConstructOidcEndpointPathSnafu)?,
-                        )
-                        .basic_auth(&self.client_id, Some(&self.client_secret))
-                        .form(&[("grant_type", "client_credentials")]),
+        let response = send_json_request::<OAuthResponse>(
+            self.http_client
+                .post(
+                    keycloak_url
+                        .join(&format!(
+                            "realms/{admin_realm}/protocol/openid-connect/token"
+                        ))
+                        .context(ConstructOidcEndpointPathSnafu)?,
                 )
-                .await
-                .context(AccessTokenSnafu)?;
+                .basic_auth(&self.client_id, Some(&self.client_secret))
+                .form(&[("grant_type", "client_credentials")]),
+        )
+        .await
+        .context(AccessTokenSnafu)?;
 
-                Ok(MintedToken {
-                    token: response.access_token,
-                    lifetime: response.expires_in.map(Duration::from_secs),
-                })
-            })
-            .await
+        Ok(response.into())
     }
 
     /// Looks the user up with an already-obtained `access_token`, so the caller can retry with a fresh
@@ -259,7 +228,7 @@ impl ResolvedKeycloakBackend {
         &self,
         req: &UserInfoRequest,
         keycloak_url: &Url,
-        access_token: &str,
+        access_token: String,
     ) -> Result<UserInfo, Error> {
         let user_realm = &self.config.user_realm;
 
@@ -277,7 +246,7 @@ impl ResolvedKeycloakBackend {
                                 .join(&req.id)
                                 .context(ConstructOidcEndpointPathSnafu)?,
                         )
-                        .bearer_auth(access_token),
+                        .bearer_auth(&access_token),
                 )
                 .await
                 .context(UserNotFoundByIdSnafu { user_id })?
@@ -289,7 +258,7 @@ impl ResolvedKeycloakBackend {
                     .context(ConstructOidcEndpointPathSnafu)?;
 
                 let users = send_json_request::<Vec<UserMetadata>>(
-                    self.http_client.get(users_url).bearer_auth(access_token),
+                    self.http_client.get(users_url).bearer_auth(&access_token),
                 )
                 .await
                 .context(SearchForUserSnafu)?;
@@ -312,7 +281,7 @@ impl ResolvedKeycloakBackend {
                         .join(&format!("{}/groups", user_info.id))
                         .context(ConstructOidcEndpointPathSnafu)?,
                 )
-                .bearer_auth(access_token),
+                .bearer_auth(&access_token),
         )
         .await
         .context(RequestUserGroupsSnafu {
@@ -369,22 +338,15 @@ mod tests {
         }
     }
 
-    /// Mounts the token endpoint, answering with a token valid for `expires_in` seconds.
-    /// `expected_calls` is verified by wiremock when the server is dropped.
+    /// Mounts Keycloak's token endpoint, see [`crate::backend::test_mocks::mock_token`].
     async fn mock_token(mock_server: &MockServer, expires_in: Option<u64>, expected_calls: u64) {
-        let mut body = serde_json::json!({"access_token": "access-token"});
-        if let Some(expires_in) = expires_in {
-            body["expires_in"] = expires_in.into();
-        }
-
-        Mock::given(method("POST"))
-            .and(path(format!(
-                "/realms/{ADMIN_REALM}/protocol/openid-connect/token"
-            )))
-            .respond_with(ResponseTemplate::new(200).set_body_json(body))
-            .expect(expected_calls)
-            .mount(mock_server)
-            .await;
+        crate::backend::test_mocks::mock_token(
+            mock_server,
+            format!("/realms/{ADMIN_REALM}/protocol/openid-connect/token"),
+            expires_in,
+            Some(expected_calls),
+        )
+        .await;
     }
 
     /// Mounts the user metadata and (empty) group endpoints, so a lookup gets all the way through.
