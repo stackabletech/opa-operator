@@ -472,8 +472,15 @@ fn group(urn: Urn, properties: Option<CorpGroupProperties>) -> Group {
     }
 }
 
+/// The username part of a `corpuser` URN, or the whole URN if it is not one.
+///
+/// Strips exactly one prefix: `trim_start_matches` would strip it repeatedly, mangling the name of a
+/// user who is unluckily called `urn:li:corpuser:alice`.
 fn strip_user_urn(urn: &Urn) -> String {
-    urn.0.trim_start_matches("urn:li:corpuser:").to_owned()
+    urn.0
+        .strip_prefix("urn:li:corpuser:")
+        .unwrap_or(&urn.0)
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -775,6 +782,19 @@ mod tests {
         assert_eq!(response.domain, None);
         assert!(response.data_products.is_empty());
         assert!(response.owners.is_empty());
+    }
+
+    /// The display name we fall back to is the URN with its prefix removed - exactly once, so that a
+    /// username that happens to look like a URN itself survives intact.
+    #[rstest]
+    #[case::plain_user("urn:li:corpuser:alice", "alice")]
+    #[case::username_looking_like_a_urn(
+        "urn:li:corpuser:urn:li:corpuser:alice",
+        "urn:li:corpuser:alice"
+    )]
+    #[case::not_a_user_urn("urn:li:corpGroup:analytics", "urn:li:corpGroup:analytics")]
+    fn the_user_urn_prefix_is_stripped_once(#[case] urn: &str, #[case] expected: &str) {
+        assert_eq!(strip_user_urn(&Urn(urn.to_owned())), expected);
     }
 
     /// A resolver that fails nulls out the list it was resolving, which must read as "nothing here"
