@@ -16,12 +16,12 @@ metadata:
 type: kubernetes.io/opaque
 stringData:
   admin: adminadmin
-  # Used by the DataHub Trino ingestion (21-ingest-trino).
+  # Used by the DataHub Trino ingestion.
   datahub: datahubdatahub
-  # Test users mirrored 1:1 from the DataHub corpusers created in 22-create-metadata (username ==
-  # DataHub corpuser id), so a later end-to-end OPA-on-Trino authz test can authenticate as them
-  # and have the RIF resolve their DataHub ownership. Passwords follow the doubled-username
-  # convention above; they are throwaway test credentials.
+  # Test users mirrored 1:1 from the DataHub corpusers, so a later end-to-end
+  # OPA-on-Trino authz test can authenticate as them and have the RIF resolve
+  # their DataHub ownership. Passwords follow the doubled-username convention
+  # above; they are throwaway test credentials.
   alice.turner: alice.turneralice.turner
   bob.ramirez: bob.ramirezbob.ramirez
   carla.nowak: carla.nowakcarla.nowak
