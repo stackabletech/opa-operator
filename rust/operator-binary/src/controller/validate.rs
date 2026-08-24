@@ -54,12 +54,6 @@ pub enum Error {
         role_group: String,
     },
 
-    #[snafu(display("failed to parse environment variable name {name:?}"))]
-    ParseEnvVarName {
-        source: stackable_operator::v2::macros::attributed_string_type::Error,
-        name: String,
-    },
-
     #[snafu(display("the role group name {role_group:?} is invalid"))]
     ParseRoleGroupName {
         source: <RoleGroupName as FromStr>::Err,
