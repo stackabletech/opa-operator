@@ -61,6 +61,9 @@ pub enum Error {
     #[snafu(display("DataHub returned GraphQL errors for URN {urn:?}: {messages}"))]
     GraphQlErrors { messages: String, urn: Urn },
 
+    #[snafu(display("failed to parse the GraphQL response data for URN {urn:?}"))]
+    ParseGraphQlData { source: serde_json::Error, urn: Urn },
+
     #[snafu(display(
         "the resource name {name:?} contains {delimiter:?}, which DataHub uses to delimit the parts \
         of a URN. No URN containing it can resolve, so the request is rejected without querying \
@@ -87,6 +90,9 @@ impl http_error::Error for Error {
             // parse or resolve is a bad request rather than a server fault. Any user who can name a
             // table can reach this, e.g. through Trino's `SELECT * FROM tpch.sf1."a,PROD)"`.
             Self::GraphQlErrors { .. } => StatusCode::BAD_REQUEST,
+
+            // DataHub answered with a body we cannot read, which the caller cannot do anything about.
+            Self::ParseGraphQlData { .. } => StatusCode::INTERNAL_SERVER_ERROR,
 
             // The caller named a resource that cannot be expressed as a URN at all.
             Self::InvalidResourceName { .. } => StatusCode::BAD_REQUEST,
@@ -260,9 +266,17 @@ impl ResolvedDataHubBackend {
             .fail();
         }
 
+        // Only now that `errors` is known to be empty is the payload parsed, so that a response we
+        // cannot read is still reported with the GraphQL error explaining it.
+        let data = response
+            .data
+            .map(serde_json::from_value::<graphql::ResponseData>)
+            .transpose()
+            .with_context(|_| ParseGraphQlDataSnafu { urn: urn.clone() })?;
+
         // A resource that is unknown to DataHub is reported as a null entity (with no errors). It
         // simply has no metadata, so we return an empty response rather than failing the request.
-        let Some(entity) = response.data.and_then(|data| data.entity) else {
+        let Some(entity) = data.and_then(|data| data.entity) else {
             debug!(%urn, "DataHub returned no entity; responding with empty resource info");
             return Ok(graphql::Entity::default());
         };

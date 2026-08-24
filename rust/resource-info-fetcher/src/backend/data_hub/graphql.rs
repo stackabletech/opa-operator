@@ -103,12 +103,28 @@ struct Variables<'a> {
     data_products_count: u32,
 }
 
+/// Reads an absent or `null` list as an empty one.
+///
+/// GraphQL answers a field whose resolver failed with `null` rather than omitting it, so a list
+/// field can legitimately arrive as `null`. `#[serde(default)]` alone only covers the absent case.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::deserialize(deserializer)?.unwrap_or_default())
+}
+
 /// A GraphQL server answers `200 OK` even when the query fails; the failures are reported in
 /// `errors`. Callers must therefore inspect `errors` explicitly rather than relying on the HTTP
 /// status code.
 #[derive(Debug, Deserialize)]
 pub struct GraphQlResponse {
-    pub data: Option<ResponseData>,
+    /// Kept unparsed until `errors` has been inspected. A failing resolver nulls out the field it
+    /// failed on, which can leave `data` in a shape [`ResponseData`] cannot describe. Parsing it
+    /// eagerly would surface such a response as a JSON error and discard `errors` — the only part
+    /// of the response that says what actually went wrong.
+    pub data: Option<serde_json::Value>,
 
     #[serde(default)]
     pub errors: Vec<GraphQlError>,
@@ -151,6 +167,7 @@ const COVERED_ENTITY_TYPES: &[&str] = &["Dataset", "Container", "Chart", "Dashbo
 
 #[derive(Debug, Deserialize)]
 struct GlobalTags {
+    #[serde(default, deserialize_with = "null_as_default")]
     tags: Vec<TagAssociation>,
 }
 
@@ -195,6 +212,7 @@ struct EntityRelationships {
     /// `relationships` actually returned, as those are capped by [`DATA_PRODUCTS_PAGE_SIZE`].
     total: Option<u32>,
 
+    #[serde(default, deserialize_with = "null_as_default")]
     relationships: Vec<EntityRelationship>,
 }
 
@@ -217,6 +235,7 @@ struct DataProductProperties {
 
 #[derive(Debug, Deserialize)]
 struct Ownership {
+    #[serde(default, deserialize_with = "null_as_default")]
     owners: Vec<Owner>,
 }
 
@@ -756,5 +775,39 @@ mod tests {
         assert_eq!(response.domain, None);
         assert!(response.data_products.is_empty());
         assert!(response.owners.is_empty());
+    }
+
+    /// A resolver that fails nulls out the list it was resolving, which must read as "nothing here"
+    /// rather than failing the whole payload.
+    #[test]
+    fn null_lists_are_read_as_empty() {
+        let response = entity_from(json!({
+            "tags": {"tags": null},
+            "ownership": {"owners": null},
+            "dataProducts": {"total": 0, "relationships": null},
+        }))
+        .into_response(urn());
+
+        assert!(response.tags.is_empty());
+        assert!(response.owners.is_empty());
+        assert!(response.data_products.is_empty());
+    }
+
+    /// `errors` is the only part of the response that says why a query failed, so it has to survive
+    /// a `data` payload we cannot read — here an owner where an object was expected.
+    #[test]
+    fn errors_survive_an_unreadable_payload() {
+        let response: GraphQlResponse = serde_json::from_value(json!({
+            "data": {"entity": {"ownership": {"owners": [{"owner": 42}]}}},
+            "errors": [{"message": "Failed to resolve ownership"}],
+        }))
+        .expect("the errors must be readable regardless of the payload");
+
+        let messages = response
+            .errors
+            .iter()
+            .map(|error| error.message.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(messages, ["Failed to resolve ownership"]);
     }
 }
