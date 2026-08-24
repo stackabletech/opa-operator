@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Populate DataHub with the users, groups, tags, domains, data products and assignments that the
-resource-info-fetcher (RIF) test asserts on (see 40_test-regorule.py).
+resource-info-fetcher (RIF) test asserts on (see 40-test-regorule.py).
 
 The metadata is attached to the entities ingested in 31/32/33: the Trino `tpch.sf1`
 catalog/schema/tables, the Kafka topics and the Superset chart/dashboard. Writes go to the GMS
@@ -81,7 +81,7 @@ SCHEMA = container_urn(
 )
 
 # The Superset seed in 23-install-superset creates exactly one chart and one dashboard in a fresh
-# Superset, so both get id 1. 40_test-regorule.py asserts on the same ids.
+# Superset, so both get id 1. 40-test-regorule.py asserts on the same ids.
 CHART = f"urn:li:chart:(superset,{SUPERSET}.1)"
 DASHBOARD = f"urn:li:dashboard:(superset,{SUPERSET}.1)"
 
