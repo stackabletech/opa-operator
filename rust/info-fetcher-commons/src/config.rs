@@ -1,16 +1,12 @@
-use std::{
-    fs::File,
-    io::BufReader,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
 
 #[derive(Snafu, Debug)]
 pub enum ConfigError {
-    #[snafu(display("failed to open config file from {path:?}"))]
-    OpenFile {
+    #[snafu(display("failed to read config file from {path:?}"))]
+    ReadFile {
         source: std::io::Error,
         path: PathBuf,
     },
@@ -22,12 +18,13 @@ pub enum ConfigError {
     },
 }
 
-pub fn read_config_file<C>(path: &Path) -> Result<C, ConfigError>
+pub async fn read_config_file<C>(path: &Path) -> Result<C, ConfigError>
 where
     C: DeserializeOwned,
 {
-    let file = File::open(path).with_context(|_| OpenFileSnafu { path })?;
-    let reader = BufReader::new(file);
+    let contents = tokio::fs::read_to_string(path)
+        .await
+        .with_context(|_| ReadFileSnafu { path })?;
 
-    serde_json::from_reader(reader).with_context(|_| ParseConfigFileSnafu { path })
+    serde_json::from_str(&contents).with_context(|_| ParseConfigFileSnafu { path })
 }
