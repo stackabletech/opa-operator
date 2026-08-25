@@ -149,23 +149,23 @@ async fn main() -> anyhow::Result<()> {
 
             let controller = controller
                 .owns(
-                    watch_namespace.get_api::<ConfigMap>(&client),
+                    watch_namespace.get_api::<DeserializeGuard<ConfigMap>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(
-                    watch_namespace.get_api::<DaemonSet>(&client),
+                    watch_namespace.get_api::<DeserializeGuard<DaemonSet>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(
-                    watch_namespace.get_api::<RoleBinding>(&client),
+                    watch_namespace.get_api::<DeserializeGuard<RoleBinding>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(
-                    watch_namespace.get_api::<Service>(&client),
+                    watch_namespace.get_api::<DeserializeGuard<Service>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(
-                    watch_namespace.get_api::<ServiceAccount>(&client),
+                    watch_namespace.get_api::<DeserializeGuard<ServiceAccount>>(&client),
                     watcher::Config::default(),
                 )
                 .graceful_shutdown_on(sigterm_watcher.handle())
