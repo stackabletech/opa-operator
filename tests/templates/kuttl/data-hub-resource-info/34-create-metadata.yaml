@@ -3,12 +3,12 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
   # Ship the metadata-creation script into the cluster as a ConfigMap (keeps
-  # 34-create-datahub-metadata.py a real, lintable file instead of inlining Python into YAML).
+  # 34_create-datahub-metadata.py a real, lintable file instead of inlining Python into YAML).
   # Idempotent so re-runs are safe. The Trino/Kafka/Superset entities it annotates already exist:
   # kuttl only advances here once 31/32/33-assert confirmed the ingestion Jobs completed.
   - script: |
       kubectl -n "$NAMESPACE" create configmap datahub-metadata-script \
-        --from-file=create-datahub-metadata.py=34-create-datahub-metadata.py \
+        --from-file=create-datahub-metadata.py=34_create-datahub-metadata.py \
         --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
 ---
 apiVersion: batch/v1
