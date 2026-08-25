@@ -9,7 +9,10 @@ commands:
   #    createAccessToken GraphQL mutation. Run inside a throwaway pod because the frontend
   #    Service is only reachable in-cluster.
   - script: |
-      set -euo pipefail
+      # kuttl runs `script` blocks with `sh -c`, which is dash on many distributions, so this
+      # must stay POSIX: no `pipefail`. The only pipeline below is the token extraction, whose
+      # failure the empty-token check already catches.
+      set -eu
 
       # The frontend Deployment reports "available" before GMS finishes bootstrapping the default
       # policies that authorize the root user to mint tokens, so early attempts come back empty.
