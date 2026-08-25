@@ -11,6 +11,7 @@ use futures::{FutureExt, future, pin_mut};
 use info_fetcher_commons::{
     config::{ConfigError, read_config_file},
     http_error,
+    telemetry::create_file_log_directory,
 };
 use moka::future::Cache;
 use serde::{Deserialize, Serialize};
@@ -77,6 +78,11 @@ enum StartupError {
 
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
+
+    #[snafu(display("failed to create the file log directory"))]
+    CreateFileLogDirectory {
+        source: info_fetcher_commons::telemetry::CreateFileLogDirectoryError,
+    },
 
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit {
@@ -149,6 +155,9 @@ async fn main() -> Result<(), StartupError> {
     // - The console log level was set by `OPA_OPERATOR_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
     // - The file log level was set by `OPA_OPERATOR_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
     // - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+    // Must happen before telemetry is initialized, see the function's documentation.
+    create_file_log_directory(&args.common.telemetry).context(CreateFileLogDirectorySnafu)?;
+
     let _tracing_guard = Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry)
         .init()
         .context(TracingInitSnafu)?;

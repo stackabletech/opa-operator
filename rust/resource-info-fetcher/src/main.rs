@@ -15,6 +15,7 @@ use hyper::StatusCode;
 use info_fetcher_commons::{
     config::{ConfigError, read_config_file},
     http_error,
+    telemetry::create_file_log_directory,
 };
 use serde::de::DeserializeOwned;
 use snafu::{ResultExt, Snafu};
@@ -67,6 +68,11 @@ enum ResolvedBackend {
 
 #[derive(Snafu, Debug)]
 enum StartupError {
+    #[snafu(display("failed to create the file log directory"))]
+    CreateFileLogDirectory {
+        source: info_fetcher_commons::telemetry::CreateFileLogDirectoryError,
+    },
+
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit {
         source: stackable_operator::telemetry::tracing::Error,
@@ -113,6 +119,9 @@ async fn resolve_backend(
 #[snafu::report]
 async fn main() -> Result<(), StartupError> {
     let args = Args::parse();
+
+    // Must happen before telemetry is initialized, see the function's documentation.
+    create_file_log_directory(&args.common.telemetry).context(CreateFileLogDirectorySnafu)?;
 
     let _tracing_guard = Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry)
         .init()
