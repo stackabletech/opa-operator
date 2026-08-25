@@ -28,7 +28,7 @@ use crate::controller::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, STACKABLE_LOG_DIR,
             USER_INFO_FETCHER_CREDENTIALS_DIR, USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
             USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, container_name,
-            sidecar_container_log_level, sidecar_resource_requirements,
+            read_only_mount, sidecar_container_log_level, sidecar_resource_requirements,
             stackable_rust_cli_env_vars,
         },
     },
@@ -111,7 +111,7 @@ pub fn add_user_info_fetcher_sidecar(
             .image_from_product_image(&cluster.image) // inherit the pull policy and pull secrets, and then...
             .image(user_info_fetcher_image) // ...override the image
             .command(vec!["stackable-opa-user-info-fetcher".to_string()])
-            .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
+            .add_volume_mounts([read_only_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)])
             .context(AddVolumeMountSnafu)?
             // The sidecar writes its file logs below this directory (see
             // `stackable_rust_cli_env_vars`). They have to land on the shared log volume,
@@ -143,10 +143,10 @@ pub fn add_user_info_fetcher_sidecar(
                 )
                 .context(KerberosVolumeSnafu)?;
                 cb_user_info_fetcher
-                    .add_volume_mount(
+                    .add_volume_mounts([read_only_mount(
                         USER_INFO_FETCHER_KERBEROS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_KERBEROS_DIR,
-                    )
+                    )])
                     .context(KerberosVolumeMountSnafu)?;
                 env_vars = env_vars
                     .with_value(
@@ -173,10 +173,10 @@ pub fn add_user_info_fetcher_sidecar(
                 )
                 .context(AddVolumeSnafu)?;
                 cb_user_info_fetcher
-                    .add_volume_mount(
+                    .add_volume_mounts([read_only_mount(
                         USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
-                    )
+                    )])
                     .context(AddVolumeMountSnafu)?;
                 keycloak
                     .tls
@@ -194,10 +194,10 @@ pub fn add_user_info_fetcher_sidecar(
                 )
                 .context(AddVolumeSnafu)?;
                 cb_user_info_fetcher
-                    .add_volume_mount(
+                    .add_volume_mounts([read_only_mount(
                         USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
-                    )
+                    )])
                     .context(AddVolumeMountSnafu)?;
 
                 TlsClientDetails {

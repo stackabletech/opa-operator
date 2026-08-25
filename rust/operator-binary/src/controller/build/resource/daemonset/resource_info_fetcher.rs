@@ -21,7 +21,7 @@ use crate::controller::{
         resource::daemonset::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
             RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, STACKABLE_LOG_DIR, container_name,
-            sidecar_container_log_level, sidecar_resource_requirements,
+            read_only_mount, sidecar_container_log_level, sidecar_resource_requirements,
             stackable_rust_cli_env_vars,
         },
     },
@@ -81,7 +81,7 @@ pub fn add_resource_info_fetcher_sidecar(
             .image_from_product_image(&cluster.image) // inherit the pull policy and pull secrets, and then...
             .image(resource_info_fetcher_image) // ...override the image
             .command(vec!["stackable-opa-resource-info-fetcher".to_string()])
-            .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
+            .add_volume_mounts([read_only_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)])
             .context(AddVolumeMountSnafu)?
             // The sidecar writes its file logs below this directory (see
             // `stackable_rust_cli_env_vars`). They have to land on the shared log volume,
@@ -102,10 +102,10 @@ pub fn add_resource_info_fetcher_sidecar(
                 )
                 .context(AddVolumeSnafu)?;
                 cb_rif
-                    .add_volume_mount(
+                    .add_volume_mounts([read_only_mount(
                         RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
-                    )
+                    )])
                     .context(AddVolumeMountSnafu)?;
                 data_hub
                     .tls

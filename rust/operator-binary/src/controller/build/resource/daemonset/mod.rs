@@ -26,7 +26,7 @@ use stackable_operator::{
             apps::v1::{DaemonSet, DaemonSetSpec, DaemonSetUpdateStrategy, RollingUpdateDaemonSet},
             core::v1::{
                 EmptyDirVolumeSource, EnvVar, EnvVarSource, HTTPGetAction, ObjectFieldSelector,
-                Probe, ResourceRequirements,
+                Probe, ResourceRequirements, VolumeMount,
             },
         },
         apimachinery::pkg::{
@@ -206,6 +206,21 @@ fn container_name(container: &Container) -> ContainerName {
 }
 
 /// The CPU and memory requests/limits shared by the bundle-builder and user-info-fetcher sidecars.
+/// A [`VolumeMount`] the container may only read from.
+///
+/// Used for the config and credential volumes of the info-fetcher sidecars: they hold data the
+/// operator writes and the sidecar only ever reads, so there is no reason for the container to be
+/// able to write through the mount. The log volume is deliberately not one of these — the sidecars
+/// write their file logs to it.
+fn read_only_mount(name: &str, mount_path: &str) -> VolumeMount {
+    VolumeMount {
+        name: name.to_owned(),
+        mount_path: mount_path.to_owned(),
+        read_only: Some(true),
+        ..VolumeMount::default()
+    }
+}
+
 fn sidecar_resource_requirements() -> ResourceRequirements {
     ResourceRequirementsBuilder::new()
         .with_cpu_request("100m")
@@ -1212,6 +1227,9 @@ mod tests {
             "/stackable/kerberos/keytab"
         );
         assert_eq!(env_var(&uif, "KRB5CCNAME"), "MEMORY:");
+        // The credential cache lives in memory (`KRB5CCNAME`), so nothing is ever written into the
+        // kerberos directory - only the krb5.conf and keytab above are read from it.
+        assert_eq!(read_only(&uif, "kerberos"), Some(true));
     }
 
     #[test]
@@ -1238,6 +1256,11 @@ mod tests {
         assert_eq!(
             mount_path(&uif_container(&ds), "user-info-fetcher-credentials"),
             "/stackable/credentials"
+        );
+        // The sidecar only reads the secret.
+        assert_eq!(
+            read_only(&uif_container(&ds), "user-info-fetcher-credentials"),
+            Some(true)
         );
     }
 
@@ -1289,6 +1312,18 @@ mod tests {
             .expect("the log volume should have a size limit")
     }
 
+    /// Whether `container` mounts `volume` read-only.
+    fn read_only(container: &Container, volume: &str) -> Option<bool> {
+        container
+            .volume_mounts
+            .as_ref()
+            .expect("the container should have volume mounts")
+            .iter()
+            .find(|mount| mount.name == volume)
+            .unwrap_or_else(|| panic!("volume mount {volume} should exist"))
+            .read_only
+    }
+
     /// Both sidecars write their file logs below `STACKABLE_LOG_DIR`, so they have to mount the `log`
     /// volume. Otherwise the logs land in the container's own filesystem, where the Vector agent
     /// (which only reads the shared volume) cannot see them.
@@ -1309,6 +1344,39 @@ mod tests {
                 format!("/stackable/log/{container_name}")
             );
         }
+    }
+
+    /// The sidecars only read their config and credentials, so those mounts must not be writable.
+    /// The log volume must stay writable, because that is where they write their file logs.
+    #[test]
+    fn info_fetcher_sidecars_mount_config_and_credentials_read_only() {
+        let ds = build(&cluster_with_both_info_fetchers());
+
+        for container_name in ["user-info-fetcher", "resource-info-fetcher"] {
+            let container = container_by_name(&ds, container_name);
+
+            assert_eq!(
+                read_only(&container, "config"),
+                Some(true),
+                "{container_name} should mount its config read-only"
+            );
+            assert_ne!(
+                read_only(&container, "log"),
+                Some(true),
+                "{container_name} has to be able to write its file logs"
+            );
+        }
+
+        // Only the resource-info-fetcher has a credentials volume in this fixture; the
+        // user-info-fetcher's is covered by the Keycloak backend test above, as the xfsc-aas backend
+        // used here needs no credentials.
+        assert_eq!(
+            read_only(
+                &container_by_name(&ds, "resource-info-fetcher"),
+                "resource-info-fetcher-credentials"
+            ),
+            Some(true)
+        );
     }
 
     /// Nothing else bounds these files. Vector only reads them, and the products' log frameworks
