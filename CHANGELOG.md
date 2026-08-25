@@ -6,14 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher, but allows to fetch additional metadata about resource information from a data catalog.
+- Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher,
+  but allows to fetch additional metadata about resource information from a data catalog.
   For now only DataHub is supported.
   Also, a rego-rule library has been added to make it easier to call resource-info-fetcher from within OPA.
   The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
-- Allow specifying the maximum number of cached entries in the user-info-fetcher, defaulting to `10000`
-  ([#863]). The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
+- Allow specifying the maximum number of cached entries in the user-info-fetcher, defaulting to `10000`.
+  The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
   the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
-  evicted least-recently-used first.
+  evicted least-recently-used first ([#863])
 
 ### Changed
 
@@ -27,7 +28,6 @@ All notable changes to this project will be documented in this file.
   lifetime the identity provider reports, instead of minting a new one for every user lookup. This
   removes one round trip per lookup. If the provider rejects the cached token before it expires, it is
   re-minted and the lookup is retried once ([#863]).
-- Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
 - Environment variable overrides (`envOverrides`) are now applied after all environment
   variables set by the operator. In particular, `CONTAINERDEBUG_LOG_DIRECTORY` can now be
   overridden, whereas previously the operator's value always took precedence ([#880]).
@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
   `user-info-fetcher-credentials` instead of `credentials`, so that it does not collide with the
   resource-info-fetcher's. A `podOverrides` patching that volume or its volume mount by name must be
   adjusted, otherwise it silently stops applying ([#863]).
+- Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
 - BREAKING: Remove the `app.kubernetes.io/component` and `app.kubernetes.io/role-group` labels
   from the resources they don't apply to (previously set to `none` or a placeholder value):
   the role-level Service (`<cluster>-server`) and the discovery ConfigMap lose
@@ -43,12 +44,12 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
-  which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
-  See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The file logs of the user-info-fetcher and resource-info-fetcher sidecars are now collected by the
   Vector agent. Both sidecars log below `/stackable/log`, but did not mount the shared `log` volume,
   so their logs were unreachable for Vector and not accounted for in the volume's size limit ([#863]).
+- Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
+  which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
+  See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
 
