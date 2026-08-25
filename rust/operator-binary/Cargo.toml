@@ -29,3 +29,6 @@ tracing.workspace = true
 
 [build-dependencies]
 built.workspace = true
+
+[dev-dependencies]
+serde_yaml.workspace = true
