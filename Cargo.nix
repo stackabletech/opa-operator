@@ -12027,6 +12027,12 @@ rec {
             features = [ "chrono" "git2" ];
           }
         ];
+        devDependencies = [
+          {
+            name = "serde_yaml";
+            packageId = "serde_yaml";
+          }
+        ];
 
       };
       "stackable-opa-regorule-library" = rec {

@@ -1,0 +1,91 @@
+---
+# The recreated DaemonSet must bring the cluster back to ready, and the recreated
+# objects must carry an owner reference back to the OpaCluster so that garbage
+# collection still works for them.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+metadata:
+  name: recreate-owned-resources
+timeout: 600
+commands:
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 601s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-opa-serviceaccount
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: test-opa-rolebinding
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-opa
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-opa-server-default
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server-default-headless
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server-default-metrics
+  ownerReferences:
+    - apiVersion: opa.stackable.tech/v1alpha2
+      controller: true
+      kind: OpaCluster
+      name: test-opa

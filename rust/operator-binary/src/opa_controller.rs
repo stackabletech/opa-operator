@@ -14,6 +14,7 @@ use stackable_operator::{
     cluster_resources::ClusterResourceApplyStrategy,
     constant,
     kube::{
+        Resource,
         core::{DeserializeGuard, error_boundary},
         runtime::controller::Action,
     },
@@ -88,6 +89,11 @@ pub async fn reconcile_opa(
     ctx: Arc<Ctx>,
 ) -> Result<Action> {
     tracing::info!("Starting reconcile");
+
+    if opa.meta().deletion_timestamp.is_some() {
+        return Ok(Action::await_change());
+    }
+
     let opa = opa
         .0
         .as_ref()
@@ -139,6 +145,14 @@ pub fn error_policy(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use stackable_operator::{
+        client::Client,
+        commons::networking::DomainName,
+        kube::{Client as KubeClient, Config},
+    };
+
     use super::*;
 
     #[test]
@@ -147,5 +161,65 @@ mod tests {
         let _ = *PRODUCT_NAME;
         let _ = *OPERATOR_NAME;
         let _ = *CONTROLLER_NAME;
+    }
+
+    /// The client points at a closed port, so any API call would fail the reconciliation: an `Ok`
+    /// proves that a cluster being deleted returns before the reconciler touches the Kubernetes
+    /// API, and because the spec is invalid, before the [`DeserializeGuard`] is unwrapped.
+    #[test]
+    fn reconcile_exits_early_for_deleted_cluster() {
+        // Building the kube client initialises rustls. kube enables its `ring` backend,
+        // but the direct `rustls` dependency also enables the default `aws-lc-rs`
+        // backend - with two candidates rustls refuses to auto-select one and panics.
+        // Install one explicitly, exactly as main() does.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        let opa = serde_yaml::from_str(
+            r#"
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: opa
+  namespace: default
+  deletionTimestamp: "2026-08-14T12:00:00Z"
+spec: {}
+"#,
+        )
+        .expect("YAML parses; the invalid spec is captured inside the DeserializeGuard");
+
+        let action = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current-thread tokio runtime")
+            .block_on(async {
+                let cluster_info = KubernetesClusterInfo {
+                    cluster_domain: DomainName::from_str("cluster.local")
+                        .expect("valid cluster domain"),
+                };
+                let ctx = Arc::new(Ctx {
+                    client: Client::new(
+                        KubeClient::try_from(Config::new(
+                            "http://127.0.0.1:1".parse().expect("valid static URI"),
+                        ))
+                        .expect("client from static config"),
+                        None,
+                        "default".to_owned(),
+                        cluster_info.clone(),
+                    ),
+                    opa_bundle_builder_image: "opa-bundle-builder".to_owned(),
+                    user_info_fetcher_image: "user-info-fetcher".to_owned(),
+                    cluster_info,
+                    operator_environment: OperatorEnvironmentOptions {
+                        operator_namespace: "stackable-operators".to_owned(),
+                        operator_service_name: "opa-operator".to_owned(),
+                        image_repository: "oci.stackable.tech/sdp".to_owned(),
+                    },
+                });
+
+                reconcile_opa(Arc::new(opa), ctx).await
+            })
+            .expect("a deleted cluster reconciles without any API call");
+
+        assert_eq!(action, Action::await_change());
     }
 }
