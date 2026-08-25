@@ -31,6 +31,14 @@ All notable changes to this project will be documented in this file.
 - Environment variable overrides (`envOverrides`) are now applied after all environment
   variables set by the operator. In particular, `CONTAINERDEBUG_LOG_DIRECTORY` can now be
   overridden, whereas previously the operator's value always took precedence ([#880]).
+- BREAKING: The `userinfo` and `resourceinfo` rego rule libraries now only return a value when the
+  fetcher answers `200 OK`, and pass an explicit 5 second timeout. Previously the body of an error
+  response was returned to the policy as if it were user/resource information, so a rule defaulting a
+  missing field (`object.get(user, "groups", [])` and the like) read a failed lookup as "this user is
+  in no groups" and allowed what it should have denied. Such a lookup is now undefined instead. Rules
+  must require a positive signal to deny on a failed lookup; where the product's OPA client allows
+  it, also set `strict-builtin-errors=true` on the decision query so that a failed lookup fails the
+  whole decision ([#880]).
 - BREAKING: The volume holding the user-info-fetcher credentials is now called
   `user-info-fetcher-credentials` instead of `credentials`, so that it does not collide with the
   resource-info-fetcher's. A `podOverrides` patching that volume or its volume mount by name must be

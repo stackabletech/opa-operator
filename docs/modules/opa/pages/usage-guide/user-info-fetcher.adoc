@@ -327,3 +327,28 @@ allow if {
     "/admin" in user.groups
 }
 ----
+
+==== Behaviour when the lookup fails
+
+[WARNING]
+====
+A failed lookup does not deny access by itself.
+Only the shape of your rule decides that.
+====
+
+The library only returns a value for `200 OK`.
+When the fetcher answers with an error (the identity provider is unreachable, the credentials were rejected, or the user does not exist), the lookup is undefined rather than an object, so the error envelope can never reach a rule as if it were user information.
+
+The rule above is written to require a positive signal, so an undefined lookup leaves `allow` at its `default` of `false`.
+A rule keyed on the *absence* of a signal instead (deny users in a blocked group, allow everyone else) becomes undefined too, and an undefined `deny` means *not denied*.
+An identity provider outage would then grant access to everybody.
+So always require a positive signal.
+
+[TIP]
+====
+Where the product's OPA client lets you set query parameters, also set `strict-builtin-errors=true` on the decision query.
+OPA then aborts the query and answers `500` when a lookup fails, instead of quietly evaluating the rule to undefined.
+====
+
+The library waits 5 seconds for the fetcher, deliberately far below the 60 seconds the fetcher itself allows for talking to the identity provider: an authorization decision has to be answered promptly.
+When the provider is slower than that, the caller is left without an answer, while the fetcher completes the lookup and caches it, so the next request is served from the cache.

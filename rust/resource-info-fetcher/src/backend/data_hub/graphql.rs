@@ -122,7 +122,7 @@ where
 pub struct GraphQlResponse {
     /// Kept unparsed until `errors` has been inspected. A failing resolver nulls out the field it
     /// failed on, which can leave `data` in a shape [`ResponseData`] cannot describe. Parsing it
-    /// eagerly would surface such a response as a JSON error and discard `errors` — the only part
+    /// eagerly would surface such a response as a JSON error and discard `errors`, the only part
     /// of the response that says what actually went wrong.
     pub data: Option<serde_json::Value>,
 
@@ -784,7 +784,7 @@ mod tests {
         assert!(response.owners.is_empty());
     }
 
-    /// The display name we fall back to is the URN with its prefix removed - exactly once, so that a
+    /// The display name we fall back to is the URN with its prefix removed exactly once, so that a
     /// username that happens to look like a URN itself survives intact.
     #[rstest]
     #[case::plain_user("urn:li:corpuser:alice", "alice")]
@@ -814,7 +814,7 @@ mod tests {
     }
 
     /// `errors` is the only part of the response that says why a query failed, so it has to survive
-    /// a `data` payload we cannot read — here an owner where an object was expected.
+    /// a `data` payload we cannot read (here an owner where an object was expected).
     #[test]
     fn errors_survive_an_unreadable_payload() {
         let response: GraphQlResponse = serde_json::from_value(json!({

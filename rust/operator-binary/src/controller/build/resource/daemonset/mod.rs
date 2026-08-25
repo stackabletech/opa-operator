@@ -210,8 +210,8 @@ fn container_name(container: &Container) -> ContainerName {
 ///
 /// Used for the config and credential volumes of the info-fetcher sidecars: they hold data the
 /// operator writes and the sidecar only ever reads, so there is no reason for the container to be
-/// able to write through the mount. The log volume is deliberately not one of these — the sidecars
-/// write their file logs to it.
+/// able to write through the mount. The log volume is deliberately not one of these, because the
+/// sidecars write their file logs to it.
 fn read_only_mount(name: &str, mount_path: &str) -> VolumeMount {
     VolumeMount {
         name: name.to_owned(),
@@ -1228,7 +1228,7 @@ mod tests {
         );
         assert_eq!(env_var(&uif, "KRB5CCNAME"), "MEMORY:");
         // The credential cache lives in memory (`KRB5CCNAME`), so nothing is ever written into the
-        // kerberos directory - only the krb5.conf and keytab above are read from it.
+        // kerberos directory. Only the krb5.conf and keytab above are read from it.
         assert_eq!(read_only(&uif, "kerberos"), Some(true));
     }
 
