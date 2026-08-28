@@ -418,7 +418,7 @@ mod tests {
                 .into_iter()
                 .map(test_opa_cluster_yaml)
                 .map(|yaml| {
-                    println!("{}", &yaml);
+                    println!("{}", yaml);
                     stackable_operator::utils::yaml_from_str_singleton_map(&yaml)
                         .expect("Failed to parse OpaClusterSpec YAML")
                 })
@@ -503,7 +503,7 @@ mod tests {
                 .into_iter()
                 .map(test_opa_cluster_yaml)
                 .map(|yaml| {
-                    println!("{}", &yaml);
+                    println!("{}", yaml);
                     stackable_operator::utils::yaml_from_str_singleton_map(&yaml)
                         .expect("Failed to parse OpaClusterSpec YAML")
                 })

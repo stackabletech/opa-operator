@@ -14,7 +14,8 @@ use stackable_operator::{
     eos::EndOfSupportChecker,
     k8s_openapi::api::{
         apps::v1::DaemonSet,
-        core::v1::{ConfigMap, Service},
+        core::v1::{ConfigMap, Service, ServiceAccount},
+        rbac::v1::RoleBinding,
     },
     kube::{
         CustomResourceExt as _,
@@ -146,15 +147,23 @@ async fn main() -> anyhow::Result<()> {
 
             let controller = controller
                 .owns(
-                    watch_namespace.get_api::<DeserializeGuard<DaemonSet>>(&client),
-                    watcher::Config::default(),
-                )
-                .owns(
                     watch_namespace.get_api::<DeserializeGuard<ConfigMap>>(&client),
                     watcher::Config::default(),
                 )
                 .owns(
+                    watch_namespace.get_api::<DeserializeGuard<DaemonSet>>(&client),
+                    watcher::Config::default(),
+                )
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<RoleBinding>>(&client),
+                    watcher::Config::default(),
+                )
+                .owns(
                     watch_namespace.get_api::<DeserializeGuard<Service>>(&client),
+                    watcher::Config::default(),
+                )
+                .owns(
+                    watch_namespace.get_api::<DeserializeGuard<ServiceAccount>>(&client),
                     watcher::Config::default(),
                 )
                 .graceful_shutdown_on(sigterm_watcher.handle())
