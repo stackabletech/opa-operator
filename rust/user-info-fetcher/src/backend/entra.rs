@@ -52,17 +52,11 @@ pub enum Error {
     #[snafu(display("failed to configure TLS"))]
     ConfigureTls { source: utils::tls::Error },
 
-    #[snafu(display("failed to read client ID from {path:?}"))]
-    ReadClientId {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the client ID"))]
+    ReadClientId { source: utils::credentials::Error },
 
-    #[snafu(display("failed to read client secret from {path:?}"))]
-    ReadClientSecret {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the client secret"))]
+    ReadClientSecret { source: utils::credentials::Error },
 }
 
 impl http_error::Error for Error {
@@ -135,20 +129,13 @@ impl ResolvedEntraBackend {
         config: v1alpha2::EntraBackend,
         credentials_dir: &Path,
     ) -> Result<Self, Error> {
-        let client_id_path = credentials_dir.join("clientId");
-        let client_secret_path = credentials_dir.join("clientSecret");
-
-        let client_id =
-            tokio::fs::read_to_string(&client_id_path)
-                .await
-                .context(ReadClientIdSnafu {
-                    path: client_id_path.display().to_string(),
-                })?;
-        let client_secret = tokio::fs::read_to_string(&client_secret_path)
+        let client_id = utils::credentials::read_credential_file(&credentials_dir.join("clientId"))
             .await
-            .context(ReadClientSecretSnafu {
-                path: client_secret_path.display().to_string(),
-            })?;
+            .context(ReadClientIdSnafu)?;
+        let client_secret =
+            utils::credentials::read_credential_file(&credentials_dir.join("clientSecret"))
+                .await
+                .context(ReadClientSecretSnafu)?;
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(

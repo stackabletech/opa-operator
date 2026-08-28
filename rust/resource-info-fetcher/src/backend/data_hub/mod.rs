@@ -29,11 +29,8 @@ pub(crate) mod resource_to_urn_mapping;
 /// does not come up at all, so (unlike [`Error`]) they have no HTTP status code to map to.
 #[derive(Snafu, Debug)]
 pub enum ResolveError {
-    #[snafu(display("failed to read DataHub token from {path:?}"))]
-    ReadToken {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the DataHub token"))]
+    ReadToken { source: utils::credentials::Error },
 
     #[snafu(display("failed to configure TLS"))]
     ConfigureTls { source: utils::tls::Error },
@@ -206,16 +203,9 @@ impl ResolvedDataHubBackend {
         config: v1alpha1::DataHubBackend,
         credentials_dir: &Path,
     ) -> Result<Self, ResolveError> {
-        let token_path = credentials_dir.join("token");
-
-        // Trim trailing whitespace/newlines so the value is safe to use in an HTTP header.
-        let token = tokio::fs::read_to_string(&token_path)
+        let token = utils::credentials::read_credential_file(&credentials_dir.join("token"))
             .await
-            .with_context(|_| ReadTokenSnafu {
-                path: token_path.display().to_string(),
-            })?
-            .trim()
-            .to_owned();
+            .context(ReadTokenSnafu)?;
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)

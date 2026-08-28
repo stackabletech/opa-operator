@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use hyper::StatusCode;
 use info_fetcher_commons::utils;
@@ -35,17 +38,11 @@ pub enum Error {
     #[snafu(display("unable to get username attribute \"{attribute}\" from LDAP user"))]
     MissingUsernameAttribute { attribute: String },
 
-    #[snafu(display("failed to read bind user from {path:?}"))]
-    ReadBindUser {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the LDAP bind user"))]
+    ReadBindUser { source: utils::credentials::Error },
 
-    #[snafu(display("failed to read bind password from {path:?}"))]
-    ReadBindPassword {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the LDAP bind password"))]
+    ReadBindPassword { source: utils::credentials::Error },
 }
 
 impl http_error::Error for Error {
@@ -86,15 +83,12 @@ impl ResolvedOpenLdapBackend {
             .bind_credentials_mount_paths()
             .expect("bind credentials must be configured for OpenLDAP backend");
 
-        let bind_user = tokio::fs::read_to_string(&user_path)
+        let bind_user = utils::credentials::read_credential_file(Path::new(&user_path))
             .await
-            .context(ReadBindUserSnafu { path: user_path })?;
-        let bind_password =
-            tokio::fs::read_to_string(&password_path)
-                .await
-                .context(ReadBindPasswordSnafu {
-                    path: password_path,
-                })?;
+            .context(ReadBindUserSnafu)?;
+        let bind_password = utils::credentials::read_credential_file(Path::new(&password_path))
+            .await
+            .context(ReadBindPasswordSnafu)?;
 
         Ok(Self {
             config,
