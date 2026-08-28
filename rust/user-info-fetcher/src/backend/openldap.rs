@@ -4,7 +4,7 @@ use std::{
 };
 
 use hyper::StatusCode;
-use info_fetcher_commons::utils;
+use info_fetcher_commons::utils::{self, secret::Secret};
 use ldap3::{LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
@@ -69,7 +69,7 @@ impl http_error::Error for Error {
 pub struct ResolvedOpenLdapBackend {
     config: v1alpha2::OpenLdapBackend,
     bind_user: String,
-    bind_password: String,
+    bind_password: Secret,
 }
 
 impl ResolvedOpenLdapBackend {
@@ -88,7 +88,8 @@ impl ResolvedOpenLdapBackend {
             .context(ReadBindUserSnafu)?;
         let bind_password = utils::credentials::read_credential_file(Path::new(&password_path))
             .await
-            .context(ReadBindPasswordSnafu)?;
+            .context(ReadBindPasswordSnafu)?
+            .into();
 
         Ok(Self {
             config,
@@ -116,7 +117,7 @@ impl ResolvedOpenLdapBackend {
         .context(ConnectLdapSnafu)?;
         ldap3::drive!(ldap_conn);
 
-        ldap.simple_bind(&self.bind_user, &self.bind_password)
+        ldap.simple_bind(&self.bind_user, self.bind_password.expose())
             .await
             .context(RequestLdapSnafu)?
             .success()

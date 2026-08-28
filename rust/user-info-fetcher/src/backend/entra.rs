@@ -4,6 +4,7 @@ use hyper::StatusCode;
 use info_fetcher_commons::utils::{
     self,
     http::send_json_request,
+    secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
 };
 use serde::Deserialize;
@@ -113,7 +114,7 @@ const MAX_GROUP_PAGES: usize = 100;
 pub struct ResolvedEntraBackend {
     config: v1alpha2::EntraBackend,
     client_id: String,
-    client_secret: String,
+    client_secret: Secret,
     http_client: reqwest::Client,
 
     /// The OAuth2 access token, minted on demand and reused until it is about to expire.
@@ -135,7 +136,8 @@ impl ResolvedEntraBackend {
         let client_secret =
             utils::credentials::read_credential_file(&credentials_dir.join("clientSecret"))
                 .await
-                .context(ReadClientSecretSnafu)?;
+                .context(ReadClientSecretSnafu)?
+                .into();
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(
@@ -189,7 +191,7 @@ impl ResolvedEntraBackend {
         let response = send_json_request::<OAuthResponse>(
             self.http_client.post(entra_backend.oauth2_token()).form(&[
                 ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
+                ("client_secret", self.client_secret.expose()),
                 ("scope", "https://graph.microsoft.com/.default"),
                 ("grant_type", "client_credentials"),
             ]),
@@ -206,7 +208,7 @@ impl ResolvedEntraBackend {
         &self,
         req: &UserInfoRequest,
         entra_backend: &EntraBackend,
-        access_token: String,
+        access_token: Secret,
     ) -> Result<UserInfo, Error> {
         let user_info = match req {
             UserInfoRequest::UserInfoRequestById(req) => {
@@ -214,7 +216,7 @@ impl ResolvedEntraBackend {
                 send_json_request::<UserMetadata>(
                     self.http_client
                         .get(entra_backend.user_info(user_id))
-                        .bearer_auth(&access_token),
+                        .bearer_auth(access_token.expose()),
                 )
                 .await
                 .with_context(|_| UserNotFoundByIdSnafu {
@@ -226,7 +228,7 @@ impl ResolvedEntraBackend {
                 send_json_request::<UserMetadata>(
                     self.http_client
                         .get(entra_backend.user_info(username))
-                        .bearer_auth(&access_token),
+                        .bearer_auth(access_token.expose()),
                 )
                 .await
                 .with_context(|_| SearchForUserSnafu {
@@ -254,7 +256,7 @@ impl ResolvedEntraBackend {
             pages_remaining -= 1;
 
             let response = send_json_request::<GroupMembershipResponse>(
-                self.http_client.get(url).bearer_auth(&access_token),
+                self.http_client.get(url).bearer_auth(access_token.expose()),
             )
             .await
             .with_context(|_| RequestUserGroupsSnafu {
@@ -384,7 +386,7 @@ mod tests {
                 client_credentials_secret: SecretName::from_str("entra-credentials").unwrap(),
             },
             client_id: "client-id".to_owned(),
-            client_secret: "client-secret".to_owned(),
+            client_secret: "client-secret".into(),
             access_token: CachedToken::new(),
             http_client: reqwest::Client::new(),
         }

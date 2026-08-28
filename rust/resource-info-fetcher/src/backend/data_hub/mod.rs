@@ -7,7 +7,7 @@ use std::{
 use hyper::StatusCode;
 use info_fetcher_commons::{
     http_error,
-    utils::{self, http::send_json_request},
+    utils::{self, http::send_json_request, secret::Secret},
 };
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -188,7 +188,7 @@ pub struct Group {
 /// Credentials, the HTTP client and the GraphQL endpoint are initialized once at startup and stored
 /// internally.
 pub struct ResolvedDataHubBackend {
-    token: String,
+    token: Secret,
     http_client: reqwest::Client,
     graphql_url: Url,
 
@@ -205,7 +205,8 @@ impl ResolvedDataHubBackend {
     ) -> Result<Self, ResolveError> {
         let token = utils::credentials::read_credential_file(&credentials_dir.join("token"))
             .await
-            .context(ReadTokenSnafu)?;
+            .context(ReadTokenSnafu)?
+            .into();
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
@@ -233,7 +234,7 @@ impl ResolvedDataHubBackend {
                 .post(self.graphql_url.clone())
                 // Authenticate with a DataHub Personal Access Token (a bearer JWT). DataHub's
                 // Metadata Service Authentication verifies it and resolves it to the token's actor.
-                .bearer_auth(&self.token)
+                .bearer_auth(self.token.expose())
                 .json(&graphql::request(urn)),
         )
         .await
@@ -309,7 +310,7 @@ impl ResolvedDataHubBackend {
     /// credentials have to be read from disk.
     pub fn for_tests(graphql_url: Url) -> Self {
         Self {
-            token: "not-a-real-token".to_owned(),
+            token: "not-a-real-token".into(),
             http_client: reqwest::Client::new(),
             graphql_url,
             env: v1alpha1::FabricType::Prod,

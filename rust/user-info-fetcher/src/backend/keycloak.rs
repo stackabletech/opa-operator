@@ -4,6 +4,7 @@ use hyper::StatusCode;
 use info_fetcher_commons::utils::{
     self,
     http::send_json_request,
+    secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
 };
 use serde::Deserialize;
@@ -109,7 +110,7 @@ struct GroupMembership {
 pub struct ResolvedKeycloakBackend {
     config: v1alpha2::KeycloakBackend,
     client_id: String,
-    client_secret: String,
+    client_secret: Secret,
     http_client: reqwest::Client,
 
     /// The OAuth2 access token, minted on demand and reused until it is about to expire.
@@ -131,7 +132,8 @@ impl ResolvedKeycloakBackend {
         let client_secret =
             utils::credentials::read_credential_file(&credentials_dir.join("clientSecret"))
                 .await
-                .context(ReadClientSecretSnafu)?;
+                .context(ReadClientSecretSnafu)?
+                .into();
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
@@ -200,7 +202,7 @@ impl ResolvedKeycloakBackend {
                         ))
                         .context(ConstructOidcEndpointPathSnafu)?,
                 )
-                .basic_auth(&self.client_id, Some(&self.client_secret))
+                .basic_auth(&self.client_id, Some(self.client_secret.expose()))
                 .form(&[("grant_type", "client_credentials")]),
         )
         .await
@@ -215,7 +217,7 @@ impl ResolvedKeycloakBackend {
         &self,
         req: &UserInfoRequest,
         keycloak_url: &Url,
-        access_token: String,
+        access_token: Secret,
     ) -> Result<UserInfo, Error> {
         let user_realm = &self.config.user_realm;
 
@@ -233,7 +235,7 @@ impl ResolvedKeycloakBackend {
                                 .join(&req.id)
                                 .context(ConstructOidcEndpointPathSnafu)?,
                         )
-                        .bearer_auth(&access_token),
+                        .bearer_auth(access_token.expose()),
                 )
                 .await
                 .context(UserNotFoundByIdSnafu { user_id })?
@@ -245,7 +247,9 @@ impl ResolvedKeycloakBackend {
                     .context(ConstructOidcEndpointPathSnafu)?;
 
                 let users = send_json_request::<Vec<UserMetadata>>(
-                    self.http_client.get(users_url).bearer_auth(&access_token),
+                    self.http_client
+                        .get(users_url)
+                        .bearer_auth(access_token.expose()),
                 )
                 .await
                 .context(SearchForUserSnafu)?;
@@ -268,7 +272,7 @@ impl ResolvedKeycloakBackend {
                         .join(&format!("{}/groups", user_info.id))
                         .context(ConstructOidcEndpointPathSnafu)?,
                 )
-                .bearer_auth(&access_token),
+                .bearer_auth(access_token.expose()),
         )
         .await
         .context(RequestUserGroupsSnafu {
@@ -319,7 +323,7 @@ mod tests {
                 user_realm: USER_REALM.to_owned(),
             },
             client_id: "client-id".to_owned(),
-            client_secret: "client-secret".to_owned(),
+            client_secret: "client-secret".into(),
             http_client: reqwest::Client::new(),
             access_token: CachedToken::new(),
         }

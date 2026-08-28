@@ -8,7 +8,7 @@ use std::{
 use serde::Deserialize;
 use tokio::sync::RwLock;
 
-use crate::utils::http;
+use crate::utils::{http, secret::Secret};
 
 /// How long before its stated expiry a token stops being handed out.
 ///
@@ -20,7 +20,7 @@ pub const EXPIRY_MARGIN: Duration = Duration::from_secs(30);
 /// A freshly minted bearer token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MintedToken {
-    pub token: String,
+    pub token: Secret,
 
     /// How long the token remains valid, as reported by whoever issued it (for OAuth: `expires_in`).
     ///
@@ -34,7 +34,7 @@ pub struct MintedToken {
 /// Both the Keycloak and the Entra backend authenticate this way, so they read the same response.
 #[derive(Debug, Deserialize)]
 pub struct OAuthResponse {
-    access_token: String,
+    access_token: Secret,
 
     /// How many seconds the token stays valid, which lets us cache it rather than mint one per
     /// lookup. Treated as optional so a response without it degrades to minting per lookup.
@@ -63,7 +63,7 @@ pub struct CachedToken {
 
 #[derive(Debug)]
 struct Entry {
-    token: String,
+    token: Secret,
 
     /// The stated expiry, already brought forward by [`EXPIRY_MARGIN`].
     usable_until: Instant,
@@ -80,7 +80,7 @@ impl CachedToken {
     /// Concurrent callers that all miss the cache do not each mint: the first one to get the write
     /// lock mints while the others wait, and they then find its result in the cache. Without that, a
     /// burst of requests arriving just after a token expired would produce a burst of token requests.
-    pub async fn get<F, Fut, E>(&self, mint: F) -> Result<String, E>
+    pub async fn get<F, Fut, E>(&self, mint: F) -> Result<Secret, E>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<MintedToken, E>>,
@@ -126,7 +126,7 @@ impl CachedToken {
     where
         M: Fn() -> MFut,
         MFut: Future<Output = Result<MintedToken, E>>,
-        U: Fn(String) -> UFut,
+        U: Fn(Secret) -> UFut,
         UFut: Future<Output = Result<T, E>>,
         E: std::error::Error + 'static,
     {
@@ -157,7 +157,7 @@ impl CachedToken {
     }
 
     /// The cached token, if there is one and it is not within [`EXPIRY_MARGIN`] of expiring.
-    fn usable_token(cached: &Option<Entry>) -> Option<String> {
+    fn usable_token(cached: &Option<Entry>) -> Option<Secret> {
         let entry = cached.as_ref()?;
 
         (entry.usable_until > Instant::now()).then(|| entry.token.clone())
@@ -192,7 +192,7 @@ mod tests {
             let call = self.calls.fetch_add(1, Ordering::SeqCst);
 
             Ok(MintedToken {
-                token: format!("token-{call}"),
+                token: format!("token-{call}").into(),
                 lifetime: self.lifetime,
             })
         }
@@ -216,8 +216,8 @@ mod tests {
         let first = cached.get(|| minter.mint()).await.expect("minting works");
         let second = cached.get(|| minter.mint()).await.expect("minting works");
 
-        assert_eq!(first, "token-0");
-        assert_eq!(second, "token-0");
+        assert_eq!(first.expose(), "token-0");
+        assert_eq!(second.expose(), "token-0");
         assert_eq!(minter.calls(), 1);
     }
 
@@ -230,8 +230,8 @@ mod tests {
         cached.invalidate().await;
         let second = cached.get(|| minter.mint()).await.expect("minting works");
 
-        assert_eq!(first, "token-0");
-        assert_eq!(second, "token-1");
+        assert_eq!(first.expose(), "token-0");
+        assert_eq!(second.expose(), "token-1");
         assert_eq!(minter.calls(), 2);
     }
 
@@ -278,7 +278,7 @@ mod tests {
         .await;
 
         for token in tokens {
-            assert_eq!(token.expect("minting works"), "token-0");
+            assert_eq!(token.expect("minting works").expose(), "token-0");
         }
         assert_eq!(minter.calls(), 1);
     }
@@ -298,7 +298,7 @@ mod tests {
         let call = mints.fetch_add(1, Ordering::SeqCst);
 
         Ok(MintedToken {
-            token: format!("token-{call}"),
+            token: format!("token-{call}").into(),
             lifetime: long_lifetime(),
         })
     }
@@ -336,7 +336,7 @@ mod tests {
             .await
             .expect("the retry with the re-minted token succeeds");
 
-        assert_eq!(token, "token-1");
+        assert_eq!(token.expose(), "token-1");
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
         assert_eq!(mints.load(Ordering::SeqCst), 2);
     }
@@ -354,7 +354,7 @@ mod tests {
                 || mint_for_lookup(&mints),
                 |_token| async {
                     attempts.fetch_add(1, Ordering::SeqCst);
-                    Err::<String, _>(rejected_with(hyper::StatusCode::FORBIDDEN))
+                    Err::<Secret, _>(rejected_with(hyper::StatusCode::FORBIDDEN))
                 },
             )
             .await
@@ -376,7 +376,10 @@ mod tests {
             .await;
         let succeeded = cached.get(|| minter.mint()).await;
 
-        assert_eq!(failed, Err("no token for you".to_owned()));
-        assert_eq!(succeeded, Ok("token-0".to_owned()));
+        assert_eq!(
+            failed.map(|token| token.expose().to_owned()),
+            Err("no token for you".to_owned())
+        );
+        assert_eq!(succeeded.expect("minting works").expose(), "token-0");
     }
 }
