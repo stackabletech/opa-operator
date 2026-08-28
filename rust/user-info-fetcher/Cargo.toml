@@ -21,7 +21,6 @@ clap.workspace = true
 futures.workspace = true
 hyper.workspace = true
 ldap3.workspace = true
-moka.workspace = true
 native-tls.workspace = true
 pin-project.workspace = true
 reqwest.workspace = true

@@ -44,6 +44,10 @@ All notable changes to this project will be documented in this file.
   resource-info-fetcher's. A `podOverrides` patching that volume or its volume mount by name must be
   adjusted, otherwise it silently stops applying ([#863]).
 - Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
+- The user-info-fetcher now logs a failed lookup once, where the backend was queried, instead of once
+  per response it is rendered into, and logs a request it rejects as the caller's fault (an unknown
+  user) at `debug` rather than `warn`. Any caller could previously fill the log with `warn` lines by
+  asking about users that do not exist ([#863]).
 - BREAKING: Remove the `app.kubernetes.io/component` and `app.kubernetes.io/role-group` labels
   from the resources they don't apply to (previously set to `none` or a placeholder value):
   the role-level Service (`<cluster>-server`) and the discovery ConfigMap lose
@@ -60,6 +64,11 @@ All notable changes to this project will be documented in this file.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
+- A failed user lookup is now cached for a few seconds, as a failed resource lookup already was. The
+  user-info-fetcher previously queried the backend again for every single request while a lookup kept
+  failing, which is reachable by anyone who can name a user and is at its worst exactly when the
+  backend is already in trouble. The window is deliberately far shorter than `entryTimeToLive`, but a
+  request arriving right after the backend recovers can still be served the cached failure ([#863]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861

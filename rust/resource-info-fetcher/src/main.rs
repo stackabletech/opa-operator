@@ -13,6 +13,7 @@ use clap::Parser;
 use futures::{FutureExt, future};
 use hyper::StatusCode;
 use info_fetcher_commons::{
+    cache::{self, CachedResponse, ResponseCache},
     config::{ConfigError, read_config_file},
     http_error,
     telemetry::create_file_log_directory,
@@ -23,14 +24,15 @@ use stackable_opa_operator::crd::resource_info_fetcher::v1alpha1::{self};
 use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
 use tokio::net::TcpListener;
 
-use crate::{
-    api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest},
-    cache::{CachedResponse, ResourceInfoCache},
-};
+use crate::api::{GetResourceInfoError, ResourceInfoBackend, ResourceInfoRequest};
 
 mod api;
 mod backend;
-mod cache;
+
+/// The resource information we answer with, already serialized to the JSON we return, keyed by the
+/// request it answers.
+type ResourceInfoCache =
+    ResponseCache<ResourceInfoRequest, serde_json::Value, GetResourceInfoError>;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -154,7 +156,7 @@ async fn main() -> Result<(), StartupError> {
         .await
         .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
-    let resource_info_cache = cache::build(&config.cache);
+    let resource_info_cache = cache::build("resource-info", &config.cache);
     // One GET endpoint per resource type. They all share the same generic `metadata` handler; only
     // the query-parameter struct (and thus the resulting `ResourceInfoRequest` variant) differs.
     let app = Router::new()
@@ -315,7 +317,7 @@ mod tests {
             backend: Arc::new(ResolvedBackend::DataHub(
                 backend::data_hub::ResolvedDataHubBackend::for_tests(graphql_url),
             )),
-            resource_info_cache: cache::build(&Default::default()),
+            resource_info_cache: cache::build("test", &Default::default()),
         }
     }
 

@@ -9,10 +9,12 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+stackable-opa-operator = { path = "../operator-binary" }
 stackable-operator.workspace = true
 
 axum.workspace = true
 hyper.workspace = true
+moka.workspace = true
 native-tls.workspace = true
 reqwest.workspace = true
 rustls-pki-types.workspace = true

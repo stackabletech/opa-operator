@@ -5462,6 +5462,12 @@ rec {
             packageId = "hyper";
           }
           {
+            name = "moka";
+            packageId = "moka";
+            usesDefaultFeatures = false;
+            features = [ "future" ];
+          }
+          {
             name = "native-tls";
             packageId = "native-tls";
           }
@@ -5487,6 +5493,10 @@ rec {
           {
             name = "snafu";
             packageId = "snafu 0.9.2";
+          }
+          {
+            name = "stackable-opa-operator";
+            packageId = "stackable-opa-operator";
           }
           {
             name = "stackable-operator";
@@ -12338,12 +12348,6 @@ rec {
             packageId = "md5";
           }
           {
-            name = "moka";
-            packageId = "moka";
-            usesDefaultFeatures = false;
-            features = [ "future" ];
-          }
-          {
             name = "reqwest";
             packageId = "reqwest";
             usesDefaultFeatures = false;
@@ -12456,12 +12460,6 @@ rec {
             name = "ldap3";
             packageId = "ldap3";
             features = [ "gssapi" "tls" ];
-          }
-          {
-            name = "moka";
-            packageId = "moka";
-            usesDefaultFeatures = false;
-            features = [ "future" ];
           }
           {
             name = "native-tls";
