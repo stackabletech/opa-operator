@@ -94,7 +94,7 @@ For DataHub that is a URN, such as `urn:li:chart:(superset,my-namespace/my-super
 
 Note that metadata is only read from the entity types the functions above map to: datasets, containers, charts and dashboards.
 Any other type (a `dataJob` or one of the ML entities, say) comes back empty, which looks just like a resource that has no metadata.
-The resource-info-fetcher logs a warning naming the entity type when this happens.
+The resource-info-fetcher logs a warning naming the entity type when this happens, and answers `inCatalog: false`, because it cannot check the presence of a type it cannot read.
 
 The first two arguments are the same everywhere:
 
@@ -117,6 +117,7 @@ An example of the returned structure:
 {
   "dataProducts": [],
   "domain": null,
+  "inCatalog": true,
   "owners": {
     "urn:li:ownershipType:__system__business_owner": {
       "groups": [
@@ -228,6 +229,51 @@ allow if {
 
 Each lookup is cached and served over the loopback interface, so consulting an extra level costs little.
 
+=== Telling an unknown resource from one without metadata
+
+A resource the catalog has never heard of and a resource it holds but that carries no tags, owners or data products look identical in the response: everything is empty either way.
+DataHub causes this, and not by accident.
+Its `entity(urn:)` resolver answers with an entity built from the URN alone for _any_ well-formed URN, rather than reporting that it does not know one, so there is nothing in the metadata itself to tell the two apart.
+
+That matters because the two mean opposite things.
+An untagged table has been through ingestion and genuinely carries no tags.
+An unknown one may be a table nobody ingested, or a typo in the arguments your rule passed.
+
+The `inCatalog` field answers it:
+
+[source,rego]
+----
+package test
+
+import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+default allow := false
+
+allow if {
+    table := resourceinfo.tableResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema, input.table)
+    table.inCatalog
+    some tag in table.tags
+    tag.urn == "urn:li:tag:public"
+}
+----
+
+`inCatalog` is `true` only when the catalog holds the resource *and* it has not been deleted there.
+That definition is deliberately independent of the catalog, so a future backend answers the same question in the same field.
+
+For DataHub, both halves are needed.
+Deleting an asset in DataHub is a soft delete: it marks the asset as removed and leaves its metadata in place, and DataHub's own `exists` field deliberately keeps reporting `true` for such an asset.
+A rule keyed on `exists` alone would therefore go on treating a deleted resource as present, which is the wrong way round for an authorization decision.
+The resource-info-fetcher reads both fields in the one query it already sends and reports the combination.
+
+`inCatalog` is `false` when the fetcher cannot check, which is the case for the entity types it does not read metadata from (see above).
+Nothing else in the response distinguishes that case, so the field answers with the option that denies rather than the one that allows.
+
+[NOTE]
+====
+`inCatalog` says the catalog knows the resource, not that its metadata is complete or current.
+A resource ingested once and never re-ingested still reports `true` with whatever tags it had at the time.
+====
+
 === Behaviour when metadata is unavailable
 
 [WARNING]
@@ -241,6 +287,7 @@ A lookup comes back without the metadata a rule expects in two cases:
 Unknown resource::
 The resource was never ingested into the catalog.
 This is not an error, so the answer is `200 OK` with empty `tags`, `owners` and `dataProducts`, and a `null` `domain`.
+It is reported as `inCatalog: false`, which is the only thing separating it from a resource that is catalogued but carries no metadata (see above).
 
 Backend unavailable::
 DataHub is down or unreachable, or the Personal Access Token expired or was revoked.
@@ -255,6 +302,7 @@ Either way the rule finds no `tags` to match on, so any expression reading them 
 
 So always require a positive signal.
 The resource-info-fetcher cannot know whether an empty record should mean allow or deny for your policy, so it does not paper over the difference.
+`inCatalog` is a positive signal that covers the empty record itself, and it is the only one that does, so a rule that must not act on a resource the catalog does not know should require it as well as the tag.
 
 [TIP]
 ====

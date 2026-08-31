@@ -49,10 +49,13 @@ fragment ResourceInfo on Entity {
     total
     relationships { ...DataProduct }
   }
-  ... on Dataset   { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
-  ... on Container { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
-  ... on Chart     { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
-  ... on Dashboard { tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  # `exists` and `status` answer whether the resource is in the catalog at all, see
+  # `Entity::in_catalog`. Both sit on the concrete types rather than on the `Entity` interface, so
+  # they have to be repeated per fragment alongside the metadata fields.
+  ... on Dataset   { exists status { removed } tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  ... on Container { exists status { removed } tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  ... on Chart     { exists status { removed } tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
+  ... on Dashboard { exists status { removed } tags { ...Tags } ownership { ...Owners } domain { ...Domain } }
 }
 fragment Tags on GlobalTags {
   tags { tag { urn properties { name } } }
@@ -152,10 +155,24 @@ pub struct Entity {
     #[serde(rename = "__typename")]
     typename: Option<String>,
 
+    /// Whether DataHub holds any aspect for this URN, see [`Entity::in_catalog`] for what that does
+    /// and does not say. [`None`] for an entity type [`RESOURCE_INFO_QUERY`] has no inline fragment
+    /// for, as the field is declared on the concrete types rather than on the `Entity` interface.
+    exists: Option<bool>,
+
+    /// The entity's lifecycle status, whose `removed` flag marks a soft delete. [`None`] when the
+    /// entity has no status aspect, which means it was never deleted.
+    status: Option<Status>,
+
     tags: Option<GlobalTags>,
     ownership: Option<Ownership>,
     domain: Option<DomainAssociation>,
     data_products: Option<EntityRelationships>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Status {
+    removed: bool,
 }
 
 /// The entity types [`RESOURCE_INFO_QUERY`] has an inline fragment for, and whose tags, owners and
@@ -306,6 +323,30 @@ pub struct DataProductsTruncation {
 }
 
 impl Entity {
+    /// Whether the resource is present in the catalog and has not been deleted.
+    ///
+    /// This is the one signal that tells a resource DataHub has never heard of apart from one that
+    /// is catalogued but carries no tags, owners or data products. Both look identical otherwise,
+    /// because `entity(urn:)` answers with an entity built from the URN alone for *any* well-formed
+    /// URN, rather than with `null` for one it does not know.
+    ///
+    /// Deliberately not DataHub's `exists` on its own. That field is resolved with
+    /// `includeSoftDelete = true`, so it stays `true` for an asset someone deleted in DataHub, which
+    /// is the normal delete there (it sets `status.removed`, it does not purge the aspects). A
+    /// policy keyed on `exists` alone would therefore keep treating a deleted resource as present,
+    /// which is exactly backwards for an authorization decision. Both fields come from the one query
+    /// we already send, so requiring both costs nothing.
+    ///
+    /// `false` when the fields are missing, which happens for an entity type
+    /// [`RESOURCE_INFO_QUERY`] has no inline fragment for (see [`Entity::uncovered_type`]). We
+    /// cannot confirm such a resource is in the catalog, and for an authorization input the honest
+    /// answer to "cannot confirm" is the one that denies.
+    pub fn in_catalog(&self) -> bool {
+        let soft_deleted = self.status.as_ref().is_some_and(|status| status.removed);
+
+        self.exists == Some(true) && !soft_deleted
+    }
+
     /// The entity's DataHub type, if [`RESOURCE_INFO_QUERY`] does not cover it.
     ///
     /// [`None`] means the type is covered, or that DataHub did not report one. In the latter case
@@ -336,6 +377,9 @@ impl Entity {
 
     /// Flattens the GraphQL response into the crate's public [`DataHubResourceInfoResponse`].
     pub fn into_response(self, urn: Urn) -> DataHubResourceInfoResponse {
+        // Read before `self` is taken apart below.
+        let in_catalog = self.in_catalog();
+
         let tags = self
             .tags
             .into_iter()
@@ -406,6 +450,7 @@ impl Entity {
 
         DataHubResourceInfoResponse {
             urn,
+            in_catalog,
             tags,
             domain,
             data_products,
@@ -557,6 +602,78 @@ mod tests {
         assert_eq!(Entity::default().uncovered_type(), None);
     }
 
+    /// Deserializes an entity with the `exists`/`status` pair DataHub answers with, both optional
+    /// because an uncovered entity type is answered without either.
+    fn entity_with_presence(exists: Option<bool>, removed: Option<bool>) -> Entity {
+        let mut payload = json!({});
+        if let Some(exists) = exists {
+            payload["exists"] = json!(exists);
+        }
+        if let Some(removed) = removed {
+            payload["status"] = json!({"removed": removed});
+        }
+
+        entity_from(payload)
+    }
+
+    /// A resource DataHub holds and nobody deleted. The only combination that may answer "yes".
+    #[rstest]
+    #[case::never_deleted(Some(true), None)]
+    #[case::explicitly_not_removed(Some(true), Some(false))]
+    fn a_catalogued_resource_is_reported_as_in_the_catalog(
+        #[case] exists: Option<bool>,
+        #[case] removed: Option<bool>,
+    ) {
+        assert!(entity_with_presence(exists, removed).in_catalog());
+    }
+
+    /// The reason we do not use DataHub's `exists` on its own. Deleting an asset in DataHub is a
+    /// soft delete: it sets `status.removed` and leaves the aspects in place, and `exists` is
+    /// resolved with `includeSoftDelete = true`, so it keeps answering `true`. A policy keyed on
+    /// `exists` alone would go on treating the deleted resource as present.
+    #[test]
+    fn a_soft_deleted_resource_is_not_in_the_catalog() {
+        assert!(!entity_with_presence(Some(true), Some(true)).in_catalog());
+    }
+
+    /// A URN DataHub has never seen. It still answers with an entity built from the URN alone,
+    /// which is why `exists` is the only thing that tells this apart from a resource with no
+    /// metadata.
+    #[test]
+    fn an_unknown_resource_is_not_in_the_catalog() {
+        assert!(!entity_with_presence(Some(false), None).in_catalog());
+    }
+
+    /// An entity type [`RESOURCE_INFO_QUERY`] has no inline fragment for is answered without
+    /// `exists`, so we cannot confirm anything. For an authorization input that has to deny.
+    #[rstest]
+    #[case::no_fields(None, None)]
+    #[case::status_only(None, Some(false))]
+    fn a_resource_we_cannot_check_is_not_in_the_catalog(
+        #[case] exists: Option<bool>,
+        #[case] removed: Option<bool>,
+    ) {
+        assert!(!entity_with_presence(exists, removed).in_catalog());
+    }
+
+    /// The substituted "no metadata" entity carries no presence fields either.
+    #[test]
+    fn the_default_entity_is_not_in_the_catalog() {
+        assert!(!Entity::default().in_catalog());
+    }
+
+    /// The wire name is part of the contract: the rego rule library and the docs both spell it
+    /// `inCatalog`, and a rule reading a differently spelled field is silently undefined rather
+    /// than wrong in any visible way.
+    #[test]
+    fn the_response_spells_the_presence_field_in_catalog() {
+        let response = entity_with_presence(Some(true), Some(false)).into_response(urn());
+
+        let body = serde_json::to_value(&response).expect("the response must serialize");
+
+        assert_eq!(body["inCatalog"], json!(true));
+    }
+
     #[test]
     fn truncated_data_products_are_detected() {
         let truncation = entity(Some(DATA_PRODUCTS_PAGE_SIZE + 1), DATA_PRODUCTS_PAGE_SIZE)
@@ -582,6 +699,8 @@ mod tests {
     fn a_fully_populated_entity_maps_every_field() {
         let response = entity_from(json!({
             "__typename": "Dataset",
+            "exists": true,
+            "status": {"removed": false},
             "tags": {"tags": [{"tag": {"urn": "urn:li:tag:PII", "properties": {"name": "PII"}}}]},
             "domain": {"domain": {"urn": "urn:li:domain:finance", "properties": {
                 "name": "Finance", "description": "Financial data",
@@ -620,6 +739,7 @@ mod tests {
         }))
         .into_response(urn());
 
+        assert!(response.in_catalog);
         assert_eq!(
             response.tags,
             vec![Tag {

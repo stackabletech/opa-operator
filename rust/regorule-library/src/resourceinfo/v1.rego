@@ -71,6 +71,18 @@ requestTimeout := "5s"
 # the query sets `strict-builtin-errors`. Write policies so that absent resource information denies
 # rather than allows, and set `strict-builtin-errors` where the product's OPA client supports it, so
 # that a failed lookup fails the decision instead of quietly dropping out of it.
+#
+# A `200` is not by itself a statement that the data catalog knows the resource. A resource it has
+# never heard of, and one it holds but that carries no tags, owners or data products, both answer
+# `200` with everything empty. The `inCatalog` field of the body tells the two apart, so a rule that
+# needs the difference should require it:
+#
+#     allow if {
+#         table := tableResourceInfo("trino", "my-trino", input.catalog, input.schema, input.table)
+#         table.inCatalog
+#         some tag in table.tags
+#         tag.urn == "urn:li:tag:public"
+#     }
 resourceInfo(endpoint, params) := response.body if {
     response := http.send({
         "method": "GET",

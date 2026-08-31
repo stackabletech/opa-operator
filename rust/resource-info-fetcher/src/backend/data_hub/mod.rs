@@ -116,6 +116,18 @@ impl Display for Urn {
 #[serde(rename_all = "camelCase")]
 pub struct DataHubResourceInfoResponse {
     urn: Urn,
+
+    /// Whether the resource is present in the catalog and has not been deleted there, see
+    /// [`graphql::Entity::in_catalog`].
+    ///
+    /// Without this, a resource the catalog has never heard of is indistinguishable from one that is
+    /// catalogued but carries no tags, owners or data products: both answer with everything empty.
+    /// A rule that wants the difference to matter can require this as its positive signal.
+    ///
+    /// Always a boolean, never `null`: in Rego a bare `info.inCatalog` holds for any value that is
+    /// not `false`, so a `null` here would read as "yes" in exactly the case we cannot answer.
+    in_catalog: bool,
+
     tags: Vec<Tag>,
 
     /// The domain the resource belongs to, e.g. `urn:li:domain:marketing`. A resource is assigned to
