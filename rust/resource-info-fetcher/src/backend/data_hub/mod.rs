@@ -7,7 +7,12 @@ use std::{
 use hyper::StatusCode;
 use info_fetcher_commons::{
     http_error,
-    utils::{self, http::send_json_request, secret::Secret},
+    utils::{
+        self,
+        credentials::FileCredential,
+        http::{is_unauthorized, send_json_request},
+        secret::Secret,
+    },
 };
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -200,7 +205,9 @@ pub struct Group {
 /// Credentials, the HTTP client and the GraphQL endpoint are initialized once at startup and stored
 /// internally.
 pub struct ResolvedDataHubBackend {
-    token: Secret,
+    /// The Personal Access Token, re-read from its mounted file when DataHub rejects it, so that
+    /// rotating it in the Secret takes effect without restarting the Pod.
+    token: FileCredential,
     http_client: reqwest::Client,
     graphql_url: Url,
 
@@ -215,10 +222,9 @@ impl ResolvedDataHubBackend {
         config: v1alpha1::DataHubBackend,
         credentials_dir: &Path,
     ) -> Result<Self, ResolveError> {
-        let token = utils::credentials::read_credential_file(&credentials_dir.join("token"))
+        let token = FileCredential::load(credentials_dir.join("token"))
             .await
-            .context(ReadTokenSnafu)?
-            .into();
+            .context(ReadTokenSnafu)?;
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
@@ -239,6 +245,20 @@ impl ResolvedDataHubBackend {
     /// server-side, so there is no client-side fan-out.
     #[instrument(skip(self))]
     async fn query_entity(&self, urn: &Urn) -> Result<graphql::Entity, Error> {
+        // A Personal Access Token can expire or be revoked while we hold it, and a rotated one is
+        // already on disk by the time DataHub starts rejecting the old one, see [`FileCredential`].
+        self.token
+            .use_with_retry(
+                "DataHub",
+                |error| is_unauthorized(error),
+                |token| self.query_entity_with(urn, token),
+            )
+            .await
+    }
+
+    /// The query itself, made with an already-read `token` so that the caller can retry it with a
+    /// freshly read one if DataHub rejects this one.
+    async fn query_entity_with(&self, urn: &Urn, token: Secret) -> Result<graphql::Entity, Error> {
         trace!(%urn, %self.graphql_url, "Sending GraphQL query to DataHub");
 
         let response: graphql::GraphQlResponse = send_json_request(
@@ -246,7 +266,7 @@ impl ResolvedDataHubBackend {
                 .post(self.graphql_url.clone())
                 // Authenticate with a DataHub Personal Access Token (a bearer JWT). DataHub's
                 // Metadata Service Authentication verifies it and resolves it to the token's actor.
-                .bearer_auth(self.token.expose())
+                .bearer_auth(token.expose())
                 .json(&graphql::request(urn)),
         )
         .await
@@ -322,7 +342,7 @@ impl ResolvedDataHubBackend {
     /// credentials have to be read from disk.
     pub fn for_tests(graphql_url: Url) -> Self {
         Self {
-            token: "not-a-real-token".into(),
+            token: FileCredential::fixed("not-a-real-token"),
             http_client: reqwest::Client::new(),
             graphql_url,
             env: v1alpha1::FabricType::Prod,

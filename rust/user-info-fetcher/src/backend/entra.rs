@@ -3,7 +3,8 @@ use std::{collections::HashMap, path::Path};
 use hyper::StatusCode;
 use info_fetcher_commons::utils::{
     self,
-    http::send_json_request,
+    credentials::FileCredential,
+    http::{is_unauthorized, send_json_request},
     secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
 };
@@ -26,11 +27,17 @@ pub enum Error {
         username: String,
     },
 
+    #[snafu(display("unable to find user with id {user_id:?}"))]
+    UserNotFoundById { user_id: String },
+
     #[snafu(display("failed to search for user with id {user_id:?}"))]
-    UserNotFoundById {
+    SearchForUserById {
         source: utils::http::Error,
         user_id: String,
     },
+
+    #[snafu(display("unable to find user with username {username:?}"))]
+    UserNotFoundByName { username: String },
 
     #[snafu(display(
         "failed to request groups for user with username {username:?} (user_id: {user_id:?})"
@@ -66,6 +73,8 @@ impl http_error::Error for Error {
             Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
+            Self::SearchForUserById { .. } => StatusCode::BAD_GATEWAY,
+            Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
             Self::BuildEntraEndpoint { .. } => StatusCode::BAD_REQUEST,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -114,7 +123,10 @@ const MAX_GROUP_PAGES: usize = 100;
 pub struct ResolvedEntraBackend {
     config: v1alpha2::EntraBackend,
     client_id: String,
-    client_secret: Secret,
+
+    /// The client secret, re-read from its mounted file when Entra rejects it, so that rotating it
+    /// in the Secret takes effect without restarting the Pod.
+    client_secret: FileCredential,
     http_client: reqwest::Client,
 
     /// The OAuth2 access token, minted on demand and reused until it is about to expire.
@@ -133,11 +145,9 @@ impl ResolvedEntraBackend {
         let client_id = utils::credentials::read_credential_file(&credentials_dir.join("clientId"))
             .await
             .context(ReadClientIdSnafu)?;
-        let client_secret =
-            utils::credentials::read_credential_file(&credentials_dir.join("clientSecret"))
-                .await
-                .context(ReadClientSecretSnafu)?
-                .into();
+        let client_secret = FileCredential::load(credentials_dir.join("clientSecret"))
+            .await
+            .context(ReadClientSecretSnafu)?;
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(
@@ -187,11 +197,29 @@ impl ResolvedEntraBackend {
     }
 
     /// Mints an access token through the `client_credentials` grant of the tenant.
+    ///
+    /// A rejected client secret is re-read from disk and the mint retried once, so that rotating it
+    /// in the Secret takes effect without restarting the Pod, see [`FileCredential`].
     async fn mint_access_token(&self, entra_backend: &EntraBackend) -> Result<MintedToken, Error> {
+        self.client_secret
+            .use_with_retry(
+                "Entra",
+                |error| is_unauthorized(error),
+                |client_secret| self.mint_access_token_with(entra_backend, client_secret),
+            )
+            .await
+    }
+
+    /// The mint itself, made with an already-read `client_secret`.
+    async fn mint_access_token_with(
+        &self,
+        entra_backend: &EntraBackend,
+        client_secret: Secret,
+    ) -> Result<MintedToken, Error> {
         let response = send_json_request::<OAuthResponse>(
             self.http_client.post(entra_backend.oauth2_token()).form(&[
                 ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.expose()),
+                ("client_secret", client_secret.expose()),
                 ("scope", "https://graph.microsoft.com/.default"),
                 ("grant_type", "client_credentials"),
             ]),
@@ -212,27 +240,35 @@ impl ResolvedEntraBackend {
     ) -> Result<UserInfo, Error> {
         let user_info = match req {
             UserInfoRequest::UserInfoRequestById(req) => {
-                let user_id = &req.id;
+                let user_id = req.id.clone();
                 send_json_request::<UserMetadata>(
                     self.http_client
-                        .get(entra_backend.user_info(user_id))
+                        .get(entra_backend.user_info(&user_id))
                         .bearer_auth(access_token.expose()),
                 )
                 .await
-                .with_context(|_| UserNotFoundByIdSnafu {
-                    user_id: user_id.clone(),
+                .map_err(|source| match source.status() {
+                    // Graph answers a user it does not have with `404`. Any other failure (an
+                    // outage, a rejected token, a body we cannot read) says nothing about whether
+                    // the user exists, so reporting it as "not found" would tell a policy that a
+                    // user is absent whenever Entra is merely unwell.
+                    Some(StatusCode::NOT_FOUND) => Error::UserNotFoundById { user_id },
+                    _ => Error::SearchForUserById { source, user_id },
                 })?
             }
             UserInfoRequest::UserInfoRequestByName(req) => {
-                let username = &req.username;
+                let username = req.username.clone();
                 send_json_request::<UserMetadata>(
                     self.http_client
-                        .get(entra_backend.user_info(username))
+                        .get(entra_backend.user_info(&username))
                         .bearer_auth(access_token.expose()),
                 )
                 .await
-                .with_context(|_| SearchForUserSnafu {
-                    username: username.clone(),
+                .map_err(|source| match source.status() {
+                    // The same split as above. Without it a username Entra does not have was
+                    // reported as a failed lookup (`502`) rather than as a user that is not there.
+                    Some(StatusCode::NOT_FOUND) => Error::UserNotFoundByName { username },
+                    _ => Error::SearchForUser { source, username },
                 })?
             }
         };
@@ -386,7 +422,7 @@ mod tests {
                 client_credentials_secret: SecretName::from_str("entra-credentials").unwrap(),
             },
             client_id: "client-id".to_owned(),
-            client_secret: "client-secret".into(),
+            client_secret: FileCredential::fixed("client-secret"),
             access_token: CachedToken::new(),
             http_client: reqwest::Client::new(),
         }
@@ -422,6 +458,106 @@ mod tests {
             })))
             .mount(mock_server)
             .await;
+    }
+
+    /// Mounts the token endpoint plus a user endpoint answering `status`, so that a lookup can be
+    /// driven into a chosen failure. `key` is whatever the request addresses the user by, which for
+    /// Graph is the id for one lookup and the principal name for the other.
+    async fn mock_token_and_failing_user(mock_server: &MockServer, key: &str, status: u16) {
+        crate::backend::test_mocks::mock_token(
+            mock_server,
+            format!("/{TENANT_ID}/oauth2/v2.0/token"),
+            None,
+            None,
+        )
+        .await;
+
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/users/{key}")))
+            .respond_with(ResponseTemplate::new(status))
+            .mount(mock_server)
+            .await;
+    }
+
+    async fn look_up_by_id(backend: &ResolvedEntraBackend) -> Result<UserInfo, super::Error> {
+        backend
+            .get_user_info(&UserInfoRequest::UserInfoRequestById(UserInfoRequestById {
+                id: USER_ID.to_owned(),
+            }))
+            .await
+    }
+
+    async fn look_up_by_name(
+        backend: &ResolvedEntraBackend,
+        username: &str,
+    ) -> Result<UserInfo, super::Error> {
+        backend
+            .get_user_info(&UserInfoRequest::UserInfoRequestByName(
+                crate::UserInfoRequestByName {
+                    username: username.to_owned(),
+                },
+            ))
+            .await
+    }
+
+    /// Graph answers a user it does not have with `404`, and that is the only case in which the
+    /// lookup may report the user as absent.
+    #[tokio::test]
+    async fn entra_reports_a_user_it_does_not_have_as_not_found() {
+        let mock_server = MockServer::start().await;
+        mock_token_and_failing_user(&mock_server, USER_ID, 404).await;
+
+        let error = look_up_by_id(&backend_for(&mock_server))
+            .await
+            .expect_err("a user Entra does not have cannot be looked up");
+
+        assert!(matches!(error, Error::UserNotFoundById { .. }), "{error}");
+        assert_eq!(
+            http_error::Error::status_code(&error),
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    /// Every other failure says nothing about whether the user exists. Reporting one as "not found"
+    /// hands a policy the same answer for "Entra is unwell" as for "this user is not there", which
+    /// is the difference an authorization decision most needs.
+    #[tokio::test]
+    async fn entra_reports_a_failed_lookup_as_a_failed_lookup() {
+        for status in [500, 502, 403] {
+            let mock_server = MockServer::start().await;
+            mock_token_and_failing_user(&mock_server, USER_ID, status).await;
+
+            let error = look_up_by_id(&backend_for(&mock_server))
+                .await
+                .expect_err("a failing lookup surfaces as an error");
+
+            assert!(
+                matches!(error, Error::SearchForUserById { .. }),
+                "for {status} got {error}"
+            );
+            assert_eq!(
+                http_error::Error::status_code(&error),
+                StatusCode::BAD_GATEWAY
+            );
+        }
+    }
+
+    /// The by-name lookup had the opposite problem: it reported every failure as a failed lookup, so
+    /// a username Entra genuinely does not have came back as `502` rather than as a missing user.
+    #[tokio::test]
+    async fn entra_reports_a_username_it_does_not_have_as_not_found() {
+        let mock_server = MockServer::start().await;
+        mock_token_and_failing_user(&mock_server, "nobody@example.com", 404).await;
+
+        let error = look_up_by_name(&backend_for(&mock_server), "nobody@example.com")
+            .await
+            .expect_err("a username Entra does not have cannot be looked up");
+
+        assert!(matches!(error, Error::UserNotFoundByName { .. }), "{error}");
+        assert_eq!(
+            http_error::Error::status_code(&error),
+            StatusCode::NOT_FOUND
+        );
     }
 
     async fn get_user_info_by_id(backend: &ResolvedEntraBackend) -> UserInfo {

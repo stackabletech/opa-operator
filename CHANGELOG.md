@@ -61,16 +61,17 @@ All notable changes to this project will be documented in this file.
 - The file logs of the user-info-fetcher and resource-info-fetcher sidecars are now collected by the
   Vector agent. Both sidecars log below `/stackable/log`, but did not mount the shared `log` volume,
   so their logs were unreachable for Vector and not accounted for in the volume's size limit ([#863]).
+- Both info-fetchers now re-read their credential from the mounted Secret when
+  the backend rejects it, and retry the request once with the new value ([#863]).
+- The user-info-fetcher Keycloak and Entra backends now only report a `404` from
+  the identity provider as a missing user ([#863]).
+- A failed user lookup is now cached for a few seconds, as a failed resource
+  lookup already was ([#863]).
 - Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
-- A failed user lookup is now cached for a few seconds, as a failed resource lookup already was. The
-  user-info-fetcher previously queried the backend again for every single request while a lookup kept
-  failing, which is reachable by anyone who can name a user and is at its worst exactly when the
-  backend is already in trouble. The window is deliberately far shorter than `entryTimeToLive`, but a
-  request arriving right after the backend recovers can still be served the cached failure ([#863]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861

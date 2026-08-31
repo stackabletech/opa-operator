@@ -3,7 +3,8 @@ use std::{collections::HashMap, path::Path};
 use hyper::StatusCode;
 use info_fetcher_commons::utils::{
     self,
-    http::send_json_request,
+    credentials::FileCredential,
+    http::{is_unauthorized, send_json_request},
     secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
 };
@@ -24,7 +25,10 @@ pub enum Error {
     SearchForUser { source: utils::http::Error },
 
     #[snafu(display("unable to find user with id {user_id:?}"))]
-    UserNotFoundById {
+    UserNotFoundById { user_id: String },
+
+    #[snafu(display("failed to search for user with id {user_id:?}"))]
+    SearchForUserById {
         source: utils::http::Error,
         user_id: String,
     },
@@ -69,6 +73,7 @@ impl http_error::Error for Error {
             Self::AccessToken { .. } => StatusCode::BAD_GATEWAY,
             Self::SearchForUser { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundById { .. } => StatusCode::NOT_FOUND,
+            Self::SearchForUserById { .. } => StatusCode::BAD_GATEWAY,
             Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
             Self::TooManyUsersReturned {} => StatusCode::INTERNAL_SERVER_ERROR,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
@@ -110,7 +115,10 @@ struct GroupMembership {
 pub struct ResolvedKeycloakBackend {
     config: v1alpha2::KeycloakBackend,
     client_id: String,
-    client_secret: Secret,
+
+    /// The client secret, re-read from its mounted file when Keycloak rejects it, so that rotating
+    /// it in the Secret takes effect without restarting the Pod.
+    client_secret: FileCredential,
     http_client: reqwest::Client,
 
     /// The OAuth2 access token, minted on demand and reused until it is about to expire.
@@ -129,11 +137,9 @@ impl ResolvedKeycloakBackend {
         let client_id = utils::credentials::read_credential_file(&credentials_dir.join("clientId"))
             .await
             .context(ReadClientIdSnafu)?;
-        let client_secret =
-            utils::credentials::read_credential_file(&credentials_dir.join("clientSecret"))
-                .await
-                .context(ReadClientSecretSnafu)?
-                .into();
+        let client_secret = FileCredential::load(credentials_dir.join("clientSecret"))
+            .await
+            .context(ReadClientSecretSnafu)?;
 
         let mut client_builder = utils::http::client_builder();
         client_builder = utils::tls::configure_reqwest(&config.tls, client_builder)
@@ -190,7 +196,25 @@ impl ResolvedKeycloakBackend {
     }
 
     /// Mints an access token through the `client_credentials` grant of the admin realm.
+    ///
+    /// A rejected client secret is re-read from disk and the mint retried once, so that rotating it
+    /// in the Secret takes effect without restarting the Pod, see [`FileCredential`].
     async fn mint_access_token(&self, keycloak_url: &Url) -> Result<MintedToken, Error> {
+        self.client_secret
+            .use_with_retry(
+                "Keycloak",
+                |error| is_unauthorized(error),
+                |client_secret| self.mint_access_token_with(keycloak_url, client_secret),
+            )
+            .await
+    }
+
+    /// The mint itself, made with an already-read `client_secret`.
+    async fn mint_access_token_with(
+        &self,
+        keycloak_url: &Url,
+        client_secret: Secret,
+    ) -> Result<MintedToken, Error> {
         let admin_realm = &self.config.admin_realm;
 
         let response = send_json_request::<OAuthResponse>(
@@ -202,7 +226,7 @@ impl ResolvedKeycloakBackend {
                         ))
                         .context(ConstructOidcEndpointPathSnafu)?,
                 )
-                .basic_auth(&self.client_id, Some(self.client_secret.expose()))
+                .basic_auth(&self.client_id, Some(client_secret.expose()))
                 .form(&[("grant_type", "client_credentials")]),
         )
         .await
@@ -238,7 +262,14 @@ impl ResolvedKeycloakBackend {
                         .bearer_auth(access_token.expose()),
                 )
                 .await
-                .context(UserNotFoundByIdSnafu { user_id })?
+                .map_err(|source| match source.status() {
+                    // Keycloak's admin API answers a user id it does not have with `404`. Any other
+                    // failure (an outage, a rejected token, a body we cannot read) says nothing
+                    // about whether the user exists, so reporting it as "not found" would tell a
+                    // policy that a user is absent whenever Keycloak is merely unwell.
+                    Some(StatusCode::NOT_FOUND) => Error::UserNotFoundById { user_id },
+                    _ => Error::SearchForUserById { source, user_id },
+                })?
             }
             UserInfoRequest::UserInfoRequestByName(req) => {
                 let username = &req.username;
@@ -323,7 +354,7 @@ mod tests {
                 user_realm: USER_REALM.to_owned(),
             },
             client_id: "client-id".to_owned(),
-            client_secret: "client-secret".into(),
+            client_secret: FileCredential::fixed("client-secret"),
             http_client: reqwest::Client::new(),
             access_token: CachedToken::new(),
         }
@@ -385,6 +416,50 @@ mod tests {
         get_user_info_by_id(&backend).await.expect("lookup works");
 
         // The token endpoint's `.expect(1)` is verified when `mock_server` is dropped.
+    }
+
+    /// Keycloak answers a user id it does not have with `404`, and that is the only case in which
+    /// the lookup may report the user as absent.
+    #[tokio::test]
+    async fn keycloak_reports_a_user_it_does_not_have_as_not_found() {
+        let mock_server = MockServer::start().await;
+        mock_token(&mock_server, Some(3600), 1).await;
+        mock_user_and_groups(&mock_server, 404).await;
+
+        let error = get_user_info_by_id(&backend_for(&mock_server))
+            .await
+            .expect_err("a user Keycloak does not have cannot be looked up");
+
+        assert!(matches!(error, Error::UserNotFoundById { .. }), "{error}");
+        assert_eq!(
+            http_error::Error::status_code(&error),
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    /// Every other failure says nothing about whether the user exists. Reporting one as "not found"
+    /// hands a policy the same answer for "Keycloak is unwell" as for "this user is not there",
+    /// which is the difference an authorization decision most needs.
+    #[tokio::test]
+    async fn keycloak_reports_a_failed_lookup_as_a_failed_lookup() {
+        for status in [500, 502, 403] {
+            let mock_server = MockServer::start().await;
+            mock_token(&mock_server, Some(3600), 1).await;
+            mock_user_and_groups(&mock_server, status).await;
+
+            let error = get_user_info_by_id(&backend_for(&mock_server))
+                .await
+                .expect_err("a failing lookup surfaces as an error");
+
+            assert!(
+                matches!(error, Error::SearchForUserById { .. }),
+                "for {status} got {error}"
+            );
+            assert_eq!(
+                http_error::Error::status_code(&error),
+                StatusCode::BAD_GATEWAY
+            );
+        }
     }
 
     /// A token can stop being accepted before it expires, e.g. by being revoked. The rejection is the

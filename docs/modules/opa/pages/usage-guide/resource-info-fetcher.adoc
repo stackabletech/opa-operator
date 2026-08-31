@@ -274,6 +274,28 @@ Nothing else in the response distinguishes that case, so the field answers with 
 A resource ingested once and never re-ingested still reports `true` with whatever tags it had at the time.
 ====
 
+=== Rotating credentials
+
+The credentials both info-fetchers authenticate with are mounted from a Secret, and Kubernetes propagates a change to that Secret into the running container within about a minute.
+
+The fetchers therefore re-read the credential themselves.
+They keep it in memory, and when the other side rejects it they read the file again and retry the request once with the new value.
+Updating the Secret is all that is needed, no restart and no rolling of the OpaCluster.
+
+Two details worth knowing:
+
+* The re-read happens only when the credential is *rejected*, not on a timer, so there is no window in which requests fail while waiting for a refresh.
+* If the file has not changed, the request is *not* retried. A credential that was revoked rather than rotated is the same value on disk, so a retry would only be rejected again and would double the load on the backend for every request. The log then says so, at `WARN`.
+
+Until the Secret is updated, lookups keep failing, which fails closed: the rule library only returns a value for `200 OK`, so a rule requiring a positive signal denies (see below).
+Failures are cached for a few seconds, so a credential that is revoked and not replaced does not turn into a request storm against the backend.
+
+[NOTE]
+====
+Only the secret itself is re-read, not the identifier next to it.
+Rotating DataHub Personal Access Token works without a restart.
+====
+
 === Behaviour when metadata is unavailable
 
 [WARNING]
