@@ -1,17 +1,15 @@
 //! Builds the discovery [`ConfigMap`] clients use to connect to an `OpaCluster`.
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::OpaRole;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
     utils::cluster_info::KubernetesClusterInfo,
 };
 
 use super::service::{APP_PORT, APP_TLS_PORT};
-use crate::{
-    controller::{
-        ValidatedCluster,
-        build::{object_meta, recommended_labels_for_role_resources},
-    },
-    crd::OpaRole,
+use crate::controller::{
+    ValidatedCluster,
+    build::{object_meta, recommended_labels_for_role_resources},
 };
 
 #[derive(Snafu, Debug)]

@@ -8,10 +8,11 @@ use stackable_operator::{
         tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
     },
     schemars::{self, JsonSchema},
-    shared::time::Duration,
     v2::types::kubernetes::{SecretClassName, SecretName},
     versioned::versioned,
 };
+
+use crate::crd::cache::Cache;
 
 mod v1alpha1_impl;
 mod v1alpha2_impl;
@@ -208,21 +209,6 @@ pub mod versioned {
         #[serde(default)]
         pub custom_attribute_mappings: BTreeMap<String, String>,
     }
-
-    #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
-    #[serde(rename_all = "camelCase")]
-    pub struct Cache {
-        /// How long metadata about each user should be cached for.
-        #[serde(default = "default_entry_time_to_live")]
-        pub entry_time_to_live: Duration,
-    }
-}
-
-/// Default time-to-live for cached user metadata.
-pub(crate) const DEFAULT_CACHE_ENTRY_TIME_TO_LIVE: Duration = Duration::from_minutes_unchecked(1);
-
-const fn default_entry_time_to_live() -> Duration {
-    DEFAULT_CACHE_ENTRY_TIME_TO_LIVE
 }
 
 fn default_root_path() -> String {

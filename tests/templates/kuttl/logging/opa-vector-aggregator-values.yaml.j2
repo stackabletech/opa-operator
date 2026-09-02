@@ -44,6 +44,18 @@ customConfig:
       condition: >-
         starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
         .container == "bundle-builder"
+    filteredAutomaticLogConfigServerUserInfoFetcher:
+      type: filter
+      inputs: [validEvents]
+      condition: >-
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
+        .container == "user-info-fetcher"
+    filteredAutomaticLogConfigServerResourceInfoFetcher:
+      type: filter
+      inputs: [validEvents]
+      condition: >-
+        starts_with(string!(.pod), "test-opa-server-automatic-log-config") &&
+        .container == "resource-info-fetcher"
     filteredAutomaticLogConfigServerVector:
       type: filter
       inputs: [validEvents]

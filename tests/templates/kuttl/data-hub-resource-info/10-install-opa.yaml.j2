@@ -1,0 +1,71 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  - script: |
+      # Quoted heredoc delimiter: the Rego below must reach kubectl verbatim, without the shell
+      # expanding backticks, $ or backslashes in it.
+      kubectl apply -n $NAMESPACE -f - <<'EOF'
+      ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: test
+        labels:
+          opa.stackable.tech/bundle: "true"
+      data:
+        test.rego: |
+          package test
+
+          import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+          # One wrapper per resource type of the shipped library, so 40_test-regorule.py can address
+          # each of them as its own rule (data.test.<rule>) and pass the coordinates as input.
+          # Note that the DataHub fabric (`env`) is not a parameter: it is backend configuration
+          # (clusterConfig.resourceInfo.backend.dataHub.env) and applied by the fetcher.
+          database := resourceinfo.databaseResourceInfo(input.system, input.instance, input.database)
+          schema := resourceinfo.schemaResourceInfo(input.system, input.instance, input.database, input.schema)
+          table := resourceinfo.tableResourceInfo(input.system, input.instance, input.database, input.schema, input.table)
+          stream := resourceinfo.streamResourceInfo(input.system, input.instance, input.queue)
+          dashboard := resourceinfo.dashboardResourceInfo(input.system, input.instance, input.id)
+          chart := resourceinfo.chartResourceInfo(input.system, input.instance, input.id)
+
+          rawIdentifier := resourceinfo.rawIdentifierResourceInfo(input.identifier)
+      EOF
+
+      # Unquoted delimiter here, because the GMS hostname needs $NAMESPACE expanded.
+      kubectl apply -n $NAMESPACE -f - <<EOF
+      ---
+      apiVersion: opa.stackable.tech/v1alpha2
+      kind: OpaCluster
+      metadata:
+        name: test-opa
+      spec:
+        image:
+{% if test_scenario['values']['opa-latest'].find(",") > 0 %}
+          custom: "{{ test_scenario['values']['opa-latest'].split(',')[1] }}"
+          productVersion: "{{ test_scenario['values']['opa-latest'].split(',')[0] }}"
+{% else %}
+          productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+{% endif %}
+          pullPolicy: IfNotPresent
+        clusterConfig:
+          resourceInfo:
+            backend:
+              dataHub:
+                hostname: datahub-datahub-gms.$NAMESPACE.svc.cluster.local
+                port: 8080
+                credentialsSecretName: datahub-rif-credentials
+                env: PROD
+            cache:
+              entryTimeToLive: 60s
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+          vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+        servers:
+          config:
+            logging:
+              enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+          roleGroups:
+            default: {}
+      EOF

@@ -1,0 +1,49 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestStep
+commands:
+  # Ship the assertion script into the cluster as a ConfigMap (keeps 40_test-regorule.py a
+  # real, lintable file instead of inlining Python into YAML). Idempotent so re-runs are safe.
+  - script: |
+      kubectl -n "$NAMESPACE" create configmap test-resource-info-script \
+        --from-file=test-regorule.py=40_test-regorule.py \
+        --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-resource-info
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: test
+          image: oci.stackable.tech/sdp/testing-tools:0.3.0-stackable0.0.0-dev
+          command:
+            - python
+            - /scripts/test-regorule.py
+            - -u
+            - http://test-opa-server:8081/v1/data/test
+          env:
+            # The Trino URNs the test asserts on embed the namespace (instance =
+            # ${POD_NAMESPACE}/my-trino, see 31-ingest-trino), so the script derives them at runtime.
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 128Mi
+      volumes:
+        - name: script
+          configMap:
+            name: test-resource-info-script

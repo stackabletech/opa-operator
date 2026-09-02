@@ -1,8 +1,7 @@
 //! Builds the OPA `user-info-fetcher.json` file.
 
 use snafu::{ResultExt, Snafu};
-
-use crate::crd::user_info_fetcher;
+use stackable_opa_operator::crd::user_info_fetcher;
 
 #[derive(Snafu, Debug)]
 pub enum Error {

@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{Container, OpaConfigOverrides};
 use stackable_operator::{
     product_logging::spec::LogLevel,
     v2::product_logging::framework::ValidatedContainerLogConfigChoice,
@@ -10,7 +11,6 @@ use stackable_operator::{
 use super::ConfigFileName;
 use crate::{
     controller::{ValidatedOpaConfig, build::BUNDLE_BUILDER_PORT},
-    crd::{Container, OpaConfigOverrides},
     opa_controller::OPA_STACKABLE_SERVICE_NAME,
 };
 
@@ -144,11 +144,10 @@ struct OpaClusterConfigStatus {
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
+    use stackable_opa_operator::crd::OpaRole;
 
     use super::*;
-    use crate::{
-        controller::build::properties::test_support::validated_cluster_from_spec, crd::OpaRole,
-    };
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
 
     /// Renders `config.json` for the `default` server role group of an `OpaCluster` built from
     /// `spec`, and parses it back into a [`Value`].

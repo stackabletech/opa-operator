@@ -98,40 +98,24 @@ def test_user_not_found(url):
     params = {"strict-builtin-errors": "true"}
     expected_status_code = 200
 
-    payload = {"input": {"username": "nonexistent"}}
-    response = requests.post(url, data=json.dumps(payload), params=params)
-    assert response.status_code == expected_status_code, (
-        f"got {response.status_code}, expected: {expected_status_code}"
-    )
-    response = response.json()
-    assert "result" in response
-    result = response["result"]
-    assert "currentUserInfoByUsername" in result
-    assert "error" in result["currentUserInfoByUsername"]
-    error = result["currentUserInfoByUsername"]["error"]
-    assert "message" in error
-    assert error["message"] == "failed to get user information from OpenLDAP"
-    assert "causes" in error
-    assert error["causes"][0] == 'unable to find user with username "nonexistent"'
+    for payload in [
+        {"input": {"username": "nonexistent"}},
+        {"input": {"id": "00000000-0000-0000-0000-000000000000"}},
+    ]:
+        response = requests.post(url, data=json.dumps(payload), params=params)
+        assert response.status_code == expected_status_code, (
+            f"got {response.status_code}, expected: {expected_status_code}"
+        )
+        response = response.json()
+        assert "result" in response
+        result = response["result"]
 
-    payload = {"input": {"id": "00000000-0000-0000-0000-000000000000"}}
-    response = requests.post(url, data=json.dumps(payload), params=params)
-    assert response.status_code == expected_status_code, (
-        f"got {response.status_code}, expected: {expected_status_code}"
-    )
-    response = response.json()
-    assert "result" in response
-    result = response["result"]
-    assert "currentUserInfoById" in result
-    assert "error" in result["currentUserInfoById"]
-    error = result["currentUserInfoById"]["error"]
-    assert "message" in error
-    assert error["message"] == "failed to get user information from OpenLDAP"
-    assert "causes" in error
-    assert (
-        error["causes"][0]
-        == 'unable to find user with id "00000000-0000-0000-0000-000000000000"'
-    )
+        # Neither rule may hold a value, whichever of the two the payload addressed. The lookup is
+        # undefined, so a policy has nothing to read rather than something misleading to read.
+        for rule in ["currentUserInfoByUsername", "currentUserInfoById"]:
+            assert rule not in result, (
+                f"for {payload=} the failed lookup must leave {rule} undefined, but got {result=}"
+            )
 
 
 if __name__ == "__main__":

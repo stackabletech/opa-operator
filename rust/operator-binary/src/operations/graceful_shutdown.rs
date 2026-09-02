@@ -1,7 +1,8 @@
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD;
 use stackable_operator::builder::pod::PodBuilder;
 
-use crate::{controller::ValidatedOpaConfig, crd::SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD};
+use crate::controller::ValidatedOpaConfig;
 
 #[derive(Debug, Snafu)]
 pub enum Error {

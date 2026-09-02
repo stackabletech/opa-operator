@@ -1,12 +1,16 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use hyper::StatusCode;
+use info_fetcher_commons::utils::{self, credentials::FileCredential, secret::Secret};
 use ldap3::{LdapConnAsync, LdapConnSettings, LdapError, Scope, SearchEntry, ldap_escape};
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
 use stackable_operator::crd::authentication::ldap;
 
-use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error, utils};
+use crate::{ErrorRenderUserInfoRequest, UserInfo, UserInfoRequest, http_error};
 
 #[derive(Snafu, Debug)]
 pub enum Error {
@@ -34,17 +38,11 @@ pub enum Error {
     #[snafu(display("unable to get username attribute \"{attribute}\" from LDAP user"))]
     MissingUsernameAttribute { attribute: String },
 
-    #[snafu(display("failed to read bind user from {path:?}"))]
-    ReadBindUser {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the LDAP bind user"))]
+    ReadBindUser { source: utils::credentials::Error },
 
-    #[snafu(display("failed to read bind password from {path:?}"))]
-    ReadBindPassword {
-        source: std::io::Error,
-        path: String,
-    },
+    #[snafu(display("failed to read the LDAP bind password"))]
+    ReadBindPassword { source: utils::credentials::Error },
 }
 
 impl http_error::Error for Error {
@@ -71,7 +69,10 @@ impl http_error::Error for Error {
 pub struct ResolvedOpenLdapBackend {
     config: v1alpha2::OpenLdapBackend,
     bind_user: String,
-    bind_password: String,
+
+    /// The bind password, re-read from its mounted file when the LDAP server rejects the bind, so
+    /// that rotating it in the Secret takes effect without restarting the Pod.
+    bind_password: FileCredential,
 }
 
 impl ResolvedOpenLdapBackend {
@@ -85,15 +86,12 @@ impl ResolvedOpenLdapBackend {
             .bind_credentials_mount_paths()
             .expect("bind credentials must be configured for OpenLDAP backend");
 
-        let bind_user = tokio::fs::read_to_string(&user_path)
+        let bind_user = utils::credentials::read_credential_file(Path::new(&user_path))
             .await
-            .context(ReadBindUserSnafu { path: user_path })?;
-        let bind_password =
-            tokio::fs::read_to_string(&password_path)
-                .await
-                .context(ReadBindPasswordSnafu {
-                    path: password_path,
-                })?;
+            .context(ReadBindUserSnafu)?;
+        let bind_password = FileCredential::load(Path::new(&password_path))
+            .await
+            .context(ReadBindPasswordSnafu)?;
 
         Ok(Self {
             config,
@@ -104,6 +102,24 @@ impl ResolvedOpenLdapBackend {
 
     #[tracing::instrument(skip(self))]
     pub(crate) async fn get_user_info(&self, request: &UserInfoRequest) -> Result<UserInfo, Error> {
+        // A rejected bind is the only sign that the password changed underneath us. The rotated one
+        // is already on disk by then, see [`FileCredential`]. The whole lookup is retried rather
+        // than just the bind, because the connection is bound once and then searched on.
+        self.bind_password
+            .use_with_retry(
+                "LDAP",
+                |error| matches!(error, Error::BindLdap { .. }),
+                |bind_password| self.get_user_info_with(request, bind_password),
+            )
+            .await
+    }
+
+    /// The lookup itself, made with an already-read `bind_password`.
+    async fn get_user_info_with(
+        &self,
+        request: &UserInfoRequest,
+        bind_password: Secret,
+    ) -> Result<UserInfo, Error> {
         let ldap_provider = self.config.to_ldap_provider();
 
         let ldap_url = ldap_provider
@@ -121,7 +137,7 @@ impl ResolvedOpenLdapBackend {
         .context(ConnectLdapSnafu)?;
         ldap3::drive!(ldap_conn);
 
-        ldap.simple_bind(&self.bind_user, &self.bind_password)
+        ldap.simple_bind(&self.bind_user, bind_password.expose())
             .await
             .context(RequestLdapSnafu)?
             .success()

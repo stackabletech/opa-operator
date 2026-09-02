@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher,
+  but allows to fetch additional metadata about resource information from a data catalog.
+  For now only DataHub is supported.
+  Also, a rego-rule library has been added to make it easier to call resource-info-fetcher from within OPA.
+  The API (especially the response) might change in the future once more data catalogs are supported ([#863]).
+- Allow specifying the maximum number of cached entries in the user-info-fetcher, defaulting to `10000`.
+  The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
+  the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
+  evicted least-recently-used first ([#863])
+
 ### Changed
 
 - Internal operator refactoring: introduce a build() step in the reconciler that
@@ -12,10 +24,30 @@ All notable changes to this project will be documented in this file.
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
 - All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#871]).
-- Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
+- The user-info-fetcher Keycloak and Entra backends now cache their OAuth2 access token for the
+  lifetime the identity provider reports, instead of minting a new one for every user lookup. This
+  removes one round trip per lookup. If the provider rejects the cached token before it expires, it is
+  re-minted and the lookup is retried once ([#863]).
 - Environment variable overrides (`envOverrides`) are now applied after all environment
   variables set by the operator. In particular, `CONTAINERDEBUG_LOG_DIRECTORY` can now be
   overridden, whereas previously the operator's value always took precedence ([#880]).
+- BREAKING: The `userinfo` and `resourceinfo` rego rule libraries now only return a value when the
+  fetcher answers `200 OK`, and pass an explicit 5 second timeout. Previously the body of an error
+  response was returned to the policy as if it were user/resource information, so a rule defaulting a
+  missing field (`object.get(user, "groups", [])` and the like) read a failed lookup as "this user is
+  in no groups" and allowed what it should have denied. Such a lookup is now undefined instead. Rules
+  must require a positive signal to deny on a failed lookup; where the product's OPA client allows
+  it, also set `strict-builtin-errors=true` on the decision query so that a failed lookup fails the
+  whole decision ([#880]).
+- BREAKING: The volume holding the user-info-fetcher credentials is now called
+  `user-info-fetcher-credentials` instead of `credentials`, so that it does not collide with the
+  resource-info-fetcher's. A `podOverrides` patching that volume or its volume mount by name must be
+  adjusted, otherwise it silently stops applying ([#863]).
+- Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
+- The user-info-fetcher now logs a failed lookup once, where the backend was queried, instead of once
+  per response it is rendered into, and logs a request it rejects as the caller's fault (an unknown
+  user) at `debug` rather than `warn`. Any caller could previously fill the log with `warn` lines by
+  asking about users that do not exist ([#863]).
 - BREAKING: Remove the `app.kubernetes.io/component` and `app.kubernetes.io/role-group` labels
   from the resources they don't apply to (previously set to `none` or a placeholder value):
   the role-level Service (`<cluster>-server`) and the discovery ConfigMap lose
@@ -26,6 +58,15 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- The file logs of the user-info-fetcher and resource-info-fetcher sidecars are now collected by the
+  Vector agent. Both sidecars log below `/stackable/log`, but did not mount the shared `log` volume,
+  so their logs were unreachable for Vector and not accounted for in the volume's size limit ([#863]).
+- Both info-fetchers now re-read their credential from the mounted Secret when
+  the backend rejects it, and retry the request once with the new value ([#863]).
+- The user-info-fetcher Keycloak and Entra backends now only report a `404` from
+  the identity provider as a missing user ([#863]).
+- A failed user lookup is now cached for a few seconds, as a failed resource
+  lookup already was ([#863]).
 - Fix a longstanding problem of including empty `categories`, `shortNames` and `additionalPrinterColumns` in the CRDs,
   which could cause problems with GitOps tools (e.g. ArgoCD) reporting a diff in the custom resources.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
@@ -34,6 +75,7 @@ All notable changes to this project will be documented in this file.
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
+[#863]: https://github.com/stackabletech/opa-operator/pull/863
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
 [#871]: https://github.com/stackabletech/opa-operator/pull/871
 [#872]: https://github.com/stackabletech/opa-operator/pull/872

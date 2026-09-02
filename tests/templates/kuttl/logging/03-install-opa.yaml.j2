@@ -17,6 +17,16 @@ data:
       false
     }
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datahub-credentials
+stringData:
+  # The resource-info-fetcher only reads this token at startup; this test never sends it a request,
+  # so the token does not have to be valid and the configured DataHub does not have to exist. The
+  # sidecar is only here so that its logs can be asserted on.
+  token: not-a-real-datahub-token
+---
 apiVersion: opa.stackable.tech/v1alpha1
 kind: OpaCluster
 metadata:
@@ -32,6 +42,16 @@ spec:
     pullPolicy: IfNotPresent
   clusterConfig:
     vectorAggregatorConfigMapName: opa-vector-aggregator-discovery
+    # Both info-fetcher sidecars are enabled so that the test covers the collection of their file
+    # logs as well. Neither of them is queried by this test.
+    userInfo:
+      backend:
+        none: {}
+    resourceInfo:
+      backend:
+        dataHub:
+          hostname: datahub-gms
+          credentialsSecretName: datahub-credentials
   servers:
     roleGroups:
       automatic-log-config:
@@ -48,6 +68,16 @@ spec:
                   decision:
                     level: INFO
               bundle-builder:
+                console:
+                  level: NONE
+                file:
+                  level: INFO
+              user-info-fetcher:
+                console:
+                  level: NONE
+                file:
+                  level: INFO
+              resource-info-fetcher:
                 console:
                   level: NONE
                 file:

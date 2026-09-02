@@ -1,0 +1,73 @@
+---
+# DataHub ingestion job: scrapes Superset dashboards and charts into DataHub GMS so that the
+# resource-info-fetcher (RIF) can resolve Superset dashboards/charts by URN.
+#
+# Simpler than the Trino/Kafka ingestions: Superset serves plain HTTP on my-superset-node:8088 (no
+# TLS), so there is no CA to extract. Auth is the Superset admin user from 23-install-superset
+# (admin/admin, database provider).
+#
+# `platform_instance` (${POD_NAMESPACE}/my-superset) is embedded in the chart/dashboard URNs and
+# must match the OpaCluster's `resourceInfo` env and the URN derivation in
+# resource_to_urn_mapping.rs, or RIF lookups miss.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datahub-superset-recipe
+data:
+  recipe.yaml: |
+    source:
+      type: superset
+      config:
+        connect_uri: 'http://my-superset-node:8088'
+        # Admin user created in 23-install-superset (superset-admin-credentials Secret).
+        username: admin
+        password: admin
+        provider: db
+        platform_instance: '${POD_NAMESPACE}/my-superset'
+        env: PROD
+    sink:
+      type: datahub-rest
+      config:
+        server: 'http://datahub-datahub-gms:8080'
+        # Same DataHub PAT the RIF sidecar uses, minted in 04-mint-pat.
+        token: '${DATAHUB_GMS_TOKEN}'
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: datahub-ingest-superset
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: ingest
+          image: acryldata/datahub-ingestion:v1.6.0
+          command: ["datahub", "ingest", "-c", "/recipe/recipe.yaml"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: DATAHUB_GMS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: datahub-rif-credentials
+                  key: token
+            - name: DATAHUB_TELEMETRY_ENABLED
+              value: "false"
+          volumeMounts:
+            - name: recipe
+              mountPath: /recipe
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: recipe
+          configMap:
+            name: datahub-superset-recipe

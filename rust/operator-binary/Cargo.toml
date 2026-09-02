@@ -17,6 +17,7 @@ const_format.workspace = true
 fnv.workspace = true
 futures.workspace = true
 indoc.workspace = true
+moka.workspace = true
 pin-project.workspace = true
 rustls.workspace = true
 semver.workspace = true

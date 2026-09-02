@@ -1,0 +1,12 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+# OpenSearch + Kafka can be slow to become ready on a cold cluster (image pulls, JVM start).
+timeout: 900
+commands:
+  # Wait for the stateful prerequisites to be ready before installing DataHub itself.
+  # (Pod/StatefulSet names come from the `prerequisites` release; adjust if a chart bump
+  # renames them.)
+  - script: kubectl -n $NAMESPACE rollout status --timeout=590s statefulset/opensearch-cluster-master
+  - script: kubectl -n $NAMESPACE rollout status --timeout=590s statefulset/prerequisites-mysql
+  - script: kubectl -n $NAMESPACE rollout status --timeout=590s statefulset/prerequisites-kafka-controller

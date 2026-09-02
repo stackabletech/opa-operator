@@ -27,6 +27,7 @@ spec:
               clusterConfig:
                 default:
                   listenerClass: cluster-internal
+                  resourceInfo: null
                   tls: null
                   userInfo: null
                 description: Global OPA cluster configuration that applies to all roles and role groups.
@@ -50,6 +51,163 @@ spec:
                     - external-unstable
                     - external-stable
                     type: string
+                  resourceInfo:
+                    description: |-
+                      Configures how to fetch additional metadata about resource information from a data
+                      catalog.
+
+                      Data catalog could e.g. be DataHub and resources could be Trino catalogs, schemas,
+                      tables or Kafka topics etc.
+                    nullable: true
+                    properties:
+                      backend:
+                        description: The backend directory service to use.
+                        oneOf:
+                        - required:
+                          - dataHub
+                        properties:
+                          dataHub:
+                            description: Backend that fetches resource information from DataHub.
+                            properties:
+                              credentialsSecretName:
+                                description: |-
+                                  Name of a Secret containing a DataHub Personal Access Token (PAT) that is authorized
+                                  to read resource metadata.
+
+                                  Must contain the field `token`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              env:
+                                default: PROD
+                                description: |-
+                                  The DataHub environment (in DataHub terms: the fabric) the resources live in.
+
+                                  This must match the `env` of the DataHub ingestion source that produced the metadata,
+                                  because `env` is part of the dataset URN (and of the container key that database and
+                                  schema URNs are hashed from). A mismatch is not reported as an error: the constructed URN
+                                  simply does not resolve and the resource-info-fetcher returns empty metadata.
+
+                                  This is configured here rather than passed in by the Rego rule on purpose. `env`
+                                  describes how the catalog was populated, not the resource that is being authorized, and
+                                  the Rego rule has no way of knowing it. It is also DataHub-specific: no other metadata
+                                  catalog we know of has this concept.
+
+                                  `env` is largely superseded by DataHub's platform instance, which the Rego rules already
+                                  pass as `instance` — within a single DataHub, a platform instance belongs to exactly one
+                                  fabric. Should a single resource-info-fetcher ever need to serve multiple fabrics, we
+                                  would add per-instance `envOverrides` here instead of moving `env` back into the API.
+                                enum:
+                                - DEV
+                                - TEST
+                                - QA
+                                - UAT
+                                - EI
+                                - PRE
+                                - STG
+                                - NON_PROD
+                                - PROD
+                                - CORP
+                                - RVW
+                                - PRD
+                                - TST
+                                - SIT
+                                - SBX
+                                - SANDBOX
+                                - CERT
+                                type: string
+                              hostname:
+                                description: Hostname of DataHub
+                                type: string
+                              port:
+                                description: Port of DataHub. If TLS is used defaults to `443`, otherwise to `80`.
+                                format: uint16
+                                maximum: 65535.0
+                                minimum: 0.0
+                                nullable: true
+                                type: integer
+                              rootPath:
+                                default: /
+                                description: |-
+                                  Root HTTP path of DataHub, e.g. `/datahub` if DataHub is served below that path by a
+                                  reverse proxy. The GraphQL endpoint is expected at `api/graphql` below this path.
+                                  Defaults to `/`.
+                                type: string
+                              tls:
+                                description: Use a TLS connection. If not specified no TLS will be used.
+                                nullable: true
+                                properties:
+                                  verification:
+                                    description: The verification method used to verify the certificates of the server and/or the client.
+                                    oneOf:
+                                    - required:
+                                      - none
+                                    - required:
+                                      - server
+                                    properties:
+                                      none:
+                                        description: Use TLS but don't verify certificates.
+                                        type: object
+                                      server:
+                                        description: Use TLS and a CA certificate to verify the server.
+                                        properties:
+                                          caCert:
+                                            description: CA cert to verify the server.
+                                            oneOf:
+                                            - required:
+                                              - webPki
+                                            - required:
+                                              - secretClass
+                                            properties:
+                                              secretClass:
+                                                description: |-
+                                                  Name of the [SecretClass](https://docs.stackable.tech/home/nightly/secret-operator/secretclass) which will provide the CA certificate.
+                                                  Note that a SecretClass does not need to have a key but can also work with just a CA certificate,
+                                                  so if you got provided with a CA cert but don't have access to the key you can still use this method.
+                                                type: string
+                                              webPki:
+                                                description: |-
+                                                  Use TLS and the CA certificates trusted by the common web browsers to verify the server.
+                                                  This can be useful when you e.g. use public AWS S3 or other public available services.
+                                                type: object
+                                            type: object
+                                        required:
+                                        - caCert
+                                        type: object
+                                    type: object
+                                required:
+                                - verification
+                                type: object
+                            required:
+                            - credentialsSecretName
+                            - hostname
+                            type: object
+                        type: object
+                      cache:
+                        default:
+                          entryTimeToLive: 1m
+                          maxEntries: 10000
+                        description: Caching configuration.
+                        properties:
+                          entryTimeToLive:
+                            default: 1m
+                            description: How long responses should be cached for.
+                            type: string
+                          maxEntries:
+                            default: 10000
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
+                            format: uint64
+                            minimum: 0.0
+                            type: integer
+                        type: object
+                    required:
+                    - backend
+                    type: object
                   tls:
                     description: |-
                       TLS encryption settings for the OPA server.
@@ -512,12 +670,23 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
+                          maxEntries: 10000
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
                             default: 1m
-                            description: How long metadata about each user should be cached for.
+                            description: How long responses should be cached for.
                             type: string
+                          maxEntries:
+                            default: 10000
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
+                            format: uint64
+                            minimum: 0.0
+                            type: integer
                         type: object
                     type: object
                   vectorAggregatorConfigMapName:
@@ -844,6 +1013,86 @@ spec:
                                     type: object
                                 type: object
                               prepare:
+                                anyOf:
+                                - required:
+                                  - custom
+                                - {}
+                                - {}
+                                description: Log configuration of the container
+                                properties:
+                                  console:
+                                    description: Configuration for the console appender
+                                    nullable: true
+                                    properties:
+                                      level:
+                                        description: |-
+                                          The log level threshold.
+                                          Log events with a lower log level are discarded.
+                                        enum:
+                                        - TRACE
+                                        - DEBUG
+                                        - INFO
+                                        - WARN
+                                        - ERROR
+                                        - FATAL
+                                        - NONE
+                                        - null
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  custom:
+                                    description: Log configuration provided in a ConfigMap
+                                    properties:
+                                      configMap:
+                                        description: ConfigMap containing the log configuration files
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  file:
+                                    description: Configuration for the file appender
+                                    nullable: true
+                                    properties:
+                                      level:
+                                        description: |-
+                                          The log level threshold.
+                                          Log events with a lower log level are discarded.
+                                        enum:
+                                        - TRACE
+                                        - DEBUG
+                                        - INFO
+                                        - WARN
+                                        - ERROR
+                                        - FATAL
+                                        - NONE
+                                        - null
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  loggers:
+                                    additionalProperties:
+                                      description: Configuration of a logger
+                                      properties:
+                                        level:
+                                          description: |-
+                                            The log level threshold.
+                                            Log events with a lower log level are discarded.
+                                          enum:
+                                          - TRACE
+                                          - DEBUG
+                                          - INFO
+                                          - WARN
+                                          - ERROR
+                                          - FATAL
+                                          - NONE
+                                          - null
+                                          nullable: true
+                                          type: string
+                                      type: object
+                                    default: {}
+                                    description: Configuration per logger
+                                    type: object
+                                type: object
+                              resource-info-fetcher:
                                 anyOf:
                                 - required:
                                   - custom
@@ -1466,6 +1715,86 @@ spec:
                                           type: object
                                       type: object
                                     prepare:
+                                      anyOf:
+                                      - required:
+                                        - custom
+                                      - {}
+                                      - {}
+                                      description: Log configuration of the container
+                                      properties:
+                                        console:
+                                          description: Configuration for the console appender
+                                          nullable: true
+                                          properties:
+                                            level:
+                                              description: |-
+                                                The log level threshold.
+                                                Log events with a lower log level are discarded.
+                                              enum:
+                                              - TRACE
+                                              - DEBUG
+                                              - INFO
+                                              - WARN
+                                              - ERROR
+                                              - FATAL
+                                              - NONE
+                                              - null
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        custom:
+                                          description: Log configuration provided in a ConfigMap
+                                          properties:
+                                            configMap:
+                                              description: ConfigMap containing the log configuration files
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        file:
+                                          description: Configuration for the file appender
+                                          nullable: true
+                                          properties:
+                                            level:
+                                              description: |-
+                                                The log level threshold.
+                                                Log events with a lower log level are discarded.
+                                              enum:
+                                              - TRACE
+                                              - DEBUG
+                                              - INFO
+                                              - WARN
+                                              - ERROR
+                                              - FATAL
+                                              - NONE
+                                              - null
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        loggers:
+                                          additionalProperties:
+                                            description: Configuration of a logger
+                                            properties:
+                                              level:
+                                                description: |-
+                                                  The log level threshold.
+                                                  Log events with a lower log level are discarded.
+                                                enum:
+                                                - TRACE
+                                                - DEBUG
+                                                - INFO
+                                                - WARN
+                                                - ERROR
+                                                - FATAL
+                                                - NONE
+                                                - null
+                                                nullable: true
+                                                type: string
+                                            type: object
+                                          default: {}
+                                          description: Configuration per logger
+                                          type: object
+                                      type: object
+                                    resource-info-fetcher:
                                       anyOf:
                                       - required:
                                         - custom
@@ -1959,6 +2288,7 @@ spec:
               clusterConfig:
                 default:
                   listenerClass: cluster-internal
+                  resourceInfo: null
                   tls: null
                   userInfo: null
                 description: Global OPA cluster configuration that applies to all roles and role groups.
@@ -1982,6 +2312,163 @@ spec:
                     - external-unstable
                     - external-stable
                     type: string
+                  resourceInfo:
+                    description: |-
+                      Configures how to fetch additional metadata about resource information from a data
+                      catalog.
+
+                      Data catalog could e.g. be DataHub and resources could be Trino catalogs, schemas,
+                      tables or Kafka topics etc.
+                    nullable: true
+                    properties:
+                      backend:
+                        description: The backend directory service to use.
+                        oneOf:
+                        - required:
+                          - dataHub
+                        properties:
+                          dataHub:
+                            description: Backend that fetches resource information from DataHub.
+                            properties:
+                              credentialsSecretName:
+                                description: |-
+                                  Name of a Secret containing a DataHub Personal Access Token (PAT) that is authorized
+                                  to read resource metadata.
+
+                                  Must contain the field `token`.
+                                maxLength: 253
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              env:
+                                default: PROD
+                                description: |-
+                                  The DataHub environment (in DataHub terms: the fabric) the resources live in.
+
+                                  This must match the `env` of the DataHub ingestion source that produced the metadata,
+                                  because `env` is part of the dataset URN (and of the container key that database and
+                                  schema URNs are hashed from). A mismatch is not reported as an error: the constructed URN
+                                  simply does not resolve and the resource-info-fetcher returns empty metadata.
+
+                                  This is configured here rather than passed in by the Rego rule on purpose. `env`
+                                  describes how the catalog was populated, not the resource that is being authorized, and
+                                  the Rego rule has no way of knowing it. It is also DataHub-specific: no other metadata
+                                  catalog we know of has this concept.
+
+                                  `env` is largely superseded by DataHub's platform instance, which the Rego rules already
+                                  pass as `instance` — within a single DataHub, a platform instance belongs to exactly one
+                                  fabric. Should a single resource-info-fetcher ever need to serve multiple fabrics, we
+                                  would add per-instance `envOverrides` here instead of moving `env` back into the API.
+                                enum:
+                                - DEV
+                                - TEST
+                                - QA
+                                - UAT
+                                - EI
+                                - PRE
+                                - STG
+                                - NON_PROD
+                                - PROD
+                                - CORP
+                                - RVW
+                                - PRD
+                                - TST
+                                - SIT
+                                - SBX
+                                - SANDBOX
+                                - CERT
+                                type: string
+                              hostname:
+                                description: Hostname of DataHub
+                                type: string
+                              port:
+                                description: Port of DataHub. If TLS is used defaults to `443`, otherwise to `80`.
+                                format: uint16
+                                maximum: 65535.0
+                                minimum: 0.0
+                                nullable: true
+                                type: integer
+                              rootPath:
+                                default: /
+                                description: |-
+                                  Root HTTP path of DataHub, e.g. `/datahub` if DataHub is served below that path by a
+                                  reverse proxy. The GraphQL endpoint is expected at `api/graphql` below this path.
+                                  Defaults to `/`.
+                                type: string
+                              tls:
+                                description: Use a TLS connection. If not specified no TLS will be used.
+                                nullable: true
+                                properties:
+                                  verification:
+                                    description: The verification method used to verify the certificates of the server and/or the client.
+                                    oneOf:
+                                    - required:
+                                      - none
+                                    - required:
+                                      - server
+                                    properties:
+                                      none:
+                                        description: Use TLS but don't verify certificates.
+                                        type: object
+                                      server:
+                                        description: Use TLS and a CA certificate to verify the server.
+                                        properties:
+                                          caCert:
+                                            description: CA cert to verify the server.
+                                            oneOf:
+                                            - required:
+                                              - webPki
+                                            - required:
+                                              - secretClass
+                                            properties:
+                                              secretClass:
+                                                description: |-
+                                                  Name of the [SecretClass](https://docs.stackable.tech/home/nightly/secret-operator/secretclass) which will provide the CA certificate.
+                                                  Note that a SecretClass does not need to have a key but can also work with just a CA certificate,
+                                                  so if you got provided with a CA cert but don't have access to the key you can still use this method.
+                                                type: string
+                                              webPki:
+                                                description: |-
+                                                  Use TLS and the CA certificates trusted by the common web browsers to verify the server.
+                                                  This can be useful when you e.g. use public AWS S3 or other public available services.
+                                                type: object
+                                            type: object
+                                        required:
+                                        - caCert
+                                        type: object
+                                    type: object
+                                required:
+                                - verification
+                                type: object
+                            required:
+                            - credentialsSecretName
+                            - hostname
+                            type: object
+                        type: object
+                      cache:
+                        default:
+                          entryTimeToLive: 1m
+                          maxEntries: 10000
+                        description: Caching configuration.
+                        properties:
+                          entryTimeToLive:
+                            default: 1m
+                            description: How long responses should be cached for.
+                            type: string
+                          maxEntries:
+                            default: 10000
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
+                            format: uint64
+                            minimum: 0.0
+                            type: integer
+                        type: object
+                    required:
+                    - backend
+                    type: object
                   tls:
                     description: |-
                       TLS encryption settings for the OPA server.
@@ -2444,12 +2931,23 @@ spec:
                       cache:
                         default:
                           entryTimeToLive: 1m
+                          maxEntries: 10000
                         description: Caching configuration.
                         properties:
                           entryTimeToLive:
                             default: 1m
-                            description: How long metadata about each user should be cached for.
+                            description: How long responses should be cached for.
                             type: string
+                          maxEntries:
+                            default: 10000
+                            description: |-
+                              Maximum number of entries to cache.
+
+                              Once it is reached, the least recently used entries are evicted. Raising this raises the
+                              memory the info-fetcher sidecar can use, which is capped by its memory limit.
+                            format: uint64
+                            minimum: 0.0
+                            type: integer
                         type: object
                     type: object
                   vectorAggregatorConfigMapName:
@@ -2776,6 +3274,86 @@ spec:
                                     type: object
                                 type: object
                               prepare:
+                                anyOf:
+                                - required:
+                                  - custom
+                                - {}
+                                - {}
+                                description: Log configuration of the container
+                                properties:
+                                  console:
+                                    description: Configuration for the console appender
+                                    nullable: true
+                                    properties:
+                                      level:
+                                        description: |-
+                                          The log level threshold.
+                                          Log events with a lower log level are discarded.
+                                        enum:
+                                        - TRACE
+                                        - DEBUG
+                                        - INFO
+                                        - WARN
+                                        - ERROR
+                                        - FATAL
+                                        - NONE
+                                        - null
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  custom:
+                                    description: Log configuration provided in a ConfigMap
+                                    properties:
+                                      configMap:
+                                        description: ConfigMap containing the log configuration files
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  file:
+                                    description: Configuration for the file appender
+                                    nullable: true
+                                    properties:
+                                      level:
+                                        description: |-
+                                          The log level threshold.
+                                          Log events with a lower log level are discarded.
+                                        enum:
+                                        - TRACE
+                                        - DEBUG
+                                        - INFO
+                                        - WARN
+                                        - ERROR
+                                        - FATAL
+                                        - NONE
+                                        - null
+                                        nullable: true
+                                        type: string
+                                    type: object
+                                  loggers:
+                                    additionalProperties:
+                                      description: Configuration of a logger
+                                      properties:
+                                        level:
+                                          description: |-
+                                            The log level threshold.
+                                            Log events with a lower log level are discarded.
+                                          enum:
+                                          - TRACE
+                                          - DEBUG
+                                          - INFO
+                                          - WARN
+                                          - ERROR
+                                          - FATAL
+                                          - NONE
+                                          - null
+                                          nullable: true
+                                          type: string
+                                      type: object
+                                    default: {}
+                                    description: Configuration per logger
+                                    type: object
+                                type: object
+                              resource-info-fetcher:
                                 anyOf:
                                 - required:
                                   - custom
@@ -3398,6 +3976,86 @@ spec:
                                           type: object
                                       type: object
                                     prepare:
+                                      anyOf:
+                                      - required:
+                                        - custom
+                                      - {}
+                                      - {}
+                                      description: Log configuration of the container
+                                      properties:
+                                        console:
+                                          description: Configuration for the console appender
+                                          nullable: true
+                                          properties:
+                                            level:
+                                              description: |-
+                                                The log level threshold.
+                                                Log events with a lower log level are discarded.
+                                              enum:
+                                              - TRACE
+                                              - DEBUG
+                                              - INFO
+                                              - WARN
+                                              - ERROR
+                                              - FATAL
+                                              - NONE
+                                              - null
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        custom:
+                                          description: Log configuration provided in a ConfigMap
+                                          properties:
+                                            configMap:
+                                              description: ConfigMap containing the log configuration files
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        file:
+                                          description: Configuration for the file appender
+                                          nullable: true
+                                          properties:
+                                            level:
+                                              description: |-
+                                                The log level threshold.
+                                                Log events with a lower log level are discarded.
+                                              enum:
+                                              - TRACE
+                                              - DEBUG
+                                              - INFO
+                                              - WARN
+                                              - ERROR
+                                              - FATAL
+                                              - NONE
+                                              - null
+                                              nullable: true
+                                              type: string
+                                          type: object
+                                        loggers:
+                                          additionalProperties:
+                                            description: Configuration of a logger
+                                            properties:
+                                              level:
+                                                description: |-
+                                                  The log level threshold.
+                                                  Log events with a lower log level are discarded.
+                                                enum:
+                                                - TRACE
+                                                - DEBUG
+                                                - INFO
+                                                - WARN
+                                                - ERROR
+                                                - FATAL
+                                                - NONE
+                                                - null
+                                                nullable: true
+                                                type: string
+                                            type: object
+                                          default: {}
+                                          description: Configuration per logger
+                                          type: object
+                                      type: object
+                                    resource-info-fetcher:
                                       anyOf:
                                       - required:
                                         - custom

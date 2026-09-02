@@ -1,4 +1,5 @@
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::{FIELD_MANAGER, OpaCluster, OpaClusterVersion};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     kube::{Client, core::crd::MergeError},
@@ -7,8 +8,6 @@ use stackable_operator::{
         webhooks::{ConversionWebhook, ConversionWebhookOptions},
     },
 };
-
-use crate::crd::{FIELD_MANAGER, OpaCluster, OpaClusterVersion};
 
 #[derive(Debug, Snafu)]
 pub enum Error {

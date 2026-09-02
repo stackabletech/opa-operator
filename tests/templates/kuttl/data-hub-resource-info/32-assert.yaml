@@ -1,0 +1,15 @@
+---
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+# Metadata-only ingestion of the Kafka topics is quick, but the datahub-ingestion image is large;
+# give the first pull headroom. Surface the logs regardless of outcome.
+timeout: 600
+commands:
+  - script: |
+      if kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=590s job/datahub-ingest-kafka; then
+        kubectl -n "$NAMESPACE" logs job/datahub-ingest-kafka --tail=40
+      else
+        echo "Kafka ingestion Job did not complete:"
+        kubectl -n "$NAMESPACE" logs job/datahub-ingest-kafka --tail=80 || true
+        exit 1
+      fi

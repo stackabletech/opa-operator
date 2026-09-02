@@ -8,7 +8,12 @@ use std::{
 use axum::{Json, Router, extract::State, routing::post};
 use clap::Parser;
 use futures::{FutureExt, future, pin_mut};
-use moka::future::Cache;
+use info_fetcher_commons::{
+    cache::{self, CachedResponse, ResponseCache},
+    config::{ConfigError, read_config_file},
+    http_error,
+    telemetry::create_file_log_directory,
+};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
@@ -16,8 +21,6 @@ use stackable_operator::{cli::CommonOptions, telemetry::Tracing};
 use tokio::net::TcpListener;
 
 mod backend;
-mod http_error;
-mod utils;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -40,8 +43,11 @@ pub struct Args {
 #[derive(Clone)]
 struct AppState {
     backend: Arc<ResolvedBackend>,
-    user_info_cache: Cache<UserInfoRequest, UserInfo>,
+    user_info_cache: UserInfoCache,
 }
+
+/// The user information we answer with, keyed by the request it answers.
+type UserInfoCache = ResponseCache<UserInfoRequest, UserInfo, GetUserInfoError>;
 
 /// Backend with resolved credentials.
 ///
@@ -64,14 +70,8 @@ enum ResolvedBackend {
 
 #[derive(Snafu, Debug)]
 enum StartupError {
-    #[snafu(display("unable to read config file from {path:?}"))]
-    ReadConfigFile {
-        source: std::io::Error,
-        path: PathBuf,
-    },
-
-    #[snafu(display("failed to parse config file"))]
-    ParseConfig { source: serde_json::Error },
+    #[snafu(display("unable to parse config file from {path:?}"))]
+    ParseConfigFile { source: ConfigError, path: PathBuf },
 
     #[snafu(display("failed to register SIGTERM handler"))]
     RegisterSigterm { source: std::io::Error },
@@ -81,6 +81,11 @@ enum StartupError {
 
     #[snafu(display("failed to run server"))]
     RunServer { source: std::io::Error },
+
+    #[snafu(display("failed to create the file log directory"))]
+    CreateFileLogDirectory {
+        source: info_fetcher_commons::telemetry::CreateFileLogDirectoryError,
+    },
 
     #[snafu(display("failed to initialize stackable-telemetry"))]
     TracingInit {
@@ -98,12 +103,6 @@ enum StartupError {
 
     #[snafu(display("failed to resolve XFSC AAS backend"))]
     ResolveXfscAasBackend { source: backend::xfsc_aas::Error },
-}
-
-async fn read_config_file(path: &Path) -> Result<String, StartupError> {
-    tokio::fs::read_to_string(path)
-        .await
-        .context(ReadConfigFileSnafu { path })
 }
 
 /// Resolves a backend configuration by loading credentials and creating the appropriate backend implementation.
@@ -159,6 +158,9 @@ async fn main() -> Result<(), StartupError> {
     // - The console log level was set by `OPA_OPERATOR_LOG`, and is now `CONSOLE_LOG` (when using Tracing::pre_configured).
     // - The file log level was set by `OPA_OPERATOR_LOG`, and is now set via `FILE_LOG` (when using Tracing::pre_configured).
     // - The file log directory was set by `OPA_OPERATOR_LOG_DIRECTORY`, and is now set by `ROLLING_LOGS_DIR` (or via `--rolling-logs <DIRECTORY>`).
+    // Must happen before telemetry is initialized, see the function's documentation.
+    create_file_log_directory(&args.common.telemetry).context(CreateFileLogDirectorySnafu)?;
+
     let _tracing_guard = Tracing::pre_configured(built_info::PKG_NAME, args.common.telemetry)
         .init()
         .context(TracingInitSnafu)?;
@@ -184,18 +186,12 @@ async fn main() -> Result<(), StartupError> {
         }
     };
 
-    let config: v1alpha2::Config =
-        serde_json::from_str(&read_config_file(&args.config).await?).context(ParseConfigSnafu)?;
-
+    let config: v1alpha2::Config = read_config_file(&args.config)
+        .await
+        .with_context(|_| ParseConfigFileSnafu { path: args.config })?;
     let backend = Arc::new(resolve_backend(config.backend, &args.credentials_dir).await?);
 
-    let user_info_cache = {
-        let v1alpha2::Cache { entry_time_to_live } = config.cache;
-        Cache::builder()
-            .name("user-info")
-            .time_to_live(*entry_time_to_live)
-            .build()
-    };
+    let user_info_cache = cache::build("user-info", &config.cache);
     let app = Router::new()
         .route("/user", post(get_user_info))
         .with_state(AppState {
@@ -292,12 +288,6 @@ enum GetUserInfoError {
 
 impl http_error::Error for GetUserInfoError {
     fn status_code(&self) -> hyper::StatusCode {
-        // todo: the warn here loses context about the scope in which the error occurred, eg: stackable_opa_user_info_fetcher::backend::keycloak
-        // Also, we should make the log level (warn vs error) more dynamic in the backend's impl `http_error::Error for Error`
-        tracing::warn!(
-            error = self as &dyn std::error::Error,
-            "Error while processing request"
-        );
         match self {
             Self::Keycloak { source } => source.status_code(),
             Self::ExperimentalXfscAas { source } => source.status_code(),
@@ -316,64 +306,94 @@ async fn get_user_info(
         backend,
         user_info_cache,
     } = state;
-    let user_info = user_info_cache
-        .try_get_with_by_ref(&req, async {
-            match backend.as_ref() {
-                ResolvedBackend::None => {
-                    let user_id = match &req {
-                        UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => {
-                            Some(id)
-                        }
-                        _ => None,
-                    };
-                    let username = match &req {
-                        UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName {
-                            username,
-                        }) => Some(username),
-                        _ => None,
-                    };
-                    Ok(UserInfo {
-                        id: user_id.cloned(),
-                        username: username.cloned(),
-                        groups: vec![],
-                        custom_attributes: HashMap::new(),
-                    })
-                }
-                ResolvedBackend::Keycloak(keycloak) => keycloak
-                    .get_user_info(&req)
-                    .await
-                    .context(get_user_info_error::KeycloakSnafu),
-                ResolvedBackend::ExperimentalXfscAas(aas) => aas
-                    .get_user_info(&req)
-                    .await
-                    .context(get_user_info_error::ExperimentalXfscAasSnafu),
-                ResolvedBackend::ActiveDirectory {
-                    ldap_server,
-                    tls,
-                    base_distinguished_name,
-                    custom_attribute_mappings,
-                    additional_group_attribute_filters,
-                } => backend::active_directory::get_user_info(
-                    &req,
-                    ldap_server,
-                    tls,
-                    base_distinguished_name,
-                    custom_attribute_mappings,
-                    additional_group_attribute_filters,
-                )
-                .await
-                .context(get_user_info_error::ActiveDirectorySnafu),
-                ResolvedBackend::Entra(entra) => entra
-                    .get_user_info(&req)
-                    .await
-                    .context(get_user_info_error::EntraSnafu),
-                ResolvedBackend::OpenLdap(openldap) => openldap
-                    .get_user_info(&req)
-                    .await
-                    .context(get_user_info_error::OpenLdapSnafu),
+    // A failed lookup is cached as well, see [`CachedResponse`], so nothing fails here: the error is
+    // part of the cached value rather than something the cache passes through.
+    let cached = user_info_cache
+        .get_with_by_ref(&req, async {
+            match fetch_user_info(&backend, &req).await {
+                Ok(user_info) => CachedResponse::Found(user_info),
+                Err(error) => CachedResponse::Failed(Arc::new(error)),
             }
         })
-        .await?;
+        .await;
 
-    Ok(Json(user_info))
+    match cached {
+        CachedResponse::Found(user_info) => Ok(Json(user_info)),
+        CachedResponse::Failed(error) => Err(error.into()),
+    }
+}
+
+/// Queries the backend for a single user.
+async fn fetch_user_info(
+    backend: &ResolvedBackend,
+    req: &UserInfoRequest,
+) -> Result<UserInfo, GetUserInfoError> {
+    let user_info = match backend {
+        ResolvedBackend::None => {
+            let user_id = match req {
+                UserInfoRequest::UserInfoRequestById(UserInfoRequestById { id }) => Some(id),
+                _ => None,
+            };
+            let username = match req {
+                UserInfoRequest::UserInfoRequestByName(UserInfoRequestByName { username }) => {
+                    Some(username)
+                }
+                _ => None,
+            };
+            Ok(UserInfo {
+                id: user_id.cloned(),
+                username: username.cloned(),
+                groups: vec![],
+                custom_attributes: HashMap::new(),
+            })
+        }
+        ResolvedBackend::Keycloak(keycloak) => keycloak
+            .get_user_info(req)
+            .await
+            .context(get_user_info_error::KeycloakSnafu),
+        ResolvedBackend::ExperimentalXfscAas(aas) => aas
+            .get_user_info(req)
+            .await
+            .context(get_user_info_error::ExperimentalXfscAasSnafu),
+        ResolvedBackend::ActiveDirectory {
+            ldap_server,
+            tls,
+            base_distinguished_name,
+            custom_attribute_mappings,
+            additional_group_attribute_filters,
+        } => backend::active_directory::get_user_info(
+            req,
+            ldap_server,
+            tls,
+            base_distinguished_name,
+            custom_attribute_mappings,
+            additional_group_attribute_filters,
+        )
+        .await
+        .context(get_user_info_error::ActiveDirectorySnafu),
+        ResolvedBackend::Entra(entra) => entra
+            .get_user_info(req)
+            .await
+            .context(get_user_info_error::EntraSnafu),
+        ResolvedBackend::OpenLdap(openldap) => openldap
+            .get_user_info(req)
+            .await
+            .context(get_user_info_error::OpenLdapSnafu),
+    };
+
+    // Logged here, where the backend was actually queried, rather than while rendering the response.
+    // A failure is cached (see [`CachedResponse`]), so logging it per response would produce a line
+    // for every request that hits the cached failure, which is precisely the burst we cache to avoid.
+    user_info.inspect_err(|error| {
+        let source = error as &dyn std::error::Error;
+
+        if http_error::Error::status_code(error).is_client_error() {
+            // The caller asked about a user the backend does not know, or in a shape it cannot look
+            // up. That says nothing about the health of this process or of the backend, so it does
+            // not belong in the log by default. Any caller can produce these at will.
+            tracing::debug!(error = source, "Rejected a user information request");
+        } else {
+            tracing::warn!(error = source, "Failed to look up user information");
+        }
+    })
 }

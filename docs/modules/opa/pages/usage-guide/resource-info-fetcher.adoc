@@ -1,0 +1,342 @@
+= Resource info fetcher
+:description: Resource Info Fetcher for OPA retrieves data from backends like DataHub. Integrate extra resource details into Rego rules for enhanced policy management.
+
+The _Resource info fetcher_ allows for additional information to be obtained from the configured backend (for example, DataHub).
+You can then write Rego rules for OpenPolicyAgent which make an HTTP request to the Resource info fetcher and make use of the additional information returned for the resource, such as Trino tables or Apache Kafka topics.
+
+You can enable the Resource info fetcher sidecar as follows:
+
+[source,yaml]
+----
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: opa
+spec:
+  image:
+    productVersion: 1.0.0
+  clusterConfig:
+    resourceInfo: # <1>
+      backend:
+        dataHub:
+          hostname: datahub-gms.my-namespace.svc.cluster.local
+          port: 8080
+          rootPath: / # optional, defaults to /
+          tls:
+            verification:
+              server:
+                caCert:
+                  secretClass: tls # <2>
+          credentialsSecretName: resource-info-fetcher-credentials # <3>
+          env: PROD # <4>
+      cache: # optional, enabled by default
+        entryTimeToLive: 60s # optional, defaults to 60s
+  servers:
+    roleGroups:
+      default: {}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: resource-info-fetcher-credentials
+stringData:
+  token: <datahub-personal-access-token> # <3>
+----
+
+<1> Enable the `resource-info-fetcher` sidecar
+<2> Enable TLS verification using the CA from the `tls` SecretClass.
+<3> Authenticate to DataHub with a Personal Access Token (PAT) read from the specified Secret. The Secret must have a `token` entry. See the DataHub documentation on https://docs.datahub.com/docs/authentication/personal-access-tokens[Personal Access Tokens] for how to create one, and make sure https://docs.datahub.com/docs/authentication/introducing-metadata-service-authentication[Metadata Service Authentication] is enabled on your DataHub.
+<4> The DataHub environment (fabric) to query, e.g. `PROD` or `DEV`. Defaults to `PROD`, which is also what DataHub's ingestion sources default to.
+
+Currently the following backends are supported:
+
+* xref:#backend-data-hub[]
+
+[#backends]
+== Backends
+
+[WARNING]
+====
+The initial version is tightly modeled to the only supported backend, namely DataHub.
+The API might change as soon as we add support for other backends.
+====
+
+[#backend-data-hub]
+=== DataHub
+
+DataHub is currently only supported backend, so the general documentation from above applies.
+
+The resource-info-fetcher talks to DataHub's GraphQL endpoint, which it expects at `api/graphql` below the configured `rootPath`.
+`rootPath` only needs to be set if DataHub is served below a sub-path, for example by a reverse proxy: with `rootPath: /datahub` the endpoint used is `/datahub/api/graphql`.
+
+== Resource info fetcher API
+
+Resource information can be retrieved from regorules using the functions in `data.stackable.opa.resourceinfo.v1`.
+There is one function per kind of resource:
+
+[source,rego]
+----
+databaseResourceInfo(system, instance, database)
+schemaResourceInfo(system, instance, database, schema)
+tableResourceInfo(system, instance, database, schema, table)
+streamResourceInfo(system, instance, queue)
+dashboardResourceInfo(system, instance, id)
+chartResourceInfo(system, instance, id)
+
+rawIdentifierResourceInfo(identifier)
+----
+
+The naming is intentionally product-agnostic, so that one function serves the equivalent resource of every product.
+`databaseResourceInfo` addresses what Trino calls a catalog, and `streamResourceInfo` what Apache Kafka calls a topic.
+
+`rawIdentifierResourceInfo` is the escape hatch for resources the functions above do not cover: it passes the identifier to the backend as-is.
+For DataHub that is a URN, such as `urn:li:chart:(superset,my-namespace/my-superset.1)`.
+
+Note that metadata is only read from the entity types the functions above map to: datasets, containers, charts and dashboards.
+Any other type (a `dataJob` or one of the ML entities, say) comes back empty, which looks just like a resource that has no metadata.
+The resource-info-fetcher logs a warning naming the entity type when this happens, and answers `inCatalog: false`, because it cannot check the presence of a type it cannot read.
+
+The first two arguments are the same everywhere:
+
+* `system` is the kind of product the resource lives in, for example `trino`, `kafka` or `superset`. DataHub calls this the _data platform_.
+* `instance` identifies _which_ deployment of that product, for example `my-namespace/my-trino`. DataHub calls this the _platform instance_, and the value must match the `platform_instance` of the ingestion source that produced the metadata.
+
+The `id` taken by `dashboardResourceInfo` and `chartResourceInfo` is whatever the product identifies the resource by, and is passed through as an opaque string.
+Superset numbers its dashboards and charts, but products that name them instead work just as well.
+
+Arguments are limited to 1024 bytes, and may not contain `,`, `(` or `)`.
+DataHub delimits the parts of a URN with those characters, so a resource whose name contains one cannot be addressed at all.
+Either way the lookup is rejected with `400 Bad Request` instead of being sent to DataHub. `rawIdentifierResourceInfo` is exempt, as a URN necessarily contains them.
+
+The DataHub environment (fabric) is deliberately *not* an argument: it describes how the catalog was populated rather than the resource being authorized, so it is configured once on the OpaCluster (see `env` above) instead of being passed in by every Rego rule.
+
+An example of the returned structure:
+
+[source,json]
+----
+{
+  "dataProducts": [],
+  "domain": null,
+  "inCatalog": true,
+  "owners": {
+    "urn:li:ownershipType:__system__business_owner": {
+      "groups": [
+        {
+          "description": "Customer Service/Analytics (mirrored from the Keycloak demo realm)",
+          "displayName": "Customer Service/Analytics",
+          "urn": "urn:li:corpGroup:customer-service-analytics"
+        }
+      ],
+      "ownershipTypeName": "Business Owner",
+      "users": []
+    }
+  },
+  "tags": [
+    {
+      "name": "PII",
+      "urn": "urn:li:tag:PII"
+    }
+  ],
+  "urn": "urn:li:container:c8531e5a52cacf56768d0bf77ca8787c"
+}
+----
+
+[NOTE]
+====
+DataHub models data product membership as graph edges rather than a field on the asset, so `dataProducts` is fetched as a single page of up to 1000 entries.
+An asset is expected to belong to one or two, so this should not be reachable in practice.
+If it ever is, the lookup fails with an error rather than returning the first 1000: a policy evaluating data product membership has no way to tell a truncated list from a complete one, and would silently decide on partial metadata.
+====
+
+=== Debug request
+
+To debug the resource-info-fetcher you can `curl` its API for a given resource.
+Every Rego function above maps to a `GET /metadata/<resource type>` endpoint that takes its arguments as query parameters.
+To achieve this shell into the `opa` container and execute
+
+[source,bash]
+----
+# Query using the abstraction layer
+curl 'localhost:9477/metadata/database?system=trino&instance=kuttl-secure-hermit-wf84/my-trino&database=tpch' | jq
+curl 'localhost:9477/metadata/schema?system=trino&instance=kuttl-secure-hermit-wf84/my-trino&database=tpch&schema=sf1' | jq
+curl 'localhost:9477/metadata/table?system=trino&instance=kuttl-secure-hermit-wf84/my-trino&database=tpch&schema=sf1&table=customer' | jq
+curl 'localhost:9477/metadata/stream?system=kafka&instance=kuttl-secure-hermit-wf84/test-kafka&queue=orders' | jq
+curl 'localhost:9477/metadata/dashboard?system=superset&instance=kuttl-secure-hermit-wf84/my-superset&id=1' | jq
+curl 'localhost:9477/metadata/chart?system=superset&instance=kuttl-secure-hermit-wf84/my-superset&id=1' | jq
+
+# Query raw identifier (URN in this case)
+curl 'localhost:9477/metadata/rawIdentifier?identifier=urn:li:container:792ce6aace288712a1ef036fbca2bb37' | jq
+curl 'localhost:9477/metadata/rawIdentifier?identifier=urn:li:chart:(superset,kuttl-secure-hermit-wf84/my-superset.1)' | jq
+----
+
+=== Rego rule library
+
+The HTTP API exposed by the resource-info-fetcher can be called directly using the rego function `http.send`.
+However, we provide a convenience rego rule library, which we ship with `OpaClusters` by default.
+We recommend to use it, as it allows us to change the underlying HTTP API without users noticing.
+
+For example, the following rule allows access to tables tagged as `public`.
+Please note that this is not a full working example, and serves as demonstration.
+
+[source,rego]
+----
+package test
+
+import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+default allow := false
+
+allow if {
+    table := resourceinfo.tableResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema, input.table)
+    some tag in table.tags
+    tag.urn == "urn:li:tag:public"
+}
+----
+
+=== Metadata is not inherited from parent containers
+
+Tags, domains and data products are read from the addressed resource only.
+Tagging the schema `tpch.sf1` as `pii` does not make `tableResourceInfo` report `pii` for the tables inside it.
+
+This is deliberate: whether a tag applies to a container's children is a property of your policy, not of the resource.
+`pii` plausibly cascades, `deprecated` or an owning team plausibly do not, and we cannot tell which is which.
+Merging them would also leave a rule unable to ask whether _this_ table is tagged.
+
+Express the inheritance you want in the rule instead, using one function per level:
+
+[source,rego]
+----
+package test
+
+import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+default allow := false
+
+# The table itself is marked public, ...
+allow if {
+    table := resourceinfo.tableResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema, input.table)
+    some tag in table.tags
+    tag.urn == "urn:li:tag:public"
+}
+
+# ... or the schema containing it is, which this rule chooses to extend to its tables.
+allow if {
+    schema := resourceinfo.schemaResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema)
+    some tag in schema.tags
+    tag.urn == "urn:li:tag:public"
+}
+----
+
+Each lookup is cached and served over the loopback interface, so consulting an extra level costs little.
+
+=== Telling an unknown resource from one without metadata
+
+A resource the catalog has never heard of and a resource it holds but that carries no tags, owners or data products look identical in the response: everything is empty either way.
+DataHub causes this, and not by accident.
+Its `entity(urn:)` resolver answers with an entity built from the URN alone for _any_ well-formed URN, rather than reporting that it does not know one, so there is nothing in the metadata itself to tell the two apart.
+
+That matters because the two mean opposite things.
+An untagged table has been through ingestion and genuinely carries no tags.
+An unknown one may be a table nobody ingested, or a typo in the arguments your rule passed.
+
+The `inCatalog` field answers it:
+
+[source,rego]
+----
+package test
+
+import data.stackable.opa.resourceinfo.v1 as resourceinfo
+
+default allow := false
+
+allow if {
+    table := resourceinfo.tableResourceInfo("trino", "my-namespace/my-trino", input.catalog, input.schema, input.table)
+    table.inCatalog
+    some tag in table.tags
+    tag.urn == "urn:li:tag:public"
+}
+----
+
+`inCatalog` is `true` only when the catalog holds the resource *and* it has not been deleted there.
+That definition is deliberately independent of the catalog, so a future backend answers the same question in the same field.
+
+For DataHub, both halves are needed.
+Deleting an asset in DataHub is a soft delete: it marks the asset as removed and leaves its metadata in place, and DataHub's own `exists` field deliberately keeps reporting `true` for such an asset.
+A rule keyed on `exists` alone would therefore go on treating a deleted resource as present, which is the wrong way round for an authorization decision.
+The resource-info-fetcher reads both fields in the one query it already sends and reports the combination.
+
+`inCatalog` is `false` when the fetcher cannot check, which is the case for the entity types it does not read metadata from (see above).
+Nothing else in the response distinguishes that case, so the field answers with the option that denies rather than the one that allows.
+
+[NOTE]
+====
+`inCatalog` says the catalog knows the resource, not that its metadata is complete or current.
+A resource ingested once and never re-ingested still reports `true` with whatever tags it had at the time.
+====
+
+=== Rotating credentials
+
+The credentials both info-fetchers authenticate with are mounted from a Secret, and Kubernetes propagates a change to that Secret into the running container within about a minute.
+
+The fetchers therefore re-read the credential themselves.
+They keep it in memory, and when the other side rejects it they read the file again and retry the request once with the new value.
+Updating the Secret is all that is needed, no restart and no rolling of the OpaCluster.
+
+Two details worth knowing:
+
+* The re-read happens only when the credential is *rejected*, not on a timer, so there is no window in which requests fail while waiting for a refresh.
+* If the file has not changed, the request is *not* retried. A credential that was revoked rather than rotated is the same value on disk, so a retry would only be rejected again and would double the load on the backend for every request. The log then says so, at `WARN`.
+
+Until the Secret is updated, lookups keep failing, which fails closed: the rule library only returns a value for `200 OK`, so a rule requiring a positive signal denies (see below).
+Failures are cached for a few seconds, so a credential that is revoked and not replaced does not turn into a request storm against the backend.
+
+[NOTE]
+====
+Only the secret itself is re-read, not the identifier next to it.
+Rotating DataHub Personal Access Token works without a restart.
+====
+
+=== Behaviour when metadata is unavailable
+
+[WARNING]
+====
+A failed metadata lookup does not deny access by itself.
+Only the shape of your rule decides that.
+====
+
+A lookup comes back without the metadata a rule expects in two cases:
+
+Unknown resource::
+The resource was never ingested into the catalog.
+This is not an error, so the answer is `200 OK` with empty `tags`, `owners` and `dataProducts`, and a `null` `domain`.
+It is reported as `inCatalog: false`, which is the only thing separating it from a resource that is catalogued but carries no metadata (see above).
+
+Backend unavailable::
+DataHub is down or unreachable, or the Personal Access Token expired or was revoked.
+The answer is then an HTTP error status with `{"error": {"message": "...", "causes": ["..."]}}` instead of a metadata record.
+The rego rule library only returns a value for `200 OK`, so this error envelope never reaches your rule as if it were metadata: the lookup is undefined instead.
+The same applies to a request the fetcher rejects, such as a resource name no URN can express.
+
+Either way the rule finds no `tags` to match on, so any expression reading them becomes undefined:
+
+* A rule keyed on a *positive* signal, like the `allow` example above, becomes undefined and therefore denies. This is what you want.
+* A rule keyed on the *absence* of a signal (`deny` if tagged `pii`, everything else allowed) also becomes undefined, and an undefined `deny` means *not denied*. A DataHub outage then grants access to every resource, `pii` included.
+
+So always require a positive signal.
+The resource-info-fetcher cannot know whether an empty record should mean allow or deny for your policy, so it does not paper over the difference.
+`inCatalog` is a positive signal that covers the empty record itself, and it is the only one that does, so a rule that must not act on a resource the catalog does not know should require it as well as the tag.
+
+[TIP]
+====
+Requiring a positive signal is the only protection that works everywhere, but where the product's OPA client lets you set query parameters, also set `strict-builtin-errors=true` on the decision query.
+OPA then aborts the query and answers `500` when a lookup fails, instead of quietly evaluating the rule to undefined, and the product denies rather than deciding on missing metadata.
+Without it, an unreachable or too-slow fetcher is indistinguishable from a rule that simply did not match.
+====
+
+The rule library waits 5 seconds for the fetcher.
+That is deliberately far below the 60 seconds the fetcher itself allows for talking to DataHub: an authorization decision has to be answered promptly.
+When DataHub is slower than that, the caller is left without an answer, while the fetcher completes the lookup and caches it, so the next request is served from the cache.
+
+A failure is cached for a few seconds, well below `entryTimeToLive`, so a lookup that keeps failing neither queries the backend nor logs on every request.
+An attempt that reaches the backend and fails is logged at `WARN`, so an unavailable backend shows up in the logs (see xref:opa:usage-guide/logging.adoc[]).
+A lookup rejected because of the request itself, such as an identifier no URN can express, is logged at `DEBUG` instead: it says nothing about the health of the backend, and any user who can name a resource can produce those at will.
