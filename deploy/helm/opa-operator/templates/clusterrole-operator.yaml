@@ -4,9 +4,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "operator.fullname" . }}-clusterrole
+  name: {{ include "opa-operator.fullname" . }}-clusterrole
   labels:
-  {{- include "operator.labels" . | nindent 4 }}
+  {{- include "opa-operator.labels" . | nindent 4 }}
 rules:
   # For automatic cluster domain detection
   - apiGroups:
@@ -54,7 +54,7 @@ rules:
     verbs:
       - bind
     resourceNames:
-      - {{ include "operator.name" . }}-clusterrole
+      - {{ include "opa-operator.name" . }}-clusterrole
   # DaemonSet or Deployment created per role group, depending on the role's `workloadKind`.
   # Applied via SSA, tracked for orphan cleanup, and owned by the controller.
   - apiGroups:
@@ -108,17 +108,17 @@ rules:
       - patch
   # Primary CRD: watched by the controller and read during reconciliation.
   - apiGroups:
-      - {{ include "operator.name" . }}.stackable.tech
+      - {{ include "opa-operator.name" . }}.stackable.tech
     resources:
-      - {{ include "operator.name" . }}clusters
+      - {{ include "opa-operator.name" . }}clusters
     verbs:
       - get
       - list
       - watch
   # Status subresource: updated at the end of every reconciliation.
   - apiGroups:
-      - {{ include "operator.name" . }}.stackable.tech
+      - {{ include "opa-operator.name" . }}.stackable.tech
     resources:
-      - {{ include "operator.name" . }}clusters/status
+      - {{ include "opa-operator.name" . }}clusters/status
     verbs:
       - patch
