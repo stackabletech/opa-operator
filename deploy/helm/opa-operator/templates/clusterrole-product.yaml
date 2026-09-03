@@ -4,9 +4,9 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "operator.name" . }}-clusterrole
+  name: {{ include "opa-operator.name" . }}-clusterrole
   labels:
-  {{- include "operator.labels" . | nindent 4 }}
+  {{- include "opa-operator.labels" . | nindent 4 }}
 rules:
   # The bundle-builder sidecar lists and watches ConfigMaps labeled opa.stackable.tech/bundle
   # to compile Rego rules into bundles. It shares this ServiceAccount because the bundle-builder
