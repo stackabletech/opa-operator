@@ -1,0 +1,33 @@
+= Pod placement
+:description: The default affinity spreads OPA Pods across Kubernetes nodes, which matters for a Deployment, and how to override it with your own affinities.
+
+You can configure Pod placement for OPA Pods as described in xref:concepts:operations/pod_placement.adoc[].
+
+== Defaults
+
+The default affinity created by the operator is:
+
+* Distribute all Pods of the `servers` role across nodes, so that multiple Pods don't end up on the same Kubernetes node (weight 70)
+
+This constrains nothing for a DaemonSet, which already places exactly one Pod per node.
+It matters for a Deployment, where several replicas would otherwise be free to share the same node.
+See xref:usage-guide/workload-kind.adoc[].
+
+[source,yaml]
+----
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: server
+            app.kubernetes.io/instance: cluster-name
+            app.kubernetes.io/name: opa
+        topologyKey: kubernetes.io/hostname
+      weight: 70
+----
+
+NOTE: The default affinity is only preferred and not enforced, because not every setup has multiple Kubernetes nodes.
+To enforce it, set your own `requiredDuringSchedulingIgnoredDuringExecution` affinity.
+Be aware that a Deployment with more replicas than nodes then leaves Pods unschedulable.

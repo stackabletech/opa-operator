@@ -39,13 +39,24 @@ pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
         type_: Some(cluster.cluster_config.listener_class.k8s_service_type()),
         ports: Some(data_service_ports(cluster.is_tls_enabled())),
         selector: Some(role_selector(cluster, &OpaRole::Server).into()),
-        // This ensures that products (e.g. Trino) on a node always talk to the OPA pod on the
-        // same node, avoiding cross-node latency. The downside is that if the local OPA pod is
-        // unavailable, requests fail instead of falling back to another node.
-        // TODO: Once our minimum supported Kubernetes version is 1.35, use
+        // Derived from the role's `workloadKind`:
+        //
+        // * `Local` for a DaemonSet, so that products (e.g. Trino) on a node always talk to the OPA
+        //   Pod on the same node, avoiding cross-node latency. The downside is that if the local OPA
+        //   Pod is unavailable, requests fail instead of falling back to another node.
+        //
+        // * `Cluster` for a Deployment, whose Pods do not cover every node, so node-local routing
+        //   would leave products on Pod-less nodes unable to reach OPA at all.
+        //
+        // TODO: In the DaemonSet case, once our minimum supported Kubernetes version is 1.35, use
         // `trafficDistribution: PreferSameNode` instead, which prefers the local node but
         // gracefully falls back to other nodes if the local pod is unavailable.
-        internal_traffic_policy: Some("Local".to_string()),
+        internal_traffic_policy: Some(
+            cluster
+                .role_config(&OpaRole::Server)
+                .internal_traffic_policy()
+                .to_string(),
+        ),
         ..ServiceSpec::default()
     };
 
@@ -227,6 +238,22 @@ mod tests {
         assert_eq!(spec.internal_traffic_policy.as_deref(), Some("Local"));
         // The role-level service selects the whole role, so it must not pin a role group.
         assert!(!spec.selector.unwrap().contains_key(ROLE_GROUP_LABEL));
+    }
+
+    /// In `Deployment` mode the Pods do not cover every node, so node-local routing would strand
+    /// products running on Pod-less nodes. The policy has to follow `workloadKind`.
+    #[test]
+    fn role_service_traffic_policy_follows_workload_kind() {
+        let deployment_mode = validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "roleConfig": { "workloadKind": "Deployment" },
+                "roleGroups": { "default": {} },
+            },
+        }));
+
+        let spec = build_server_role_service(&deployment_mode).spec.unwrap();
+        assert_eq!(spec.internal_traffic_policy.as_deref(), Some("Cluster"));
     }
 
     #[test]

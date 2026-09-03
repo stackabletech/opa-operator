@@ -1,5 +1,39 @@
 = Allowed Pod disruptions
+:description: Whether the operator creates a PodDisruptionBudget for OPA depends on the workload kind, and how to configure or disable that budget.
 
-For OPA clusters, the operator does not deploy any PodDisruptionBudgets (PDBs), as there is one instance per Kubernetes node running (Daemonset).
-When a Kubernetes node gets drained to gracefully shut it down, the OPA Pod get's evicted - there is no point in blocking the eviction.
-In case the OPA Pod terminated before the products depending on OPA (e.g. Trino coordinator) on the same node, the products can still use the OPA Service, as it routes to OPA Pods running on other Kubernetes nodes.
+You can configure the allowed Pod disruptions as described in xref:concepts:operations/pod_disruptions.adoc[].
+
+What the operator creates depends on the xref:usage-guide/workload-kind.adoc[workload kind] of the role.
+
+== DaemonSet
+
+No PodDisruptionBudget is created, and you should not enable one.
+
+`kubectl drain` skips DaemonSet Pods, a budget is never consulted during a node drain.
+Moreover, PodDisruptionBudgets over DaemonSets can never be evaluated: DaemonSet does not implement the scale subresource.
+Therefore the budget stays at `disruptionsAllowed: 0` with a `SyncFailed` condition and refuses every direct eviction.
+
+Because the role Service routes node-locally in this mode, products on a drained node cannot reach OPA on another node.
+Drain nodes together with the products that query OPA on them.
+
+== Deployment
+
+The operator creates one PodDisruptionBudget per role, allowing one Pod to be unavailable at a time by default:
+
+[source,yaml]
+----
+spec:
+  servers:
+    roleConfig:
+      podDisruptionBudget:
+        enabled: true # <1>
+        maxUnavailable: 1 # <2>
+----
+<1> Defaults to true for a Deployment. Set it to false to create no budget.
+<2> Defaults to 1. Raise it to allow more Pods to be unavailable at once.
+
+Keep `maxUnavailable` at 1 unless you have measured that OPA tolerates more.
+Products query OPA on every request, budgets that drain too many Pods at once turn a node rotation into a platform-wide slowdown.
+
+NOTE: A budget only helps when there is another Pod to fall back to.
+With `replicas` set to 1, the single Pod can still be evicted.
