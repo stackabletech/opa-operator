@@ -13,7 +13,7 @@ const REDACTED: &str = "[redacted]";
 /// `?token` or `#[instrument]` away from writing that token to the log file the Vector agent ships
 /// off the node. Wrapping the value means the leak has to be an explicit decision ([`Secret::expose`])
 /// rather than an accident: the type has no [`Display`](fmt::Display), and its
-/// [`Debug`](fmt::Debug) renders [`REDACTED`], so every struct that holds one can keep deriving
+/// [`Debug`](fmt::Debug) renders a default value, so every struct that holds one can keep deriving
 /// `Debug` safely.
 #[derive(Clone, PartialEq, Eq, Deserialize)]
 #[serde(transparent)]

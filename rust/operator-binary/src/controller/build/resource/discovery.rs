@@ -1,5 +1,4 @@
 //! Builds the discovery [`ConfigMap`] clients use to connect to an `OpaCluster`.
-use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::OpaRole;
 use stackable_operator::{
     builder::configmap::ConfigMapBuilder, k8s_openapi::api::core::v1::ConfigMap,
@@ -12,22 +11,12 @@ use crate::controller::{
     build::{object_meta, recommended_labels_for_role_resources},
 };
 
-#[derive(Snafu, Debug)]
-pub enum Error {
-    #[snafu(display("failed to build ConfigMap"))]
-    BuildConfigMap {
-        source: stackable_operator::builder::configmap::Error,
-    },
-}
-
-type Result<T, E = Error> = std::result::Result<T, E>;
-
 /// Builds the discovery [`ConfigMap`] containing the URL (and, when TLS is enabled, the secret
 /// class) clients need to connect to the cluster.
 pub fn build_discovery_config_map(
     cluster: &ValidatedCluster,
     cluster_info: &KubernetesClusterInfo,
-) -> Result<ConfigMap> {
+) -> ConfigMap {
     let (scheme, port) = if cluster.is_tls_enabled() {
         ("https", APP_TLS_PORT)
     } else {
@@ -57,7 +46,9 @@ pub fn build_discovery_config_map(
         cm_builder.add_data("OPA_SECRET_CLASS", tls.server_secret_class.to_string());
     }
 
-    cm_builder.build().context(BuildConfigMapSnafu)
+    cm_builder
+        .build()
+        .expect("The ConfigMap metadata is set in this function.")
 }
 
 #[cfg(test)]
@@ -82,7 +73,7 @@ mod tests {
             "servers": { "roleGroups": { "default": {} } },
         }));
 
-        let cm = build_discovery_config_map(&validated, &cluster_info()).unwrap();
+        let cm = build_discovery_config_map(&validated, &cluster_info());
         let data = cm.data.unwrap();
 
         assert_eq!(
@@ -100,7 +91,7 @@ mod tests {
             "servers": { "roleGroups": { "default": {} } },
         }));
 
-        let cm = build_discovery_config_map(&validated, &cluster_info()).unwrap();
+        let cm = build_discovery_config_map(&validated, &cluster_info());
         let data = cm.data.unwrap();
 
         assert_eq!(

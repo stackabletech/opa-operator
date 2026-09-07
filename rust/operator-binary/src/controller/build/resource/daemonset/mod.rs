@@ -8,7 +8,6 @@ use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaRole};
 use stackable_operator::{
     builder::{
-        self,
         meta::ObjectMetaBuilder,
         pod::{
             PodBuilder,
@@ -174,19 +173,6 @@ pub enum Error {
         source: crate::operations::graceful_shutdown::Error,
     },
 
-    #[snafu(display("failed to add needed volume"))]
-    AddVolume { source: builder::pod::Error },
-
-    #[snafu(display("failed to add needed volumeMount"))]
-    AddVolumeMount {
-        source: builder::pod::container::Error,
-    },
-
-    #[snafu(display("failed to build TLS volume"))]
-    TlsVolumeBuild {
-        source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
-    },
-
     #[snafu(display("failed to build User Info Fetcher sidecar"))]
     BuildUserInfoFetcherSidecar { source: user_info_fetcher::Error },
 
@@ -312,9 +298,9 @@ pub fn build_server_rolegroup_daemonset(
                 .join(" && "),
         ])
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .resources(merged_config.resources.to_owned().into());
 
     // All operator-set environment variables of the bundle-builder container, collected into an
@@ -337,9 +323,9 @@ pub fn build_server_rolegroup_daemonset(
         )])
         .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .resources(sidecar_resource_requirements())
         .readiness_probe(http_readiness_probe(
             BUNDLE_BUILDER_PROBE_PATH,
@@ -383,16 +369,16 @@ pub fn build_server_rolegroup_daemonset(
         cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
         cb_opa
             .add_volume_mount(TLS_VOLUME_NAME.as_ref(), TLS_STORE_DIR)
-            .context(AddVolumeMountSnafu)?;
+            .expect("The mount paths are statically defined and there should be no duplicates.");
     } else {
         cb_opa.add_container_port(APP_PORT_NAME, APP_PORT.into());
     }
 
     cb_opa
         .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .resources(merged_config.resources.to_owned().into());
 
     let (probe_port_name, probe_scheme) = if cluster.is_tls_enabled() {
@@ -437,13 +423,13 @@ pub fn build_server_rolegroup_daemonset(
                 )
                 .build(),
         )
-        .context(AddVolumeSnafu)?
+        .expect("The volume names are statically defined and there should be no duplicates.")
         .add_volume(
             VolumeBuilder::new(BUNDLES_VOLUME_NAME.as_ref())
                 .with_empty_dir(None::<String>, None)
                 .build(),
         )
-        .context(AddVolumeSnafu)?
+        .expect("The volume names are statically defined and there should be no duplicates.")
         .add_volume(
             VolumeBuilder::new(LOG_VOLUME_NAME.as_ref())
                 .empty_dir(EmptyDirVolumeSource {
@@ -452,7 +438,7 @@ pub fn build_server_rolegroup_daemonset(
                 })
                 .build(),
         )
-        .context(AddVolumeSnafu)?
+        .expect("The volume names are statically defined and there should be no duplicates.")
         .service_account_name(
             cluster
                 .cluster_resource_names()
@@ -488,13 +474,20 @@ pub fn build_server_rolegroup_daemonset(
                             .to_string(),
                     )
                     .build()
-                    .context(TlsVolumeBuildSnafu)?,
+                    .expect(
+                        "The annotation keys are static and annotation values cannot be invalid.",
+                    ),
                 )
                 .build(),
         )
-        .context(AddVolumeSnafu)?;
+        .expect("The volume names are statically defined and there should be no duplicates.");
     }
 
+    // Both sidecars add their statically named volumes (`kerberos`, `*-credentials`) to `pb` with
+    // `expect`, and the TLS/LDAP helpers from operator-rs add volumes named after user-supplied
+    // SecretClasses fallibly. The user-info-fetcher's SecretClass-derived volumes precede the
+    // resource-info-fetcher's static one, which is fine: the derived names always end in `-ca-cert`
+    // or `-bind-credentials` and so can never equal a static volume name.
     add_user_info_fetcher_sidecar(
         &mut pb,
         cluster,
@@ -853,6 +846,7 @@ mod tests {
         let _ = *BUNDLES_VOLUME_NAME;
         let _ = *USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *USER_INFO_FETCHER_KERBEROS_VOLUME_NAME;
+        let _ = *RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *TLS_VOLUME_NAME;
         let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
         let _ = *WATCH_NAMESPACE;
@@ -1262,6 +1256,60 @@ mod tests {
             read_only(&uif_container(&ds), "user-info-fetcher-credentials"),
             Some(true)
         );
+    }
+
+    /// The Entra backend projects its client credentials Secret like the Keycloak backend does. Its
+    /// TLS CA volume is named after the user's SecretClass and is added to the pod *before* the
+    /// resource-info-fetcher's statically named credentials volume, so this also pins that the two
+    /// cannot collide (see the comment above the sidecar calls in `build_server_rolegroup_daemonset`).
+    #[test]
+    fn user_info_fetcher_entra_backend_mounts_client_credentials_next_to_resource_info_fetcher() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "entra": {
+                            "tenantId": "my-tenant",
+                            "clientCredentialsSecret": "entra-credentials",
+                            "tls": {
+                                "verification": {
+                                    "server": { "caCert": { "secretClass": "my-ca" } }
+                                }
+                            },
+                        }
+                    }
+                },
+                "resourceInfo": {
+                    "backend": {
+                        "dataHub": {
+                            "hostname": "datahub-gms.default.svc.cluster.local",
+                            "credentialsSecretName": "datahub-credentials",
+                        }
+                    }
+                },
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let volumes = volume_names(&ds);
+        for expected in [
+            "user-info-fetcher-credentials",
+            "my-ca-ca-cert",
+            "resource-info-fetcher-credentials",
+        ] {
+            assert!(
+                volumes.contains(&expected.to_owned()),
+                "missing volume {expected}"
+            );
+        }
+
+        let uif = uif_container(&ds);
+        assert_eq!(
+            mount_path(&uif, "user-info-fetcher-credentials"),
+            "/stackable/credentials"
+        );
+        assert_eq!(read_only(&uif, "user-info-fetcher-credentials"), Some(true));
     }
 
     /// A cluster running both info-fetcher sidecars, so their shared wiring can be asserted in one go.
