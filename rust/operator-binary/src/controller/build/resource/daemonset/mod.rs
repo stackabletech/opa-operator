@@ -483,11 +483,11 @@ pub fn build_server_rolegroup_daemonset(
         .expect("The volume names are statically defined and there should be no duplicates.");
     }
 
-    // Both sidecars add their statically named volumes (`kerberos`, `*-credentials`) to `pb` with
-    // `expect`, and the TLS/LDAP helpers from operator-rs add volumes named after user-supplied
-    // SecretClasses fallibly. The user-info-fetcher's SecretClass-derived volumes precede the
-    // resource-info-fetcher's static one, which is fine: the derived names always end in `-ca-cert`
-    // or `-bind-credentials` and so can never equal a static volume name.
+    // Both sidecars add their statically named volumes with `expect`, and the TLS/LDAP helpers
+    // from operator-rs add volumes named after user-supplied SecretClasses fallibly. The
+    // user-info-fetcher's SecretClass-derived volumes precede the resource-info-fetcher's
+    // static one, which is fine: the derived names always end in `-ca-cert` or
+    // `-bind-credentials` and so can never equal a static volume name.
     add_user_info_fetcher_sidecar(
         &mut pb,
         cluster,
