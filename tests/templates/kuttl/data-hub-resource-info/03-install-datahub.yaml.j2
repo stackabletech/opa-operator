@@ -2,11 +2,21 @@
 apiVersion: kuttl.dev/v1beta1
 kind: TestStep
 commands:
-  # The chart runs a `datahub-system-update` bootstrap job (creates the MySQL schema and
-  # the OpenSearch indices) before GMS starts; 03-assert waits for GMS to become ready.
+  # The chart installs its bootstrap jobs (MySQL schema, Kafka topics, OpenSearch indices,
+  # `datahub-system-update`) as Helm hooks, so `helm install` only returns once all of them
+  # have run; 03-assert then waits for GMS to become ready.
+  #
+  # Two timeouts are needed here:
+  #   * `--timeout` is Helm's wait per individual hook. The default (5m) is not enough for
+  #     the system-update job on a contended cluster.
+  #   * `timeout` is kuttl's budget for the whole command, so it has to cover all hooks
+  #     together. It is kept above Helm's so a stuck hook fails with Helm's error message
+  #     instead of kuttl killing the process.
   - script: >-
       helm install datahub datahub
       --namespace $NAMESPACE
       --version {{ test_scenario['values']['data-hub'] }}
       --repo https://helm.datahubproject.io
       --values 03_datahub-values.yaml
+      --timeout 10m
+    timeout: 1200
