@@ -487,7 +487,8 @@ pub fn build_server_rolegroup_daemonset(
     // from operator-rs add volumes named after user-supplied SecretClasses fallibly. The
     // user-info-fetcher's SecretClass-derived volumes precede the resource-info-fetcher's
     // static one, which is fine: the derived names always end in `-ca-cert` or
-    // `-bind-credentials` and so can never equal a static volume name.
+    // `-bind-credentials` and so can never equal a static volume name (the alternative would be
+    // to split both calls into two parts, static and derived).
     add_user_info_fetcher_sidecar(
         &mut pb,
         cluster,
