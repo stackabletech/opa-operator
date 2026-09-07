@@ -37,6 +37,13 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// Adds the Resource Info Fetcher sidecar container to the given [`PodBuilder`].
+///
+/// # Panics
+///
+/// Panics if the volumes or volume mounts cannot be added to the builders. Only call this
+/// on builders whose volume names and mount paths are still distinct from the ones added
+/// here.
 pub fn add_resource_info_fetcher_sidecar(
     pb: &mut PodBuilder,
     cluster: &ValidatedCluster,
