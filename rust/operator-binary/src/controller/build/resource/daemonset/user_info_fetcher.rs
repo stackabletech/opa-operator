@@ -3,7 +3,10 @@ use std::str::FromStr;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::{Container, user_info_fetcher};
 use stackable_operator::{
-    builder::pod::{PodBuilder, volume::VolumeBuilder},
+    builder::{
+        self,
+        pod::{PodBuilder, volume::VolumeBuilder},
+    },
     commons::{
         secret_class::{
             SecretClassVolume, SecretClassVolumeProvisionParts, SecretClassVolumeScope,
@@ -39,6 +42,21 @@ constant!(KRB5CCNAME: EnvVarName = "KRB5CCNAME");
 
 #[derive(Snafu, Debug)]
 pub enum Error {
+    #[snafu(display("failed to build volume spec for the User Info Fetcher TLS config"))]
+    KerberosVolume {
+        source: stackable_operator::builder::pod::Error,
+    },
+
+    #[snafu(display("failed to build volume mount spec for the User Info Fetcher TLS config"))]
+    KerberosVolumeMount {
+        source: stackable_operator::builder::pod::container::Error,
+    },
+
+    #[snafu(display("failed to convert the User Info Fetcher Kerberos SecretClass into a volume"))]
+    ConvertKerberosSecretClassVolume {
+        source: stackable_operator::commons::secret_class::SecretClassVolumeError,
+    },
+
     #[snafu(display(
         "failed to build volume or volume mount spec for the User Info Fetcher TLS config"
     ))]
@@ -48,17 +66,19 @@ pub enum Error {
         "failed to build volume or volume mount spec for the User Info Fetcher LDAP config"
     ))]
     LdapVolumeAndMounts { source: ldap::v1alpha1::Error },
+
+    #[snafu(display("failed to add needed volume"))]
+    AddVolume { source: builder::pod::Error },
+
+    #[snafu(display("failed to add needed volumeMount"))]
+    AddVolumeMount {
+        source: builder::pod::container::Error,
+    },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Adds the User Info Fetcher sidecar container to the given [`PodBuilder`].
-///
-/// # Panics
-///
-/// Panics if the volumes or volume mounts cannot be added to the builders. Only call this
-/// on builders whose volume names and mount paths are still distinct from the ones added
-/// here.
 pub fn add_user_info_fetcher_sidecar(
     pb: &mut PodBuilder,
     cluster: &ValidatedCluster,
@@ -93,7 +113,7 @@ pub fn add_user_info_fetcher_sidecar(
             .image(user_info_fetcher_image) // ...override the image
             .command(vec!["stackable-opa-user-info-fetcher".to_string()])
             .add_volume_mounts([read_only_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)])
-            .expect("The mount paths are statically defined and there should be no duplicates.")
+            .context(AddVolumeMountSnafu)?
             // The sidecar writes its file logs below this directory (see
             // `stackable_rust_cli_env_vars`). They have to land on the shared log volume,
             // because that is the only place the Vector agent collects them from.
@@ -120,21 +140,15 @@ pub fn add_user_info_fetcher_sidecar(
                         // The user-info-fetcher needs both the keytab (private) and the Kerberos config (public).
                         SecretClassVolumeProvisionParts::PublicPrivate,
                     )
-                    .expect(
-                        "The annotation keys are static and annotation values cannot be invalid.",
-                    ),
+                    .context(ConvertKerberosSecretClassVolumeSnafu)?,
                 )
-                .expect(
-                    "The volume names are statically defined and there should be no duplicates.",
-                );
+                .context(KerberosVolumeSnafu)?;
                 cb_user_info_fetcher
                     .add_volume_mounts([read_only_mount(
                         USER_INFO_FETCHER_KERBEROS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_KERBEROS_DIR,
                     )])
-                    .expect(
-                        "The mount paths are statically defined and there should be no duplicates.",
-                    );
+                    .context(KerberosVolumeMountSnafu)?;
                 env_vars = env_vars
                     .with_value(
                         &KRB5_CONFIG,
@@ -158,17 +172,13 @@ pub fn add_user_info_fetcher_sidecar(
                         })
                         .build(),
                 )
-                .expect(
-                    "The volume names are statically defined and there should be no duplicates.",
-                );
+                .context(AddVolumeSnafu)?;
                 cb_user_info_fetcher
                     .add_volume_mounts([read_only_mount(
                         USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
                     )])
-                    .expect(
-                        "The mount paths are statically defined and there should be no duplicates.",
-                    );
+                    .context(AddVolumeMountSnafu)?;
                 keycloak
                     .tls
                     .add_volumes_and_mounts(pb, vec![&mut cb_user_info_fetcher])
@@ -183,17 +193,13 @@ pub fn add_user_info_fetcher_sidecar(
                         })
                         .build(),
                 )
-                .expect(
-                    "The volume names are statically defined and there should be no duplicates.",
-                );
+                .context(AddVolumeSnafu)?;
                 cb_user_info_fetcher
                     .add_volume_mounts([read_only_mount(
                         USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         USER_INFO_FETCHER_CREDENTIALS_DIR,
                     )])
-                    .expect(
-                        "The mount paths are statically defined and there should be no duplicates.",
-                    );
+                    .context(AddVolumeMountSnafu)?;
 
                 TlsClientDetails {
                     tls: entra.tls.clone(),

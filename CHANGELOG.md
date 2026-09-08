@@ -55,7 +55,7 @@ All notable changes to this project will be documented in this file.
   deletion is required ([#880]).
 - The operator now watches all resources that it creates and early-exits the reconcile action when the
   cluster is marked for deletion ([#882]).
-- Make operations infallible where appropriate ([#886]).
+- Make operations infallible where dependent on static inputs ([#886]).
 
 ### Fixed
 

@@ -8,6 +8,7 @@ use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaRole};
 use stackable_operator::{
     builder::{
+        self,
         meta::ObjectMetaBuilder,
         pod::{
             PodBuilder,
@@ -171,6 +172,14 @@ pub enum Error {
     #[snafu(display("failed to configure graceful shutdown"))]
     GracefulShutdown {
         source: crate::operations::graceful_shutdown::Error,
+    },
+
+    #[snafu(display("failed to add needed volume"))]
+    AddVolume { source: builder::pod::Error },
+
+    #[snafu(display("failed to build TLS volume"))]
+    TlsVolumeBuild {
+        source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
     },
 
     #[snafu(display("failed to build User Info Fetcher sidecar"))]
@@ -423,13 +432,13 @@ pub fn build_server_rolegroup_daemonset(
                 )
                 .build(),
         )
-        .expect("The volume names are statically defined and there should be no duplicates.")
+        .context(AddVolumeSnafu)?
         .add_volume(
             VolumeBuilder::new(BUNDLES_VOLUME_NAME.as_ref())
                 .with_empty_dir(None::<String>, None)
                 .build(),
         )
-        .expect("The volume names are statically defined and there should be no duplicates.")
+        .context(AddVolumeSnafu)?
         .add_volume(
             VolumeBuilder::new(LOG_VOLUME_NAME.as_ref())
                 .empty_dir(EmptyDirVolumeSource {
@@ -438,7 +447,7 @@ pub fn build_server_rolegroup_daemonset(
                 })
                 .build(),
         )
-        .expect("The volume names are statically defined and there should be no duplicates.")
+        .context(AddVolumeSnafu)?
         .service_account_name(
             cluster
                 .cluster_resource_names()
@@ -474,21 +483,13 @@ pub fn build_server_rolegroup_daemonset(
                             .to_string(),
                     )
                     .build()
-                    .expect(
-                        "The annotation keys are static and annotation values cannot be invalid.",
-                    ),
+                    .context(TlsVolumeBuildSnafu)?,
                 )
                 .build(),
         )
-        .expect("The volume names are statically defined and there should be no duplicates.");
+        .context(AddVolumeSnafu)?;
     }
 
-    // Both sidecars add their statically named volumes with `expect`, and the TLS/LDAP helpers
-    // from operator-rs add volumes named after user-supplied SecretClasses fallibly. The
-    // user-info-fetcher's SecretClass-derived volumes precede the resource-info-fetcher's
-    // static one, which is fine: the derived names always end in `-ca-cert` or
-    // `-bind-credentials` and so can never equal a static volume name (the alternative would be
-    // to split both calls into two parts, static and derived).
     add_user_info_fetcher_sidecar(
         &mut pb,
         cluster,
@@ -1262,7 +1263,7 @@ mod tests {
     /// The Entra backend projects its client credentials Secret like the Keycloak backend does. Its
     /// TLS CA volume is named after the user's SecretClass and is added to the pod *before* the
     /// resource-info-fetcher's statically named credentials volume, so this also pins that the two
-    /// cannot collide (see the comment above the sidecar calls in `build_server_rolegroup_daemonset`).
+    /// do not collide (the derived name ends in `-ca-cert`).
     #[test]
     fn user_info_fetcher_entra_backend_mounts_client_credentials_next_to_resource_info_fetcher() {
         let ds = build(&validated_cluster_from_spec(json!({

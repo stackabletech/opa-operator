@@ -3,7 +3,10 @@ use std::str::FromStr;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::{Container, resource_info_fetcher};
 use stackable_operator::{
-    builder::pod::{PodBuilder, volume::VolumeBuilder},
+    builder::{
+        self,
+        pod::{PodBuilder, volume::VolumeBuilder},
+    },
     commons::tls_verification::TlsClientDetailsError,
     constant,
     k8s_openapi::api::core::v1::SecretVolumeSource,
@@ -33,17 +36,19 @@ pub enum Error {
         "failed to build volume or volume mount spec for the Resource Info Fetcher TLS config"
     ))]
     TlsVolumeAndMounts { source: TlsClientDetailsError },
+
+    #[snafu(display("failed to add needed volume"))]
+    AddVolume { source: builder::pod::Error },
+
+    #[snafu(display("failed to add needed volumeMount"))]
+    AddVolumeMount {
+        source: builder::pod::container::Error,
+    },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 /// Adds the Resource Info Fetcher sidecar container to the given [`PodBuilder`].
-///
-/// # Panics
-///
-/// Panics if the volumes or volume mounts cannot be added to the builders. Only call this
-/// on builders whose volume names and mount paths are still distinct from the ones added
-/// here.
 pub fn add_resource_info_fetcher_sidecar(
     pb: &mut PodBuilder,
     cluster: &ValidatedCluster,
@@ -78,7 +83,7 @@ pub fn add_resource_info_fetcher_sidecar(
             .image(resource_info_fetcher_image) // ...override the image
             .command(vec!["stackable-opa-resource-info-fetcher".to_string()])
             .add_volume_mounts([read_only_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)])
-            .expect("The mount paths are statically defined and there should be no duplicates.")
+            .context(AddVolumeMountSnafu)?
             // The sidecar writes its file logs below this directory (see
             // `stackable_rust_cli_env_vars`). They have to land on the shared log volume,
             // because that is the only place the Vector agent collects them from.
@@ -96,17 +101,13 @@ pub fn add_resource_info_fetcher_sidecar(
                         })
                         .build(),
                 )
-                .expect(
-                    "The volume names are statically defined and there should be no duplicates.",
-                );
+                .context(AddVolumeSnafu)?;
                 cb_rif
                     .add_volume_mounts([read_only_mount(
                         RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME.as_ref(),
                         RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
                     )])
-                    .expect(
-                        "The mount paths are statically defined and there should be no duplicates.",
-                    );
+                    .context(AddVolumeMountSnafu)?;
                 data_hub
                     .tls
                     .add_volumes_and_mounts(pb, vec![&mut cb_rif])

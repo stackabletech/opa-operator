@@ -22,14 +22,20 @@ use crate::controller::{
 #[derive(Snafu, Debug)]
 pub enum Error {
     #[snafu(display("failed to build config.json"))]
-    ConfigJson { source: config_json::Error },
+    BuildConfigJson { source: config_json::Error },
 
     #[snafu(display("failed to build user-info-fetcher.json"))]
-    UserInfoFetcher { source: user_info_fetcher::Error },
+    BuildUserInfoFetcher { source: user_info_fetcher::Error },
 
     #[snafu(display("failed to build resource-info-fetcher.json"))]
-    ResourceInfoFetcher {
+    BuildResourceInfoFetcher {
         source: resource_info_fetcher::Error,
+    },
+
+    #[snafu(display("failed to assemble ConfigMap for role group {role_group}"))]
+    Assemble {
+        source: stackable_operator::builder::configmap::Error,
+        role_group: RoleGroupName,
     },
 }
 
@@ -60,19 +66,19 @@ pub fn build_rolegroup_config_map(
     cm_builder.metadata(metadata).add_data(
         ConfigFileName::ConfigJson.to_string(),
         config_json::build(&rolegroup_config.config, &rolegroup_config.config_overrides)
-            .context(ConfigJsonSnafu)?,
+            .context(BuildConfigJsonSnafu)?,
     );
 
     if let Some(user_info) = &cluster.cluster_config.user_info {
         cm_builder.add_data(
             ConfigFileName::UserInfoFetcher.to_string(),
-            user_info_fetcher::build(user_info).context(UserInfoFetcherSnafu)?,
+            user_info_fetcher::build(user_info).context(BuildUserInfoFetcherSnafu)?,
         );
     }
     if let Some(resource_info) = &cluster.cluster_config.resource_info {
         cm_builder.add_data(
             ConfigFileName::ResourceInfoFetcher.to_string(),
-            resource_info_fetcher::build(resource_info).context(ResourceInfoFetcherSnafu)?,
+            resource_info_fetcher::build(resource_info).context(BuildResourceInfoFetcherSnafu)?,
         );
     }
 
@@ -83,9 +89,9 @@ pub fn build_rolegroup_config_map(
         );
     }
 
-    Ok(cm_builder
-        .build()
-        .expect("The ConfigMap metadata is set in this function."))
+    cm_builder.build().with_context(|_| AssembleSnafu {
+        role_group: role_group_name.clone(),
+    })
 }
 
 #[cfg(test)]
