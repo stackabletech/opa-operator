@@ -7,6 +7,7 @@ use stackable_operator::{
         secret_class::SecretClassVolume,
         tls_verification::{CaCert, Tls, TlsClientDetails, TlsServerVerification, TlsVerification},
     },
+    constant,
     schemars::{self, JsonSchema},
     v2::types::kubernetes::{SecretClassName, SecretName},
     versioned::versioned,
@@ -215,12 +216,15 @@ fn default_root_path() -> String {
     "/".to_string()
 }
 
+constant!(ENTRA_DEFAULT_TOKEN_HOSTNAME: HostName = "login.microsoft.com");
+constant!(ENTRA_DEFAULT_USER_INFO_HOSTNAME: HostName = "graph.microsoft.com");
+
 fn entra_default_token_hostname() -> HostName {
-    HostName::from_str("login.microsoft.com").unwrap()
+    ENTRA_DEFAULT_TOKEN_HOSTNAME.clone()
 }
 
 fn entra_default_user_info_hostname() -> HostName {
-    HostName::from_str("graph.microsoft.com").unwrap()
+    ENTRA_DEFAULT_USER_INFO_HOSTNAME.clone()
 }
 
 fn default_tls_web_pki() -> Option<Tls> {
@@ -245,4 +249,16 @@ fn openldap_default_user_name_attribute() -> String {
 
 fn openldap_default_group_member_attribute() -> String {
     "member".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constants() {
+        // Test that dereferencing the constants does not panic.
+        let _ = *ENTRA_DEFAULT_TOKEN_HOSTNAME;
+        let _ = *ENTRA_DEFAULT_USER_INFO_HOSTNAME;
+    }
 }

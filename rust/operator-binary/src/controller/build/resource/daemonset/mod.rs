@@ -177,11 +177,6 @@ pub enum Error {
     #[snafu(display("failed to add needed volume"))]
     AddVolume { source: builder::pod::Error },
 
-    #[snafu(display("failed to add needed volumeMount"))]
-    AddVolumeMount {
-        source: builder::pod::container::Error,
-    },
-
     #[snafu(display("failed to build TLS volume"))]
     TlsVolumeBuild {
         source: builder::pod::volume::SecretOperatorVolumeSourceBuilderError,
@@ -198,14 +193,6 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// The typed [`ContainerName`] for a [`Container`]. The enum's `Display` values are all valid
-/// container names, so this conversion is infallible.
-fn container_name(container: &Container) -> ContainerName {
-    ContainerName::from_str(&container.to_string())
-        .expect("Container enum variants are valid container names")
-}
-
-/// The CPU and memory requests/limits shared by the bundle-builder and user-info-fetcher sidecars.
 /// A [`VolumeMount`] the container may only read from.
 ///
 /// Used for the config and credential volumes of the info-fetcher sidecars: they hold data the
@@ -221,6 +208,7 @@ fn read_only_mount(name: &str, mount_path: &str) -> VolumeMount {
     }
 }
 
+/// The CPU and memory requests/limits shared by the bundle-builder and user-info-fetcher sidecars.
 fn sidecar_resource_requirements() -> ResourceRequirements {
     ResourceRequirementsBuilder::new()
         .with_cpu_request("100m")
@@ -295,14 +283,14 @@ pub fn build_server_rolegroup_daemonset(
 
     let mut pb = PodBuilder::new();
 
-    let prepare_container_name = container_name(&Container::Prepare);
-    let mut cb_prepare = new_container_builder(&prepare_container_name);
+    let prepare_container_name: &ContainerName = &Container::Prepare;
+    let mut cb_prepare = new_container_builder(prepare_container_name);
 
-    let bundle_builder_container_name = container_name(&Container::BundleBuilder);
-    let mut cb_bundle_builder = new_container_builder(&bundle_builder_container_name);
+    let bundle_builder_container_name: &ContainerName = &Container::BundleBuilder;
+    let mut cb_bundle_builder = new_container_builder(bundle_builder_container_name);
 
-    let opa_container_name = container_name(&Container::Opa);
-    let mut cb_opa = new_container_builder(&opa_container_name);
+    let opa_container_name: &ContainerName = &Container::Opa;
+    let mut cb_opa = new_container_builder(opa_container_name);
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
@@ -312,9 +300,9 @@ pub fn build_server_rolegroup_daemonset(
                 .join(" && "),
         ])
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .resources(merged_config.resources.to_owned().into());
 
     // All operator-set environment variables of the bundle-builder container, collected into an
@@ -337,9 +325,9 @@ pub fn build_server_rolegroup_daemonset(
         )])
         .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .resources(sidecar_resource_requirements())
         .readiness_probe(http_readiness_probe(
             BUNDLE_BUILDER_PROBE_PATH,
@@ -383,16 +371,16 @@ pub fn build_server_rolegroup_daemonset(
         cb_opa.add_container_port(service::APP_TLS_PORT_NAME, service::APP_TLS_PORT.into());
         cb_opa
             .add_volume_mount(TLS_VOLUME_NAME.as_ref(), TLS_STORE_DIR)
-            .context(AddVolumeMountSnafu)?;
+            .expect("The mount paths are statically defined and there should be no duplicates.");
     } else {
         cb_opa.add_container_port(APP_PORT_NAME, APP_PORT.into());
     }
 
     cb_opa
         .add_volume_mount(CONFIG_VOLUME_NAME.as_ref(), CONFIG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-        .context(AddVolumeMountSnafu)?
+        .expect("The mount paths are statically defined and there should be no duplicates.")
         .resources(merged_config.resources.to_owned().into());
 
     let (probe_port_name, probe_scheme) = if cluster.is_tls_enabled() {
@@ -516,7 +504,7 @@ pub fn build_server_rolegroup_daemonset(
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
     if let Some(vector_log_config) = &merged_config.logging.vector_container {
         pb.add_container(vector_container(
-            &container_name(&Container::Vector),
+            &Container::Vector,
             resolved_product_image,
             vector_log_config,
             &cluster.role_group_resource_names(role_group_name),
@@ -853,6 +841,7 @@ mod tests {
         let _ = *BUNDLES_VOLUME_NAME;
         let _ = *USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *USER_INFO_FETCHER_KERBEROS_VOLUME_NAME;
+        let _ = *RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *TLS_VOLUME_NAME;
         let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
         let _ = *WATCH_NAMESPACE;
@@ -1262,6 +1251,60 @@ mod tests {
             read_only(&uif_container(&ds), "user-info-fetcher-credentials"),
             Some(true)
         );
+    }
+
+    /// The Entra backend projects its client credentials Secret like the Keycloak backend does. Its
+    /// TLS CA volume is named `<secret-class>-ca-cert` after the user's SecretClass, so this also
+    /// checks that a SecretClass-derived name coexists with the statically named credentials
+    /// volumes of both info-fetchers in one pod.
+    #[test]
+    fn user_info_fetcher_entra_backend_mounts_client_credentials_next_to_resource_info_fetcher() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "entra": {
+                            "tenantId": "my-tenant",
+                            "clientCredentialsSecret": "entra-credentials",
+                            "tls": {
+                                "verification": {
+                                    "server": { "caCert": { "secretClass": "my-ca" } }
+                                }
+                            },
+                        }
+                    }
+                },
+                "resourceInfo": {
+                    "backend": {
+                        "dataHub": {
+                            "hostname": "datahub-gms.default.svc.cluster.local",
+                            "credentialsSecretName": "datahub-credentials",
+                        }
+                    }
+                },
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let volumes = volume_names(&ds);
+        for expected in [
+            "user-info-fetcher-credentials",
+            "my-ca-ca-cert",
+            "resource-info-fetcher-credentials",
+        ] {
+            assert!(
+                volumes.contains(&expected.to_owned()),
+                "missing volume {expected}"
+            );
+        }
+
+        let uif = uif_container(&ds);
+        assert_eq!(
+            mount_path(&uif, "user-info-fetcher-credentials"),
+            "/stackable/credentials"
+        );
+        assert_eq!(read_only(&uif, "user-info-fetcher-credentials"), Some(true));
     }
 
     /// A cluster running both info-fetcher sidecars, so their shared wiring can be asserted in one go.

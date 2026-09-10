@@ -25,7 +25,7 @@ use stackable_operator::{
         config_overrides::JsonConfigOverrides,
         role_utils::{GenericCommonConfig, Role},
         types::{
-            kubernetes::{ConfigMapName, SecretClassName},
+            kubernetes::{ConfigMapName, ContainerName, SecretClassName},
             operator::RoleName,
         },
     },
@@ -219,6 +219,30 @@ pub enum Container {
     ResourceInfoFetcher,
 }
 
+// Typed container names. They must match the strum `Display` (kebab-case) of the variants above,
+// which is pinned by a unit test.
+constant!(PREPARE_CONTAINER_NAME: ContainerName = "prepare");
+constant!(VECTOR_CONTAINER_NAME: ContainerName = "vector");
+constant!(BUNDLE_BUILDER_CONTAINER_NAME: ContainerName = "bundle-builder");
+constant!(OPA_CONTAINER_NAME: ContainerName = "opa");
+constant!(USER_INFO_FETCHER_CONTAINER_NAME: ContainerName = "user-info-fetcher");
+constant!(RESOURCE_INFO_FETCHER_CONTAINER_NAME: ContainerName = "resource-info-fetcher");
+
+impl Deref for Container {
+    type Target = ContainerName;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Container::Prepare => &PREPARE_CONTAINER_NAME,
+            Container::Vector => &VECTOR_CONTAINER_NAME,
+            Container::BundleBuilder => &BUNDLE_BUILDER_CONTAINER_NAME,
+            Container::Opa => &OPA_CONTAINER_NAME,
+            Container::UserInfoFetcher => &USER_INFO_FETCHER_CONTAINER_NAME,
+            Container::ResourceInfoFetcher => &RESOURCE_INFO_FETCHER_CONTAINER_NAME,
+        }
+    }
+}
+
 // NOTE (@Techassi): This struct can currently NOT be versioned because it is used via Role which
 // makes it incredible hard to implement the From trait for conversions.
 #[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
@@ -331,14 +355,37 @@ impl HasStatusCondition for v1alpha2::OpaCluster {
 #[cfg(test)]
 mod tests {
     use indoc::formatdoc;
-    use stackable_operator::versioned::test_utils::RoundtripTestData;
+    use stackable_operator::{
+        v2::types::kubernetes::ContainerName, versioned::test_utils::RoundtripTestData,
+    };
+    use strum::IntoEnumIterator;
 
-    use super::{SERVER_ROLE_NAME, v1alpha1, v1alpha2};
+    use super::{
+        BUNDLE_BUILDER_CONTAINER_NAME, Container, OPA_CONTAINER_NAME, PREPARE_CONTAINER_NAME,
+        RESOURCE_INFO_FETCHER_CONTAINER_NAME, SERVER_ROLE_NAME, USER_INFO_FETCHER_CONTAINER_NAME,
+        VECTOR_CONTAINER_NAME, v1alpha1, v1alpha2,
+    };
 
     #[test]
     fn test_constants() {
         // Test that dereferencing the constants does not panic.
         let _ = *SERVER_ROLE_NAME;
+        let _ = *PREPARE_CONTAINER_NAME;
+        let _ = *VECTOR_CONTAINER_NAME;
+        let _ = *BUNDLE_BUILDER_CONTAINER_NAME;
+        let _ = *OPA_CONTAINER_NAME;
+        let _ = *USER_INFO_FETCHER_CONTAINER_NAME;
+        let _ = *RESOURCE_INFO_FETCHER_CONTAINER_NAME;
+    }
+
+    /// The typed container names behind `Container`'s `Deref` must agree with its strum
+    /// `Display`, which the logging configuration still uses as the per-container key.
+    #[test]
+    fn container_names_match_display() {
+        for container in Container::iter() {
+            let container_name: &ContainerName = &container;
+            assert_eq!(container_name.to_string(), container.to_string());
+        }
     }
 
     impl RoundtripTestData for v1alpha1::OpaClusterSpec {
