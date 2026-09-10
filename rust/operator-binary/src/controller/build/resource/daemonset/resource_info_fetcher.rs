@@ -20,8 +20,8 @@ use crate::controller::{
         self,
         resource::daemonset::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
-            RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, STACKABLE_LOG_DIR, container_name,
-            read_only_mount, sidecar_container_log_level, sidecar_resource_requirements,
+            RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, STACKABLE_LOG_DIR, read_only_mount,
+            sidecar_container_log_level, sidecar_resource_requirements,
             stackable_rust_cli_env_vars,
         },
     },
@@ -57,8 +57,7 @@ pub fn add_resource_info_fetcher_sidecar(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<()> {
     if let Some(resource_info) = &cluster.cluster_config.resource_info {
-        let rif_container_name = container_name(&Container::ResourceInfoFetcher);
-        let mut cb_rif = new_container_builder(&rif_container_name);
+        let mut cb_rif = new_container_builder(&Container::ResourceInfoFetcher);
 
         // All operator-set environment variables of the resource-info-fetcher container, collected
         // into an `EnvVarSet` so that every name occurs only once.

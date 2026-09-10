@@ -193,14 +193,6 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// The typed [`ContainerName`] for a [`Container`]. The enum's `Display` values are all valid
-/// container names, so this conversion is infallible.
-fn container_name(container: &Container) -> ContainerName {
-    ContainerName::from_str(&container.to_string())
-        .expect("Container enum variants are valid container names")
-}
-
-/// The CPU and memory requests/limits shared by the bundle-builder and user-info-fetcher sidecars.
 /// A [`VolumeMount`] the container may only read from.
 ///
 /// Used for the config and credential volumes of the info-fetcher sidecars: they hold data the
@@ -216,6 +208,7 @@ fn read_only_mount(name: &str, mount_path: &str) -> VolumeMount {
     }
 }
 
+/// The CPU and memory requests/limits shared by the bundle-builder and user-info-fetcher sidecars.
 fn sidecar_resource_requirements() -> ResourceRequirements {
     ResourceRequirementsBuilder::new()
         .with_cpu_request("100m")
@@ -290,14 +283,14 @@ pub fn build_server_rolegroup_daemonset(
 
     let mut pb = PodBuilder::new();
 
-    let prepare_container_name = container_name(&Container::Prepare);
-    let mut cb_prepare = new_container_builder(&prepare_container_name);
+    let prepare_container_name: &ContainerName = &Container::Prepare;
+    let mut cb_prepare = new_container_builder(prepare_container_name);
 
-    let bundle_builder_container_name = container_name(&Container::BundleBuilder);
-    let mut cb_bundle_builder = new_container_builder(&bundle_builder_container_name);
+    let bundle_builder_container_name: &ContainerName = &Container::BundleBuilder;
+    let mut cb_bundle_builder = new_container_builder(bundle_builder_container_name);
 
-    let opa_container_name = container_name(&Container::Opa);
-    let mut cb_opa = new_container_builder(&opa_container_name);
+    let opa_container_name: &ContainerName = &Container::Opa;
+    let mut cb_opa = new_container_builder(opa_container_name);
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
@@ -511,7 +504,7 @@ pub fn build_server_rolegroup_daemonset(
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
     if let Some(vector_log_config) = &merged_config.logging.vector_container {
         pb.add_container(vector_container(
-            &container_name(&Container::Vector),
+            &Container::Vector,
             resolved_product_image,
             vector_log_config,
             &cluster.role_group_resource_names(role_group_name),

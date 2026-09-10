@@ -27,7 +27,7 @@ use crate::controller::{
         resource::daemonset::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, STACKABLE_LOG_DIR,
             USER_INFO_FETCHER_CREDENTIALS_DIR, USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-            USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, container_name,
+            USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
             read_only_mount, sidecar_container_log_level, sidecar_resource_requirements,
             stackable_rust_cli_env_vars,
         },
@@ -87,8 +87,7 @@ pub fn add_user_info_fetcher_sidecar(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<()> {
     if let Some(user_info) = &cluster.cluster_config.user_info {
-        let user_info_fetcher_container_name = container_name(&Container::UserInfoFetcher);
-        let mut cb_user_info_fetcher = new_container_builder(&user_info_fetcher_container_name);
+        let mut cb_user_info_fetcher = new_container_builder(&Container::UserInfoFetcher);
 
         // All operator-set environment variables of the user-info-fetcher container, collected
         // into an `EnvVarSet` so that every name occurs only once. The backend match below may
