@@ -57,7 +57,7 @@ pub fn add_resource_info_fetcher_sidecar(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<()> {
     if let Some(resource_info) = &cluster.cluster_config.resource_info {
-        let mut cb_rif = new_container_builder(&Container::ResourceInfoFetcher);
+        let mut cb_rif = new_container_builder(Container::ResourceInfoFetcher.name());
 
         // All operator-set environment variables of the resource-info-fetcher container, collected
         // into an `EnvVarSet` so that every name occurs only once.

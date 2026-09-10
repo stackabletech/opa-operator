@@ -228,10 +228,9 @@ constant!(OPA_CONTAINER_NAME: ContainerName = "opa");
 constant!(USER_INFO_FETCHER_CONTAINER_NAME: ContainerName = "user-info-fetcher");
 constant!(RESOURCE_INFO_FETCHER_CONTAINER_NAME: ContainerName = "resource-info-fetcher");
 
-impl Deref for Container {
-    type Target = ContainerName;
-
-    fn deref(&self) -> &Self::Target {
+impl Container {
+    /// The typed container name of this variant.
+    pub fn name(&self) -> &'static ContainerName {
         match self {
             Container::Prepare => &PREPARE_CONTAINER_NAME,
             Container::Vector => &VECTOR_CONTAINER_NAME,
@@ -355,9 +354,7 @@ impl HasStatusCondition for v1alpha2::OpaCluster {
 #[cfg(test)]
 mod tests {
     use indoc::formatdoc;
-    use stackable_operator::{
-        v2::types::kubernetes::ContainerName, versioned::test_utils::RoundtripTestData,
-    };
+    use stackable_operator::versioned::test_utils::RoundtripTestData;
     use strum::IntoEnumIterator;
 
     use super::{
@@ -378,13 +375,12 @@ mod tests {
         let _ = *RESOURCE_INFO_FETCHER_CONTAINER_NAME;
     }
 
-    /// The typed container names behind `Container`'s `Deref` must agree with its strum
-    /// `Display`, which the logging configuration still uses as the per-container key.
+    /// The typed container names returned by `name` must agree with the strum `Display`
+    /// of `Container`, which the logging configuration still uses as the per-container key.
     #[test]
     fn container_names_match_display() {
         for container in Container::iter() {
-            let container_name: &ContainerName = &container;
-            assert_eq!(container_name.to_string(), container.to_string());
+            assert_eq!(container.name().to_string(), container.to_string());
         }
     }
 
