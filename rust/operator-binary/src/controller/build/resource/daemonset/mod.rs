@@ -1254,9 +1254,9 @@ mod tests {
     }
 
     /// The Entra backend projects its client credentials Secret like the Keycloak backend does. Its
-    /// TLS CA volume is named after the user's SecretClass and is added to the pod *before* the
-    /// resource-info-fetcher's statically named credentials volume, so this also pins that the two
-    /// do not collide (the derived name ends in `-ca-cert`).
+    /// TLS CA volume is named `<secret-class>-ca-cert` after the user's SecretClass, so this also
+    /// checks that a SecretClass-derived name coexists with the statically named credentials
+    /// volumes of both info-fetchers in one pod.
     #[test]
     fn user_info_fetcher_entra_backend_mounts_client_credentials_next_to_resource_info_fetcher() {
         let ds = build(&validated_cluster_from_spec(json!({
