@@ -45,7 +45,7 @@ use stackable_operator::{
         product_logging::framework::{
             STACKABLE_LOG_DIR, ValidatedContainerLogConfigChoice, vector_container,
         },
-        types::kubernetes::{ContainerName, VolumeName},
+        types::kubernetes::VolumeName,
     },
 };
 
@@ -283,20 +283,17 @@ pub fn build_server_rolegroup_daemonset(
 
     let mut pb = PodBuilder::new();
 
-    let prepare_container_name: &ContainerName = &Container::Prepare;
-    let mut cb_prepare = new_container_builder(prepare_container_name);
+    let mut cb_prepare = new_container_builder(Container::Prepare.name());
 
-    let bundle_builder_container_name: &ContainerName = &Container::BundleBuilder;
-    let mut cb_bundle_builder = new_container_builder(bundle_builder_container_name);
+    let mut cb_bundle_builder = new_container_builder(Container::BundleBuilder.name());
 
-    let opa_container_name: &ContainerName = &Container::Opa;
-    let mut cb_opa = new_container_builder(opa_container_name);
+    let mut cb_opa = new_container_builder(Container::Opa.name());
 
     cb_prepare
         .image_from_product_image(resolved_product_image)
         .command(bash_entrypoint_command())
         .args(vec![
-            build_prepare_start_command(merged_config, prepare_container_name.as_ref())
+            build_prepare_start_command(merged_config, Container::Prepare.name().as_ref())
                 .join(" && "),
         ])
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
@@ -321,7 +318,7 @@ pub fn build_server_rolegroup_daemonset(
         .command(bash_entrypoint_command())
         .args(vec![build_bundle_builder_start_command(
             merged_config,
-            bundle_builder_container_name.as_ref(),
+            Container::BundleBuilder.name().as_ref(),
         )])
         .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
@@ -355,7 +352,7 @@ pub fn build_server_rolegroup_daemonset(
         .command(bash_entrypoint_command())
         .args(vec![build_opa_start_command(
             merged_config,
-            opa_container_name.as_ref(),
+            Container::Opa.name().as_ref(),
             cluster.is_tls_enabled(),
             &rolegroup_config.cli_overrides,
         )])
@@ -504,7 +501,7 @@ pub fn build_server_rolegroup_daemonset(
     // the Vector agent is enabled and the aggregator discovery ConfigMap name is valid.
     if let Some(vector_log_config) = &merged_config.logging.vector_container {
         pb.add_container(vector_container(
-            &Container::Vector,
+            Container::Vector.name(),
             resolved_product_image,
             vector_log_config,
             &cluster.role_group_resource_names(role_group_name),

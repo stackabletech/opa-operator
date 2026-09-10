@@ -87,7 +87,7 @@ pub fn add_user_info_fetcher_sidecar(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<()> {
     if let Some(user_info) = &cluster.cluster_config.user_info {
-        let mut cb_user_info_fetcher = new_container_builder(&Container::UserInfoFetcher);
+        let mut cb_user_info_fetcher = new_container_builder(Container::UserInfoFetcher.name());
 
         // All operator-set environment variables of the user-info-fetcher container, collected
         // into an `EnvVarSet` so that every name occurs only once. The backend match below may
