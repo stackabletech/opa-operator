@@ -1,5 +1,5 @@
 = Pod placement
-:description: The default affinity spreads OPA Pods across Kubernetes nodes, which matters for a Deployment, and how to override it with your own affinities.
+:description: The default affinity spreads OPA Pods across Kubernetes nodes, which matters only for a Deployment.
 
 You can configure Pod placement for OPA Pods as described in xref:concepts:operations/pod_placement.adoc[].
 
