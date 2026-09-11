@@ -1,0 +1,51 @@
+---
+# The `DaemonSet` default: unchanged behaviour for existing installations.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 600
+commands:
+  - script: kubectl -n $NAMESPACE rollout status daemonset test-opa-server-default --timeout 600s
+  - script: kubectl -n $NAMESPACE wait --for=condition=available opaclusters.opa.stackable.tech/test-opa --timeout 600s
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default
+spec:
+  # The reference the Deployment in `20-assert.yaml` is asserted against: the switch is only safe
+  # while both workload kinds label their Pods identically, because the role Service below keeps
+  # selecting them across it.
+  #
+  # `app.kubernetes.io/managed-by`, `app.kubernetes.io/version` and `stackable.tech/vendor` are
+  # deliberately not asserted. `version` carries the build-specific image suffix
+  # (`1.16.2-stackable0.0.0-dev` locally, a release suffix in CI), so pinning it would break the
+  # test for a reason that has nothing to do with the workload kind.
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: server
+      app.kubernetes.io/instance: test-opa
+      app.kubernetes.io/name: opa
+      app.kubernetes.io/role-group: default
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/instance: test-opa
+        app.kubernetes.io/name: opa
+        app.kubernetes.io/role-group: default
+---
+# Node-local routing, which is only safe because a DaemonSet covers every node.
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-opa-server
+spec:
+  internalTrafficPolicy: Local
+  # Selects the role, not a role group, so it fronts every role group and survives a `workloadKind`
+  # switch. This is the other half of the Pod-label assertion above: together they pin "the role
+  # Service selects this workload's Pods", which no other assertion in this suite covers -- a
+  # Deployment with the wrong Pod labels would still roll out and report `readyReplicas`.
+  selector:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/instance: test-opa
+    app.kubernetes.io/name: opa

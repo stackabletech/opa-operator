@@ -1,0 +1,14 @@
+---
+# Left behind, the Deployment's Pods would still be selected by the role Service -- which has just
+# narrowed back to `internalTrafficPolicy: Local`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-opa-server-default
+---
+# A budget over DaemonSet Pods would block node drains while protecting nothing, since `kubectl
+# drain` skips them anyway.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: test-opa-server

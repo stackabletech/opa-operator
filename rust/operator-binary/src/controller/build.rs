@@ -4,6 +4,7 @@
 use std::marker::PhantomData;
 
 use snafu::{ResultExt, Snafu};
+use stackable_opa_operator::crd::v1alpha2;
 use stackable_operator::{
     builder::meta::ObjectMetaBuilder,
     kvp::Labels,
@@ -20,12 +21,16 @@ use crate::{
         KubernetesResources, Prepared, RoleGroupName, ValidatedCluster,
         build::resource::{
             config_map::build_rolegroup_config_map,
-            daemonset::build_server_rolegroup_daemonset,
             discovery::build_discovery_config_map,
+            pdb::build_role_pod_disruption_budget,
             rbac::{build_role_binding, build_service_account},
             service::{
                 build_rolegroup_headless_service, build_rolegroup_metrics_service,
                 build_server_role_service,
+            },
+            workload::{
+                daemonset::build_server_rolegroup_daemonset,
+                deployment::build_server_rolegroup_deployment,
             },
         },
     },
@@ -45,7 +50,13 @@ pub enum Error {
 
     #[snafu(display("failed to build DaemonSet for role group {role_group}"))]
     DaemonSet {
-        source: resource::daemonset::Error,
+        source: resource::workload::Error,
+        role_group: RoleGroupName,
+    },
+
+    #[snafu(display("failed to build Deployment for role group {role_group}"))]
+    Deployment {
+        source: resource::workload::Error,
         role_group: RoleGroupName,
     },
 
@@ -70,13 +81,25 @@ pub fn build(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<KubernetesResources<Prepared>, Error> {
     let mut daemon_sets = vec![];
+    let mut deployments = vec![];
     let mut services = vec![];
     let mut config_maps = vec![];
+    let mut pod_disruption_budgets = vec![];
 
     // The role-level load-balanced Service, which is not bound to a single role group.
     services.push(build_server_role_service(cluster));
 
-    for role_group_configs in cluster.role_group_configs.values() {
+    // Iterating with the role key, because the workload kind is configured per role.
+    for (opa_role, role_group_configs) in &cluster.role_group_configs {
+        let role_config = cluster.role_config(opa_role);
+        let workload_kind = &role_config.workload_kind;
+
+        pod_disruption_budgets.extend(build_role_pod_disruption_budget(
+            cluster,
+            opa_role,
+            role_config,
+        ));
+
         for (role_group_name, role_group) in role_group_configs {
             config_maps.push(
                 build_rolegroup_config_map(cluster, role_group_name, role_group).context(
@@ -87,20 +110,37 @@ pub fn build(
             );
             services.push(build_rolegroup_headless_service(cluster, role_group_name));
             services.push(build_rolegroup_metrics_service(cluster, role_group_name));
-            daemon_sets.push(
-                build_server_rolegroup_daemonset(
-                    cluster,
-                    role_group_name,
-                    role_group,
-                    opa_bundle_builder_image,
-                    user_info_fetcher_image,
-                    resource_info_fetcher_image,
-                    cluster_info,
-                )
-                .context(DaemonSetSnafu {
-                    role_group: role_group_name.clone(),
-                })?,
-            );
+            // Exactly one workload object per role group, of the kind its role asks for.
+            match workload_kind {
+                v1alpha2::WorkloadKind::DaemonSet => daemon_sets.push(
+                    build_server_rolegroup_daemonset(
+                        cluster,
+                        role_group_name,
+                        role_group,
+                        opa_bundle_builder_image,
+                        user_info_fetcher_image,
+                        resource_info_fetcher_image,
+                        cluster_info,
+                    )
+                    .context(DaemonSetSnafu {
+                        role_group: role_group_name.clone(),
+                    })?,
+                ),
+                v1alpha2::WorkloadKind::Deployment => deployments.push(
+                    build_server_rolegroup_deployment(
+                        cluster,
+                        role_group_name,
+                        role_group,
+                        opa_bundle_builder_image,
+                        user_info_fetcher_image,
+                        resource_info_fetcher_image,
+                        cluster_info,
+                    )
+                    .context(DeploymentSnafu {
+                        role_group: role_group_name.clone(),
+                    })?,
+                ),
+            }
         }
     }
 
@@ -109,10 +149,12 @@ pub fn build(
 
     Ok(KubernetesResources {
         daemon_sets,
+        deployments,
         services,
         config_maps,
         service_accounts: vec![build_service_account(cluster)],
         role_bindings: vec![build_role_binding(cluster)],
+        pod_disruption_budgets,
         status: PhantomData,
     })
 }
@@ -239,11 +281,12 @@ mod tests {
         )
         .expect("build succeeds");
 
-        // One DaemonSet per role group.
+        // One DaemonSet per role group, as `workloadKind` defaults to `DaemonSet`.
         assert_eq!(
             sorted_names(&resources.daemon_sets),
             ["test-opa-server-default"]
         );
+        assert!(resources.deployments.is_empty());
         // The role-level Service plus a headless and a metrics Service per role group.
         assert_eq!(
             sorted_names(&resources.services),
@@ -266,6 +309,60 @@ mod tests {
         assert_eq!(
             sorted_names(&resources.role_bindings),
             ["test-opa-rolebinding"]
+        );
+        // The default `DaemonSet` gets no PodDisruptionBudget, so existing installations gain no
+        // new object on upgrade.
+        assert!(resources.pod_disruption_budgets.is_empty());
+    }
+
+    /// `workloadKind` decides which workload object a role group gets. Exactly one kind is built, so
+    /// the other list stays empty and `ClusterResources` sweeps the workload that is no longer
+    /// wanted when the administrator switches modes.
+    #[test]
+    fn build_dispatches_on_workload_kind() {
+        let build_with = |workload_kind| {
+            build(
+                &validated_cluster_from_spec(json!({
+                    "image": { "productVersion": "1.2.3" },
+                    "servers": {
+                        "roleConfig": { "workloadKind": workload_kind },
+                        "roleGroups": { "default": {} },
+                    },
+                })),
+                "bundle-builder-image",
+                "user-info-fetcher-image",
+                "resource-info-fetcher-image",
+                &cluster_info(),
+            )
+            .expect("build succeeds")
+        };
+
+        let daemon_set_mode = build_with("DaemonSet");
+        assert_eq!(
+            sorted_names(&daemon_set_mode.daemon_sets),
+            ["test-opa-server-default"]
+        );
+        assert!(daemon_set_mode.deployments.is_empty());
+
+        let deployment_mode = build_with("Deployment");
+        assert_eq!(
+            sorted_names(&deployment_mode.deployments),
+            ["test-opa-server-default"]
+        );
+        assert!(deployment_mode.daemon_sets.is_empty());
+
+        // One role-level PodDisruptionBudget for a Deployment, none for a DaemonSet whose Pods
+        // `kubectl drain` skips anyway.
+        assert!(daemon_set_mode.pod_disruption_budgets.is_empty());
+        assert_eq!(
+            sorted_names(&deployment_mode.pod_disruption_budgets),
+            ["test-opa-server"]
+        );
+
+        // Products consume the discovery ConfigMap, so it must not depend on the workload kind.
+        assert_eq!(
+            sorted_names(&daemon_set_mode.config_maps),
+            sorted_names(&deployment_mode.config_maps)
         );
     }
 }

@@ -1,0 +1,8 @@
+---
+# The DaemonSet must be swept once the Deployment takes over. Both workload objects carry the same
+# name and the same role labels, so leaving it behind would mean the role Service selects the Pods
+# of both.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default

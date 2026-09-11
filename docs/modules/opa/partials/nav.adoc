@@ -3,6 +3,7 @@
 ** xref:opa:getting_started/first_steps.adoc[]
 * xref:opa:usage-guide/index.adoc[]
 ** xref:opa:usage-guide/listenerclass.adoc[]
+** xref:opa:usage-guide/workload-kind.adoc[]
 ** xref:opa:usage-guide/policies.adoc[]
 ** xref:opa:usage-guide/user-info-fetcher.adoc[]
 ** xref:opa:usage-guide/resource-info-fetcher.adoc[]
@@ -14,7 +15,7 @@
 ** xref:opa:usage-guide/tls.adoc[]
 ** xref:opa:usage-guide/operations/index.adoc[]
 *** xref:opa:usage-guide/operations/cluster-operations.adoc[]
-// *** xref:hdfs:usage-guide/operations/pod-placement.adoc[] Missing
+*** xref:opa:usage-guide/operations/pod-placement.adoc[]
 *** xref:opa:usage-guide/operations/pod-disruptions.adoc[]
 *** xref:opa:usage-guide/operations/graceful-shutdown.adoc[]
 * xref:opa:reference/index.adoc[]

@@ -2,7 +2,8 @@
 //! Kubernetes resources, one module per resource kind.
 
 pub mod config_map;
-pub mod daemonset;
 pub mod discovery;
+pub mod pdb;
 pub mod rbac;
 pub mod service;
+pub mod workload;

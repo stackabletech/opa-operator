@@ -60,6 +60,12 @@ tests:
     dimensions:
       - opa-latest
       - openshift
+  # Deliberately not a dimension of `smoke`: the Pod template is identical for both workload kinds,
+  # so re-running the whole smoke matrix would double it for no extra coverage.
+  - name: workload-kind
+    dimensions:
+      - opa-latest
+      - openshift
   - name: config-overrides
     dimensions:
       - opa-latest

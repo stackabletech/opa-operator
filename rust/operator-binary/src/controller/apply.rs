@@ -83,21 +83,29 @@ impl<'a> Applier<'a> {
         // compile here instead of silently never being applied.
         let KubernetesResources {
             daemon_sets,
+            deployments,
             services,
             config_maps,
             service_accounts,
             role_bindings,
+            pod_disruption_budgets,
             status: _,
         } = resources;
 
-        // Apply order is: DaemonSets last (a changed mounted ConfigMap must exist first, else the
-        // Pods restart a second time -- commons-operator#111). The ServiceAccount comes first
-        // because the Pods reference it at creation time.
+        // Apply order is: the workload objects last (a changed mounted ConfigMap must exist first,
+        // else the Pods restart a second time -- commons-operator#111). The ServiceAccount comes
+        // first because the Pods reference it at creation time.
+        //
+        // A role group runs as either a DaemonSet or a Deployment, so for any given role group only
+        // one of the two collections has an entry; applying both is how the other one gets cleaned
+        // up as orphaned after a `workloadKind` switch.
         let service_accounts = self.add_resources(service_accounts).await?;
         let role_bindings = self.add_resources(role_bindings).await?;
         let services = self.add_resources(services).await?;
         let config_maps = self.add_resources(config_maps).await?;
+        let pod_disruption_budgets = self.add_resources(pod_disruption_budgets).await?;
         let daemon_sets = self.add_resources(daemon_sets).await?;
+        let deployments = self.add_resources(deployments).await?;
 
         self.remove_legacy_field_manager_scope(&daemon_sets).await?;
 
@@ -108,10 +116,12 @@ impl<'a> Applier<'a> {
 
         Ok(KubernetesResources {
             daemon_sets,
+            deployments,
             services,
             config_maps,
             service_accounts,
             role_bindings,
+            pod_disruption_budgets,
             status: PhantomData,
         })
     }
