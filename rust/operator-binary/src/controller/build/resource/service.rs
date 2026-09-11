@@ -241,7 +241,7 @@ mod tests {
     }
 
     /// In `Deployment` mode the Pods do not cover every node, so node-local routing would strand
-    /// products running on Pod-less nodes. The policy has to follow `workloadKind`.
+    /// products running on nodes without OPA Pods. The policy has to follow `workloadKind`.
     #[test]
     fn role_service_traffic_policy_follows_workload_kind() {
         let deployment_mode = validated_cluster_from_spec(json!({
