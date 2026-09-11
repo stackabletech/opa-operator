@@ -27,7 +27,7 @@ use crate::controller::{
         resource::workload::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, STACKABLE_LOG_DIR,
             USER_INFO_FETCHER_CREDENTIALS_DIR, USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME,
-            USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME, container_name,
+            USER_INFO_FETCHER_KERBEROS_DIR, USER_INFO_FETCHER_KERBEROS_VOLUME_NAME,
             read_only_mount, sidecar_container_log_level, sidecar_resource_requirements,
             stackable_rust_cli_env_vars,
         },
@@ -78,6 +78,7 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// Adds the User Info Fetcher sidecar container to the given [`PodBuilder`].
 pub fn add_user_info_fetcher_sidecar(
     pb: &mut PodBuilder,
     cluster: &ValidatedCluster,
@@ -86,8 +87,7 @@ pub fn add_user_info_fetcher_sidecar(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<()> {
     if let Some(user_info) = &cluster.cluster_config.user_info {
-        let user_info_fetcher_container_name = container_name(&Container::UserInfoFetcher);
-        let mut cb_user_info_fetcher = new_container_builder(&user_info_fetcher_container_name);
+        let mut cb_user_info_fetcher = new_container_builder(Container::UserInfoFetcher.name());
 
         // All operator-set environment variables of the user-info-fetcher container, collected
         // into an `EnvVarSet` so that every name occurs only once. The backend match below may
@@ -117,7 +117,7 @@ pub fn add_user_info_fetcher_sidecar(
             // `stackable_rust_cli_env_vars`). They have to land on the shared log volume,
             // because that is the only place the Vector agent collects them from.
             .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-            .context(AddVolumeMountSnafu)?
+            .expect("The mount paths are statically defined and there should be no duplicates.")
             .resources(sidecar_resource_requirements());
 
         match &user_info.backend {

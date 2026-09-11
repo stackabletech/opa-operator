@@ -20,8 +20,8 @@ use crate::controller::{
         self,
         resource::workload::{
             CONFIG_DIR, CONFIG_VOLUME_NAME, LOG_VOLUME_NAME, RESOURCE_INFO_FETCHER_CREDENTIALS_DIR,
-            RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, STACKABLE_LOG_DIR, container_name,
-            read_only_mount, sidecar_container_log_level, sidecar_resource_requirements,
+            RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME, STACKABLE_LOG_DIR, read_only_mount,
+            sidecar_container_log_level, sidecar_resource_requirements,
             stackable_rust_cli_env_vars,
         },
     },
@@ -48,6 +48,7 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+/// Adds the Resource Info Fetcher sidecar container to the given [`PodBuilder`].
 pub fn add_resource_info_fetcher_sidecar(
     pb: &mut PodBuilder,
     cluster: &ValidatedCluster,
@@ -56,8 +57,7 @@ pub fn add_resource_info_fetcher_sidecar(
     cluster_info: &KubernetesClusterInfo,
 ) -> Result<()> {
     if let Some(resource_info) = &cluster.cluster_config.resource_info {
-        let rif_container_name = container_name(&Container::ResourceInfoFetcher);
-        let mut cb_rif = new_container_builder(&rif_container_name);
+        let mut cb_rif = new_container_builder(Container::ResourceInfoFetcher.name());
 
         // All operator-set environment variables of the resource-info-fetcher container, collected
         // into an `EnvVarSet` so that every name occurs only once.
@@ -87,7 +87,7 @@ pub fn add_resource_info_fetcher_sidecar(
             // `stackable_rust_cli_env_vars`). They have to land on the shared log volume,
             // because that is the only place the Vector agent collects them from.
             .add_volume_mount(LOG_VOLUME_NAME.as_ref(), STACKABLE_LOG_DIR)
-            .context(AddVolumeMountSnafu)?
+            .expect("The mount paths are statically defined and there should be no duplicates.")
             .resources(sidecar_resource_requirements());
 
         match &resource_info.backend {

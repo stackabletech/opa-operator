@@ -95,6 +95,7 @@ mod tests {
         let _ = *BUNDLES_VOLUME_NAME;
         let _ = *USER_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *USER_INFO_FETCHER_KERBEROS_VOLUME_NAME;
+        let _ = *RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *TLS_VOLUME_NAME;
         let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
         let _ = *WATCH_NAMESPACE;
@@ -504,6 +505,60 @@ mod tests {
             read_only(&uif_container(&ds), "user-info-fetcher-credentials"),
             Some(true)
         );
+    }
+
+    /// The Entra backend projects its client credentials Secret like the Keycloak backend does. Its
+    /// TLS CA volume is named `<secret-class>-ca-cert` after the user's SecretClass, so this also
+    /// checks that a SecretClass-derived name coexists with the statically named credentials
+    /// volumes of both info-fetchers in one pod.
+    #[test]
+    fn user_info_fetcher_entra_backend_mounts_client_credentials_next_to_resource_info_fetcher() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "clusterConfig": {
+                "userInfo": {
+                    "backend": {
+                        "entra": {
+                            "tenantId": "my-tenant",
+                            "clientCredentialsSecret": "entra-credentials",
+                            "tls": {
+                                "verification": {
+                                    "server": { "caCert": { "secretClass": "my-ca" } }
+                                }
+                            },
+                        }
+                    }
+                },
+                "resourceInfo": {
+                    "backend": {
+                        "dataHub": {
+                            "hostname": "datahub-gms.default.svc.cluster.local",
+                            "credentialsSecretName": "datahub-credentials",
+                        }
+                    }
+                },
+            },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        let volumes = volume_names(&ds);
+        for expected in [
+            "user-info-fetcher-credentials",
+            "my-ca-ca-cert",
+            "resource-info-fetcher-credentials",
+        ] {
+            assert!(
+                volumes.contains(&expected.to_owned()),
+                "missing volume {expected}"
+            );
+        }
+
+        let uif = uif_container(&ds);
+        assert_eq!(
+            mount_path(&uif, "user-info-fetcher-credentials"),
+            "/stackable/credentials"
+        );
+        assert_eq!(read_only(&uif, "user-info-fetcher-credentials"), Some(true));
     }
 
     /// A cluster running both info-fetcher sidecars, so their shared wiring can be asserted in one go.
