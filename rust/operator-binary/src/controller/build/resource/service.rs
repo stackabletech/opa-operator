@@ -46,7 +46,7 @@ pub(crate) fn build_server_role_service(cluster: &ValidatedCluster) -> Service {
         //   Pod is unavailable, requests fail instead of falling back to another node.
         //
         // * `Cluster` for a Deployment, whose Pods do not cover every node, so node-local routing
-        //   would leave products on Pod-less nodes unable to reach OPA at all.
+        //   would leave products on nodes without OPA Pods unable to reach OPA at all.
         //
         // TODO: In the DaemonSet case, once our minimum supported Kubernetes version is 1.35, use
         // `trafficDistribution: PreferSameNode` instead, which prefers the local node but
@@ -241,7 +241,7 @@ mod tests {
     }
 
     /// In `Deployment` mode the Pods do not cover every node, so node-local routing would strand
-    /// products running on Pod-less nodes. The policy has to follow `workloadKind`.
+    /// products running on nodes without OPA Pods. The policy has to follow `workloadKind`.
     #[test]
     fn role_service_traffic_policy_follows_workload_kind() {
         let deployment_mode = validated_cluster_from_spec(json!({
