@@ -41,8 +41,15 @@ mod opa_controller;
 mod operations;
 mod webhooks;
 
-pub mod built_info {
+mod built_info {
+    use std::{str::FromStr, sync::LazyLock};
+
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
+
+    pub static PKG_VERSION_SEMVER: LazyLock<semver::Version> = LazyLock::new(|| {
+        semver::Version::from_str(PKG_VERSION)
+            .expect("PKG_VERSION must be able to be parsed as semver")
+    });
 }
 
 #[derive(Parser)]
