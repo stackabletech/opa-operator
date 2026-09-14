@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Support floating tag in product image selection ([#891]).
 - Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher,
   but allows to fetch additional metadata about resource information from a data catalog.
   For now only DataHub is supported.
@@ -14,7 +15,7 @@ All notable changes to this project will be documented in this file.
 - Allow specifying the maximum number of cached entries in the user-info-fetcher, defaulting to `10000`.
   The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
   the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
-  evicted least-recently-used first ([#863])
+  evicted least-recently-used first ([#863]).
 
 ### Changed
 
@@ -84,6 +85,7 @@ All notable changes to this project will be documented in this file.
 [#882]: https://github.com/stackabletech/opa-operator/pull/882
 [#886]: https://github.com/stackabletech/opa-operator/pull/886
 [#889]: https://github.com/stackabletech/opa-operator/pull/889
+[#891]: https://github.com/stackabletech/opa-operator/pull/891
 
 ## [26.7.0] - 2026-07-21
 
