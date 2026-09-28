@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
   The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
   the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
   evicted least-recently-used first ([#863]).
+- Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
 
 ### Changed
 
@@ -61,6 +62,7 @@ All notable changes to this project will be documented in this file.
 - The operator now watches all resources that it creates and early-exits the reconcile action when the
   cluster is marked for deletion ([#882]).
 - Make operations infallible where dependent on static inputs ([#886], [#889]).
+- Bump stackable-operator to 0.119.0 ([#894]).
 
 ### Fixed
 
@@ -90,6 +92,7 @@ All notable changes to this project will be documented in this file.
 [#886]: https://github.com/stackabletech/opa-operator/pull/886
 [#889]: https://github.com/stackabletech/opa-operator/pull/889
 [#891]: https://github.com/stackabletech/opa-operator/pull/891
+[#894]: https://github.com/stackabletech/opa-operator/pull/894
 
 ## [26.7.0] - 2026-07-21
 
