@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Support floating tags for product images via the new `spec.image.stackableVersionPolicy` field
+  ([#891]).
 - Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher,
   but allows to fetch additional metadata about resource information from a data catalog.
   For now only DataHub is supported.
@@ -24,9 +26,17 @@ All notable changes to this project will be documented in this file.
 
 - OPA Pods now default to a soft anti-affinity that spreads them across nodes. This is a no-op for a
   `DaemonSet`, which already runs one Pod per node, but keeps a `Deployment`'s replicas from being deployed together ([#873]).
+  evicted least-recently-used first ([#863]).
+
+### Changed
+
+- BREAKING: `spec.image.stackableVersion` must now be a full, valid semver version, e.g. `26.7.1`.
+  Abbreviated values such as `26.7` are no longer accepted ([#891]).
+- BREAKING: `spec.image.pullPolicy` now defaults to `IfNotPresent` for non-floating tags instead of
+  always defaulting to `Always` ([#891]).
 - Internal operator refactoring: introduce a build() step in the reconciler that
   assembles all relevant Kubernetes resources before anything is applied ([#852]).
-- Bump `stackable-operator` to 0.114.0 ([#867]).
+- Bump `stackable-operator` to 0.118.0 ([#867], [#880], [#891]).
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
 - All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#871]).
@@ -49,7 +59,6 @@ All notable changes to this project will be documented in this file.
   `user-info-fetcher-credentials` instead of `credentials`, so that it does not collide with the
   resource-info-fetcher's. A `podOverrides` patching that volume or its volume mount by name must be
   adjusted, otherwise it silently stops applying ([#863]).
-- Bump `stackable-operator` to 0.116.0 ([#867], [#880]).
 - The user-info-fetcher now logs a failed lookup once, where the backend was queried, instead of once
   per response it is rendered into, and logs a request it rejects as the caller's fault (an unknown
   user) at `debug` rather than `warn`. Any caller could previously fill the log with `warn` lines by
@@ -91,6 +100,7 @@ All notable changes to this project will be documented in this file.
 [#882]: https://github.com/stackabletech/opa-operator/pull/882
 [#886]: https://github.com/stackabletech/opa-operator/pull/886
 [#889]: https://github.com/stackabletech/opa-operator/pull/889
+[#891]: https://github.com/stackabletech/opa-operator/pull/891
 
 ## [26.7.0] - 2026-07-21
 
