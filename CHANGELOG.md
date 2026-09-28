@@ -27,9 +27,6 @@ All notable changes to this project will be documented in this file.
 - OPA Pods now default to a soft anti-affinity that spreads them across nodes. This is a no-op for a
   `DaemonSet`, which already runs one Pod per node, but keeps a `Deployment`'s replicas from being deployed together ([#873]).
   evicted least-recently-used first ([#863]).
-
-### Changed
-
 - BREAKING: `spec.image.stackableVersion` must now be a full, valid semver version, e.g. `26.7.1`.
   Abbreviated values such as `26.7` are no longer accepted ([#891]).
 - BREAKING: `spec.image.pullPolicy` now defaults to `IfNotPresent` for non-floating tags instead of
