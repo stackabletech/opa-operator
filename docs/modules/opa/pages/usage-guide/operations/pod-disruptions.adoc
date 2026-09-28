@@ -7,7 +7,9 @@ What the operator creates depends on the xref:usage-guide/workload-kind.adoc[wor
 
 == DaemonSet
 
-No PodDisruptionBudget is created, and you should not enable one.
+No PodDisruptionBudget is created.
+Setting `podDisruptionBudget.enabled: true` is rejected as a misconfiguration and the OpaCluster is not reconciled.
+A configured `maxUnavailable` is ignored and the operator logs a warning.
 
 `kubectl drain` skips DaemonSet Pods, a budget is never consulted during a node drain.
 Moreover, PodDisruptionBudgets over DaemonSets can never be evaluated: DaemonSet does not implement the scale subresource.

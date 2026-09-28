@@ -1,0 +1,23 @@
+---
+# `podDisruptionBudget.enabled: true` on a DaemonSet is rejected by the validate step. The reconcile
+# fails before anything is applied, so the error is only visible as a Warning event on the
+# OpaCluster -- the `available` condition is left over from the previous step and proves nothing.
+apiVersion: kuttl.dev/v1beta1
+kind: TestAssert
+timeout: 180
+commands:
+  - script: |
+      for _ in $(seq 90); do
+        kubectl -n $NAMESPACE get events \
+          --field-selector involvedObject.kind=OpaCluster,involvedObject.name=test-opa,reason=ValidateCluster \
+          -o jsonpath='{.items[*].message}' \
+          | grep -q 'enables a PodDisruptionBudget, but its workloadKind is DaemonSet' && exit 0
+        sleep 2
+      done
+      exit 1
+---
+# Nothing is applied on a failed validation, so the DaemonSet from `30-assert.yaml` keeps running.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: test-opa-server-default

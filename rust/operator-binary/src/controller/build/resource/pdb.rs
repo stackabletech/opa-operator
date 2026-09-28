@@ -110,19 +110,25 @@ mod tests {
         assert!(!match_labels.contains_key("app.kubernetes.io/role-group"));
     }
 
-    /// `enabled` is an explicit override, so a DaemonSet gets a budget when the administrator asks
-    /// for one, even though it will not do much.
+    /// A budget over a DaemonSet can never be evaluated and refuses every eviction, so none is
+    /// built even when `enabled: true` gets past the validate step.
     #[test]
-    fn explicitly_enabling_it_wins_over_the_workload_kind_default() {
+    fn explicitly_enabling_it_on_a_daemonset_still_builds_none() {
+        // Passed in directly, as the validate step rejects this role config.
+        let cluster = validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        }));
+        let role_config = v1alpha2::OpaRoleConfig {
+            workload_kind: v1alpha2::WorkloadKind::DaemonSet,
+            pod_disruption_budget: v1alpha2::OpaPdbConfig {
+                enabled: Some(true),
+                max_unavailable: None,
+            },
+        };
+
         assert!(
-            build(json!({
-                "image": { "productVersion": "1.2.3" },
-                "servers": {
-                    "roleConfig": { "podDisruptionBudget": { "enabled": true } },
-                    "roleGroups": { "default": {} },
-                },
-            }))
-            .is_some()
+            build_role_pod_disruption_budget(&cluster, &OpaRole::Server, &role_config).is_none()
         );
     }
 

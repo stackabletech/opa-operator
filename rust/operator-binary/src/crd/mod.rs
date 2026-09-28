@@ -203,8 +203,9 @@ pub mod versioned {
     pub struct OpaPdbConfig {
         /// Whether a PodDisruptionBudget should be written out for this role.
         ///
-        /// Defaults to `true` when `workloadKind` is `Deployment` and to `false` when it is
-        /// `DaemonSet`, since a PodDisruptionBudget doesn't make sense for a DaemonSet.
+        /// Defaults to `true` when `workloadKind` is `Deployment`. Must not be `true` when it is
+        /// `DaemonSet`: DaemonSets do not implement the scale subresource, so such a budget could
+        /// never be evaluated and would block every eviction.
         #[serde(default)]
         pub enabled: Option<bool>,
 
@@ -397,11 +398,17 @@ impl v1alpha2::OpaRoleConfig {
 
     /// Whether a PodDisruptionBudget should be written out for this role.
     ///
-    /// Falls back to `true` for a Deployment only.
+    /// Never for a DaemonSet: it does not implement the scale subresource, so the disruption
+    /// controller cannot evaluate the budget and refuses every eviction. The validate step rejects
+    /// an explicit `enabled: true` for a DaemonSet; this is the guard should that check be bypassed.
+    /// A Deployment falls back to `true`.
     pub fn pod_disruption_budget_enabled(&self) -> bool {
-        self.pod_disruption_budget
-            .enabled
-            .unwrap_or(self.workload_kind == v1alpha2::WorkloadKind::Deployment)
+        match self.workload_kind {
+            v1alpha2::WorkloadKind::DaemonSet => false,
+            v1alpha2::WorkloadKind::Deployment => {
+                self.pod_disruption_budget.enabled.unwrap_or(true)
+            }
+        }
     }
 }
 
@@ -507,10 +514,10 @@ mod tests {
         assert!(deployment.pod_disruption_budget_enabled());
     }
 
-    /// An explicitly configured `podDisruptionBudget.enabled` wins over the `workloadKind`-derived
-    /// default, which is the point of exposing the field as an `Option` at all.
+    /// An explicit `podDisruptionBudget.enabled: true` never yields a budget for a DaemonSet. The
+    /// validate step rejects this combination; this asserts the guard behind it.
     #[test]
-    fn explicit_role_config_overrides_the_derived_defaults() {
+    fn daemon_set_never_enables_a_pod_disruption_budget() {
         let role_config = v1alpha2::OpaRoleConfig {
             workload_kind: v1alpha2::WorkloadKind::DaemonSet,
             pod_disruption_budget: v1alpha2::OpaPdbConfig {
@@ -519,7 +526,7 @@ mod tests {
             },
         };
 
-        assert!(role_config.pod_disruption_budget_enabled());
+        assert!(!role_config.pod_disruption_budget_enabled());
         // `internalTrafficPolicy` is not yet user-configurable, so it stays at the DaemonSet default.
         assert_eq!(
             role_config.internal_traffic_policy(),

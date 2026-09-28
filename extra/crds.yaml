@@ -1517,8 +1517,9 @@ spec:
                             description: |-
                               Whether a PodDisruptionBudget should be written out for this role.
 
-                              Defaults to `true` when `workloadKind` is `Deployment` and to `false` when it is
-                              `DaemonSet`, since a PodDisruptionBudget doesn't make sense for a DaemonSet.
+                              Defaults to `true` when `workloadKind` is `Deployment`. Must not be `true` when it is
+                              `DaemonSet`: DaemonSets do not implement the scale subresource, so such a budget could
+                              never be evaluated and would block every eviction.
                             nullable: true
                             type: boolean
                           maxUnavailable:
@@ -3822,8 +3823,9 @@ spec:
                             description: |-
                               Whether a PodDisruptionBudget should be written out for this role.
 
-                              Defaults to `true` when `workloadKind` is `Deployment` and to `false` when it is
-                              `DaemonSet`, since a PodDisruptionBudget doesn't make sense for a DaemonSet.
+                              Defaults to `true` when `workloadKind` is `Deployment`. Must not be `true` when it is
+                              `DaemonSet`: DaemonSets do not implement the scale subresource, so such a budget could
+                              never be evaluated and would block every eviction.
                             nullable: true
                             type: boolean
                           maxUnavailable:

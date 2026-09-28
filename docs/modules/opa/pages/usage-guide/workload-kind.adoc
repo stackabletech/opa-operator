@@ -16,6 +16,7 @@ spec:
 ----
 <1> Either DaemonSet (default) or Deployment.
 <2> Only used by Deployment, DaemonSet derives Pod count from the number of nodes.
+Set on a DaemonSet, it is ignored and the operator logs a warning.
 
 The workload kind also decides whether the operator creates a xref:usage-guide/operations/pod-disruptions.adoc[PodDisruptionBudget], and it changes what the default xref:usage-guide/operations/pod-placement.adoc[Pod placement] achieves.
 
@@ -82,3 +83,7 @@ Products on the remaining nodes fail until the DaemonSet has rolled out everywhe
 To ease the interruption, pin the traffic policy to Cluster as described in <<override-traffic-policy>>, and remove the override once the rollout has finished.
 This keeps every product able to reach any OPA Pod throughout the change.
 A short window in which no Pod is ready can still occur, because the outgoing workload is removed as the new one starts.
+
+While the switch is in progress, the xref:usage-guide/operations/pod-disruptions.adoc[PodDisruptionBudget] of the Deployment can briefly select the Pods of both workloads.
+Kubernetes cannot evaluate a budget over DaemonSet Pods, so the budget reports `CalculateExpectedPodCountFailed` warning events for a few seconds, until the outgoing Pods are gone.
+These events are expected during a switch and need no action.
