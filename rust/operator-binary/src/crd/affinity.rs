@@ -13,7 +13,7 @@ use crate::crd::{APP_NAME, OpaRole};
 /// note on [`get_affinity`].
 const ANTI_AFFINITY_BETWEEN_ROLE_PODS_WEIGHT: i32 = 70;
 
-/// The default affinity of `role`: prefer to spread its Pods across nodes.
+/// The default affinity of `OpaRole`: prefer to spread its Pods across nodes.
 ///
 // TODO: Revisit once our minimum supported Kubernetes version is 1.35 and the role Service can use
 // `trafficDistribution: PreferSameNode` instead of `internalTrafficPolicy` (see
