@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
   `spec.servers.roleConfig.workloadKind` ([#873]).
 - A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
   with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
+- Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
+
 
 ### Changed
 
@@ -68,6 +70,7 @@ All notable changes to this project will be documented in this file.
 - The operator now watches all resources that it creates and early-exits the reconcile action when the
   cluster is marked for deletion ([#882]).
 - Make operations infallible where dependent on static inputs ([#886], [#889]).
+- Bump stackable-operator to 0.119.0 ([#894]).
 
 ### Fixed
 
@@ -98,6 +101,7 @@ All notable changes to this project will be documented in this file.
 [#886]: https://github.com/stackabletech/opa-operator/pull/886
 [#889]: https://github.com/stackabletech/opa-operator/pull/889
 [#891]: https://github.com/stackabletech/opa-operator/pull/891
+[#894]: https://github.com/stackabletech/opa-operator/pull/894
 
 ## [26.7.0] - 2026-07-21
 

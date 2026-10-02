@@ -31,6 +31,7 @@ use stackable_operator::{
     shared::yaml::SerializeOptions,
     telemetry::Tracing,
     utils::signal::{self, SignalWatcher},
+    webhook::health::HealthCheckRegistry,
 };
 
 use crate::{
@@ -129,9 +130,16 @@ async fn main() -> anyhow::Result<()> {
 
             let kubernetes_cluster_info = client.kubernetes_cluster_info.clone();
 
+            let mut readiness_checks = HealthCheckRegistry::new();
+            let opa_cluster_crd_check = readiness_checks.register(format!(
+                "CRD {crd} established",
+                crd = v1alpha2::OpaCluster::crd_name()
+            ));
+
             let webhook_server = create_webhook_server(
                 &operator_environment,
                 maintenance.disable_crd_maintenance,
+                readiness_checks,
                 client.as_kube_client(),
             )
             .await?;
@@ -219,7 +227,8 @@ async fn main() -> anyhow::Result<()> {
                 .map(anyhow::Ok);
 
             let delayed_controller = async {
-                signal::crd_established(&client, v1alpha2::OpaCluster::crd_name(), None).await?;
+                signal::crd_established(&client, v1alpha2::OpaCluster::crd_name()).await?;
+                opa_cluster_crd_check.mark_passed();
                 controller.await
             };
 
