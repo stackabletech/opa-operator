@@ -1,0 +1,7 @@
+---
+# Even when asked for explicitly, a DaemonSet gets no budget: it would sit at `disruptionsAllowed: 0`
+# with a `SyncFailed` condition and block every eviction of the OPA Pods.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: test-opa-server

@@ -6,7 +6,7 @@ use stackable_operator::{
     client::Client,
     status::condition::{
         compute_conditions, daemonset::DaemonSetConditionBuilder,
-        operations::ClusterOperationsConditionBuilder,
+        deployment::DeploymentConditionBuilder, operations::ClusterOperationsConditionBuilder,
     },
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
@@ -37,11 +37,26 @@ pub async fn update_status(
         ds_cond_builder.add(daemon_set.clone());
     }
 
+    // A role group runs as either a DaemonSet or a Deployment, so one of the two builders is empty
+    // for any given role group. Both are fed in, because `Available` has to follow whichever kind
+    // the role is currently configured for.
+    let mut deployment_cond_builder = DeploymentConditionBuilder::default();
+    for deployment in &applied.deployments {
+        deployment_cond_builder.add(deployment.clone());
+    }
+
     let cluster_operation_cond_builder =
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
     let status = OpaClusterStatus {
-        conditions: compute_conditions(opa, &[&ds_cond_builder, &cluster_operation_cond_builder]),
+        conditions: compute_conditions(
+            opa,
+            &[
+                &ds_cond_builder,
+                &deployment_cond_builder,
+                &cluster_operation_cond_builder,
+            ],
+        ),
     };
 
     client

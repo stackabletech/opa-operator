@@ -16,8 +16,9 @@ use stackable_operator::{
         resources::{NoRuntimeLimits, Resources},
     },
     k8s_openapi::api::{
-        apps::v1::DaemonSet,
+        apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service, ServiceAccount},
+        policy::v1::PodDisruptionBudget,
         rbac::v1::RoleBinding,
     },
     kube::{Resource as KubeResource, api::ObjectMeta},
@@ -57,6 +58,11 @@ pub struct ValidatedCluster {
     pub product_version: ProductVersion,
     pub image: ResolvedProductImage,
     pub cluster_config: ValidatedClusterConfig,
+    /// The role-level configuration of every role, keyed the same way as `role_group_configs`.
+    ///
+    /// Role-level rather than role-group-level, because `workloadKind` decides the shape of the
+    /// role Service, which selects across all of a role's role groups.
+    pub role_configs: BTreeMap<OpaRole, v1alpha2::OpaRoleConfig>,
     pub role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
 }
 
@@ -67,6 +73,7 @@ impl ValidatedCluster {
         uid: Uid,
         image: ResolvedProductImage,
         cluster_config: ValidatedClusterConfig,
+        role_configs: BTreeMap<OpaRole, v1alpha2::OpaRoleConfig>,
         role_group_configs: BTreeMap<OpaRole, BTreeMap<RoleGroupName, OpaRoleGroupConfig>>,
     ) -> Self {
         let product_version = ProductVersion::from_str(&image.app_version_label_value)
@@ -86,8 +93,19 @@ impl ValidatedCluster {
             product_version,
             image,
             cluster_config,
+            role_configs,
             role_group_configs,
         }
+    }
+
+    /// The role-level configuration of `role`.
+    ///
+    /// The validate step inserts an entry for every [`OpaRole`], falling back to the
+    /// `OpaRoleConfig` default for roles the user did not configure.
+    pub fn role_config(&self, role: &OpaRole) -> &v1alpha2::OpaRoleConfig {
+        self.role_configs
+            .get(role)
+            .expect("the validate step inserts a role config for every role")
     }
 
     /// Whether the cluster serves HTTPS, derived from the validated cluster config.
@@ -181,20 +199,26 @@ pub struct Applied;
 
 /// Every Kubernetes resource produced by the [`build`](build::build) step.
 ///
-/// OPA runs as a `DaemonSet` (one Pod per node), so there are no `StatefulSet`s, PDBs or
-/// `Listener`s. `services` holds the role-level `Service` and the per-role-group headless and
-/// metrics `Service`s; `config_maps` holds the per-role-group `ConfigMap`s and the cluster-level
-/// discovery `ConfigMap`.
+/// Each role group might run as either a `DaemonSet` or a `Deployment`, depending on its role's
+/// `workloadKind`, so exactly one of `daemon_sets` and `deployments` holds an entry for it. There
+/// are no `StatefulSet`s or `Listener`s. `services` holds the role-level `Service` and the
+/// per-role-group headless and metrics `Service`s; `config_maps` holds the per-role-group
+/// `ConfigMap`s and the cluster-level discovery `ConfigMap`.
+///
+/// `pod_disruption_budgets` holds at most one entry per role, and is empty for roles that have it
+/// disabled (the default for a `DaemonSet`).
 ///
 /// `T` is a marker that indicates whether these resources are only [`Prepared`] or already
 /// [`Applied`]. It lets the type system prove that e.g. the cluster status is derived from
 /// applied resources rather than merely built ones.
 pub struct KubernetesResources<T> {
     pub daemon_sets: Vec<DaemonSet>,
+    pub deployments: Vec<Deployment>,
     pub services: Vec<Service>,
     pub config_maps: Vec<ConfigMap>,
     pub service_accounts: Vec<ServiceAccount>,
     pub role_bindings: Vec<RoleBinding>,
+    pub pod_disruption_budgets: Vec<PodDisruptionBudget>,
     pub status: PhantomData<T>,
 }
 
