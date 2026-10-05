@@ -23,7 +23,6 @@ All notable changes to this project will be documented in this file.
   with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 - Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
 
-
 ### Changed
 
 - OPA Pods now default to a soft anti-affinity that spreads them across nodes. This is a no-op for a
