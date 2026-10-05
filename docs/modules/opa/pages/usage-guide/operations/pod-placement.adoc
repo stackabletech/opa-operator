@@ -1,17 +1,16 @@
 = Pod placement
-:description: The default affinity spreads OPA Pods across Kubernetes nodes, which matters only for a Deployment.
+:description: For a Deployment, the default affinity spreads OPA Pods across Kubernetes nodes. A DaemonSet gets no default affinity.
 
 You can configure Pod placement for OPA Pods as described in xref:concepts:operations/pod_placement.adoc[].
 
 == Defaults
 
-The default affinity created by the operator is:
+The default affinity depends on the xref:usage-guide/workload-kind.adoc[workload kind]:
 
-* Distribute all Pods of the `servers` role across nodes, so that multiple Pods don't end up on the same Kubernetes node (weight 70)
+* `DaemonSet`: none. A DaemonSet already places exactly one Pod per node.
+* `Deployment`: distribute all Pods of the `servers` role across nodes, so that multiple replicas don't end up on the same Kubernetes node (weight 70)
 
-This constrains nothing for a DaemonSet, which already places exactly one Pod per node.
-It matters for a Deployment, where several replicas would otherwise be free to share the same node.
-See xref:usage-guide/workload-kind.adoc[].
+The default affinity for a Deployment is:
 
 [source,yaml]
 ----

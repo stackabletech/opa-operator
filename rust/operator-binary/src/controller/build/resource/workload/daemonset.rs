@@ -75,7 +75,8 @@ mod tests {
     use serde_json::json;
     use stackable_opa_operator::crd::OpaRole;
     use stackable_operator::{
-        commons::networking::DomainName, k8s_openapi::api::core::v1::Container,
+        commons::networking::DomainName,
+        k8s_openapi::api::core::v1::{Affinity, Container},
     };
 
     use super::*;
@@ -168,6 +169,53 @@ mod tests {
         let rolling_update = strategy.rolling_update.as_ref().unwrap();
         // A DaemonSet must never take an OPA pod down before the replacement is ready.
         assert_eq!(rolling_update.max_unavailable, Some(IntOrString::Int(0)));
+    }
+
+    fn pod_affinity(ds: DaemonSet) -> Affinity {
+        ds.spec
+            .and_then(|spec| spec.template.spec)
+            .and_then(|pod_spec| pod_spec.affinity)
+            .unwrap_or_default()
+    }
+
+    /// A DaemonSet places one Pod per node by itself, so the operator must not add an affinity.
+    #[test]
+    fn daemonset_has_no_default_affinity() {
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        })));
+
+        assert_eq!(pod_affinity(ds), Affinity::default());
+    }
+
+    /// Users can still restrict the nodes OPA runs on, and nothing is added next to their choice.
+    #[test]
+    fn daemonset_keeps_a_user_set_affinity() {
+        let node_affinity = json!({
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+                "nodeSelectorTerms": [{
+                    "matchExpressions": [
+                        { "key": "kubernetes.io/os", "operator": "In", "values": ["linux"] }
+                    ]
+                }]
+            }
+        });
+        let ds = build(&validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": {
+                "config": { "affinity": { "nodeAffinity": node_affinity.clone() } },
+                "roleGroups": { "default": {} },
+            },
+        })));
+
+        let affinity = pod_affinity(ds);
+        assert_eq!(
+            affinity.node_affinity,
+            Some(serde_json::from_value(node_affinity).unwrap())
+        );
+        assert_eq!(affinity.pod_anti_affinity, None);
+        assert_eq!(affinity.pod_affinity, None);
     }
 
     #[test]

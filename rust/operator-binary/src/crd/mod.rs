@@ -414,8 +414,13 @@ impl v1alpha2::OpaRoleConfig {
 
 impl OpaConfig {
     /// `cluster_name` and `role` are needed for the default affinity, whose selector is specific to
-    /// this cluster's role rather than a static value.
-    pub fn default_config(cluster_name: &str, role: &OpaRole) -> OpaConfigFragment {
+    /// this cluster's role rather than a static value. `workload_kind` decides whether there is a
+    /// default affinity.
+    pub fn default_config(
+        cluster_name: &str,
+        role: &OpaRole,
+        workload_kind: &v1alpha2::WorkloadKind,
+    ) -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
@@ -429,8 +434,13 @@ impl OpaConfig {
                 },
                 storage: OpaStorageConfigFragment {},
             },
-            // Spreads the role's Pods across nodes. A no-op for a DaemonSet.
-            affinity: affinity::get_affinity(cluster_name, role),
+            affinity: match workload_kind {
+                // A DaemonSet places exactly one Pod per node by itself, so the operator sets no
+                // affinity. Users can still set one.
+                v1alpha2::WorkloadKind::DaemonSet => Default::default(),
+                // Spreads the role's Pods across nodes.
+                v1alpha2::WorkloadKind::Deployment => affinity::get_affinity(cluster_name, role),
+            },
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
     }
