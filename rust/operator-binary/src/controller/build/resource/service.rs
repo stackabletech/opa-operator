@@ -227,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn role_service_is_cluster_internal_with_node_local_traffic() {
+    fn role_service_is_cluster_internal() {
         let cluster = cluster(false);
         let service = build_server_role_service(&cluster);
         let spec = service.spec.unwrap();
@@ -235,25 +235,31 @@ mod tests {
         assert_eq!(service.metadata.name.as_deref(), Some("test-opa-server"));
         // Default listener class `cluster-internal` maps to a `ClusterIP` Service.
         assert_eq!(spec.type_.as_deref(), Some("ClusterIP"));
-        assert_eq!(spec.internal_traffic_policy.as_deref(), Some("Local"));
         // The role-level service selects the whole role, so it must not pin a role group.
         assert!(!spec.selector.unwrap().contains_key(ROLE_GROUP_LABEL));
     }
 
     /// In `Deployment` mode the Pods do not cover every node, so node-local routing would strand
-    /// products running on nodes without OPA Pods. The policy has to follow `workloadKind`.
+    /// products running on nodes without OPA Pods.
     #[test]
     fn role_service_traffic_policy_follows_workload_kind() {
-        let deployment_mode = validated_cluster_from_spec(json!({
-            "image": { "productVersion": "1.2.3" },
-            "servers": {
-                "roleConfig": { "workloadKind": "Deployment" },
-                "roleGroups": { "default": {} },
-            },
-        }));
+        for (workload_kind, expected_policy) in [("DaemonSet", "Local"), ("Deployment", "Cluster")]
+        {
+            let cluster = validated_cluster_from_spec(json!({
+                "image": { "productVersion": "1.2.3" },
+                "servers": {
+                    "roleConfig": { "workloadKind": workload_kind },
+                    "roleGroups": { "default": {} },
+                },
+            }));
 
-        let spec = build_server_role_service(&deployment_mode).spec.unwrap();
-        assert_eq!(spec.internal_traffic_policy.as_deref(), Some("Cluster"));
+            let spec = build_server_role_service(&cluster).spec.unwrap();
+            assert_eq!(
+                spec.internal_traffic_policy.as_deref(),
+                Some(expected_policy),
+                "unexpected internalTrafficPolicy for workloadKind {workload_kind}"
+            );
+        }
     }
 
     #[test]

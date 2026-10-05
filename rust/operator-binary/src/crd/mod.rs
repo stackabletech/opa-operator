@@ -488,9 +488,8 @@ mod tests {
         }
     }
 
-    /// The values the operator derives from `workloadKind`, which an OpenAPI schema default cannot
-    /// express. `internalTrafficPolicy` is derived outright; `podDisruptionBudget.enabled` is a
-    /// default the user can override.
+    /// The `podDisruptionBudget.enabled` default depends on `workloadKind`, which an OpenAPI schema
+    /// default cannot express.
     #[test]
     fn role_config_defaults_follow_workload_kind() {
         let role_config = |workload_kind| v1alpha2::OpaRoleConfig {
@@ -498,20 +497,9 @@ mod tests {
             ..v1alpha2::OpaRoleConfig::default()
         };
 
-        let daemon_set = role_config(v1alpha2::WorkloadKind::DaemonSet);
-        assert_eq!(
-            daemon_set.internal_traffic_policy(),
-            v1alpha2::InternalTrafficPolicy::Local
-        );
         // `kubectl drain` skips DaemonSet Pods, so a PDB would protect nothing.
-        assert!(!daemon_set.pod_disruption_budget_enabled());
-
-        let deployment = role_config(v1alpha2::WorkloadKind::Deployment);
-        assert_eq!(
-            deployment.internal_traffic_policy(),
-            v1alpha2::InternalTrafficPolicy::Cluster
-        );
-        assert!(deployment.pod_disruption_budget_enabled());
+        assert!(!role_config(v1alpha2::WorkloadKind::DaemonSet).pod_disruption_budget_enabled());
+        assert!(role_config(v1alpha2::WorkloadKind::Deployment).pod_disruption_budget_enabled());
     }
 
     /// An explicit `podDisruptionBudget.enabled: true` never yields a budget for a DaemonSet. The
@@ -527,11 +515,6 @@ mod tests {
         };
 
         assert!(!role_config.pod_disruption_budget_enabled());
-        // `internalTrafficPolicy` is not yet user-configurable, so it stays at the DaemonSet default.
-        assert_eq!(
-            role_config.internal_traffic_policy(),
-            v1alpha2::InternalTrafficPolicy::Local
-        );
     }
 
     /// Leaving the PDB fields out and writing them as an explicit `null` must resolve to the same
@@ -557,10 +540,9 @@ mod tests {
         }
     }
 
-    /// The two enums must serialise the way Kubernetes spells them: `workloadKind` names the
-    /// workload API kinds, and `internalTrafficPolicy` is passed through to `Service.spec`.
+    /// `workloadKind` must serialise as the Kubernetes workload API kinds are spelled.
     #[test]
-    fn enums_use_the_kubernetes_spelling() {
+    fn workload_kind_uses_the_kubernetes_spelling() {
         assert_eq!(
             serde_json::to_value(v1alpha2::WorkloadKind::DaemonSet).unwrap(),
             json!("DaemonSet")
@@ -568,23 +550,6 @@ mod tests {
         assert_eq!(
             serde_json::to_value(v1alpha2::WorkloadKind::Deployment).unwrap(),
             json!("Deployment")
-        );
-        assert_eq!(
-            serde_json::to_value(v1alpha2::InternalTrafficPolicy::Local).unwrap(),
-            json!("Local")
-        );
-        assert_eq!(
-            serde_json::to_value(v1alpha2::InternalTrafficPolicy::Cluster).unwrap(),
-            json!("Cluster")
-        );
-
-        // The Service builder writes the policy via `Display`, which is derived by strum and does
-        // not honour `#[serde(rename_all)]`. Asserted separately, so renaming a variant cannot
-        // leave serde green while the Service gets a value Kubernetes rejects.
-        assert_eq!(v1alpha2::InternalTrafficPolicy::Local.to_string(), "Local");
-        assert_eq!(
-            v1alpha2::InternalTrafficPolicy::Cluster.to_string(),
-            "Cluster"
         );
     }
 
