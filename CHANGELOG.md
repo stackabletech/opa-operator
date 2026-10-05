@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 - Allow specifying the maximum number of cached entries in the user-info-fetcher, defaulting to `10000`.
   The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
   the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
-  evicted least-recently-used first ([#863])
+  evicted least-recently-used first ([#863]).
 - The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
   `spec.servers.roleConfig.workloadKind` ([#873]).
 - A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
