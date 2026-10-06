@@ -1,0 +1,31 @@
+---
+apiVersion: opa.stackable.tech/v1alpha2
+kind: OpaCluster
+metadata:
+  name: test-opa
+spec:
+  image:
+{% if test_scenario['values']['opa-latest'].find(",") > 0 %}
+    custom: "{{ test_scenario['values']['opa-latest'].split(',')[1] }}"
+    productVersion: "{{ test_scenario['values']['opa-latest'].split(',')[0] }}"
+{% else %}
+    productVersion: "{{ test_scenario['values']['opa-latest'] }}"
+{% endif %}
+    pullPolicy: IfNotPresent
+{% if lookup('env', 'VECTOR_AGGREGATOR') %}
+  clusterConfig:
+    vectorAggregatorConfigMapName: vector-aggregator-discovery
+{% endif %}
+  servers:
+    roleConfig:
+      workloadKind: DaemonSet
+      # A misconfiguration: DaemonSets do not implement the scale subresource, so the disruption
+      # controller could never evaluate this budget and would refuse every eviction.
+      podDisruptionBudget:
+        enabled: true
+    config:
+      logging:
+        enableVectorAgent: {{ lookup('env', 'VECTOR_AGGREGATOR') | length > 0 }}
+    roleGroups:
+      default:
+        replicas: 2

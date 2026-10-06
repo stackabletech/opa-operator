@@ -5,8 +5,8 @@ use stackable_opa_operator::crd::{OPA_OPERATOR_NAME, OpaClusterStatus, v1alpha2}
 use stackable_operator::{
     client::Client,
     status::condition::{
-        compute_conditions, daemonset::DaemonSetConditionBuilder,
-        operations::ClusterOperationsConditionBuilder,
+        ConditionBuilder, compute_conditions, daemonset::DaemonSetConditionBuilder,
+        deployment::DeploymentConditionBuilder, operations::ClusterOperationsConditionBuilder,
     },
 };
 use strum::{EnumDiscriminants, IntoStaticStr};
@@ -37,11 +37,29 @@ pub async fn update_status(
         ds_cond_builder.add(daemon_set.clone());
     }
 
+    let mut deployment_cond_builder = DeploymentConditionBuilder::default();
+    for deployment in &applied.deployments {
+        deployment_cond_builder.add(deployment.clone());
+    }
+
     let cluster_operation_cond_builder =
         ClusterOperationsConditionBuilder::new(&opa.spec.cluster_operation);
 
-    let status = OpaClusterStatus {
-        conditions: compute_conditions(opa, &[&ds_cond_builder, &cluster_operation_cond_builder]),
+    // The workload kind is configured per role, so only one of the two workload lists is filled.
+    // Only builders with resources to judge are passed on.
+    let status = {
+        let mut condition_builders: Vec<&dyn ConditionBuilder> = Vec::new();
+        if !applied.daemon_sets.is_empty() {
+            condition_builders.push(&ds_cond_builder);
+        }
+        if !applied.deployments.is_empty() {
+            condition_builders.push(&deployment_cond_builder);
+        }
+        condition_builders.push(&cluster_operation_cond_builder);
+
+        OpaClusterStatus {
+            conditions: compute_conditions(opa, &condition_builders),
+        }
     };
 
     client

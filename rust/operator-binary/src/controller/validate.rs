@@ -7,7 +7,7 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use snafu::{OptionExt, ResultExt, Snafu};
-use stackable_opa_operator::crd::{Container, OpaConfig, OpaRole, v1alpha2};
+use stackable_opa_operator::crd::{Container, OpaConfig, OpaRole, OpaRoleType, v1alpha2};
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection,
@@ -69,6 +69,12 @@ pub enum Error {
         "the Vector agent is enabled but no Vector aggregator discovery ConfigMap name is set"
     ))]
     MissingVectorAggregatorConfigMapName,
+
+    #[snafu(display(
+        "role \"{}\" enables a PodDisruptionBudget, but its workloadKind is DaemonSet; DaemonSets do not implement the scale subresource, so the budget could never be evaluated",
+        **role
+    ))]
+    PodDisruptionBudgetOnDaemonSet { role: OpaRole },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -129,6 +135,42 @@ fn validate_logging(
     })
 }
 
+/// The settings a DaemonSet has no use for, one message each.
+///
+/// Ignored rather than rejected, as they do no harm, but returned so that `validate` can log them
+/// and the user is not left wondering why they have no effect. A DaemonSet runs one Pod per node,
+/// so `replicas` is meaningless, and it gets no PodDisruptionBudget, so `maxUnavailable` is too.
+fn settings_ignored_by_daemon_set(opa_role: &OpaRole, role: &OpaRoleType) -> Vec<String> {
+    if role.role_config.workload_kind != v1alpha2::WorkloadKind::DaemonSet {
+        return vec![];
+    }
+
+    let mut ignored = vec![];
+    if role
+        .role_config
+        .pod_disruption_budget
+        .max_unavailable
+        .is_some()
+    {
+        ignored.push(format!(
+            "role \"{}\": podDisruptionBudget.maxUnavailable is ignored, as a DaemonSet gets no PodDisruptionBudget",
+            **opa_role
+        ));
+    }
+    // Sorted, as `role_groups` is a `HashMap`: the same CR logs the same messages in the same order
+    // on every reconcile.
+    let role_groups: BTreeMap<_, _> = role.role_groups.iter().collect();
+    for (role_group_name, role_group) in role_groups {
+        if role_group.replicas.is_some() {
+            ignored.push(format!(
+                "role group {role_group_name:?} of role \"{}\": replicas is ignored, as a DaemonSet runs one Pod per node",
+                **opa_role
+            ));
+        }
+    }
+    ignored
+}
+
 /// Validates the cluster spec and produces a [`ValidatedCluster`].
 pub fn validate(
     opa: &v1alpha2::OpaCluster,
@@ -157,21 +199,40 @@ pub fn validate(
         .vector_aggregator_config_map_name
         .clone();
 
+    let mut role_configs = BTreeMap::new();
     let mut role_group_configs = BTreeMap::new();
     for opa_role in OpaRole::iter() {
         let role = opa.role(&opa_role);
+
+        // Carried per role rather than per cluster, so a second role could pick its own
+        // `workloadKind`. `serde(default)` on `Role::role_config` means this is the
+        // `OpaRoleConfig` default.
+        let role_config = &role.role_config;
+        // Rejected rather than ignored: the build step never writes a budget for a DaemonSet, so
+        // silently dropping an explicit `enabled: true` would leave the user wondering where it went.
+        if role_config.workload_kind == v1alpha2::WorkloadKind::DaemonSet
+            && role_config.pod_disruption_budget.enabled == Some(true)
+        {
+            return PodDisruptionBudgetOnDaemonSetSnafu { role: opa_role }.fail();
+        }
+        for ignored in settings_ignored_by_daemon_set(&opa_role, role) {
+            tracing::warn!("{ignored}");
+        }
+        role_configs.insert(opa_role.clone(), role_config.clone());
 
         let mut group_configs = BTreeMap::new();
         for (role_group_name, role_group) in &role.role_groups {
             // Merge default <- role <- role group and validate the config fragment, plus merge all
             // four override kinds (config/env/cli/pod) in one shot. Role group wins over role wins
             // over defaults.
-            let merged: RoleGroup<OpaConfig, _, _> =
-                with_validated_config(role_group, role, &OpaConfig::default_config()).context(
-                    ValidateRoleGroupConfigSnafu {
-                        role_group: role_group_name.clone(),
-                    },
-                )?;
+            let merged: RoleGroup<OpaConfig, _, _> = with_validated_config(
+                role_group,
+                role,
+                &OpaConfig::default_config(name.as_ref(), &opa_role, &role_config.workload_kind),
+            )
+            .context(ValidateRoleGroupConfigSnafu {
+                role_group: role_group_name.clone(),
+            })?;
 
             // Validate the logging configuration up-front (borrows the merged config before it is
             // moved into the `OpaRoleGroupConfig` below).
@@ -190,7 +251,8 @@ pub fn validate(
             group_configs.insert(
                 role_group_name,
                 OpaRoleGroupConfig {
-                    // Unused for a DaemonSet, but the `RoleGroupConfig` type requires it.
+                    // Only used in `Deployment` mode; a DaemonSet derives its Pod count from the
+                    // number of nodes.
                     replicas: merged.replicas,
                     config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
                     config_overrides: merged.config.config_overrides,
@@ -216,6 +278,7 @@ pub fn validate(
             tls: opa.spec.cluster_config.tls.clone(),
             listener_class: opa.spec.cluster_config.listener_class.clone(),
         },
+        role_configs,
         role_group_configs,
     ))
 }
@@ -286,6 +349,12 @@ mod tests {
             v1alpha2::CurrentlySupportedListenerClasses::ClusterInternal
         );
 
+        // The fixture sets no `roleConfig`, so the role falls back to the `OpaRoleConfig` default.
+        assert_eq!(
+            cluster.role_config(&OpaRole::Server),
+            &v1alpha2::OpaRoleConfig::default()
+        );
+
         // A single `server` role with the single `default` role group; the Vector agent is off.
         assert_eq!(cluster.role_group_configs.len(), 1);
         let role_groups = &cluster.role_group_configs[&OpaRole::Server];
@@ -296,6 +365,143 @@ mod tests {
             .next()
             .expect("the default role group exists");
         assert_eq!(role_group.config.logging.vector_container, None);
+    }
+
+    /// A configured `roleConfig` reaches the build step, and every role gets an entry so
+    /// `ValidatedCluster::role_config` cannot panic.
+    #[test]
+    fn validate_carries_the_role_config_of_every_role() {
+        let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
+            "apiVersion": "opa.stackable.tech/v1alpha2",
+            "kind": "OpaCluster",
+            "metadata": {
+                "name": "test-opa",
+                "namespace": "default",
+                "uid": "c27b3971-ca72-42c1-80a4-abdfc1db0ddd",
+            },
+            "spec": {
+                "image": { "productVersion": "1.2.3" },
+                "servers": {
+                    "roleConfig": { "workloadKind": "Deployment" },
+                    "roleGroups": { "default": {} },
+                },
+            },
+        }))
+        .expect("valid test input");
+        let operator_environment = OperatorEnvironmentOptions {
+            operator_namespace: "stackable-operators".to_string(),
+            operator_service_name: "opa-operator".to_string(),
+            image_repository: "oci.example.org".to_string(),
+        };
+
+        let cluster = validate(&opa, &operator_environment).expect("the fixture validates");
+
+        assert_eq!(
+            cluster.role_config(&OpaRole::Server).workload_kind,
+            v1alpha2::WorkloadKind::Deployment
+        );
+        // Every role is present, whether or not the user configured it.
+        assert_eq!(cluster.role_configs.len(), OpaRole::iter().count());
+        for opa_role in OpaRole::iter() {
+            cluster.role_config(&opa_role);
+        }
+    }
+
+    /// A PodDisruptionBudget over a DaemonSet can never be evaluated, so asking for one is a
+    /// misconfiguration that fails validation instead of being silently dropped.
+    #[test]
+    fn validate_rejects_a_pod_disruption_budget_on_a_daemon_set() {
+        let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
+            "apiVersion": "opa.stackable.tech/v1alpha2",
+            "kind": "OpaCluster",
+            "metadata": {
+                "name": "test-opa",
+                "namespace": "default",
+                "uid": "c27b3971-ca72-42c1-80a4-abdfc1db0ddd",
+            },
+            "spec": {
+                "image": { "productVersion": "1.2.3" },
+                "servers": {
+                    "roleConfig": {
+                        "workloadKind": "DaemonSet",
+                        "podDisruptionBudget": { "enabled": true },
+                    },
+                    "roleGroups": { "default": {} },
+                },
+            },
+        }))
+        .expect("valid test input");
+        let operator_environment = OperatorEnvironmentOptions {
+            operator_namespace: "stackable-operators".to_string(),
+            operator_service_name: "opa-operator".to_string(),
+            image_repository: "oci.example.org".to_string(),
+        };
+
+        let Err(error) = validate(&opa, &operator_environment) else {
+            panic!("the fixture must be rejected");
+        };
+        assert!(matches!(
+            error,
+            Error::PodDisruptionBudgetOnDaemonSet {
+                role: OpaRole::Server
+            }
+        ));
+        // Named as the user knows the role, not by its Rust variant.
+        assert!(error.to_string().starts_with("role \"server\" "), "{error}");
+    }
+
+    fn server_role(servers: serde_json::Value) -> OpaRoleType {
+        let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
+            "apiVersion": "opa.stackable.tech/v1alpha2",
+            "kind": "OpaCluster",
+            "metadata": { "name": "test-opa" },
+            "spec": { "image": { "productVersion": "1.2.3" }, "servers": servers },
+        }))
+        .expect("valid test input");
+        opa.spec.servers
+    }
+
+    /// `maxUnavailable` and `replicas` do nothing for a DaemonSet, so each one set is reported
+    /// for `validate` to log, rather than silently dropped.
+    #[test]
+    fn daemon_set_reports_every_ignored_setting() {
+        let role = server_role(json!({
+            "roleConfig": { "podDisruptionBudget": { "maxUnavailable": 2 } },
+            "roleGroups": { "default": { "replicas": 2 }, "other": { "replicas": 3 }, "unset": {} },
+        }));
+
+        let ignored = settings_ignored_by_daemon_set(&OpaRole::Server, &role);
+
+        assert_eq!(ignored.len(), 3, "unexpected messages: {ignored:?}");
+        assert!(
+            ignored
+                .iter()
+                .all(|message| message.contains("role \"server\""))
+        );
+        assert!(ignored[0].contains("maxUnavailable"));
+        assert!(ignored[1].contains("\"default\"") && ignored[1].contains("replicas"));
+        assert!(ignored[2].contains("\"other\"") && ignored[2].contains("replicas"));
+    }
+
+    #[test]
+    fn daemon_set_without_those_settings_reports_nothing() {
+        let role = server_role(json!({ "roleGroups": { "default": {} } }));
+
+        assert!(settings_ignored_by_daemon_set(&OpaRole::Server, &role).is_empty());
+    }
+
+    /// Both settings are honoured by a Deployment, so nothing is reported.
+    #[test]
+    fn deployment_reports_nothing() {
+        let role = server_role(json!({
+            "roleConfig": {
+                "workloadKind": "Deployment",
+                "podDisruptionBudget": { "maxUnavailable": 2 },
+            },
+            "roleGroups": { "default": { "replicas": 2 } },
+        }));
+
+        assert!(settings_ignored_by_daemon_set(&OpaRole::Server, &role).is_empty());
     }
 
     /// A [`Logging`] with an automatic log config for every container, as the (defaulted) merged

@@ -1,0 +1,13 @@
+---
+# A DaemonSet's Pods are skipped by `kubectl drain`, so a PodDisruptionBudget would protect nothing
+# and none is written out.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: test-opa-server
+---
+# Nothing has asked for a Deployment yet.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-opa-server-default

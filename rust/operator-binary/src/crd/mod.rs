@@ -17,7 +17,6 @@ use stackable_operator::{
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
     product_logging::{self, spec::Logging},
-    role_utils::EmptyRoleConfig,
     schemars::{self, JsonSchema},
     shared::time::Duration,
     status::condition::{ClusterCondition, HasStatusCondition},
@@ -33,6 +32,7 @@ use stackable_operator::{
 };
 use strum::{Display, EnumIter};
 
+pub mod affinity;
 pub mod cache;
 pub mod resource_info_fetcher;
 pub mod user_info_fetcher;
@@ -46,7 +46,7 @@ pub const DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_mi
 pub const SERVER_GRACEFUL_SHUTDOWN_SAFETY_OVERHEAD: Duration = Duration::from_secs(5);
 
 pub type OpaRoleType =
-    Role<OpaConfigFragment, OpaConfigOverrides, EmptyRoleConfig, GenericCommonConfig>;
+    Role<OpaConfigFragment, OpaConfigOverrides, v1alpha2::OpaRoleConfig, GenericCommonConfig>;
 
 #[versioned(
     version(name = "v1alpha1"),
@@ -141,6 +141,77 @@ pub mod versioned {
         #[serde(default)]
         #[versioned(hint(option))]
         pub tls: Option<OpaTls>,
+    }
+
+    /// Role-level configuration for the OPA servers.
+    #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct OpaRoleConfig {
+        /// The Kubernetes workload the OPA servers run as.
+        ///
+        /// * `DaemonSet`: one Pod per node. `replicas` is ignored.
+        ///
+        /// * `Deployment`: fixed number of Pods, configured by `replicas`.
+        #[serde(default)]
+        pub workload_kind: WorkloadKind,
+
+        // `internalTrafficPolicy` is deliberately not a field here: the operator derives it from
+        // `workloadKind` in `OpaRoleConfig::internal_traffic_policy`. Exposing it as a user
+        // override means adding an `Option<InternalTrafficPolicy>` field back and falling back to
+        // that helper's `match`.
+        //
+        // We can not #[serde(flatten)] a `GenericRoleConfig` here, as we need a PodDisruptionBudget
+        // default that depends on `workloadKind`.
+        #[serde(default)]
+        pub pod_disruption_budget: OpaPdbConfig,
+    }
+
+    /// The Kubernetes Kind currently supported.
+    #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub enum WorkloadKind {
+        #[default]
+        DaemonSet,
+        Deployment,
+    }
+
+    /// The `internalTrafficPolicy` of a Kubernetes Service.
+    ///
+    /// The variants are spelled as Kubernetes spells them, so the value can be passed through to
+    /// `Service.spec.internalTrafficPolicy` unchanged.
+    ///
+    /// TODO: Not yet part of the CRD: the operator derives the policy from [`WorkloadKind`].
+    #[derive(Clone, Debug, Deserialize, Display, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "PascalCase")]
+    pub enum InternalTrafficPolicy {
+        Local,
+        Cluster,
+    }
+
+    // A copy of `PdbConfig` from stackable-operator, but with `enabled` as an `Option`. The
+    // default depends on `workloadKind` and can therefore not be hard-coded.
+    //
+    /// This struct is used to configure:
+    ///
+    /// 1. If PodDisruptionBudgets are created by the operator
+    /// 2. The allowed number of Pods to be unavailable (`maxUnavailable`)
+    ///
+    /// Documentation:
+    /// [allowed Pod disruptions documentation](DOCS_BASE_URL_PLACEHOLDER/concepts/operations/pod_disruptions).
+    #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct OpaPdbConfig {
+        /// Whether a PodDisruptionBudget should be written out for this role.
+        ///
+        /// Defaults to `true` when `workloadKind` is `Deployment`. Must not be `true` when it is
+        /// `DaemonSet`: DaemonSets do not implement the scale subresource, so such a budget could
+        /// never be evaluated and would block every eviction.
+        #[serde(default)]
+        pub enabled: Option<bool>,
+
+        /// The number of Pods that are allowed to be down simultaneous.
+        #[serde(default)]
+        pub max_unavailable: Option<u16>,
     }
 
     #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -310,8 +381,46 @@ impl v1alpha2::CurrentlySupportedListenerClasses {
     }
 }
 
+impl v1alpha2::OpaRoleConfig {
+    /// The `internalTrafficPolicy` to write into the role Service.
+    ///
+    /// Derived from the [`v1alpha2::WorkloadKind`]: `Local` for a DaemonSet
+    /// and `Cluster` for a Deployment.
+    ///
+    /// TODO: This is the single place the policy is decided, so exposing a user override later means
+    /// adding the CRD field back and wrapping this `match` in an `unwrap_or`.
+    pub fn internal_traffic_policy(&self) -> v1alpha2::InternalTrafficPolicy {
+        match self.workload_kind {
+            v1alpha2::WorkloadKind::DaemonSet => v1alpha2::InternalTrafficPolicy::Local,
+            v1alpha2::WorkloadKind::Deployment => v1alpha2::InternalTrafficPolicy::Cluster,
+        }
+    }
+
+    /// Whether a PodDisruptionBudget should be written out for this role.
+    ///
+    /// Never for a DaemonSet: it does not implement the scale subresource, so the disruption
+    /// controller cannot evaluate the budget and refuses every eviction. The validate step rejects
+    /// an explicit `enabled: true` for a DaemonSet; this is the guard should that check be bypassed.
+    /// A Deployment falls back to `true`.
+    pub fn pod_disruption_budget_enabled(&self) -> bool {
+        match self.workload_kind {
+            v1alpha2::WorkloadKind::DaemonSet => false,
+            v1alpha2::WorkloadKind::Deployment => {
+                self.pod_disruption_budget.enabled.unwrap_or(true)
+            }
+        }
+    }
+}
+
 impl OpaConfig {
-    pub fn default_config() -> OpaConfigFragment {
+    /// `cluster_name` and `role` are needed for the default affinity, whose selector is specific to
+    /// this cluster's role rather than a static value. `workload_kind` decides whether there is a
+    /// default affinity.
+    pub fn default_config(
+        cluster_name: &str,
+        role: &OpaRole,
+        workload_kind: &v1alpha2::WorkloadKind,
+    ) -> OpaConfigFragment {
         OpaConfigFragment {
             logging: product_logging::spec::default_logging(),
             resources: ResourcesFragment {
@@ -325,9 +434,13 @@ impl OpaConfig {
                 },
                 storage: OpaStorageConfigFragment {},
             },
-            // There is no point in having a default affinity, as exactly one OPA Pods should run on every node.
-            // We only have the affinity configurable to let users limit the nodes the OPA Pods run on.
-            affinity: Default::default(),
+            affinity: match workload_kind {
+                // A DaemonSet places exactly one Pod per node by itself, so the operator sets no
+                // affinity. Users can still set one.
+                v1alpha2::WorkloadKind::DaemonSet => Default::default(),
+                // Spreads the role's Pods across nodes.
+                v1alpha2::WorkloadKind::Deployment => affinity::get_affinity(cluster_name, role),
+            },
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
     }
@@ -354,6 +467,7 @@ impl HasStatusCondition for v1alpha2::OpaCluster {
 #[cfg(test)]
 mod tests {
     use indoc::formatdoc;
+    use serde_json::json;
     use stackable_operator::versioned::test_utils::RoundtripTestData;
     use strum::IntoEnumIterator;
 
@@ -382,6 +496,71 @@ mod tests {
         for container in Container::iter() {
             assert_eq!(container.name().to_string(), container.to_string());
         }
+    }
+
+    /// The `podDisruptionBudget.enabled` default depends on `workloadKind`, which an OpenAPI schema
+    /// default cannot express.
+    #[test]
+    fn role_config_defaults_follow_workload_kind() {
+        let role_config = |workload_kind| v1alpha2::OpaRoleConfig {
+            workload_kind,
+            ..v1alpha2::OpaRoleConfig::default()
+        };
+
+        // `kubectl drain` skips DaemonSet Pods, so a PDB would protect nothing.
+        assert!(!role_config(v1alpha2::WorkloadKind::DaemonSet).pod_disruption_budget_enabled());
+        assert!(role_config(v1alpha2::WorkloadKind::Deployment).pod_disruption_budget_enabled());
+    }
+
+    /// An explicit `podDisruptionBudget.enabled: true` never yields a budget for a DaemonSet. The
+    /// validate step rejects this combination; this asserts the guard behind it.
+    #[test]
+    fn daemon_set_never_enables_a_pod_disruption_budget() {
+        let role_config = v1alpha2::OpaRoleConfig {
+            workload_kind: v1alpha2::WorkloadKind::DaemonSet,
+            pod_disruption_budget: v1alpha2::OpaPdbConfig {
+                enabled: Some(true),
+                max_unavailable: None,
+            },
+        };
+
+        assert!(!role_config.pod_disruption_budget_enabled());
+    }
+
+    /// Leaving the PDB fields out and writing them as an explicit `null` must resolve to the same
+    /// unset state, as the derived default is applied by the operator rather than by the schema.
+    ///
+    /// Only covers what serde does; substituting the `roleConfig` default for an entirely absent
+    /// `roleConfig` is the apiserver's job and is not exercised here.
+    #[test]
+    fn unset_role_config_fields_deserialise_to_none() {
+        let unset = v1alpha2::OpaRoleConfig::default();
+
+        for value in [
+            json!({}),
+            json!({ "workloadKind": "DaemonSet" }),
+            json!({
+                "workloadKind": "DaemonSet",
+                "podDisruptionBudget": { "enabled": null, "maxUnavailable": null },
+            }),
+        ] {
+            let role_config: v1alpha2::OpaRoleConfig =
+                serde_json::from_value(value.clone()).expect("a valid role config");
+            assert_eq!(role_config, unset, "unexpected role config for {value}");
+        }
+    }
+
+    /// `workloadKind` must serialise as the Kubernetes workload API kinds are spelled.
+    #[test]
+    fn workload_kind_uses_the_kubernetes_spelling() {
+        assert_eq!(
+            serde_json::to_value(v1alpha2::WorkloadKind::DaemonSet).unwrap(),
+            json!("DaemonSet")
+        );
+        assert_eq!(
+            serde_json::to_value(v1alpha2::WorkloadKind::Deployment).unwrap(),
+            json!("Deployment")
+        );
     }
 
     impl RoundtripTestData for v1alpha1::OpaClusterSpec {

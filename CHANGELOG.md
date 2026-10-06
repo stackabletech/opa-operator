@@ -17,10 +17,17 @@ All notable changes to this project will be documented in this file.
   The cache was previously unbounded, which a caller could exploit to exhaust the memory limit of
   the sidecar, as cache keys are built from caller-supplied parameters. Entries beyond the limit are now
   evicted least-recently-used first ([#863]).
+- The `servers` role can now run as a `Deployment` instead of a `DaemonSet`, selected via
+  `spec.servers.roleConfig.workloadKind` ([#873]).
+- A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
+  with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 - Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
 
 ### Changed
 
+- OPA Pods now default to a soft anti-affinity that spreads them across nodes. This is a no-op for a
+  `DaemonSet`, which already runs one Pod per node, but keeps a `Deployment`'s replicas from being deployed together ([#873]).
+  evicted least-recently-used first ([#863]).
 - BREAKING: `spec.image.stackableVersion` must now be a full, valid semver version, e.g. `26.7.1`.
   Abbreviated values such as `26.7` are no longer accepted ([#891]).
 - BREAKING: `spec.image.pullPolicy` now defaults to `IfNotPresent` for non-floating tags instead of
@@ -81,6 +88,7 @@ All notable changes to this project will be documented in this file.
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
 
+[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863
