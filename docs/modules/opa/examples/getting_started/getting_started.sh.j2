@@ -39,9 +39,6 @@ exit 1
 ;;
 esac
 
-# TODO: Remove once https://github.com/stackabletech/issues/issues/828 has been implemented (see that issue for details).
-until kubectl get crd opaclusters.opa.stackable.tech >/dev/null 2>&1; do echo "Waiting for CRDs to be installed" && sleep 1; done
-
 echo "Creating OPA cluster"
 # tag::apply-opa-cluster[]
 kubectl apply -f opa.yaml
