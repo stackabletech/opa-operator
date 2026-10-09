@@ -70,6 +70,7 @@ All notable changes to this project will be documented in this file.
   cluster is marked for deletion ([#882]).
 - Make operations infallible where dependent on static inputs ([#886], [#889]).
 - Bump stackable-operator to 0.119.0 ([#894]).
+- test: Bump vector-aggregator to 0.58.0 ([#899]).
 
 ### Fixed
 
@@ -101,6 +102,7 @@ All notable changes to this project will be documented in this file.
 [#889]: https://github.com/stackabletech/opa-operator/pull/889
 [#891]: https://github.com/stackabletech/opa-operator/pull/891
 [#894]: https://github.com/stackabletech/opa-operator/pull/894
+[#899]: https://github.com/stackabletech/opa-operator/pull/899
 
 ## [26.7.0] - 2026-07-21
 
