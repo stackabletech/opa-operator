@@ -72,6 +72,7 @@ All notable changes to this project will be documented in this file.
 - Bump stackable-operator to 0.119.0 ([#894]).
 - test: Bump vector-aggregator to 0.58.0 ([#899]).
 - test: Bump opa latest to 1.20.2, removed 1.12.3 ([#901]).
+- Update docs to version 1.20.2 ([#903]).
 
 ### Fixed
 
@@ -105,6 +106,7 @@ All notable changes to this project will be documented in this file.
 [#894]: https://github.com/stackabletech/opa-operator/pull/894
 [#899]: https://github.com/stackabletech/opa-operator/pull/899
 [#901]: https://github.com/stackabletech/opa-operator/pull/901
+[#903]: https://github.com/stackabletech/opa-operator/pull/903
 
 ## [26.7.0] - 2026-07-21
 
