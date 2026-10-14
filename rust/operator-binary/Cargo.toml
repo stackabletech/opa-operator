@@ -32,4 +32,4 @@ tracing.workspace = true
 built.workspace = true
 
 [dev-dependencies]
-serde_yaml.workspace = true
+yaml_serde.workspace = true
