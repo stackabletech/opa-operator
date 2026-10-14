@@ -34,7 +34,7 @@ All notable changes to this project will be documented in this file.
   always defaulting to `Always` ([#891]).
 - Internal operator refactoring: introduce a build() step in the reconciler that
   assembles all relevant Kubernetes resources before anything is applied ([#852]).
-- Bump `stackable-operator` to 0.118.0 ([#867], [#880], [#891]).
+- Bump `stackable-operator` to 0.121.0 ([#867], [#880], [#891], [#894], [#904]).
 - The RBAC ServiceAccount and RoleBinding are now built with the operator-rs `v2::rbac`
   functions and carry the full set of recommended labels ([#861]).
 - All product containers now run with `securityContext.runAsNonRoot` set to `true` to improve security ([#871]).
@@ -69,9 +69,10 @@ All notable changes to this project will be documented in this file.
 - The operator now watches all resources that it creates and early-exits the reconcile action when the
   cluster is marked for deletion ([#882]).
 - Make operations infallible where dependent on static inputs ([#886], [#889]).
-- Bump stackable-operator to 0.119.0 ([#894]).
 - test: Bump vector-aggregator to 0.58.0 ([#899]).
 - test: Bump opa latest to 1.20.2, removed 1.12.3 ([#901]).
+- All pods now set `securityContext.seccompProfile.type` to `RuntimeDefault` ([#904]).
+- Replace the unmaintained `serde_yaml` with `yaml_serde` ([#904]).
 
 ### Fixed
 
@@ -105,6 +106,7 @@ All notable changes to this project will be documented in this file.
 [#894]: https://github.com/stackabletech/opa-operator/pull/894
 [#899]: https://github.com/stackabletech/opa-operator/pull/899
 [#901]: https://github.com/stackabletech/opa-operator/pull/901
+[#904]: https://github.com/stackabletech/opa-operator/pull/904
 
 ## [26.7.0] - 2026-07-21
 
