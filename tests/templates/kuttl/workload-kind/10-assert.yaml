@@ -18,7 +18,7 @@ spec:
   #
   # `app.kubernetes.io/managed-by`, `app.kubernetes.io/version` and `stackable.tech/vendor` are
   # deliberately not asserted. `version` carries the build-specific image suffix
-  # (`1.16.2-stackable0.0.0-dev` locally, a release suffix in CI), so pinning it would break the
+  # (`1.20.2-stackable0.0.0-dev` locally, a release suffix in CI), so pinning it would break the
   # test for a reason that has nothing to do with the workload kind.
   selector:
     matchLabels:
