@@ -16,6 +16,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -41,6 +42,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -60,6 +62,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -77,6 +80,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -97,6 +101,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -113,6 +118,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -131,6 +137,7 @@ tests:
           source_type: file
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -152,6 +159,7 @@ tests:
           source_type: internal_logs
     outputs:
       - extract_from: extended_logs
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
@@ -169,6 +177,7 @@ tests:
             level: INFO
     outputs:
       - extract_from: filtered_logs_vector
+        expected_event_count: 1
         conditions:
           - type: vrl
             source: |
