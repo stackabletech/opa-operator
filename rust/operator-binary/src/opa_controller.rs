@@ -174,7 +174,7 @@ mod tests {
         // Install one explicitly, exactly as main() does.
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        let opa = serde_yaml::from_str(
+        let opa = yaml_serde::from_str(
             r#"
 apiVersion: opa.stackable.tech/v1alpha2
 kind: OpaCluster
