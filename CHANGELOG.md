@@ -71,6 +71,7 @@ All notable changes to this project will be documented in this file.
 - Make operations infallible where dependent on static inputs ([#886], [#889]).
 - test: Bump vector-aggregator to 0.58.0 ([#899]).
 - test: Bump opa latest to 1.20.2, removed 1.12.3 ([#901]).
+- Update docs to version 1.20.2 ([#903]).
 - All pods now set `securityContext.seccompProfile.type` to `RuntimeDefault` ([#904]).
 - Replace the unmaintained `serde_yaml` with `yaml_serde` ([#904]).
 
@@ -106,6 +107,7 @@ All notable changes to this project will be documented in this file.
 [#894]: https://github.com/stackabletech/opa-operator/pull/894
 [#899]: https://github.com/stackabletech/opa-operator/pull/899
 [#901]: https://github.com/stackabletech/opa-operator/pull/901
+[#903]: https://github.com/stackabletech/opa-operator/pull/903
 [#904]: https://github.com/stackabletech/opa-operator/pull/904
 
 ## [26.7.0] - 2026-07-21
