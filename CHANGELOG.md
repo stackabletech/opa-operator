@@ -69,7 +69,7 @@ All notable changes to this project will be documented in this file.
 - The operator now watches all resources that it creates and early-exits the reconcile action when the
   cluster is marked for deletion ([#882]).
 - Make operations infallible where dependent on static inputs ([#886], [#889]).
-- Support Vector 0.58.0 ([#899], [#905]).
+- Support Vector 0.58.0 ([#899], [#905], [#906]).
 - test: Bump opa latest to 1.20.2, removed 1.12.3 ([#901]).
 - Update docs to version 1.20.2 ([#903]).
 - All pods now set `securityContext.seccompProfile.type` to `RuntimeDefault` ([#904]).
@@ -110,6 +110,7 @@ All notable changes to this project will be documented in this file.
 [#903]: https://github.com/stackabletech/opa-operator/pull/903
 [#904]: https://github.com/stackabletech/opa-operator/pull/904
 [#905]: https://github.com/stackabletech/opa-operator/pull/905
+[#906]: https://github.com/stackabletech/opa-operator/pull/906
 
 ## [26.7.0] - 2026-07-21
 
