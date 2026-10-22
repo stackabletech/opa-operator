@@ -74,6 +74,7 @@ All notable changes to this project will be documented in this file.
 - Update docs to version 1.20.2 ([#903]).
 - All pods now set `securityContext.seccompProfile.type` to `RuntimeDefault` ([#904]).
 - Replace the unmaintained `serde_yaml` with `yaml_serde` ([#904]).
+- The operator Deployment runs with a restricted security context and a read-only root filesystem, so it can be deployed into namespaces that enforce the `restricted` Pod Security Standard ([#908]).
 
 ### Fixed
 
@@ -111,6 +112,7 @@ All notable changes to this project will be documented in this file.
 [#904]: https://github.com/stackabletech/opa-operator/pull/904
 [#905]: https://github.com/stackabletech/opa-operator/pull/905
 [#906]: https://github.com/stackabletech/opa-operator/pull/906
+[#908]: https://github.com/stackabletech/opa-operator/pull/908
 
 ## [26.7.0] - 2026-07-21
 
