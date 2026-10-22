@@ -23,6 +23,9 @@ serde_json.workspace = true
 snafu.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+url.workspace = true
 
 [dev-dependencies]
 futures.workspace = true
+percent-encoding.workspace = true
+rstest.workspace = true

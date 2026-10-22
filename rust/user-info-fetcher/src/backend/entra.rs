@@ -7,6 +7,7 @@ use info_fetcher_commons::utils::{
     http::{is_unauthorized, send_json_request},
     secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
+    url_path::append_path_segments,
 };
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
@@ -54,6 +55,12 @@ pub enum Error {
         endpoint: String,
     },
 
+    #[snafu(display("failed to construct the Graph URL for user {user:?}"))]
+    ConstructUserUrl {
+        source: utils::url_path::Error,
+        user: String,
+    },
+
     #[snafu(display("failed to construct HTTP client"))]
     ConstructHttpClient { source: reqwest::Error },
 
@@ -77,6 +84,11 @@ impl http_error::Error for Error {
             Self::UserNotFoundByName { .. } => StatusCode::NOT_FOUND,
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
             Self::BuildEntraEndpoint { .. } => StatusCode::BAD_REQUEST,
+            Self::ConstructUserUrl {
+                source: utils::url_path::Error::InvalidPathSegment { .. },
+                ..
+            } => StatusCode::BAD_REQUEST,
+            Self::ConstructUserUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ReadClientId { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -243,7 +255,7 @@ impl ResolvedEntraBackend {
                 let user_id = req.id.clone();
                 send_json_request::<UserMetadata>(
                     self.http_client
-                        .get(entra_backend.user_info(&user_id))
+                        .get(entra_backend.user_info(&user_id)?)
                         .bearer_auth(access_token.expose()),
                 )
                 .await
@@ -260,7 +272,7 @@ impl ResolvedEntraBackend {
                 let username = req.username.clone();
                 send_json_request::<UserMetadata>(
                     self.http_client
-                        .get(entra_backend.user_info(&username))
+                        .get(entra_backend.user_info(&username)?)
                         .bearer_auth(access_token.expose()),
                 )
                 .await
@@ -274,7 +286,7 @@ impl ResolvedEntraBackend {
         };
 
         let mut groups = Vec::new();
-        let mut next_url = Some(entra_backend.group_info(&user_info.id));
+        let mut next_url = Some(entra_backend.group_info(&user_info.id)?);
         let mut pages_remaining = MAX_GROUP_PAGES;
 
         while let Some(url) = next_url {
@@ -356,22 +368,24 @@ impl EntraBackend {
     }
 
     // Works both with id/oid and userPrincipalName
-    pub fn user_info(&self, user: &str) -> Url {
-        let mut user_info_url = self.user_info_endpoint_url.clone();
-        user_info_url.set_path(&format!("/v1.0/users/{user}"));
-        user_info_url
+    pub fn user_info(&self, user: &str) -> Result<Url, Error> {
+        append_path_segments(&self.user_info_endpoint_url, &["v1.0", "users", user])
+            .context(ConstructUserUrlSnafu { user })
     }
 
     /// Requests the first page of the user's directory memberships.
     ///
     /// `memberOf` returns every directory object the user belongs to: groups as well as directory
     /// roles and administrative units.
-    pub fn group_info(&self, user: &str) -> Url {
-        let mut user_info_url = self.user_info_endpoint_url.clone();
-        user_info_url.set_path(&format!("/v1.0/users/{user}/memberOf"));
+    pub fn group_info(&self, user: &str) -> Result<Url, Error> {
+        let mut group_info_url = append_path_segments(
+            &self.user_info_endpoint_url,
+            &["v1.0", "users", user, "memberOf"],
+        )
+        .context(ConstructUserUrlSnafu { user })?;
         // 999 is the largest page size Graph accepts, and keeps the number of round-trips down.
-        user_info_url.set_query(Some("$select=displayName&$top=999"));
-        user_info_url
+        group_info_url.set_query(Some("$select=displayName&$top=999"));
+        Ok(group_info_url)
     }
 
     /// Rebases an `@odata.nextLink` onto the configured user info endpoint.
@@ -402,7 +416,10 @@ mod tests {
     };
 
     use super::*;
-    use crate::UserInfoRequestById;
+    use crate::{
+        UserInfoRequestById,
+        backend::test_mocks::{HOSTILE_USERS, assert_looked_up_below, received_lookups},
+    };
 
     const TENANT_ID: &str = "1234-5678-1234-5678";
     const USER_ID: &str = "8765-4321-8765-4321";
@@ -479,10 +496,13 @@ mod tests {
             .await;
     }
 
-    async fn look_up_by_id(backend: &ResolvedEntraBackend) -> Result<UserInfo, super::Error> {
+    async fn look_up_by_id(
+        backend: &ResolvedEntraBackend,
+        id: &str,
+    ) -> Result<UserInfo, super::Error> {
         backend
             .get_user_info(&UserInfoRequest::UserInfoRequestById(UserInfoRequestById {
-                id: USER_ID.to_owned(),
+                id: id.to_owned(),
             }))
             .await
     }
@@ -507,7 +527,7 @@ mod tests {
         let mock_server = MockServer::start().await;
         mock_token_and_failing_user(&mock_server, USER_ID, 404).await;
 
-        let error = look_up_by_id(&backend_for(&mock_server))
+        let error = look_up_by_id(&backend_for(&mock_server), USER_ID)
             .await
             .expect_err("a user Entra does not have cannot be looked up");
 
@@ -527,7 +547,7 @@ mod tests {
             let mock_server = MockServer::start().await;
             mock_token_and_failing_user(&mock_server, USER_ID, status).await;
 
-            let error = look_up_by_id(&backend_for(&mock_server))
+            let error = look_up_by_id(&backend_for(&mock_server), USER_ID)
                 .await
                 .expect_err("a failing lookup surfaces as an error");
 
@@ -558,6 +578,79 @@ mod tests {
             http_error::Error::status_code(&error),
             StatusCode::NOT_FOUND
         );
+    }
+
+    /// Mounts the token endpoint plus an answer of `404` to every lookup.
+    async fn mock_token_and_no_users(mock_server: &MockServer) {
+        mock_token(mock_server, Some(3600), 1).await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(mock_server)
+            .await;
+    }
+
+    /// A request-supplied id stays one segment under `/v1.0/users/`, so `../` cannot reach another
+    /// Graph endpoint with the access token.
+    #[tokio::test]
+    async fn entra_keeps_a_hostile_id_inside_the_users_endpoint() {
+        for &user_id in HOSTILE_USERS {
+            let mock_server = MockServer::start().await;
+            mock_token_and_no_users(&mock_server).await;
+
+            let error = look_up_by_id(&backend_for(&mock_server), user_id)
+                .await
+                .expect_err("Entra does not have the user");
+
+            assert!(
+                matches!(error, Error::UserNotFoundById { .. }),
+                "for {user_id:?} got {error}"
+            );
+            assert_looked_up_below(&mock_server, "/v1.0/users/", user_id).await;
+        }
+    }
+
+    /// Graph takes the principal name in the same path segment as the id, so it needs the same
+    /// protection.
+    #[tokio::test]
+    async fn entra_keeps_a_hostile_username_inside_the_users_endpoint() {
+        for &username in HOSTILE_USERS {
+            let mock_server = MockServer::start().await;
+            mock_token_and_no_users(&mock_server).await;
+
+            let error = look_up_by_name(&backend_for(&mock_server), username)
+                .await
+                .expect_err("Entra does not have the user");
+
+            assert!(
+                matches!(error, Error::UserNotFoundByName { .. }),
+                "for {username:?} got {error}"
+            );
+            assert_looked_up_below(&mock_server, "/v1.0/users/", username).await;
+        }
+    }
+
+    /// An empty, `.` or `..` user would be dropped from the path, turning the lookup of one user
+    /// into a listing of all of them, and a line break would be stripped, looking up another user.
+    #[tokio::test]
+    async fn entra_rejects_a_user_that_cannot_be_a_path_segment() {
+        for username in ["", ".", "..", "ad\nmin"] {
+            let mock_server = MockServer::start().await;
+            mock_token(&mock_server, Some(3600), 1).await;
+
+            let error = look_up_by_name(&backend_for(&mock_server), username)
+                .await
+                .expect_err("the user is rejected before Entra is asked");
+
+            assert!(
+                matches!(error, Error::ConstructUserUrl { .. }),
+                "for {username:?} got {error}"
+            );
+            assert_eq!(
+                http_error::Error::status_code(&error),
+                StatusCode::BAD_REQUEST
+            );
+            assert!(received_lookups(&mock_server).await.is_empty());
+        }
     }
 
     async fn get_user_info_by_id(backend: &ResolvedEntraBackend) -> UserInfo {
@@ -723,11 +816,11 @@ mod tests {
             .unwrap()
         );
         assert_eq!(
-            entra.user_info(user),
+            entra.user_info(user).expect("valid user"),
             Url::parse(&format!("https://graph.microsoft.com/v1.0/users/{user}")).unwrap()
         );
         assert_eq!(
-            entra.group_info(user),
+            entra.group_info(user).expect("valid user"),
             Url::parse(&format!(
                 "https://graph.microsoft.com/v1.0/users/{user}/memberOf?$select=displayName&$top=999"
             ))
@@ -763,11 +856,11 @@ mod tests {
             .unwrap()
         );
         assert_eq!(
-            entra.user_info(user),
+            entra.user_info(user).expect("valid user"),
             Url::parse(&format!("http://graph.mock.com:8080/v1.0/users/{user}")).unwrap()
         );
         assert_eq!(
-            entra.group_info(user),
+            entra.group_info(user).expect("valid user"),
             Url::parse(&format!(
                 "http://graph.mock.com:8080/v1.0/users/{user}/memberOf?$select=displayName&$top=999"
             ))

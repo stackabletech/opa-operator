@@ -35,6 +35,7 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+percent-encoding.workspace = true
 wiremock.workspace = true
 
 [build-dependencies]
