@@ -7,6 +7,7 @@ use info_fetcher_commons::utils::{
     http::{is_unauthorized, send_json_request},
     secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
+    url_path::append_path_segments,
 };
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -52,7 +53,13 @@ pub enum Error {
     ParseOidcEndpointUrl { source: oidc::v1alpha1::Error },
 
     #[snafu(display("failed to construct OIDC endpoint path"))]
-    ConstructOidcEndpointPath { source: url::ParseError },
+    ConstructOidcEndpointPath { source: utils::url_path::Error },
+
+    #[snafu(display("failed to construct the Keycloak URL for user id {user_id:?}"))]
+    ConstructUserUrl {
+        source: utils::url_path::Error,
+        user_id: String,
+    },
 
     #[snafu(display("failed to construct HTTP client"))]
     ConstructHttpClient { source: reqwest::Error },
@@ -79,6 +86,11 @@ impl http_error::Error for Error {
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
             Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ConstructUserUrl {
+                source: utils::url_path::Error::InvalidPathSegment { .. },
+                ..
+            } => StatusCode::BAD_REQUEST,
+            Self::ConstructUserUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ReadClientId { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -216,16 +228,15 @@ impl ResolvedKeycloakBackend {
         client_secret: Secret,
     ) -> Result<MintedToken, Error> {
         let admin_realm = &self.config.admin_realm;
+        let token_url = append_path_segments(
+            keycloak_url,
+            &["realms", admin_realm, "protocol", "openid-connect", "token"],
+        )
+        .context(ConstructOidcEndpointPathSnafu)?;
 
         let response = send_json_request::<OAuthResponse>(
             self.http_client
-                .post(
-                    keycloak_url
-                        .join(&format!(
-                            "realms/{admin_realm}/protocol/openid-connect/token"
-                        ))
-                        .context(ConstructOidcEndpointPathSnafu)?,
-                )
+                .post(token_url)
                 .basic_auth(&self.client_id, Some(client_secret.expose()))
                 .form(&[("grant_type", "client_credentials")]),
         )
@@ -244,21 +255,19 @@ impl ResolvedKeycloakBackend {
         access_token: Secret,
     ) -> Result<UserInfo, Error> {
         let user_realm = &self.config.user_realm;
-
-        let users_base_url = keycloak_url
-            .join(&format!("admin/realms/{user_realm}/users/"))
-            .context(ConstructOidcEndpointPathSnafu)?;
+        let users_url =
+            append_path_segments(keycloak_url, &["admin", "realms", user_realm, "users"])
+                .context(ConstructOidcEndpointPathSnafu)?;
 
         let user_info = match req {
             UserInfoRequest::UserInfoRequestById(req) => {
                 let user_id = req.id.clone();
+                let user_url = append_path_segments(&users_url, &[&user_id])
+                    .context(ConstructUserUrlSnafu { user_id: &user_id })?;
+
                 send_json_request::<UserMetadata>(
                     self.http_client
-                        .get(
-                            users_base_url
-                                .join(&req.id)
-                                .context(ConstructOidcEndpointPathSnafu)?,
-                        )
+                        .get(user_url)
                         .bearer_auth(access_token.expose()),
                 )
                 .await
@@ -273,13 +282,10 @@ impl ResolvedKeycloakBackend {
             }
             UserInfoRequest::UserInfoRequestByName(req) => {
                 let username = &req.username;
-                let users_url = users_base_url
-                    .join(&format!("?username={username}&exact=true"))
-                    .context(ConstructOidcEndpointPathSnafu)?;
-
                 let users = send_json_request::<Vec<UserMetadata>>(
                     self.http_client
-                        .get(users_url)
+                        .get(users_url.clone())
+                        .query(&[("username", username.as_str()), ("exact", "true")])
                         .bearer_auth(access_token.expose()),
                 )
                 .await
@@ -296,13 +302,15 @@ impl ResolvedKeycloakBackend {
             }
         };
 
+        let groups_url = append_path_segments(&users_url, &[&user_info.id, "groups"]).context(
+            ConstructUserUrlSnafu {
+                user_id: &user_info.id,
+            },
+        )?;
+
         let groups = send_json_request::<Vec<GroupMembership>>(
             self.http_client
-                .get(
-                    users_base_url
-                        .join(&format!("{}/groups", user_info.id))
-                        .context(ConstructOidcEndpointPathSnafu)?,
-                )
+                .get(groups_url)
                 .bearer_auth(access_token.expose()),
         )
         .await
@@ -334,7 +342,13 @@ mod tests {
     };
 
     use super::*;
-    use crate::{UserInfoRequestById, backend::keycloak::ResolvedKeycloakBackend};
+    use crate::{
+        UserInfoRequestById, UserInfoRequestByName,
+        backend::{
+            keycloak::ResolvedKeycloakBackend,
+            test_mocks::{HOSTILE_USERS, assert_looked_up_below, received_lookups},
+        },
+    };
 
     const ADMIN_REALM: &str = "master";
     const USER_REALM: &str = "my-realm";
@@ -395,11 +409,25 @@ mod tests {
 
     async fn get_user_info_by_id(
         backend: &ResolvedKeycloakBackend,
+        id: &str,
     ) -> Result<UserInfo, super::Error> {
         backend
             .get_user_info(&UserInfoRequest::UserInfoRequestById(UserInfoRequestById {
-                id: USER_ID.to_owned(),
+                id: id.to_owned(),
             }))
+            .await
+    }
+
+    async fn get_user_info_by_name(
+        backend: &ResolvedKeycloakBackend,
+        username: &str,
+    ) -> Result<UserInfo, super::Error> {
+        backend
+            .get_user_info(&UserInfoRequest::UserInfoRequestByName(
+                UserInfoRequestByName {
+                    username: username.to_owned(),
+                },
+            ))
             .await
     }
 
@@ -412,8 +440,12 @@ mod tests {
         mock_user_and_groups(&mock_server, 200).await;
 
         let backend = backend_for(&mock_server);
-        get_user_info_by_id(&backend).await.expect("lookup works");
-        get_user_info_by_id(&backend).await.expect("lookup works");
+        get_user_info_by_id(&backend, USER_ID)
+            .await
+            .expect("lookup works");
+        get_user_info_by_id(&backend, USER_ID)
+            .await
+            .expect("lookup works");
 
         // The token endpoint's `.expect(1)` is verified when `mock_server` is dropped.
     }
@@ -426,7 +458,7 @@ mod tests {
         mock_token(&mock_server, Some(3600), 1).await;
         mock_user_and_groups(&mock_server, 404).await;
 
-        let error = get_user_info_by_id(&backend_for(&mock_server))
+        let error = get_user_info_by_id(&backend_for(&mock_server), USER_ID)
             .await
             .expect_err("a user Keycloak does not have cannot be looked up");
 
@@ -447,7 +479,7 @@ mod tests {
             mock_token(&mock_server, Some(3600), 1).await;
             mock_user_and_groups(&mock_server, status).await;
 
-            let error = get_user_info_by_id(&backend_for(&mock_server))
+            let error = get_user_info_by_id(&backend_for(&mock_server), USER_ID)
                 .await
                 .expect_err("a failing lookup surfaces as an error");
 
@@ -462,6 +494,137 @@ mod tests {
         }
     }
 
+    /// A request-supplied id stays one segment under `users/`.
+    /// An absolute URL must never replace the host.
+    /// And `../` is also not allowed to point the admin token at another endpoint.
+    #[tokio::test]
+    async fn keycloak_keeps_a_hostile_id_inside_the_users_endpoint() {
+        for &user_id in HOSTILE_USERS {
+            let mock_server = MockServer::start().await;
+            mock_token(&mock_server, Some(3600), 1).await;
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(404))
+                .mount(&mock_server)
+                .await;
+
+            let error = get_user_info_by_id(&backend_for(&mock_server), user_id)
+                .await
+                .expect_err("Keycloak does not have the user");
+
+            assert!(
+                matches!(error, Error::UserNotFoundById { .. }),
+                "for {user_id:?} got {error}"
+            );
+            let users_path = format!("/admin/realms/{USER_REALM}/users/");
+            assert_looked_up_below(&mock_server, &users_path, user_id).await;
+        }
+    }
+
+    /// A request-supplied username stays the value of the `username` query parameter, so it cannot
+    /// switch off the exact match or add parameters.
+    #[tokio::test]
+    async fn keycloak_keeps_a_hostile_username_inside_its_query_parameter() {
+        for &username in HOSTILE_USERS {
+            let mock_server = MockServer::start().await;
+            mock_token(&mock_server, Some(3600), 1).await;
+            Mock::given(method("GET"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+                .mount(&mock_server)
+                .await;
+
+            let error = get_user_info_by_name(&backend_for(&mock_server), username)
+                .await
+                .expect_err("Keycloak does not have the user");
+
+            assert!(
+                matches!(error, Error::UserNotFoundByName { .. }),
+                "for {username:?} got {error}"
+            );
+            let lookups = received_lookups(&mock_server).await;
+            let [lookup] = lookups.as_slice() else {
+                panic!("{username:?} was not looked up exactly once: {lookups:?}");
+            };
+            let query: Vec<(String, String)> = lookup.url.query_pairs().into_owned().collect();
+            assert_eq!(
+                lookup.url.path(),
+                format!("/admin/realms/{USER_REALM}/users"),
+                "{username:?}"
+            );
+            assert_eq!(
+                query,
+                [
+                    ("username".to_owned(), username.to_owned()),
+                    ("exact".to_owned(), "true".to_owned()),
+                ],
+                "{username:?}"
+            );
+        }
+    }
+
+    /// An empty, `.` or `..` id would be dropped from the path, turning the lookup of one user into a
+    /// listing of all of them, and a line break would be stripped, looking up another user.
+    #[tokio::test]
+    async fn keycloak_rejects_an_id_that_cannot_be_a_path_segment() {
+        for user_id in ["", ".", "..", "ad\nmin"] {
+            let mock_server = MockServer::start().await;
+            mock_token(&mock_server, Some(3600), 1).await;
+
+            let error = get_user_info_by_id(&backend_for(&mock_server), user_id)
+                .await
+                .expect_err("the id is rejected before Keycloak is asked");
+
+            assert!(
+                matches!(error, Error::ConstructUserUrl { .. }),
+                "for {user_id:?} got {error}"
+            );
+            assert_eq!(
+                http_error::Error::status_code(&error),
+                StatusCode::BAD_REQUEST
+            );
+            assert!(received_lookups(&mock_server).await.is_empty());
+        }
+    }
+
+    /// A root path without a trailing slash is kept, so a Keycloak under `/auth` is asked at
+    /// `/auth/realms/...`.
+    #[tokio::test]
+    async fn keycloak_keeps_the_root_path() {
+        let mock_server = MockServer::start().await;
+        crate::backend::test_mocks::mock_token(
+            &mock_server,
+            format!("/auth/realms/{ADMIN_REALM}/protocol/openid-connect/token"),
+            Some(3600),
+            Some(1),
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/auth/admin/realms/{USER_REALM}/users/{USER_ID}"
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": USER_ID,
+                "username": "alice",
+            })))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!(
+                "/auth/admin/realms/{USER_REALM}/users/{USER_ID}/groups"
+            )))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let mut backend = backend_for(&mock_server);
+        backend.config.root_path = "/auth".to_owned();
+
+        get_user_info_by_id(&backend, USER_ID)
+            .await
+            .expect("Keycloak is reached under its root path");
+    }
+
     /// A token can stop being accepted before it expires, e.g. by being revoked. The rejection is the
     /// only way to find that out, so it has to trigger exactly one re-authentication. Not none
     /// (the lookup would keep failing until the token expired), and not a retry loop.
@@ -471,7 +634,7 @@ mod tests {
         mock_token(&mock_server, Some(3600), 2).await;
         mock_user_and_groups(&mock_server, 401).await;
 
-        let error = get_user_info_by_id(&backend_for(&mock_server))
+        let error = get_user_info_by_id(&backend_for(&mock_server), USER_ID)
             .await
             .expect_err("a permanently rejected token must surface as an error");
 

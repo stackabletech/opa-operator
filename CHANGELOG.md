@@ -92,6 +92,10 @@ All notable changes to this project will be documented in this file.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
+- The user-info-fetcher Keycloak and Entra backends now encode user ids and names as a single URL
+  path segment, and the Keycloak backend sends the username as a query parameter. An empty, `.` or
+  `..` id or name, or one containing a line break, is rejected with `400` ([#909]).
+- The user-info-fetcher Keycloak backend now keeps a `rootPath` without a trailing slash ([#909]).
 
 [#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
@@ -113,6 +117,7 @@ All notable changes to this project will be documented in this file.
 [#905]: https://github.com/stackabletech/opa-operator/pull/905
 [#906]: https://github.com/stackabletech/opa-operator/pull/906
 [#908]: https://github.com/stackabletech/opa-operator/pull/908
+[#909]: https://github.com/stackabletech/opa-operator/pull/909
 
 ## [26.7.0] - 2026-07-21
 

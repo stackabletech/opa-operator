@@ -29,6 +29,7 @@ ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
 md5 = "0.8"
 moka = { version = "0.12", default-features = false, features = ["future"] }
 native-tls = "0.2.12"
+percent-encoding = "2.3"
 pin-project = "1.1"
 # `default-features = false` drops reqwest 0.13's `default-tls = ["rustls"]`; we select
 # `native-tls` (OpenSSL) to stay on the same TLS stack as ldap3 (see utils/tls.rs). The

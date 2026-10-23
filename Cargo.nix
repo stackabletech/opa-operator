@@ -5536,11 +5536,23 @@ rec {
             name = "tracing";
             packageId = "tracing";
           }
+          {
+            name = "url";
+            packageId = "url";
+          }
         ];
         devDependencies = [
           {
             name = "futures";
             packageId = "futures";
+          }
+          {
+            name = "percent-encoding";
+            packageId = "percent-encoding";
+          }
+          {
+            name = "rstest";
+            packageId = "rstest";
           }
         ];
 
@@ -10782,9 +10794,9 @@ rec {
       };
       "rustls-webpki" = rec {
         crateName = "rustls-webpki";
-        version = "0.103.15";
+        version = "0.103.16";
         edition = "2021";
-        sha256 = "1hhanq3lz384v4nccacnjfwsyy99n3yc6m6iw8kljz8yicfwzhzk";
+        sha256 = "10djm2f00xzi5qlbcfqjhhn2smk2h9aw8b4l74qncz4xsfvb2hs4";
         libName = "webpki";
         dependencies = [
           {
@@ -12604,6 +12616,10 @@ rec {
         ];
         devDependencies = [
           {
+            name = "percent-encoding";
+            packageId = "percent-encoding";
+          }
+          {
             name = "wiremock";
             packageId = "wiremock";
           }
@@ -13671,7 +13687,7 @@ rec {
           }
           {
             name = "getrandom";
-            packageId = "getrandom 0.4.3";
+            packageId = "getrandom 0.3.4";
             optional = true;
             usesDefaultFeatures = false;
             target = { target, features }: ((target."unix" or false) || (target."windows" or false) || ("wasi" == target."os" or null));
