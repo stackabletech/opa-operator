@@ -50,7 +50,7 @@ pub mod versioned {
         ActiveDirectory(ActiveDirectoryBackend),
 
         /// Backend that fetches user information from Microsoft Entra
-        #[versioned(changed(since = "v1alpha2", from_name = "ExperimentalEntra"))]
+        #[versioned(changed(in = "v1alpha2", previous_name = "ExperimentalEntra"))]
         Entra(EntraBackend),
 
         /// Backend that fetches user information from OpenLDAP
