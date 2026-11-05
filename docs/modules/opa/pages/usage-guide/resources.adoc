@@ -1,4 +1,5 @@
 = Resource requests
+:description: CPU and memory requests and limits for Open Policy Agent (OPA) Pods, which run as a DaemonSet with one Pod on every Kubernetes node.
 
 include::concepts:stackable_resource_requests.adoc[]
 

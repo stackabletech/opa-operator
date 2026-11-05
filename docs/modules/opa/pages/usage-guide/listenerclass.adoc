@@ -1,4 +1,5 @@
 = Service exposition with ListenerClasses
+:description: Exposing the Open Policy Agent (OPA) API with a ListenerClass, covering cluster-internal and external access to the Service the operator creates.
 
 OPA offers an API.
 The operator deploys a Service called `<name>` (where `<name>` is the name of the OpaCluster) through which OPA can be reached.
