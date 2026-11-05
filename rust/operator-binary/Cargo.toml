@@ -32,4 +32,5 @@ tracing.workspace = true
 built.workspace = true
 
 [dev-dependencies]
+stackable-operator = { workspace = true, features = ["test-support"] }
 yaml_serde.workspace = true

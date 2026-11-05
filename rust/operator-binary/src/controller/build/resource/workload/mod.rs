@@ -6,6 +6,7 @@
 
 use std::{collections::BTreeMap, str::FromStr};
 
+use const_format::concatcp;
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaRole};
@@ -87,7 +88,6 @@ const RESOURCE_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
-constant!(CONTAINERDEBUG_LOG_DIRECTORY: EnvVarName = "CONTAINERDEBUG_LOG_DIRECTORY");
 constant!(WATCH_NAMESPACE: EnvVarName = "WATCH_NAMESPACE");
 
 // HTTP probe configuration shared by the bundle-builder and OPA containers. They differ in the
@@ -335,10 +335,23 @@ pub fn build_server_rolegroup_pod_template(
 
     // All operator-set environment variables of the OPA container, collected into an
     // `EnvVarSet` so that every name occurs only once.
-    let opa_env_vars = EnvVarSet::new().with_value(
-        &CONTAINERDEBUG_LOG_DIRECTORY,
-        format!("{STACKABLE_LOG_DIR}/containerdebug"),
-    );
+    //
+    // These are the generic `stackable-telemetry` variables, here for the `containerdebug`
+    // process which runs in the background of the OPA container. `FILE_LOG_LEVEL` is
+    // deliberately not set: unlike our own Rust binaries, containerdebug's level is not derived
+    // from the log configuration. The rotation differs from the one in
+    // [`stackable_rust_cli_env_vars`] as well, because containerdebug writes only a handful of
+    // lines per run and a minutely rotation with five files would keep just a few minutes of it.
+    let opa_env_vars = EnvVarSet::new()
+        // The directory must be exactly one level below the log directory, because the Vector
+        // agent derives the container name from that path segment.
+        .with_value(
+            &FILE_LOG_DIRECTORY,
+            concatcp!(STACKABLE_LOG_DIR, "/containerdebug"),
+        )
+        // Rotation is opt-in, so without these the file would grow unbounded.
+        .with_value(&FILE_LOG_ROTATION_PERIOD, "hourly")
+        .with_value(&FILE_LOG_MAX_FILES, "2");
     // Environment variable overrides (highest precedence), merged from role and role group.
     // They are merged in last so that they override any operator-set environment variable.
     let opa_env_vars = opa_env_vars.merge(rolegroup_config.env_overrides.clone());
@@ -518,6 +531,9 @@ pub fn build_server_rolegroup_pod_template(
 /// The size limit of the shared `log` [`EmptyDirVolumeSource`], which has to accommodate the log
 /// files of every container that mounts it. The always-present containers are budgeted for
 /// unconditionally; the optional info-fetcher sidecars only when the cluster configures them.
+///
+/// The `containerdebug` files in this volume are rotated by time, not by size, so they have no
+/// budget; raising `FILE_LOG_LEVEL` via `envOverrides` can therefore evict the Pod.
 fn log_volume_size_limit(cluster: &ValidatedCluster) -> Quantity {
     let mut max_log_file_sizes = vec![
         MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
@@ -656,6 +672,7 @@ fn build_opa_start_command(
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
+        mkdir --parents \"$FILE_LOG_DIRECTORY\"
         containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
         opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{config_file} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
         wait_for_termination $!

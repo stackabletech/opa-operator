@@ -98,7 +98,6 @@ mod tests {
         let _ = *USER_INFO_FETCHER_KERBEROS_VOLUME_NAME;
         let _ = *RESOURCE_INFO_FETCHER_CREDENTIALS_VOLUME_NAME;
         let _ = *TLS_VOLUME_NAME;
-        let _ = *CONTAINERDEBUG_LOG_DIRECTORY;
         let _ = *WATCH_NAMESPACE;
         let _ = *CONSOLE_LOG_LEVEL;
         let _ = *FILE_LOG_LEVEL;
@@ -812,12 +811,10 @@ mod tests {
     }
 
     /// The user-supplied `envOverrides` must be merged in after all operator-set environment
-    /// variables, so that they can override any of them. `CONTAINERDEBUG_LOG_DIRECTORY` is used
+    /// variables, so that they can override any of them. `FILE_LOG_DIRECTORY` is used
     /// as the example here because it is set unconditionally by the operator.
     #[test]
     fn env_overrides_override_operator_set_env_vars() {
-        use std::str::FromStr;
-
         use stackable_operator::v2::builder::pod::container::EnvVarName;
 
         let cluster = validated_cluster_from_spec(json!({
@@ -830,7 +827,7 @@ mod tests {
             .expect("the default role group should exist");
         let mut role_group = role_group.clone();
         role_group.env_overrides = EnvVarSet::new().with_value(
-            &EnvVarName::from_str("CONTAINERDEBUG_LOG_DIRECTORY").expect("valid env var name"),
+            &EnvVarName::from_str_unsafe("FILE_LOG_DIRECTORY"),
             "/custom/log/dir",
         );
 
@@ -860,7 +857,7 @@ mod tests {
 
         let containerdebug: Vec<_> = env
             .iter()
-            .filter(|env_var| env_var.name == "CONTAINERDEBUG_LOG_DIRECTORY")
+            .filter(|env_var| env_var.name == "FILE_LOG_DIRECTORY")
             .collect();
         assert_eq!(
             containerdebug.len(),
