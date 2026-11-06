@@ -10,7 +10,7 @@ edition = "2024"
 repository = "https://github.com/stackabletech/opa-operator"
 
 [workspace.dependencies]
-stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "stackable-operator-0.121.0", features = ["webhook"] }
+stackable-operator = { git = "https://github.com/stackabletech/operator-rs.git", tag = "stackable-operator-0.122.0", features = ["webhook"] }
 krb5 = { git = "https://github.com/stackabletech/krb5-rs.git", tag = "v0.1.0" }
 
 anyhow = "1.0"
@@ -20,16 +20,15 @@ built = { version = "0.8", features = ["chrono", "git2"] }
 byteorder = "1.5"
 clap = "4.6"
 const_format = "0.2"
-flate2 = "1.0"
+flate2 = "1.1"
 fnv = "1.0"
 futures = { version = "0.3" }
-hyper = "1.11"
+hyper = "1.12"
 indoc = "2.0"
 ldap3 = { version = "0.12", features = ["gssapi", "tls"] }
 md5 = "0.8"
 moka = { version = "0.12", default-features = false, features = ["future"] }
-native-tls = "0.2.12"
-percent-encoding = "2.3"
+native-tls = "0.2"
 pin-project = "1.1"
 # `default-features = false` drops reqwest 0.13's `default-tls = ["rustls"]`; we select
 # `native-tls` (OpenSSL) to stay on the same TLS stack as ldap3 (see utils/tls.rs). The
@@ -38,7 +37,7 @@ pin-project = "1.1"
 # charset/http2/system-proxy are reqwest 0.13 defaults re-added here.
 # TODO(@maltesander): We should remove these and "native-tls" and add ca-certificates to the docker images?
 reqwest = { version = "0.13", default-features = false, features = ["json", "form", "query", "native-tls", "charset", "http2", "system-proxy"] }
-rstest = "0.26"
+rstest = "0.28"
 rustls = "0.23"
 rustls-pki-types = "1.15"
 semver = "1.0"
@@ -47,13 +46,16 @@ serde_json = "1.0"
 snafu = "0.9"
 strum = { version = "0.28", features = ["derive"] }
 tar = "0.4"
-tokio = { version = "1.53", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 tracing = "0.1"
 url = "2.5"
-uuid = "1.24"
+uuid = "1.29"
 wiremock = "0.6"
 yaml_serde = "0.10"
 
 [patch."https://github.com/stackabletech/operator-rs.git"]
 # stackable-operator = { git = "https://github.com/stackabletech//operator-rs.git", branch = "main" }
 # stackable-operator = { path = "../operator-rs/crates/stackable-operator" }
+
+[workspace.lints.clippy]
+disallowed_methods = "deny"

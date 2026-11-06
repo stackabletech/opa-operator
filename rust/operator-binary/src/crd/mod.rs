@@ -119,8 +119,8 @@ pub mod versioned {
         /// from an external directory service.
         #[versioned(
             changed(
-                since = "v1alpha2",
-                from_type = "Option<user_info_fetcher::v1alpha1::Config>"
+                in = "v1alpha2",
+                previous_type = "Option<user_info_fetcher::v1alpha1::Config>"
             ),
             hint(option)
         )]
