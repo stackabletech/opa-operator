@@ -1,4 +1,5 @@
 = Implementation notes
+:description: Implementation notes on the Stackable operator for Open Policy Agent (OPA), covering one OPA Pod per node and how the bundle builder serves policies.
 
 These notes may be of use when trying to understand why things are implemented the way that they are,
 but should not be required reading for regular use.
