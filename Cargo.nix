@@ -5681,23 +5681,11 @@ rec {
             name = "tracing";
             packageId = "tracing";
           }
-          {
-            name = "url";
-            packageId = "url";
-          }
         ];
         devDependencies = [
           {
             name = "futures";
             packageId = "futures";
-          }
-          {
-            name = "percent-encoding";
-            packageId = "percent-encoding";
-          }
-          {
-            name = "rstest";
-            packageId = "rstest";
           }
         ];
 

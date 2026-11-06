@@ -7,12 +7,14 @@ use info_fetcher_commons::utils::{
     http::{is_unauthorized, send_json_request},
     secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
-    url_path::append_path_segments,
 };
 use serde::Deserialize;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
-use stackable_operator::commons::{networking::HostName, tls_verification::TlsClientDetails};
+use stackable_operator::{
+    commons::{networking::HostName, tls_verification::TlsClientDetails},
+    utils::UrlExt,
+};
 use url::Url;
 
 use crate::{UserInfo, UserInfoRequest, http_error};
@@ -57,7 +59,7 @@ pub enum Error {
 
     #[snafu(display("failed to construct the Graph URL for user {user:?}"))]
     ConstructUserUrl {
-        source: utils::url_path::Error,
+        source: stackable_operator::utils::UrlError,
         user: String,
     },
 
@@ -85,7 +87,7 @@ impl http_error::Error for Error {
             Self::RequestUserGroups { .. } => StatusCode::BAD_GATEWAY,
             Self::BuildEntraEndpoint { .. } => StatusCode::BAD_REQUEST,
             Self::ConstructUserUrl {
-                source: utils::url_path::Error::InvalidPathSegment { .. },
+                source: stackable_operator::utils::UrlError::InvalidSegments { .. },
                 ..
             } => StatusCode::BAD_REQUEST,
             Self::ConstructUserUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -369,7 +371,8 @@ impl EntraBackend {
 
     // Works both with id/oid and userPrincipalName
     pub fn user_info(&self, user: &str) -> Result<Url, Error> {
-        append_path_segments(&self.user_info_endpoint_url, &["v1.0", "users", user])
+        self.user_info_endpoint_url
+            .join_safe(&["v1.0", "users", user])
             .context(ConstructUserUrlSnafu { user })
     }
 
@@ -378,11 +381,10 @@ impl EntraBackend {
     /// `memberOf` returns every directory object the user belongs to: groups as well as directory
     /// roles and administrative units.
     pub fn group_info(&self, user: &str) -> Result<Url, Error> {
-        let mut group_info_url = append_path_segments(
-            &self.user_info_endpoint_url,
-            &["v1.0", "users", user, "memberOf"],
-        )
-        .context(ConstructUserUrlSnafu { user })?;
+        let mut group_info_url = self
+            .user_info_endpoint_url
+            .join_safe(&["v1.0", "users", user, "memberOf"])
+            .context(ConstructUserUrlSnafu { user })?;
         // 999 is the largest page size Graph accepts, and keeps the number of round-trips down.
         group_info_url.set_query(Some("$select=displayName&$top=999"));
         Ok(group_info_url)

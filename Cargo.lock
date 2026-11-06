@@ -1700,9 +1700,7 @@ dependencies = [
  "hyper",
  "moka",
  "native-tls",
- "percent-encoding",
  "reqwest",
- "rstest",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -1711,7 +1709,6 @@ dependencies = [
  "stackable-operator",
  "tokio",
  "tracing",
- "url",
 ]
 
 [[package]]

@@ -7,12 +7,11 @@ use info_fetcher_commons::utils::{
     http::{is_unauthorized, send_json_request},
     secret::Secret,
     token::{CachedToken, MintedToken, OAuthResponse},
-    url_path::append_path_segments,
 };
 use serde::Deserialize;
 use snafu::{OptionExt, ResultExt, Snafu};
 use stackable_opa_operator::crd::user_info_fetcher::v1alpha2;
-use stackable_operator::crd::authentication::oidc;
+use stackable_operator::{crd::authentication::oidc, utils::UrlExt};
 use url::Url;
 
 use crate::{UserInfo, UserInfoRequest, http_error};
@@ -53,11 +52,13 @@ pub enum Error {
     ParseOidcEndpointUrl { source: oidc::v1alpha1::Error },
 
     #[snafu(display("failed to construct OIDC endpoint path"))]
-    ConstructOidcEndpointPath { source: utils::url_path::Error },
+    ConstructOidcEndpointPath {
+        source: stackable_operator::utils::UrlError,
+    },
 
     #[snafu(display("failed to construct the Keycloak URL for user id {user_id:?}"))]
     ConstructUserUrl {
-        source: utils::url_path::Error,
+        source: stackable_operator::utils::UrlError,
         user_id: String,
     },
 
@@ -87,7 +88,7 @@ impl http_error::Error for Error {
             Self::ParseOidcEndpointUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructOidcEndpointPath { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructUserUrl {
-                source: utils::url_path::Error::InvalidPathSegment { .. },
+                source: stackable_operator::utils::UrlError::InvalidSegments { .. },
                 ..
             } => StatusCode::BAD_REQUEST,
             Self::ConstructUserUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
@@ -228,11 +229,9 @@ impl ResolvedKeycloakBackend {
         client_secret: Secret,
     ) -> Result<MintedToken, Error> {
         let admin_realm = &self.config.admin_realm;
-        let token_url = append_path_segments(
-            keycloak_url,
-            &["realms", admin_realm, "protocol", "openid-connect", "token"],
-        )
-        .context(ConstructOidcEndpointPathSnafu)?;
+        let token_url = keycloak_url
+            .join_safe(&["realms", admin_realm, "protocol", "openid-connect", "token"])
+            .context(ConstructOidcEndpointPathSnafu)?;
 
         let response = send_json_request::<OAuthResponse>(
             self.http_client
@@ -255,14 +254,15 @@ impl ResolvedKeycloakBackend {
         access_token: Secret,
     ) -> Result<UserInfo, Error> {
         let user_realm = &self.config.user_realm;
-        let users_url =
-            append_path_segments(keycloak_url, &["admin", "realms", user_realm, "users"])
-                .context(ConstructOidcEndpointPathSnafu)?;
+        let users_url = keycloak_url
+            .join_safe(&["admin", "realms", user_realm, "users"])
+            .context(ConstructOidcEndpointPathSnafu)?;
 
         let user_info = match req {
             UserInfoRequest::UserInfoRequestById(req) => {
                 let user_id = req.id.clone();
-                let user_url = append_path_segments(&users_url, &[&user_id])
+                let user_url = users_url
+                    .join_safe(&[&user_id])
                     .context(ConstructUserUrlSnafu { user_id: &user_id })?;
 
                 send_json_request::<UserMetadata>(
@@ -302,11 +302,12 @@ impl ResolvedKeycloakBackend {
             }
         };
 
-        let groups_url = append_path_segments(&users_url, &[&user_info.id, "groups"]).context(
-            ConstructUserUrlSnafu {
-                user_id: &user_info.id,
-            },
-        )?;
+        let groups_url =
+            users_url
+                .join_safe(&[&user_info.id, "groups"])
+                .context(ConstructUserUrlSnafu {
+                    user_id: &user_info.id,
+                })?;
 
         let groups = send_json_request::<Vec<GroupMembership>>(
             self.http_client
