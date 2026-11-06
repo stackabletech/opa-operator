@@ -3738,7 +3738,6 @@ dependencies = [
  "krb5",
  "ldap3",
  "native-tls",
- "percent-encoding",
  "pin-project",
  "reqwest",
  "rustls-pki-types",

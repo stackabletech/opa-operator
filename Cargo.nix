@@ -12884,10 +12884,6 @@ rec {
         ];
         devDependencies = [
           {
-            name = "percent-encoding";
-            packageId = "percent-encoding";
-          }
-          {
             name = "wiremock";
             packageId = "wiremock";
           }

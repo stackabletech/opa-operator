@@ -6,7 +6,7 @@ pub mod xfsc_aas;
 
 #[cfg(test)]
 mod test_mocks {
-    use percent_encoding::percent_decode_str;
+    use url::Url;
     use wiremock::{
         Mock, MockServer, Request, ResponseTemplate,
         matchers::{method, path},
@@ -57,8 +57,12 @@ mod test_mocks {
             .collect()
     }
 
-    /// Asserts that `mock_server` received a single lookup, addressed to exactly one path segment
-    /// below `parent_path` that decodes to `user`.
+    /// Asserts that `mock_server` received a single lookup, addressed to `user` as exactly one path
+    /// segment below `parent_path`.
+    ///
+    /// The expected path is spelled out with [`url`]'s own encoder rather than by decoding what was
+    /// received. That still catches a call site which interpolates the user into the path as text,
+    /// and it saves this test helper a percent-decoder of its own.
     pub(super) async fn assert_looked_up_below(
         mock_server: &MockServer,
         parent_path: &str,
@@ -69,19 +73,20 @@ mod test_mocks {
             panic!("{user:?} was not looked up exactly once: {lookups:?}");
         };
 
-        let path = lookup.url.path();
-        let segment = path
-            .strip_prefix(parent_path)
-            .unwrap_or_else(|| panic!("{user:?} was looked up at {path}, outside {parent_path}"));
+        let mut expected_url =
+            Url::parse("https://expected.example.com").expect("a constant URL parses");
+        expected_url.set_path(parent_path);
+        expected_url
+            .path_segments_mut()
+            .expect("an https URL can be a base")
+            .pop_if_empty()
+            .push(user);
 
-        assert!(
-            !segment.contains('/'),
-            "{user:?} was looked up at {path}, more than one segment below {parent_path}"
-        );
         assert_eq!(
-            percent_decode_str(segment).decode_utf8_lossy(),
-            user,
-            "{user:?} was looked up at {path}"
+            lookup.url.path(),
+            expected_url.path(),
+            "{user:?} was looked up at {}",
+            lookup.url.path()
         );
     }
 
