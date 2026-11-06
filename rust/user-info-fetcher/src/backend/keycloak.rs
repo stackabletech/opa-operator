@@ -62,6 +62,14 @@ pub enum Error {
         user_id: String,
     },
 
+    #[snafu(display(
+        "failed to construct the Keycloak groups URL for user id {user_id:?} returned by Keycloak"
+    ))]
+    ConstructUserGroupsUrl {
+        source: stackable_operator::utils::UrlError,
+        user_id: String,
+    },
+
     #[snafu(display("failed to construct HTTP client"))]
     ConstructHttpClient { source: reqwest::Error },
 
@@ -92,6 +100,13 @@ impl http_error::Error for Error {
                 ..
             } => StatusCode::BAD_REQUEST,
             Self::ConstructUserUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            // The groups URL is built from the user id in Keycloak's own response, so an id that
+            // cannot be a path segment is a fault of the backend and not of the caller.
+            Self::ConstructUserGroupsUrl {
+                source: stackable_operator::utils::UrlError::InvalidSegments { .. },
+                ..
+            } => StatusCode::BAD_GATEWAY,
+            Self::ConstructUserGroupsUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ReadClientId { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -302,12 +317,10 @@ impl ResolvedKeycloakBackend {
             }
         };
 
-        let groups_url =
-            users_url
-                .join_safe(&[&user_info.id, "groups"])
-                .context(ConstructUserUrlSnafu {
-                    user_id: &user_info.id,
-                })?;
+        let user_id = &user_info.id;
+        let groups_url = users_url
+            .join_safe(&[user_id, "groups"])
+            .context(ConstructUserGroupsUrlSnafu { user_id })?;
 
         let groups = send_json_request::<Vec<GroupMembership>>(
             self.http_client
@@ -584,6 +597,35 @@ mod tests {
             );
             assert!(received_lookups(&mock_server).await.is_empty());
         }
+    }
+
+    /// The groups are requested for the id in Keycloak's own answer, so an id that cannot be a path
+    /// segment is a fault of the backend and must not be reported as a bad request of the caller.
+    #[tokio::test]
+    async fn keycloak_reports_an_unusable_id_in_its_own_answer_as_a_backend_fault() {
+        let mock_server = MockServer::start().await;
+        mock_token(&mock_server, Some(3600), 1).await;
+        Mock::given(method("GET"))
+            .and(path(format!("/admin/realms/{USER_REALM}/users/{USER_ID}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "",
+                "username": "alice",
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let error = get_user_info_by_id(&backend_for(&mock_server), USER_ID)
+            .await
+            .expect_err("the groups of a user without an id cannot be requested");
+
+        assert!(
+            matches!(error, Error::ConstructUserGroupsUrl { .. }),
+            "{error}"
+        );
+        assert_eq!(
+            http_error::Error::status_code(&error),
+            StatusCode::BAD_GATEWAY
+        );
     }
 
     /// A root path without a trailing slash is kept, so a Keycloak under `/auth` is asked at

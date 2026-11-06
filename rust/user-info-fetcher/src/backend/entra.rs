@@ -63,6 +63,14 @@ pub enum Error {
         user: String,
     },
 
+    #[snafu(display(
+        "failed to construct the Graph groups URL for user id {user_id:?} returned by Entra"
+    ))]
+    ConstructUserGroupsUrl {
+        source: stackable_operator::utils::UrlError,
+        user_id: String,
+    },
+
     #[snafu(display("failed to construct HTTP client"))]
     ConstructHttpClient { source: reqwest::Error },
 
@@ -91,6 +99,13 @@ impl http_error::Error for Error {
                 ..
             } => StatusCode::BAD_REQUEST,
             Self::ConstructUserUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            // The groups URL is built from the user id in Graph's own response, so an id that
+            // cannot be a path segment is a fault of the backend and not of the caller.
+            Self::ConstructUserGroupsUrl {
+                source: stackable_operator::utils::UrlError::InvalidSegments { .. },
+                ..
+            } => StatusCode::BAD_GATEWAY,
+            Self::ConstructUserGroupsUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ConstructHttpClient { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ConfigureTls { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::ReadClientId { .. } => StatusCode::SERVICE_UNAVAILABLE,
@@ -380,11 +395,11 @@ impl EntraBackend {
     ///
     /// `memberOf` returns every directory object the user belongs to: groups as well as directory
     /// roles and administrative units.
-    pub fn group_info(&self, user: &str) -> Result<Url, Error> {
+    pub fn group_info(&self, user_id: &str) -> Result<Url, Error> {
         let mut group_info_url = self
             .user_info_endpoint_url
-            .join_safe(&["v1.0", "users", user, "memberOf"])
-            .context(ConstructUserUrlSnafu { user })?;
+            .join_safe(&["v1.0", "users", user_id, "memberOf"])
+            .context(ConstructUserGroupsUrlSnafu { user_id })?;
         // 999 is the largest page size Graph accepts, and keeps the number of round-trips down.
         group_info_url.set_query(Some("$select=displayName&$top=999"));
         Ok(group_info_url)
@@ -653,6 +668,36 @@ mod tests {
             );
             assert!(received_lookups(&mock_server).await.is_empty());
         }
+    }
+
+    /// The group memberships are requested for the id in Graph's own answer, so an id that cannot be
+    /// a path segment is a fault of the backend and must not be reported as a bad request of the
+    /// caller.
+    #[tokio::test]
+    async fn entra_reports_an_unusable_id_in_its_own_answer_as_a_backend_fault() {
+        let mock_server = MockServer::start().await;
+        mock_token(&mock_server, Some(3600), 1).await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1.0/users/{USER_ID}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "",
+                "userPrincipalName": "alice@example.com",
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let error = look_up_by_id(&backend_for(&mock_server), USER_ID)
+            .await
+            .expect_err("the group memberships of a user without an id cannot be requested");
+
+        assert!(
+            matches!(error, Error::ConstructUserGroupsUrl { .. }),
+            "{error}"
+        );
+        assert_eq!(
+            http_error::Error::status_code(&error),
+            StatusCode::BAD_GATEWAY
+        );
     }
 
     async fn get_user_info_by_id(backend: &ResolvedEntraBackend) -> UserInfo {

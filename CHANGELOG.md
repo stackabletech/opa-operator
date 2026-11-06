@@ -92,10 +92,15 @@ All notable changes to this project will be documented in this file.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
-- The user-info-fetcher Keycloak and Entra backends now encode user ids and names as a single URL
-  path segment, and the Keycloak backend sends the username as a query parameter. An empty, `.` or
-  `..` id or name, or one containing a line break, is rejected with `400` ([#909]).
-- The user-info-fetcher Keycloak backend now keeps a `rootPath` without a trailing slash ([#909]).
+- The user-info-fetcher Entra backend now encodes the user id and the username as a single URL path
+  segment. An empty, `.` or `..` id or username, or one containing a line break, is rejected with
+  `400` ([#909]).
+- The user-info-fetcher Keycloak backend now encodes the user id as a single URL path segment, and
+  sends the username as a query parameter instead of appending it to the URL as text, so that a
+  username can no longer add or override search parameters. An empty, `.` or `..` id, or one
+  containing a line break, is rejected with `400` ([#909]).
+- The user-info-fetcher Keycloak backend no longer drops a configured `rootPath` from the URLs it
+  requests, so a Keycloak served below a sub-path, like `/auth`, can now be reached ([#909]).
 
 [#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
