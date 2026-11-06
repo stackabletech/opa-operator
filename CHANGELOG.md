@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
   with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 - Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
+- The logs of the `containerdebug` process are now collected by the Vector agent and forwarded to
+  the Vector aggregator ([#912]).
 
 ### Changed
 
@@ -92,6 +94,13 @@ All notable changes to this project will be documented in this file.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
+- The `containerdebug` process writes its log file again. The operator set
+  `CONTAINERDEBUG_LOG_DIRECTORY` on the OPA container, which containerdebug stopped reading in its
+  version 0.2.0 when it moved to `stackable-telemetry`; the directory is now set via
+  `FILE_LOG_DIRECTORY`, with an hourly rotation that keeps at most two files ([#912]).
+- The `tracing-rs` transform of the Vector agent no longer discards log events. A message which is
+  not a string is kept among the other fields, a `fields` object which is not an object falls back
+  to the raw line, and a missing timestamp is recorded as an error ([#912]).
 
 [#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
@@ -113,6 +122,7 @@ All notable changes to this project will be documented in this file.
 [#905]: https://github.com/stackabletech/opa-operator/pull/905
 [#906]: https://github.com/stackabletech/opa-operator/pull/906
 [#908]: https://github.com/stackabletech/opa-operator/pull/908
+[#912]: https://github.com/stackabletech/opa-operator/pull/912
 
 ## [26.7.0] - 2026-07-21
 
