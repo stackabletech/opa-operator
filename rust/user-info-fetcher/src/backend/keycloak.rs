@@ -360,7 +360,9 @@ mod tests {
         UserInfoRequestById, UserInfoRequestByName,
         backend::{
             keycloak::ResolvedKeycloakBackend,
-            test_mocks::{HOSTILE_USERS, assert_looked_up_below, received_lookups},
+            test_mocks::{
+                HOSTILE_PATH_USERS, HOSTILE_USERS, assert_looked_up_below, received_lookups,
+            },
         },
     };
 
@@ -513,7 +515,7 @@ mod tests {
     /// And `../` is also not allowed to point the admin token at another endpoint.
     #[tokio::test]
     async fn keycloak_keeps_a_hostile_id_inside_the_users_endpoint() {
-        for &user_id in HOSTILE_USERS {
+        for &user_id in HOSTILE_PATH_USERS {
             let mock_server = MockServer::start().await;
             mock_token(&mock_server, Some(3600), 1).await;
             Mock::given(method("GET"))

@@ -435,7 +435,7 @@ mod tests {
     use super::*;
     use crate::{
         UserInfoRequestById,
-        backend::test_mocks::{HOSTILE_USERS, assert_looked_up_below, received_lookups},
+        backend::test_mocks::{HOSTILE_PATH_USERS, assert_looked_up_below, received_lookups},
     };
 
     const TENANT_ID: &str = "1234-5678-1234-5678";
@@ -607,10 +607,11 @@ mod tests {
     }
 
     /// A request-supplied id stays one segment under `/v1.0/users/`, so `../` cannot reach another
-    /// Graph endpoint with the access token.
+    /// Graph endpoint with the access token. A username needs no test of its own: Graph addresses
+    /// the user by id or by principal name in that very same segment.
     #[tokio::test]
     async fn entra_keeps_a_hostile_id_inside_the_users_endpoint() {
-        for &user_id in HOSTILE_USERS {
+        for &user_id in HOSTILE_PATH_USERS {
             let mock_server = MockServer::start().await;
             mock_token_and_no_users(&mock_server).await;
 
@@ -623,26 +624,6 @@ mod tests {
                 "for {user_id:?} got {error}"
             );
             assert_looked_up_below(&mock_server, "/v1.0/users/", user_id).await;
-        }
-    }
-
-    /// Graph takes the principal name in the same path segment as the id, so it needs the same
-    /// protection.
-    #[tokio::test]
-    async fn entra_keeps_a_hostile_username_inside_the_users_endpoint() {
-        for &username in HOSTILE_USERS {
-            let mock_server = MockServer::start().await;
-            mock_token_and_no_users(&mock_server).await;
-
-            let error = look_up_by_name(&backend_for(&mock_server), username)
-                .await
-                .expect_err("Entra does not have the user");
-
-            assert!(
-                matches!(error, Error::UserNotFoundByName { .. }),
-                "for {username:?} got {error}"
-            );
-            assert_looked_up_below(&mock_server, "/v1.0/users/", username).await;
         }
     }
 

@@ -12,8 +12,23 @@ mod test_mocks {
         matchers::{method, path},
     };
 
+    /// User ids and names that reach for another path or host when put into a URL as text. One per
+    /// mechanism is enough here: that every other shape is encoded as well is a property of
+    /// [`stackable_operator::utils::UrlExt::join_safe`] and is covered by its own tests. What these
+    /// pin down is only that the request-supplied value is put through it at all.
+    pub(super) const HOSTILE_PATH_USERS: &[&str] = &[
+        // Would climb out of the users endpoint.
+        "../../master",
+        // Would replace the host the access token is sent to.
+        "https://evil.example.com/",
+        // Would survive a single round of escaping and be decoded by the server.
+        "%2e%2e/%2e%2e/master",
+    ];
+
     /// User ids and names that address something other than the user when put into a URL as text:
-    /// another host, another path or extra query parameters.
+    /// another host, another path or extra query parameters. Used where the value ends up as the
+    /// value of a query parameter rather than as a path segment, and is therefore escaped by
+    /// `reqwest` instead of by [`stackable_operator::utils::UrlExt::join_safe`].
     pub(super) const HOSTILE_USERS: &[&str] = &[
         "https://evil.example.com/",
         "//evil.example.com",
