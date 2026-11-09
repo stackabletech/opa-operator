@@ -672,7 +672,7 @@ fn build_opa_start_command(
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
-        mkdir --parents \"$FILE_LOG_DIRECTORY\"
+        mkdir --parents \"${file_log_directory}\" || true
         containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
         opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{config_file} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
         wait_for_termination $!
@@ -682,6 +682,7 @@ fn build_opa_start_command(
             remove_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
+        file_log_directory = FILE_LOG_DIRECTORY.as_ref(),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
         opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal(),
         extra_cli_args = extra_cli_args
