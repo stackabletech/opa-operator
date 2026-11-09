@@ -59,10 +59,6 @@ mod test_mocks {
 
     /// Asserts that `mock_server` received a single lookup, addressed to `user` as exactly one path
     /// segment below `parent_path`.
-    ///
-    /// The expected path is spelled out with [`url`]'s own encoder rather than by decoding what was
-    /// received. That still catches a call site which interpolates the user into the path as text,
-    /// and it saves this test helper a percent-decoder of its own.
     pub(super) async fn assert_looked_up_below(
         mock_server: &MockServer,
         parent_path: &str,
