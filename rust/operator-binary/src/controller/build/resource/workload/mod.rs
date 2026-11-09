@@ -289,7 +289,7 @@ pub fn build_server_rolegroup_pod_template(
         .image_from_product_image(resolved_product_image)
         .command(bash_entrypoint_command())
         .args(vec![
-            build_prepare_start_command(merged_config, Container::Prepare.name().as_ref())
+            build_prepare_start_command(cluster, merged_config, Container::Prepare.name().as_ref())
                 .join(" && "),
         ])
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
@@ -312,10 +312,7 @@ pub fn build_server_rolegroup_pod_template(
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
         .command(bash_entrypoint_command())
-        .args(vec![build_bundle_builder_start_command(
-            merged_config,
-            Container::BundleBuilder.name().as_ref(),
-        )])
+        .args(vec![build_bundle_builder_start_command(merged_config)])
         .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .expect("The mount paths are statically defined and there should be no duplicates.")
@@ -551,6 +548,13 @@ fn log_volume_size_limit(cluster: &ValidatedCluster) -> Quantity {
     product_logging::framework::calculate_log_volume_size_limit(&max_log_file_sizes)
 }
 
+/// The directory the given container's Rust binary writes its file logs into, which is the value
+/// of its `FILE_LOG_DIRECTORY`. It is exactly one level below [`STACKABLE_LOG_DIR`], because the
+/// Vector agent derives the container name from that path segment.
+fn file_log_directory(container: &Container) -> String {
+    format!("{STACKABLE_LOG_DIR}/{container}")
+}
+
 /// Env variables that are need to run stackable Rust binaries, such as
 /// * opa-bundle-builder
 /// * user-info-fetcher
@@ -567,10 +571,7 @@ fn stackable_rust_cli_env_vars(
     EnvVarSet::new()
         .with_value(&CONSOLE_LOG_LEVEL, log_level.clone())
         .with_value(&FILE_LOG_LEVEL, log_level)
-        .with_value(
-            &FILE_LOG_DIRECTORY,
-            format!("{STACKABLE_LOG_DIR}/{container}"),
-        )
+        .with_value(&FILE_LOG_DIRECTORY, file_log_directory(container))
         .with_value(&FILE_LOG_ROTATION_PERIOD, DEFAULT_FILE_LOG_ROTATION_PERIOD)
         .with_value(&FILE_LOG_MAX_FILES, DEFAULT_FILE_LOG_MAX_FILES.to_string())
         // `FieldPathEnvVar` has no variant for `spec.nodeName`, so the `EnvVar` is built by hand.
@@ -689,10 +690,7 @@ fn build_opa_start_command(
     }
 }
 
-fn build_bundle_builder_start_command(
-    merged_config: &ValidatedOpaConfig,
-    container_name: &str,
-) -> String {
+fn build_bundle_builder_start_command(merged_config: &ValidatedOpaConfig) -> String {
     let mut console_logging_off = false;
 
     // We need to check if the console logging is deactivated (NONE)
@@ -711,10 +709,11 @@ fn build_bundle_builder_start_command(
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         prepare_signal_handlers
-        mkdir -p {STACKABLE_LOG_DIR}/{container_name}
+        mkdir --parents \"${file_log_directory}\" || true
         stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
+        file_log_directory = FILE_LOG_DIRECTORY.as_ref(),
         logging_redirects = if console_logging_off {
             " > /dev/null"
         } else {
@@ -769,6 +768,7 @@ fn sidecar_container_log_level(
 }
 
 fn build_prepare_start_command(
+    cluster: &ValidatedCluster,
     merged_config: &ValidatedOpaConfig,
     container_name: &str,
 ) -> Vec<String> {
@@ -786,6 +786,26 @@ fn build_prepare_start_command(
     for dir in [BUNDLES_ACTIVE_DIR, BUNDLES_INCOMING_DIR, BUNDLES_TMP_DIR] {
         prepare_container_args.push(format!("echo \"Create dir [{dir}]\""));
         prepare_container_args.push(format!("mkdir -p {dir}"));
+    }
+
+    // The log directories of the info-fetcher sidecars are created here, because those containers
+    // run their binary directly without a shell that could do it. Setting `FILE_LOG_MAX_FILES`
+    // makes the telemetry library prune old log files before it creates the first one, which
+    // complains about the directory not existing yet. The sidecars with a shell create their own
+    // directory from `$FILE_LOG_DIRECTORY` instead, so that an `envOverrides` entry for it takes
+    // effect; here the path has to be rebuilt, which an override would therefore not move.
+    let mut sidecars = vec![];
+    if cluster.cluster_config.user_info.is_some() {
+        sidecars.push(Container::UserInfoFetcher);
+    }
+    if cluster.cluster_config.resource_info.is_some() {
+        sidecars.push(Container::ResourceInfoFetcher);
+    }
+    for sidecar in sidecars {
+        prepare_container_args.push(format!(
+            "mkdir --parents {dir}",
+            dir = file_log_directory(&sidecar)
+        ));
     }
 
     prepare_container_args
