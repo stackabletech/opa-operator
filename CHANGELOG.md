@@ -114,13 +114,13 @@ All notable changes to this project will be documented in this file.
   log directory on startup. Their log directory is now created by the `prepare` container, because
   those containers run their binary without a shell which could create it ([#912]).
 
-[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
 [#871]: https://github.com/stackabletech/opa-operator/pull/871
 [#872]: https://github.com/stackabletech/opa-operator/pull/872
+[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#880]: https://github.com/stackabletech/opa-operator/pull/880
 [#882]: https://github.com/stackabletech/opa-operator/pull/882
 [#886]: https://github.com/stackabletech/opa-operator/pull/886
