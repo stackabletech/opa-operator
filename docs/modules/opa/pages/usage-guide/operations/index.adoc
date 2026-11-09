@@ -1,5 +1,6 @@
 
 = Operations
+:description: Operating Open Policy Agent (OPA) with the Stackable operator, covering graceful shutdown, Pod disruptions, Pod placement and cluster operations.
 
 This section of the documentation is intended for the operations teams that maintain a Stackable Data Platform installation.
 

@@ -94,6 +94,15 @@ All notable changes to this project will be documented in this file.
   See [our internal issue](https://github.com/stackabletech/hdfs-operator/issues/626) and [the fix](https://github.com/kube-rs/kube/pull/2042) for details ([#871]).
 - The reconciler now applies resources and derives the cluster status in discrete
   apply and update_status steps for the `opa_controller` ([#872]).
+- The user-info-fetcher Entra backend now encodes the user id and the username as a single URL path
+  segment. An empty, `.` or `..` id or username, or one containing a line break, is rejected with
+  `400` ([#909]).
+- The user-info-fetcher Keycloak backend now encodes the user id as a single URL path segment, and
+  sends the username as a query parameter instead of appending it to the URL as text, so that a
+  username can no longer add or override search parameters. An empty, `.` or `..` id, or one
+  containing a line break, is rejected with `400` ([#909]).
+- The user-info-fetcher Keycloak backend no longer drops a configured `rootPath` from the URLs it
+  requests, so a Keycloak served below a sub-path, like `/auth`, can now be reached ([#909]).
 - The `containerdebug` process writes its log file again. The operator set
   `CONTAINERDEBUG_LOG_DIRECTORY` on the OPA container, which containerdebug stopped reading in its
   version 0.2.0 when it moved to `stackable-telemetry`; the directory is now set via
@@ -122,6 +131,7 @@ All notable changes to this project will be documented in this file.
 [#905]: https://github.com/stackabletech/opa-operator/pull/905
 [#906]: https://github.com/stackabletech/opa-operator/pull/906
 [#908]: https://github.com/stackabletech/opa-operator/pull/908
+[#909]: https://github.com/stackabletech/opa-operator/pull/909
 [#912]: https://github.com/stackabletech/opa-operator/pull/912
 
 ## [26.7.0] - 2026-07-21

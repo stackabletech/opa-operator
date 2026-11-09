@@ -6,10 +6,85 @@ pub mod xfsc_aas;
 
 #[cfg(test)]
 mod test_mocks {
+    use url::Url;
     use wiremock::{
-        Mock, MockServer, ResponseTemplate,
+        Mock, MockServer, Request, ResponseTemplate,
         matchers::{method, path},
     };
+
+    /// User ids and names that reach for another path or host when put into a URL as text. One per
+    /// mechanism is enough here: that every other shape is encoded as well is a property of
+    /// [`stackable_operator::utils::UrlExt::join_safe`] and is covered by its own tests. What these
+    /// pin down is only that the request-supplied value is put through it at all.
+    pub(super) const HOSTILE_PATH_USERS: &[&str] = &[
+        // Would climb out of the users endpoint.
+        "../../master",
+        // Would replace the host the access token is sent to.
+        "https://evil.example.com/",
+        // Would survive a single round of escaping and be decoded by the server.
+        "%2e%2e/%2e%2e/master",
+    ];
+
+    /// User ids and names that address something other than the user when put into a URL as text:
+    /// another host, another path or extra query parameters. Used where the value ends up as the
+    /// value of a query parameter rather than as a path segment, and is therefore escaped by
+    /// `reqwest` instead of by [`stackable_operator::utils::UrlExt::join_safe`].
+    pub(super) const HOSTILE_USERS: &[&str] = &[
+        "https://evil.example.com/",
+        "//evil.example.com",
+        "../../master",
+        "..%2F..%2Fmaster",
+        "%2e%2e/%2e%2e/master",
+        "..\\..\\master",
+        "alice/groups",
+        "alice?briefRepresentation=true",
+        "alice&exact=false",
+        "alice#fragment",
+        "alice;x=1",
+        "alice@example.com",
+    ];
+
+    /// The `GET` requests `mock_server` received, leaving out the token requests.
+    pub(super) async fn received_lookups(mock_server: &MockServer) -> Vec<Request> {
+        let requests = mock_server
+            .received_requests()
+            .await
+            .expect("request recording is enabled by default");
+
+        requests
+            .into_iter()
+            .filter(|request| request.method.as_str() == "GET")
+            .collect()
+    }
+
+    /// Asserts that `mock_server` received a single lookup, addressed to `user` as exactly one path
+    /// segment below `parent_path`.
+    pub(super) async fn assert_looked_up_below(
+        mock_server: &MockServer,
+        parent_path: &str,
+        user: &str,
+    ) {
+        let lookups = received_lookups(mock_server).await;
+        let [lookup] = lookups.as_slice() else {
+            panic!("{user:?} was not looked up exactly once: {lookups:?}");
+        };
+
+        let mut expected_url =
+            Url::parse("https://expected.example.com").expect("a constant URL parses");
+        expected_url.set_path(parent_path);
+        expected_url
+            .path_segments_mut()
+            .expect("an https URL can be a base")
+            .pop_if_empty()
+            .push(user);
+
+        assert_eq!(
+            lookup.url.path(),
+            expected_url.path(),
+            "{user:?} was looked up at {}",
+            lookup.url.path()
+        );
+    }
 
     /// Mounts an OAuth2 `client_credentials` token endpoint at `token_path`, answering with a token
     /// that is valid for `expires_in` seconds. Without an `expires_in` the token is deliberately not
