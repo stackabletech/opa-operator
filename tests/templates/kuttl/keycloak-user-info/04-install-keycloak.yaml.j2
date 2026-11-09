@@ -70,6 +70,9 @@ commands:
                 args:
                   - start
                   - --hostname-strict=false
+                  # Serve Keycloak below a sub-path, so that the user-info-fetcher's `rootPath`
+                  # handling is covered.
+                  - --http-relative-path=/auth
                   - --https-key-store-file=/tls/keystore.p12
                   - --https-key-store-password=changeit
                   - --import-realm
@@ -97,7 +100,7 @@ commands:
                 readinessProbe:
                   httpGet:
                     scheme: HTTPS
-                    path: /realms/master
+                    path: /auth/realms/master
                     port: https
                 resources:
                   limits:
