@@ -689,46 +689,6 @@ mod tests {
         }
     }
 
-    /// The info-fetcher sidecars run their binary without a shell, so they cannot create their own
-    /// log directory. The prepare container does it for them, and the path it creates has to be
-    /// exactly the one the sidecar logs into: otherwise the telemetry library prunes against a
-    /// missing directory and complains on every start.
-    #[test]
-    fn prepare_creates_the_info_fetcher_log_directories() {
-        let ds = build(&cluster_with_both_info_fetchers());
-        let prepare_args = ds
-            .spec
-            .as_ref()
-            .expect("the DaemonSet has a spec")
-            .template
-            .spec
-            .as_ref()
-            .expect("the pod template has a spec")
-            .init_containers
-            .as_ref()
-            .expect("the pod has init containers")
-            .iter()
-            .find(|c| c.name == "prepare")
-            .expect("the prepare container exists")
-            .args
-            .clone()
-            .expect("the prepare container has args")
-            .join(" && ");
-        // The commands are one `&&` chain, and the match below has to be exact: a substring
-        // check would also accept a longer path that merely starts with the expected one.
-        let commands: Vec<&str> = prepare_args.split(" && ").map(str::trim).collect();
-
-        for container_name in ["user-info-fetcher", "resource-info-fetcher"] {
-            let container = container_by_name(&ds, container_name);
-            let directory = env_var(&container, "FILE_LOG_DIRECTORY");
-            let expected = format!("mkdir --parents {directory}");
-            assert!(
-                commands.contains(&expected.as_str()),
-                "prepare must run {expected:?} for {container_name}, got: {commands:?}"
-            );
-        }
-    }
-
     /// The sidecars only read their config and credentials, so those mounts must not be writable.
     /// The log volume must stay writable, because that is where they write their file logs.
     #[test]

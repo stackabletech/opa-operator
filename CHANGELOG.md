@@ -110,9 +110,6 @@ All notable changes to this project will be documented in this file.
 - The `tracing-rs` transform of the Vector agent no longer discards log events. A message which is
   not a string is kept among the other fields, a `fields` object which is not an object falls back
   to the raw line, and a missing timestamp is recorded as an error ([#912]).
-- The user-info-fetcher and resource-info-fetcher containers no longer log an error about a missing
-  log directory on startup. Their log directory is now created by the `prepare` container, because
-  those containers run their binary without a shell which could create it ([#912]).
 
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861

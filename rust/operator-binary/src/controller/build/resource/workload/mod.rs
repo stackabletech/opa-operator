@@ -289,7 +289,7 @@ pub fn build_server_rolegroup_pod_template(
         .image_from_product_image(resolved_product_image)
         .command(bash_entrypoint_command())
         .args(vec![
-            build_prepare_start_command(cluster, merged_config, Container::Prepare.name().as_ref())
+            build_prepare_start_command(merged_config, Container::Prepare.name().as_ref())
                 .join(" && "),
         ])
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
@@ -768,7 +768,6 @@ fn sidecar_container_log_level(
 }
 
 fn build_prepare_start_command(
-    cluster: &ValidatedCluster,
     merged_config: &ValidatedOpaConfig,
     container_name: &str,
 ) -> Vec<String> {
@@ -786,26 +785,6 @@ fn build_prepare_start_command(
     for dir in [BUNDLES_ACTIVE_DIR, BUNDLES_INCOMING_DIR, BUNDLES_TMP_DIR] {
         prepare_container_args.push(format!("echo \"Create dir [{dir}]\""));
         prepare_container_args.push(format!("mkdir -p {dir}"));
-    }
-
-    // The log directories of the info-fetcher sidecars are created here, because those containers
-    // run their binary directly without a shell that could do it. Setting `FILE_LOG_MAX_FILES`
-    // makes the telemetry library prune old log files before it creates the first one, which
-    // complains about the directory not existing yet. The sidecars with a shell create their own
-    // directory from `$FILE_LOG_DIRECTORY` instead, so that an `envOverrides` entry for it takes
-    // effect; here the path has to be rebuilt, which an override would therefore not move.
-    let mut sidecars = vec![];
-    if cluster.cluster_config.user_info.is_some() {
-        sidecars.push(Container::UserInfoFetcher);
-    }
-    if cluster.cluster_config.resource_info.is_some() {
-        sidecars.push(Container::ResourceInfoFetcher);
-    }
-    for sidecar in sidecars {
-        prepare_container_args.push(format!(
-            "mkdir --parents {dir}",
-            dir = file_log_directory(&sidecar)
-        ));
     }
 
     prepare_container_args
