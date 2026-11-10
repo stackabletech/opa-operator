@@ -102,8 +102,8 @@ mod tests {
         let _ = *CONSOLE_LOG_LEVEL;
         let _ = *FILE_LOG_LEVEL;
         let _ = *FILE_LOG_DIRECTORY;
-        let _ = *FILE_LOG_ROTATION_PERIOD;
         let _ = *FILE_LOG_MAX_FILES;
+        let _ = *FILE_LOG_ROTATION_PERIOD;
         let _ = *KUBERNETES_NODE_NAME;
         let _ = *KUBERNETES_CLUSTER_DOMAIN;
     }
