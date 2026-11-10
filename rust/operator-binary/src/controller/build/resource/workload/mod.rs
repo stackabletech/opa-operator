@@ -6,6 +6,7 @@
 
 use std::{collections::BTreeMap, str::FromStr};
 
+use const_format::concatcp;
 use indoc::formatdoc;
 use snafu::{ResultExt, Snafu};
 use stackable_opa_operator::crd::{Container, DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT, OpaRole};
@@ -87,7 +88,6 @@ const RESOURCE_INFO_FETCHER_CREDENTIALS_DIR: &str = "/stackable/credentials";
 constant!(TLS_VOLUME_NAME: VolumeName = "tls");
 const TLS_STORE_DIR: &str = "/stackable/tls";
 
-constant!(CONTAINERDEBUG_LOG_DIRECTORY: EnvVarName = "CONTAINERDEBUG_LOG_DIRECTORY");
 constant!(WATCH_NAMESPACE: EnvVarName = "WATCH_NAMESPACE");
 
 // HTTP probe configuration shared by the bundle-builder and OPA containers. They differ in the
@@ -103,8 +103,8 @@ const LIVENESS_PROBE_INITIAL_DELAY_SECONDS: i32 = 30;
 constant!(CONSOLE_LOG_LEVEL: EnvVarName = "CONSOLE_LOG_LEVEL");
 constant!(FILE_LOG_LEVEL: EnvVarName = "FILE_LOG_LEVEL");
 constant!(FILE_LOG_DIRECTORY: EnvVarName = "FILE_LOG_DIRECTORY");
-constant!(FILE_LOG_ROTATION_PERIOD: EnvVarName = "FILE_LOG_ROTATION_PERIOD");
 constant!(FILE_LOG_MAX_FILES: EnvVarName = "FILE_LOG_MAX_FILES");
+constant!(FILE_LOG_ROTATION_PERIOD: EnvVarName = "FILE_LOG_ROTATION_PERIOD");
 constant!(KUBERNETES_NODE_NAME: EnvVarName = "KUBERNETES_NODE_NAME");
 constant!(KUBERNETES_CLUSTER_DOMAIN: EnvVarName = "KUBERNETES_CLUSTER_DOMAIN");
 
@@ -312,10 +312,7 @@ pub fn build_server_rolegroup_pod_template(
         .image_from_product_image(resolved_product_image) // inherit the pull policy and pull secrets, and then...
         .image(opa_bundle_builder_image) // ...override the image
         .command(bash_entrypoint_command())
-        .args(vec![build_bundle_builder_start_command(
-            merged_config,
-            Container::BundleBuilder.name().as_ref(),
-        )])
+        .args(vec![build_bundle_builder_start_command(merged_config)])
         .add_env_vars(bundle_builder_env_vars)
         .add_volume_mount(BUNDLES_VOLUME_NAME.as_ref(), BUNDLES_DIR)
         .expect("The mount paths are statically defined and there should be no duplicates.")
@@ -335,10 +332,23 @@ pub fn build_server_rolegroup_pod_template(
 
     // All operator-set environment variables of the OPA container, collected into an
     // `EnvVarSet` so that every name occurs only once.
-    let opa_env_vars = EnvVarSet::new().with_value(
-        &CONTAINERDEBUG_LOG_DIRECTORY,
-        format!("{STACKABLE_LOG_DIR}/containerdebug"),
-    );
+    //
+    // These are the generic `stackable-telemetry` variables, here for the `containerdebug`
+    // process which runs in the background of the OPA container. `FILE_LOG_LEVEL` is
+    // deliberately not set: unlike our own Rust binaries, containerdebug's level is not derived
+    // from the log configuration. The rotation differs from the one in
+    // [`stackable_rust_cli_env_vars`] as well, because containerdebug writes only a handful of
+    // lines per run and a minutely rotation with five files would keep just a few minutes of it.
+    let opa_env_vars = EnvVarSet::new()
+        // The directory must be exactly one level below the log directory, because the Vector
+        // agent derives the container name from that path segment.
+        .with_value(
+            &FILE_LOG_DIRECTORY,
+            concatcp!(STACKABLE_LOG_DIR, "/containerdebug"),
+        )
+        // Rotation is opt-in, so without these the file would grow unbounded.
+        .with_value(&FILE_LOG_ROTATION_PERIOD, "hourly")
+        .with_value(&FILE_LOG_MAX_FILES, "2");
     // Environment variable overrides (highest precedence), merged from role and role group.
     // They are merged in last so that they override any operator-set environment variable.
     let opa_env_vars = opa_env_vars.merge(rolegroup_config.env_overrides.clone());
@@ -518,6 +528,9 @@ pub fn build_server_rolegroup_pod_template(
 /// The size limit of the shared `log` [`EmptyDirVolumeSource`], which has to accommodate the log
 /// files of every container that mounts it. The always-present containers are budgeted for
 /// unconditionally; the optional info-fetcher sidecars only when the cluster configures them.
+///
+/// The `containerdebug` files in this volume are rotated by time, not by size, so they have no
+/// budget; raising `FILE_LOG_LEVEL` via `envOverrides` can therefore evict the Pod.
 fn log_volume_size_limit(cluster: &ValidatedCluster) -> Quantity {
     let mut max_log_file_sizes = vec![
         MAX_OPA_BUNDLE_BUILDER_LOG_FILE_SIZE,
@@ -533,6 +546,13 @@ fn log_volume_size_limit(cluster: &ValidatedCluster) -> Quantity {
     }
 
     product_logging::framework::calculate_log_volume_size_limit(&max_log_file_sizes)
+}
+
+/// The directory the given container's Rust binary writes its file logs into, which is the value
+/// of its `FILE_LOG_DIRECTORY`. It is exactly one level below [`STACKABLE_LOG_DIR`], because the
+/// Vector agent derives the container name from that path segment.
+fn file_log_directory(container: &Container) -> String {
+    format!("{STACKABLE_LOG_DIR}/{container}")
 }
 
 /// Env variables that are need to run stackable Rust binaries, such as
@@ -551,10 +571,7 @@ fn stackable_rust_cli_env_vars(
     EnvVarSet::new()
         .with_value(&CONSOLE_LOG_LEVEL, log_level.clone())
         .with_value(&FILE_LOG_LEVEL, log_level)
-        .with_value(
-            &FILE_LOG_DIRECTORY,
-            format!("{STACKABLE_LOG_DIR}/{container}"),
-        )
+        .with_value(&FILE_LOG_DIRECTORY, file_log_directory(container))
         .with_value(&FILE_LOG_ROTATION_PERIOD, DEFAULT_FILE_LOG_ROTATION_PERIOD)
         .with_value(&FILE_LOG_MAX_FILES, DEFAULT_FILE_LOG_MAX_FILES.to_string())
         // `FieldPathEnvVar` has no variant for `spec.nodeName`, so the `EnvVar` is built by hand.
@@ -656,6 +673,7 @@ fn build_opa_start_command(
         {COMMON_BASH_TRAP_FUNCTIONS}
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
+        mkdir --parents \"${file_log_directory}\" || true
         containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
         opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{config_file} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
         wait_for_termination $!
@@ -665,16 +683,14 @@ fn build_opa_start_command(
             remove_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
+        file_log_directory = FILE_LOG_DIRECTORY.as_ref(),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
         opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal(),
         extra_cli_args = extra_cli_args
     }
 }
 
-fn build_bundle_builder_start_command(
-    merged_config: &ValidatedOpaConfig,
-    container_name: &str,
-) -> String {
+fn build_bundle_builder_start_command(merged_config: &ValidatedOpaConfig) -> String {
     let mut console_logging_off = false;
 
     // We need to check if the console logging is deactivated (NONE)
@@ -693,10 +709,11 @@ fn build_bundle_builder_start_command(
     formatdoc! {"
         {COMMON_BASH_TRAP_FUNCTIONS}
         prepare_signal_handlers
-        mkdir -p {STACKABLE_LOG_DIR}/{container_name}
+        mkdir --parents \"${file_log_directory}\" || true
         stackable-opa-bundle-builder{logging_redirects} &
         wait_for_termination $!
         ",
+        file_log_directory = FILE_LOG_DIRECTORY.as_ref(),
         logging_redirects = if console_logging_off {
             " > /dev/null"
         } else {

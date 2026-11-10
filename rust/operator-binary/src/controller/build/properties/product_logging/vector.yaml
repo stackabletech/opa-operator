@@ -84,8 +84,10 @@ transforms:
           if err == null {
             .timestamp = parsed_timestamp
           } else {
-            .errors = push(.errors, "Timestamp not parsable, trying current time instead: " + err)
+            .errors = push(.errors, "Timestamp not parsable, using current time instead: " + err)
           }
+        } else {
+          .errors = push(.errors, "Timestamp not found, using current time instead.")
         }
 
         .logger, err = string(event.target)
@@ -103,19 +105,29 @@ transforms:
         }
 
         fields, err = object(event.fields)
-        if err != null {
+        if err == null {
+          message, err = string(fields.message)
+          if err == null {
+            # The message is prepended to the other fields, so remove it from
+            # them.
+            del(fields.message)
+          } else {
+            # Keep an unusable message among the other fields instead of
+            # discarding its content.
+            message = ""
+          }
+
+          other_fields = encode_key_value(fields, field_delimiter: "\n")
+          .message = join!(compact([message, other_fields]), "\n\n")
+        } else {
           .errors = push(.errors, "Fields are not an object.")
+          # Fall back to the raw line, so that its content is not lost.
+          .message = raw_message
         }
 
-        .message, err = string(fields.message)
-        if err != null || is_empty(.message) {
+        if is_empty(.message) {
           .errors = push(.errors, "Message not found.")
         }
-
-        del(fields.message)
-
-        other_fields = encode_key_value(fields, field_delimiter: "\n")
-        .message = join!(compact([.message, other_fields]), "\n\n")
       }
 
   # Transforms OPA's own JSON logs

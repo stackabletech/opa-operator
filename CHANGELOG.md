@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - A `PodDisruptionBudget` is now written out for the `servers` role when it runs as a `Deployment`,
   with `maxUnavailable: 1`. Configurable via `spec.servers.roleConfig.podDisruptionBudget` ([#873]).
 - Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
+- The logs of the `containerdebug` process are now collected by the Vector agent and forwarded to
+  the Vector aggregator ([#912]).
 
 ### Changed
 
@@ -101,14 +103,21 @@ All notable changes to this project will be documented in this file.
   containing a line break, is rejected with `400` ([#909]).
 - The user-info-fetcher Keycloak backend no longer drops a configured `rootPath` from the URLs it
   requests, so a Keycloak served below a sub-path, like `/auth`, can now be reached ([#909]).
+- The `containerdebug` process writes its log file again. The operator set
+  `CONTAINERDEBUG_LOG_DIRECTORY` on the OPA container, which containerdebug stopped reading in its
+  version 0.2.0 when it moved to `stackable-telemetry`; the directory is now set via
+  `FILE_LOG_DIRECTORY`, with an hourly rotation that keeps at most two files ([#912]).
+- The `tracing-rs` transform of the Vector agent no longer discards log events. A message which is
+  not a string is kept among the other fields, a `fields` object which is not an object falls back
+  to the raw line, and a missing timestamp is recorded as an error ([#912]).
 
-[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#852]: https://github.com/stackabletech/opa-operator/pull/852
 [#861]: https://github.com/stackabletech/opa-operator/pull/861
 [#863]: https://github.com/stackabletech/opa-operator/pull/863
 [#867]: https://github.com/stackabletech/opa-operator/pull/867
 [#871]: https://github.com/stackabletech/opa-operator/pull/871
 [#872]: https://github.com/stackabletech/opa-operator/pull/872
+[#873]: https://github.com/stackabletech/opa-operator/pull/873
 [#880]: https://github.com/stackabletech/opa-operator/pull/880
 [#882]: https://github.com/stackabletech/opa-operator/pull/882
 [#886]: https://github.com/stackabletech/opa-operator/pull/886
@@ -123,6 +132,7 @@ All notable changes to this project will be documented in this file.
 [#906]: https://github.com/stackabletech/opa-operator/pull/906
 [#908]: https://github.com/stackabletech/opa-operator/pull/908
 [#909]: https://github.com/stackabletech/opa-operator/pull/909
+[#912]: https://github.com/stackabletech/opa-operator/pull/912
 
 ## [26.7.0] - 2026-07-21
 
