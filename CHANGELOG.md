@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 - Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
 - The logs of the `containerdebug` process are now collected by the Vector agent and forwarded to
   the Vector aggregator ([#912]).
+- Add `containerdebug` config CRD ([#914]).
 
 ### Changed
 
@@ -133,6 +134,7 @@ All notable changes to this project will be documented in this file.
 [#908]: https://github.com/stackabletech/opa-operator/pull/908
 [#909]: https://github.com/stackabletech/opa-operator/pull/909
 [#912]: https://github.com/stackabletech/opa-operator/pull/912
+[#914]: https://github.com/stackabletech/opa-operator/pull/914
 
 ## [26.7.0] - 2026-07-21
 
