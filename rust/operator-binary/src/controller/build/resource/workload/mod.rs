@@ -674,7 +674,7 @@ fn build_opa_start_command(
         {remove_vector_shutdown_file_command}
         prepare_signal_handlers
         mkdir --parents \"${file_log_directory}\" || true
-        containerdebug --output={STACKABLE_LOG_DIR}/containerdebug-state.json --loop &
+        {containerdebug_command}
         opa run -s -a 0.0.0.0:{bind_port} -c {CONFIG_DIR}/{config_file} -l {opa_log_level} --shutdown-grace-period {shutdown_grace_period_s} --disable-telemetry {tls_flags} {extra_cli_args} {logging_redirects} &
         wait_for_termination $!
         {create_vector_shutdown_file_command}
@@ -684,6 +684,10 @@ fn build_opa_start_command(
         create_vector_shutdown_file_command =
             create_vector_shutdown_file_command(STACKABLE_LOG_DIR),
         file_log_directory = FILE_LOG_DIRECTORY.as_ref(),
+        containerdebug_command = merged_config
+            .containerdebug
+            .background_command(STACKABLE_LOG_DIR)
+            .unwrap_or_default(),
         shutdown_grace_period_s = merged_config.graceful_shutdown_timeout.unwrap_or(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT).as_secs(),
         opa_log_level = [console_log_level, file_log_level].iter().min().unwrap_or(&LogLevel::INFO).to_opa_literal(),
         extra_cli_args = extra_cli_args
@@ -788,4 +792,78 @@ fn build_prepare_start_command(
     }
 
     prepare_container_args
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use stackable_opa_operator::crd::OpaRole;
+    use stackable_operator::{
+        commons::networking::DomainName, crd::containerdebug::ValidatedContainerdebugConfig,
+        shared::time::Duration,
+    };
+
+    use super::*;
+    use crate::controller::build::properties::test_support::validated_cluster_from_spec;
+
+    /// Builds the `default` server Pod template with the given `containerdebug` config and returns
+    /// the `containerdebug` line of the opa container's args, if any.
+    fn containerdebug_line(containerdebug: ValidatedContainerdebugConfig) -> Option<String> {
+        let cluster = validated_cluster_from_spec(json!({
+            "image": { "productVersion": "1.2.3" },
+            "servers": { "roleGroups": { "default": {} } },
+        }));
+        let (role_group_name, role_group) = cluster.role_group_configs[&OpaRole::Server]
+            .iter()
+            .next()
+            .expect("the default role group should exist");
+        let mut role_group = role_group.clone();
+        role_group.config.containerdebug = containerdebug;
+
+        build_server_rolegroup_pod_template(
+            &cluster,
+            role_group_name,
+            &role_group,
+            "bundle-builder-image",
+            "user-info-fetcher-image",
+            "resource-info-fetcher-image",
+            &KubernetesClusterInfo {
+                cluster_domain: DomainName::try_from("cluster.local").unwrap(),
+            },
+        )
+        .expect("the Pod template should build")
+        .spec
+        .expect("the Pod template has a spec")
+        .containers
+        .into_iter()
+        .find(|container| container.name == Container::Opa.name().to_string())
+        .expect("the opa container exists")
+        .args
+        .expect("the opa container has args")
+        .join("\n")
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("containerdebug "))
+        .map(str::to_owned)
+    }
+
+    /// The opa container starts `containerdebug` from the role group's validated config. The
+    /// command itself is owned (and tested) by operator-rs, so only the wiring is checked here.
+    #[test]
+    fn opa_container_starts_containerdebug_when_enabled() {
+        let containerdebug = ValidatedContainerdebugConfig::Enabled {
+            interval: Duration::from_minutes_unchecked(10),
+        };
+        let expected = containerdebug.background_command(STACKABLE_LOG_DIR);
+
+        assert_eq!(containerdebug_line(containerdebug), expected);
+    }
+
+    #[test]
+    fn opa_container_does_not_start_containerdebug_when_disabled() {
+        assert_eq!(
+            containerdebug_line(ValidatedContainerdebugConfig::Disabled),
+            None
+        );
+    }
 }
