@@ -4,7 +4,7 @@ kind: TestStep
 commands:
   # The chart installs its bootstrap jobs (MySQL schema, Kafka topics, OpenSearch indices,
   # `datahub-system-update`) as Helm hooks, so `helm install` only returns once all of them
-  # have run; 03-assert then waits for GMS to become ready.
+  # have run; 04-assert then waits for GMS to become ready.
   #
   # Two timeouts are needed here:
   #   * `--timeout` is Helm's wait per individual hook. The default (5m) is not enough for
@@ -17,6 +17,6 @@ commands:
       --namespace $NAMESPACE
       --version {{ test_scenario['values']['data-hub'] }}
       --repo https://helm.datahubproject.io
-      --values 03_datahub-values.yaml
+      --values 04_datahub-values.yaml
       --timeout 10m
     timeout: 1200

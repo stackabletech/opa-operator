@@ -29,7 +29,7 @@ data:
       type: datahub-rest
       config:
         server: 'http://datahub-datahub-gms:8080'
-        # Same DataHub PAT the RIF sidecar uses, minted in 04-mint-pat.
+        # Same DataHub PAT the RIF sidecar uses, minted in 05-mint-pat.
         token: '${DATAHUB_GMS_TOKEN}'
 ---
 apiVersion: batch/v1
