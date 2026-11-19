@@ -11,6 +11,7 @@ use stackable_opa_operator::crd::{Container, OpaConfig, OpaRole, OpaRoleType, v1
 use stackable_operator::{
     cli::OperatorEnvironmentOptions,
     commons::product_image_selection,
+    crd::containerdebug,
     product_logging::spec::Logging,
     v2::{
         controller_utils::{get_cluster_name, get_namespace, get_uid},
@@ -51,6 +52,12 @@ pub enum Error {
     #[snafu(display("failed to merge and validate config for role group {role_group:?}"))]
     ValidateRoleGroupConfig {
         source: stackable_operator::config::fragment::ValidationError,
+        role_group: String,
+    },
+
+    #[snafu(display("invalid containerdebug config for role group {role_group:?}"))]
+    InvalidContainerdebugConfig {
+        source: containerdebug::Error,
         role_group: String,
     },
 
@@ -234,6 +241,12 @@ pub fn validate(
                 role_group: role_group_name.clone(),
             })?;
 
+            let containerdebug = merged.config.config.containerdebug.validate().context(
+                InvalidContainerdebugConfigSnafu {
+                    role_group: role_group_name.clone(),
+                },
+            )?;
+
             // Validate the logging configuration up-front (borrows the merged config before it is
             // moved into the `OpaRoleGroupConfig` below).
             let logging = validate_logging(
@@ -254,7 +267,11 @@ pub fn validate(
                     // Only used in `Deployment` mode; a DaemonSet derives its Pod count from the
                     // number of nodes.
                     replicas: merged.replicas,
-                    config: ValidatedOpaConfig::from_merged(merged.config.config, logging),
+                    config: ValidatedOpaConfig::from_merged(
+                        merged.config.config,
+                        containerdebug,
+                        logging,
+                    ),
                     config_overrides: merged.config.config_overrides,
                     env_overrides: merged.config.env_overrides.into(),
                     cli_overrides: merged.config.cli_overrides,

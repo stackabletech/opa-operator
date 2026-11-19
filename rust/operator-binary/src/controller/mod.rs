@@ -15,6 +15,7 @@ use stackable_operator::{
         product_image_selection::ResolvedProductImage,
         resources::{NoRuntimeLimits, Resources},
     },
+    crd::containerdebug::ValidatedContainerdebugConfig,
     k8s_openapi::api::{
         apps::v1::{DaemonSet, Deployment},
         core::v1::{ConfigMap, Service, ServiceAccount},
@@ -241,15 +242,21 @@ pub struct ValidatedOpaConfig {
     pub resources: Resources<OpaStorageConfig, NoRuntimeLimits>,
     pub logging: validate::ValidatedLogging,
     pub affinity: StackableAffinity,
+    pub containerdebug: ValidatedContainerdebugConfig,
     pub graceful_shutdown_timeout: Option<Duration>,
 }
 
 impl ValidatedOpaConfig {
-    pub(crate) fn from_merged(merged: OpaConfig, logging: validate::ValidatedLogging) -> Self {
+    pub(crate) fn from_merged(
+        merged: OpaConfig,
+        containerdebug: ValidatedContainerdebugConfig,
+        logging: validate::ValidatedLogging,
+    ) -> Self {
         Self {
             resources: merged.resources,
             logging,
             affinity: merged.affinity,
+            containerdebug,
             graceful_shutdown_timeout: merged.graceful_shutdown_timeout,
         }
     }
