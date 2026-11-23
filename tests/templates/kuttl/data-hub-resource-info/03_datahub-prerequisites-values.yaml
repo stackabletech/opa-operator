@@ -53,7 +53,7 @@ opensearch:
 
 mysql:
   auth:
-    # Root password is read from the `mysql-secrets` Secret created in 02-install-datahub-prerequisites.
+    # Root password is read from the `mysql-secrets` Secret created in 03-install-datahub-prerequisites.
     # This is the same Secret the datahub chart reads (its default global.sql.datasource.password).
     existingSecret: mysql-secrets
     database: datahub

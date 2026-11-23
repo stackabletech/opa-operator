@@ -32,7 +32,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            # Same DataHub PAT the RIF sidecar uses, minted in 04-mint-pat.
+            # Same DataHub PAT the RIF sidecar uses, minted in 05-mint-pat.
             - name: DATAHUB_GMS_TOKEN
               valueFrom:
                 secretKeyRef:
