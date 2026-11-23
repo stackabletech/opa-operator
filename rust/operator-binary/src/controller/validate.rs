@@ -241,11 +241,14 @@ pub fn validate(
                 role_group: role_group_name.clone(),
             })?;
 
-            let containerdebug = merged.config.config.containerdebug.validate().context(
-                InvalidContainerdebugConfigSnafu {
+            let containerdebug = merged
+                .config
+                .config
+                .containerdebug
+                .validate()
+                .with_context(|_| InvalidContainerdebugConfigSnafu {
                     role_group: role_group_name.clone(),
-                },
-            )?;
+                })?;
 
             // Validate the logging configuration up-front (borrows the merged config before it is
             // moved into the `OpaRoleGroupConfig` below).
@@ -565,6 +568,82 @@ mod tests {
         assert_eq!(
             vector.vector_aggregator_config_map_name.as_ref(),
             "vector-aggregator-discovery"
+        );
+    }
+
+    /// Validates an `OpaCluster` whose `servers` role is the given JSON.
+    fn validate_servers(servers: serde_json::Value) -> Result<ValidatedCluster, Error> {
+        let opa: v1alpha2::OpaCluster = serde_json::from_value(json!({
+            "apiVersion": "opa.stackable.tech/v1alpha2",
+            "kind": "OpaCluster",
+            "metadata": {
+                "name": "test-opa",
+                "namespace": "default",
+                "uid": "c27b3971-ca72-42c1-80a4-abdfc1db0ddd",
+            },
+            "spec": {
+                "image": { "productVersion": "1.2.3" },
+                "servers": servers,
+            },
+        }))
+        .expect("valid test input");
+        let operator_environment = OperatorEnvironmentOptions {
+            operator_namespace: "stackable-operators".to_string(),
+            operator_service_name: "opa-operator".to_string(),
+            image_repository: "oci.example.org".to_string(),
+        };
+
+        validate(&opa, &operator_environment)
+    }
+
+    /// A role `config` that does not mention `containerdebug` still gets the default, so the
+    /// `containerdebug` field of the CRD must be optional.
+    #[test]
+    fn containerdebug_defaults_when_not_configured() {
+        use stackable_operator::crd::containerdebug::{
+            DEFAULT_INTERVAL, ValidatedContainerdebugConfig,
+        };
+
+        let Ok(cluster) = validate_servers(json!({
+            "config": { "gracefulShutdownTimeout": "1h" },
+            "roleGroups": { "default": {} },
+        })) else {
+            panic!("the fixture must validate");
+        };
+        let role_group_name = RoleGroupName::from_str("default").expect("valid role group name");
+
+        assert_eq!(
+            cluster.role_group_configs[&OpaRole::Server][&role_group_name]
+                .config
+                .containerdebug,
+            ValidatedContainerdebugConfig::Enabled {
+                interval: DEFAULT_INTERVAL
+            }
+        );
+    }
+
+    /// An invalid `containerdebug` config fails the validation, naming the role group.
+    #[test]
+    fn zero_containerdebug_interval_fails_validation() {
+        let Err(error) = validate_servers(json!({
+            "config": { "containerdebug": { "interval": "0s" } },
+            "roleGroups": { "default": {} },
+        })) else {
+            panic!("the fixture must be rejected");
+        };
+        let chain: Vec<String> =
+            std::iter::successors(Some(&error as &dyn std::error::Error), |error| {
+                error.source()
+            })
+            .map(ToString::to_string)
+            .collect();
+
+        assert_eq!(
+            chain,
+            [
+                r#"invalid containerdebug config for role group "default""#,
+                "the containerdebug interval must not be zero",
+            ]
         );
     }
 }
