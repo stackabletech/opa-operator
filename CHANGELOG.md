@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Add the `config.containerdebug` field to roles and role groups ([#914]).
+
+[#914]: https://github.com/stackabletech/opa-operator/pull/914
+
+## [26.11.0] - 2026-11-20
+
+## [26.11.0-rc1] - 2026-11-19
+
+### Added
+
 - Support floating tags for product images via the new `spec.image.stackableVersionPolicy` field
   ([#891]).
 - Add an initial version of resource-info-fetcher, which is similar to user-info-fetcher,
@@ -24,7 +34,6 @@ All notable changes to this project will be documented in this file.
 - Add `/ready` endpoint to the operator Deployment, which reports the CRD installation status ([#894]).
 - The logs of the `containerdebug` process are now collected by the Vector agent and forwarded to
   the Vector aggregator ([#912]).
-- Add the `config.containerdebug` field to roles and role groups ([#914]).
 
 ### Changed
 
@@ -134,7 +143,6 @@ All notable changes to this project will be documented in this file.
 [#908]: https://github.com/stackabletech/opa-operator/pull/908
 [#909]: https://github.com/stackabletech/opa-operator/pull/909
 [#912]: https://github.com/stackabletech/opa-operator/pull/912
-[#914]: https://github.com/stackabletech/opa-operator/pull/914
 
 ## [26.7.0] - 2026-07-21
 
