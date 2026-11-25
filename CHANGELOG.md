@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Add the `config.containerdebug` field to roles and role groups ([#914]).
+
+[#914]: https://github.com/stackabletech/opa-operator/pull/914
+
 ## [26.11.0] - 2026-11-20
 
 ## [26.11.0-rc1] - 2026-11-19

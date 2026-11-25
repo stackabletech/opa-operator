@@ -13,6 +13,7 @@ use stackable_operator::{
     },
     config::{fragment::Fragment, merge::Merge},
     constant,
+    crd::containerdebug::{default_containerdebug_config, v1alpha1::ContainerdebugConfig},
     deep_merger::ObjectOverrides,
     k8s_openapi::apimachinery::pkg::api::resource::Quantity,
     kube::CustomResource,
@@ -315,7 +316,7 @@ impl Container {
 
 // NOTE (@Techassi): This struct can currently NOT be versioned because it is used via Role which
 // makes it incredible hard to implement the From trait for conversions.
-#[derive(Clone, Debug, Default, Fragment, JsonSchema, PartialEq)]
+#[derive(Clone, Debug, Fragment, JsonSchema, PartialEq)]
 #[fragment_attrs(
     derive(
         Clone,
@@ -338,6 +339,9 @@ pub struct OpaConfig {
 
     #[fragment_attrs(serde(default))]
     pub affinity: StackableAffinity,
+
+    #[fragment_attrs(serde(default))]
+    pub containerdebug: ContainerdebugConfig,
 
     /// Time period Pods have to gracefully shut down, e.g. `30m`, `1h` or `2d`. Consult the operator documentation for details.
     #[fragment_attrs(serde(default))]
@@ -441,6 +445,7 @@ impl OpaConfig {
                 // Spreads the role's Pods across nodes.
                 v1alpha2::WorkloadKind::Deployment => affinity::get_affinity(cluster_name, role),
             },
+            containerdebug: default_containerdebug_config(),
             graceful_shutdown_timeout: Some(DEFAULT_SERVER_GRACEFUL_SHUTDOWN_TIMEOUT),
         }
     }
